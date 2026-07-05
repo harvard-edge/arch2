@@ -13,31 +13,36 @@ Please use our [Submit a Tool Form](https://github.com/harvard-edge/architecture
 ## Contents
 - [Simulation & Execution Environments](#simulation--execution-environments)
 - [Proxy Models & Surrogate Predictors](#proxy-models--surrogate-predictors)
-- [Agentic Workflows & Search Methods](#agentic-workflows--search-methods)
+- [Agentic Workflows & Generators](#agentic-workflows--generators)
 - [Data Representations & Hardware Vocabularies](#data-representations--hardware-vocabularies)
 - [Verification & Red-Teaming](#verification--red-teaming)
+- [Benchmarks & Datasets](#benchmarks--datasets)
+- [Physical Design & EDA](#physical-design--eda)
 
 ---
 
 ## Simulation & Execution Environments
 *The "ground truth" verification gates that provide slow but highly accurate feedback.*
 
-* **[gem5](https://www.gem5.org/)** - A modular platform for computer-system architecture research, encompassing system-level architecture as well as processor microarchitecture.
-* **[FireSim](https://fires.im/)** - An open-source cycle-exact FPGA-accelerated scale-out computer system simulation platform.
+* **[gem5](https://www.gem5.org/)** - Modular computer-system simulator for architecture feedback needing workload execution and reproducible state.
+* **[FireSim](https://fires.im/)** - FPGA-accelerated full-system simulation for when the loop needs stronger hardware/software feedback than a proxy can provide.
+* **[Chipyard](https://chipyard.readthedocs.io/)** - Integrated framework for generating and evaluating hardware systems, connecting generators, RTL, and simulation.
 * **[Verilator](https://www.veripool.org/verilator/)** - The fastest free Verilog HDL simulator, converting Verilog to C++/SystemC.
 
 ## Proxy Models & Surrogate Predictors
 *Fast, lightweight models that approximate the simulator to accelerate the AI agent's search.*
 
-* **[Apollo](https://github.com/harvard-edge/Apollo)** - An automated framework for fast, accurate, and transferable architecture design space exploration using surrogate models (Harvard).
-* **[ArchGym](https://github.com/harvard-edge/ArchGym)** - An open-source gym environment for evaluating machine learning algorithms in computer architecture exploration (Harvard).
-* **[MicroGrad (Arch)](https://github.com/karpathy/micrograd)** - (Placeholder for ML-based analytical models for power/area/timing).
+* **[Apollo](https://github.com/harvard-edge/Apollo)** - An automated framework for fast, accurate, and transferable architecture design space exploration using surrogate models.
+* **[MAESTRO](https://github.com/maestro-project/maestro)** - Analytical cost model for DNN dataflows and tiling; a fast-feedback model for dataflow exploration.
+* **[Accelergy](https://github.com/Accelergy-Project/accelergy)** - Energy-estimation infrastructure for accelerators, providing an explicit energy feedback source.
+* **[Timeloop](https://github.com/NVlabs/timeloop)** - Mapping and modeling tool for tensor workloads on accelerator architectures.
 
-## Agentic Workflows & Search Methods
+## Agentic Workflows & Generators
 *Frameworks that wrap LLMs, Reinforcement Learning, or Bayesian Search into autonomous hardware design loops.*
 
+* **[ArchGym](https://github.com/srivatsankrishnan/oss-arch-gym)** - Open-source gym environment for evaluating machine learning algorithms in computer architecture exploration.
 * **[AutoChip](https://github.com/shailja-thakur/AutoChip)** - Conversational hardware design using LLMs to generate Verilog from natural language specifications.
-* **[ChipNeMo](https://arxiv.org/abs/2311.00176)** - Domain-adapted LLMs for chip design, trained by NVIDIA, demonstrating automated EDA script generation and bug analysis.
+* **[ChipNeMo](https://arxiv.org/abs/2311.00176)** - Domain-adapted LLMs for chip design, demonstrating automated EDA script generation and bug analysis.
 * **[VeriGen](https://arxiv.org/abs/2308.00708)** - A large language model customized for generating functional Verilog code.
 
 ## Data Representations & Hardware Vocabularies
@@ -50,5 +55,20 @@ Please use our [Submit a Tool Form](https://github.com/harvard-edge/architecture
 ## Verification & Red-Teaming
 *Tools dedicated to aggressively testing and rejecting AI-generated claims.*
 
-* **[CocoTB](https://github.com/cocotb/cocotb)** - A coroutine based cosimulation library for writing VHDL and Verilog testbenches in Python. Ideal for connecting LLM test-generators to simulators.
+* **[CocoTB](https://github.com/cocotb/cocotb)** - A coroutine-based cosimulation library for writing VHDL and Verilog testbenches in Python.
 * **[SymbiYosys](https://symbiyosys.readthedocs.io/en/latest/)** - Front-end for Yosys-based formal verification flows, allowing agents to assert mathematical proofs against their generated RTL.
+
+## Benchmarks & Datasets
+*Standardized tasks for evaluating the performance of Architecture 2.0 loops.*
+
+* **[CVDP Benchmark](https://github.com/NVlabs/cvdp_benchmark)** - Comprehensive Verilog Design Problems for RTL design and verification. Crucial for loops involving HDL generation and test harnesses.
+* **[QuArch](https://quarch.ai/)** - Architecture question-answering and reasoning benchmark to test if a model can reason over architecture concepts.
+* **[VerilogEval](https://github.com/NVlabs/verilog-eval)** - Specification-to-RTL and Verilog code-generation benchmark with executable checks.
+* **[KernelBench](https://github.com/ScalingIntelligence/KernelBench)** - GPU-kernel generation benchmark with correctness and performance evaluation.
+* **[CircuitNet](https://github.com/circuitnet/CircuitNet)** - VLSI CAD dataset for machine-learning applications in EDA.
+
+## Physical Design & EDA
+*Tools for physical-design feedback, timing/area/power evidence, and signoff-adjacent rejection.*
+
+* **[OpenROAD](https://theopenroadproject.org/)** - Open-source RTL-to-GDS flow for loops that need physical-design feedback and evidence.
+* **[ChiPBench](https://openreview.net/forum?id=gDkQ5iesrI)** - Benchmark focused on end-to-end physical-design impact for AI chip placement.
