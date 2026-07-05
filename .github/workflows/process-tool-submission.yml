@@ -1,0 +1,81 @@
+name: Process Tool Submission
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  create_pr_from_issue:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'tool-submission')
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Parse Issue and Update Catalog
+        id: parse
+        run: |
+          python -c "
+          import os, yaml, re
+          
+          body = os.environ['ISSUE_BODY']
+          
+          # Extract fields using regex based on the ISSUE_TEMPLATE structure
+          def extract(header):
+              pattern = f'### {header}\s+([^#]+)'
+              match = re.search(pattern, body)
+              return match.group(1).strip() if match else ''
+
+          title = extract('Tool Name')
+          url = extract('Tool URL')
+          description = extract('Short Description')
+          category = extract('Category')
+
+          if title and url and description and category:
+              new_tool = {
+                  'title': title,
+                  'url': url,
+                  'description': description,
+                  'categories': [category]
+              }
+              
+              with open('tools/tools.yml', 'r') as f:
+                  tools = yaml.safe_load(f) or []
+                  
+              # Check for duplicates
+              if not any(t.get('title') == title for t in tools):
+                  tools.append(new_tool)
+                  
+                  with open('tools/tools.yml', 'w') as f:
+                      yaml.dump(tools, f, sort_keys=False, default_flow_style=False)
+                  
+                  print('::set-output name=success::true')
+                  print(f'::set-output name=tool_name::{title}')
+              else:
+                  print('::set-output name=success::false')
+                  print('Tool already exists.')
+          "
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+
+      - name: Create Pull Request
+        if: steps.parse.outputs.success == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "feat: Add ${{ steps.parse.outputs.tool_name }} to Tool Catalog"
+          title: "Add ${{ steps.parse.outputs.tool_name }} to Tool Catalog"
+          body: |
+            Automatically generated PR from Issue #${{ github.event.issue.number }}.
+            
+            Closes #${{ github.event.issue.number }}
+          branch: "add-tool-${{ github.event.issue.number }}"
+          labels: "tool-catalog"

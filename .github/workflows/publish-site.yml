@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "synthesis/**"
+      - "book/**"
+      - "tools/**"
+      - "www/**"
+      - "_global/**"
       - "requirements.txt"
       - ".github/workflows/publish-site.yml"
   workflow_dispatch:
@@ -65,18 +68,33 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Render synthesis book
-        working-directory: synthesis
+      - name: Render Book (via arch2 cli)
         run: ./arch2 render
 
+      - name: Render Tool Catalog
+        run: quarto render tools
+
+      - name: Render Landing Page
+        run: quarto render www
+
+      - name: Assemble Final Site
+        run: |
+          mkdir -p _site/book
+          mkdir -p _site/tools
+          cp -r book/_build/* _site/book/
+          cp -r tools/_site/* _site/tools/
+          cp -r www/_site/* _site/
+          
       - name: Validate Pages payload
         run: |
-          test -f synthesis/book/_build/index.html
-          test -f synthesis/book/_build/Architecture-2.0.pdf
-          touch synthesis/book/_build/.nojekyll
-          echo "arch2.mlsysbook.ai" > synthesis/book/_build/CNAME
-          echo "HTML pages: $(find synthesis/book/_build -name '*.html' | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "PDF: synthesis/book/_build/Architecture-2.0.pdf" >> "$GITHUB_STEP_SUMMARY"
+          test -f _site/index.html
+          test -f _site/book/index.html
+          test -f _site/book/Architecture-2.0.pdf
+          test -f _site/tools/index.html
+          touch _site/.nojekyll
+          echo "arch2.mlsysbook.ai" > _site/CNAME
+          echo "HTML pages: $(find _site -name '*.html' | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          echo "PDF: _site/book/Architecture-2.0.pdf" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
@@ -84,14 +102,14 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: synthesis/book/_build
+          path: _site
 
       - name: Upload render logs on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: arch2-render-logs
-          path: synthesis/book/_build/logs
+          path: book/_build/logs
           if-no-files-found: ignore
 
   deploy:
