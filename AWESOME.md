@@ -2,7 +2,7 @@
 
 A curated list of awesome tools, simulators, proxies, and agentic workflows that enable **Architecture 2.0**—the shift toward fully automated, AI-driven hardware design loops.
 
-This is the living catalog accompanying the book [*Architecture 2.0: Designing the Loops that Design the Chips*](https://harvard-edge.github.io/architecture20).
+This is the living catalog accompanying the book [*Architecture 2.0: Designing the Loops that Design the Chips*](https://arch2.mlsysbook.ai).
 
 ## 🚀 How to Contribute
 If you have built an open-source tool, surrogate model, or agentic loop, **we want it here!**

@@ -1,6 +1,6 @@
 # Architecture 2.0: Designing the Loops that Design the Chips
 
-[![Read the Book](https://img.shields.io/badge/Read_the_Book-Hosted_on_GitHub_Pages-blue?style=for-the-badge)](https://harvard-edge.github.io/architecture20)
+[![Read the Book](https://img.shields.io/badge/Read_the_Book-Hosted_on_GitHub_Pages-blue?style=for-the-badge)](https://arch2.mlsysbook.ai)
 [![Join the Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289da?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/your-invite-link)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-Organization-FFD21E?style=for-the-badge)](https://huggingface.co/architecture20)
 
@@ -13,7 +13,7 @@ This repository serves two primary purposes:
 ## 📖 The Book
 Computer architecture is facing an existential crisis: we are trying to design trillion-transistor, hyperscale AI systems using manual, human-speed design loops. *Architecture 2.0* proposes a radical shift: instead of using AI merely to generate code, architects must design explicit, verifiable *loops* in which AI agents can safely operate.
 
-You can read the latest compiled web version of the book here: [Read Architecture 2.0](https://harvard-edge.github.io/architecture20)
+You can read the latest compiled web version of the book here: [Read Architecture 2.0](https://arch2.mlsysbook.ai)
 
 ## 🛠 The Living Catalog (Community Submissions)
 The ecosystem of AI tools for hardware design is moving faster than any static book can capture. 
