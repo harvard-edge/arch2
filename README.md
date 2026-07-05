@@ -1,46 +1,109 @@
-# Architecture 2.0: Designing the Loops that Design the Chips
+# Architecture 2.0 Synthesis Lecture
 
-[![Read the Book](https://img.shields.io/badge/Read_the_Book-Hosted_on_GitHub_Pages-blue?style=for-the-badge)](https://arch2.mlsysbook.ai)
-[![Join the Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289da?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/your-invite-link)
-[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-Organization-FFD21E?style=for-the-badge)](https://huggingface.co/architecture20)
+This directory contains the Quarto source for **Architecture 2.0: Agentic
+Design Loops for Computing-System Synthesis**.
 
-Welcome to the central repository for **Architecture 2.0**, a movement toward fully agentic, AI-driven design loops in computer architecture.
+Architecture 2.0 treats the architecture design loop itself as the object of
+design. The lecture focuses on represented intent, constraints, world models,
+tools, feedback, evidence, rejection, and human architectural judgment.
 
-This repository serves two primary purposes:
-1. **The Book Source Code:** It hosts the open-source Quarto markdown files for the work-in-progress synthesis lecture, *Architecture 2.0*. 
-2. **The Living Catalog:** It is a community-driven registry of the tools, surrogates, and design loops that are making Architecture 2.0 a reality.
+## Local Build
 
-## 📖 The Book
-Computer architecture is facing an existential crisis: we are trying to design trillion-transistor, hyperscale AI systems using manual, human-speed design loops. *Architecture 2.0* proposes a radical shift: instead of using AI merely to generate code, architects must design explicit, verifiable *loops* in which AI agents can safely operate.
-
-You can read the latest compiled web version of the book here: [Read Architecture 2.0](https://arch2.mlsysbook.ai)
-
-## 🛠 The Living Catalog (Community Submissions)
-The ecosystem of AI tools for hardware design is moving faster than any static book can capture. 
-
-We maintain a living catalog of Architecture 2.0 tools in the [**Awesome Architecture 2.0 List**](AWESOME.md). If you have built an open-source tool, proxy model, simulator environment, or agentic workflow, **we want to feature it!**
-
-👉 **[Submit your tool to the catalog here](https://github.com/harvard-edge/architecture20/issues/new/choose)** using our automated Issue Template.
-
-## 🌐 The Community
-Architecture 2.0 requires a village. We are building a community of hardware purists, ML systems researchers, and EDA developers.
-* **Join the Discord:** Come chat with us, share your loops, and discuss the book! (Link coming soon)
-* **Hugging Face Hub:** While this GitHub repo hosts the book and tool registry, we encourage researchers to host their pre-trained architecture surrogates, proxy models, and datasets on the [Hugging Face Hub](https://huggingface.co/architecture20).
-
-## Building the Book Locally
-If you want to compile the book yourself (to output PDF, HTML, or EPUB), you will need to install [Quarto](https://quarto.org/).
+Run commands from this directory:
 
 ```bash
-# Clone the repository
-git clone https://github.com/harvard-edge/architecture20.git
-cd architecture20/synthesis/book
-
-# Render the HTML version
-quarto render --to html
-
-# Render the PDF version (requires LaTeX)
-quarto render --to pdf
+./arch2 build            # HTML + PDF (the usual build)
 ```
 
-## Contributing
-See our [Contributing Guide](CONTRIBUTING.md) for details on how to submit typos, propose new content, or add your tool to the catalog.
+That builds both:
+
+- `book/_build/index.html`
+- `book/_build/Architecture-2.0.pdf`
+
+Pick formats with flags, or build one target when iterating:
+
+```bash
+./arch2 build --html --pdf     # both, explicitly
+./arch2 build --pdf            # PDF only
+./arch2 build --html --no-layout   # HTML only, skip the PDF layout scan
+./arch2 build --all           # HTML + PDF + EPUB in one pass
+```
+
+`build` and `render` share one native pipeline: the CLI owns figure preparation,
+a single Quarto render pass, and every post-build audit (figure, HTML, EPUB, PDF
+layout) plus scratch cleanup. There are no Quarto pre/post-render hooks; the
+`arch2` CLI drives the whole build. `render --to all|html|pdf|epub` is the
+lower-level single-target form; `build` is the flag-driven front end.
+
+Preview and clean:
+
+```bash
+./arch2 serve             # build the HTML site, then serve it at 127.0.0.1:8766
+./arch2 serve --no-build  # serve the existing build without rebuilding
+./arch2 clean             # remove _build/ and stray LaTeX scratch files
+```
+
+## Quality Gates
+
+Use the composed checks before publishing or committing:
+
+```bash
+./arch2 check precommit
+./arch2 check standard
+```
+
+Lower-level checks are grouped by purpose:
+
+```bash
+./arch2 validate refs
+./arch2 validate citations
+./arch2 validate concepts
+./arch2 validate disclosure
+./arch2 validate svg book/chapters book/appendices
+./arch2 verify figures
+./arch2 verify html
+./arch2 layout scan
+```
+
+Install the local commit hook with:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+## Repository Layout
+
+```text
+synthesis/
+├── arch2                         # CLI wrapper
+├── cli/                          # arch2 command implementation
+├── book/                         # Quarto book source
+│   ├── _quarto.yml
+│   ├── index.qmd
+│   ├── chapters/
+│   ├── appendices/
+│   ├── csl/
+│   ├── scripts/
+│   └── tex/
+├── data/                         # checked-in receipts and small datasets
+├── references/                   # bibliography and source notes
+└── scripts/                      # corpus and analysis helpers
+```
+
+Generated build output is intentionally ignored under `book/_build/`.
+
+## Review Loop
+
+The `arch2 loop` commands create source-grounded review packets and triage
+reports for manuscript improvement:
+
+```bash
+./arch2 loop packet --focus progressive-disclosure
+./arch2 loop review --reviewer gemini --model gemini-3.1-pro-preview
+./arch2 loop triage
+./arch2 loop learn
+```
+
+Loop artifacts are local working files under `.arch2/reviews/loop/` and should
+not be committed.
