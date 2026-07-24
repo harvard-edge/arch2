@@ -73,11 +73,13 @@ Evaluating the process of design means tracking metrics across three distinct ro
 
 ### Mitigating Data Contamination
 
-The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets, and repository-scale RTL benchmarks such as RTL-Repo [@AllamShalan2024RTLRepo] draw directly from that small pool. If we evaluate an agent on optimizing an OpenTitan core, did it actually reason through the architecture, or did it just regurgitate the optimal configuration it memorized during pre-training [@WangEtAl2025VeriContaminated]? In addition to standard overlap detection that estimates Jaccard similarity over shingled n-grams (e.g., MinHash) against the pre-training corpus, evaluators must build strict operational safeguards against memorization:
+The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets, and repository-scale RTL benchmarks such as RTL-Repo [@AllamShalan2024RTLRepo] draw directly from that small pool. If we evaluate an agent on optimizing an OpenTitan core, did it actually reason through the architecture, or did it just regurgitate the optimal configuration it memorized during pre-training [@WangEtAl2025VeriContaminated]? In addition to standard overlap detection that estimates Jaccard similarity over shingled n-grams (e.g., MinHash)[^fn-jaccard-minhash-c10] against the pre-training corpus, evaluators must build strict operational safeguards against memorization:
 
 *   **Canary Strings and AST Obfuscation:** Inject globally unique, searchable canary strings (random GUIDs) into benchmark source files, so that any verbatim reappearance in a model's output signals contamination. Furthermore, evaluators should use AST-level rewriting to de-identify standard naming conventions (masking `clk` or `axi_wdata` with randomized aliases), ensuring the agent isn't coasting on semantic priors.
 *   **Zero-Day Sandboxes:** Introduce held-out, non-standard ISAs or custom accelerators that post-date the model's knowledge cutoff, mirroring the time-stamped, post-cutoff task discipline of LiveCodeBench [@JainEtAl2025LiveCodeBench]. Evaluation must measure zero-shot synthesis from raw, unseen specifications rather than standard RISC-V cores.
 *   **Semantic Equivalence vs. Exact Match:** Shift from BLEU/ROUGE-style surface metrics to Formal Equivalence Checking (e.g., using SymbiYosys or JasperGold) to ensure the model isn't just reciting code but generating functionally correct, novel logic.
+
+[^fn-jaccard-minhash-c10]: **Jaccard similarity and MinHash**: Jaccard similarity measures how much two documents overlap by cutting each into short overlapping fragments, called shingles, and dividing the number of shingles they share by the number they have between them. MinHash estimates that ratio from a small fixed-size signature per document, which is what makes it affordable to test one benchmark file against a pre-training corpus of billions of documents.
 
 ### Benchmark Decay and Retirement
 
@@ -107,7 +109,7 @@ Whatever the action space, an agent score is a property of a system, the model p
 
 ## Identifying Pitfalls: Exposing the Cheating Agent
 
-An agent evaluated strictly on maximizing performance will aggressively exploit the environment. An evaluator's job is to catch the agent cheating by designing metrics that expose specific failure modes (@tbl-agent-metrics).
+An agent evaluated strictly on maximizing performance will aggressively exploit the environment. An evaluator's job is to catch the agent cheating by designing metrics that expose specific failure modes (@tbl-agent-metrics).[^fn-igd-c10]
 
 | **Metric** | **AI Role** | **What It Measures** | **Failure Mode Exposed** |
 | --- | --- | --- | --- |
@@ -115,13 +117,15 @@ An agent evaluated strictly on maximizing performance will aggressively exploit 
 | **Proxy Calibration** | Prediction | Rank fidelity between the fast proxy and the slow simulator. | Exposes the Proxy Mirage, where a surrogate misranks physical reality. |
 | **Trajectory Efficiency (AUC)** | Optimization | Reward quality as a function of environment interactions spent. | Quantifies the Simulator Tax; shows whether the search is causal or random. |
 | **Self-Correction (SCR)** | Generation & Optimization | Probability the agent resolves a failing STA/formal report on the next try. | Isolates the agent's ability to use causal failure logs over brute force. |
-| **Monotonic Convergence** | Optimization | Evaluates whether the agent smoothly traverses the PPA-C frontier without regressing. | Exposes Constraint Whac-A-Mole (fixing setup timing but breaking hold timing). |
+| **Monotonic Convergence** | Optimization | Evaluates whether the agent smoothly traverses the power, performance, area, and cost frontier without regressing. | Exposes Constraint Whac-A-Mole (fixing setup timing but breaking hold timing). |
 | **Inverted Generational Distance (IGD)** | Optimization | Measures how fully the agent's found points cover the reference Pareto front. | Detects agents trapped in local minima whose points cluster instead of spanning the front (tweaking registers vs switching topologies). |
 | **Security Adherence** | Optimization | Measures whether the agent preserves isolation and side-channel boundaries. | Exposes Security Reward Hacking (deleting Spectre mitigations for IPC gains). |
 | **Structural Legibility** | Generation | Scores cyclomatic complexity, signal naming, and module boundaries. | Exposes obfuscated, unmaintainable "sea of gates" RTL that ruins post-silicon ECOs. |
 | **EDA-NIAH (Needle In A Haystack)** | Prediction | Evaluates extraction of a critical path violation buried in 50,000 lines of an STA report, the long-context stress test RULER formalizes [@HsiehEtAl2024RULER]. | Detects context-window saturation and loss of critical telemetry. |
 
 : **Core metrics for evaluating the AI architect:** A rigorous evaluation maps its metrics to the distinct roles of generation, prediction, and optimization. {#tbl-agent-metrics tbl-colwidths="[20,15,30,35]"}
+
+[^fn-igd-c10]: **Inverted Generational Distance (IGD)**: The average distance from each point on a reference Pareto front to the nearest point the agent actually found, so the score falls as the agent's results spread across the whole front rather than clustering in one region of it. The metric is defined only against a known reference front, so where none exists evaluators substitute the pooled non-dominated set of every point every agent evaluated, which makes the resulting number relative to that pool rather than comparable across studies.
 
 ### The Proxy Mirage
 
@@ -143,7 +147,9 @@ To rigorously benchmark an agent, we must evaluate its *Epistemic Robustness*, o
 
 ### Constraint Whac-A-Mole
 
-Unlike software unit tests which are largely orthogonal, hardware design involves navigating tight Pareto frontiers. Improving one metric almost invariably degrades another. The canonical failure mode for naive agents is the **Setup vs. Hold Oscillation**. For instance, consider an agent optimizing the XR Lighthouse's L2 cache controller: fixing a setup time violation (e.g., by upsizing a logic cell or swapping to a low-Vt cell) speeds up the logic cone, which instantly breaks the hold timing on an intersecting SRAM memory interface if that cell is shared with a short path that is now too fast for the capturing flip-flop.
+Unlike software unit tests which are largely orthogonal, hardware design involves navigating tight Pareto frontiers. Improving one metric almost invariably degrades another. The canonical failure mode for naive agents is the **Setup vs. Hold Oscillation**. For instance, consider an agent optimizing the XR Lighthouse's L2 cache controller: fixing a setup time violation (e.g., by upsizing a logic cell or swapping to a low-Vt cell)[^fn-low-vt-c10] speeds up the logic cone, which instantly breaks the hold timing on an intersecting SRAM memory interface if that cell is shared with a short path that is now too fast for the capturing flip-flop.
+
+[^fn-low-vt-c10]: **Low-Vt cell**: A standard cell built from transistors with a lower threshold voltage, which switch faster but leak far more current while idle. Swapping a cell to its low-Vt variant is the quickest way to buy timing on a critical path and the quickest way to overrun a leakage-power budget.
 
 Furthermore, resolving physical Design Rule Checks (DRCs) is highly localized but structurally rigid. Moving a wire to fix a spacing violation often pushes it into an adjacent net, triggering a DRC cascade. Evaluators must log the state trajectory of the agent, not just the final outcome. A rigorous benchmark tracks this state trajectory over time to distinguish a capable agent demonstrating directed, *monotonic convergence* toward a clean state from a failing agent thrashing wildly in an infinite constraint loop (@fig-whac-a-mole).
 
@@ -270,11 +276,15 @@ A rigorous benchmark must mandate:
 *   **A/A Noise Floor:** Before any A/B comparison of agents, run the A/A experiment. Rerun the same agent with new seeds, and separately push the same netlist through the same place-and-route flow twice, because the commercial tools are themselves nondeterministic and a few percent of run-to-run PPA scatter is normal. That scatter is the noise floor of the whole apparatus. A claimed delta that does not clear it measures the tool's dice, not the agent, and only the variance that remains after subtracting the environment's share says anything about the model. This is the agent-evaluation form of the measurement-bias result of @Mytkowicz2009WrongData, where environment effects exceeded the effect under study.
 *   **`pass@k,t`:** Adapt traditional software `pass@k` to hardware's compilation bottlenecks. Define probability of success within $k$ attempts and a bounded EDA tool time $t$ to penalize outliers that cause simulation timeouts. Compute the rate with the unbiased estimator of @Chen2021Codex, drawing $n \geq k$ samples per task; the naive success fraction over $n$ samples is biased and is a common evaluation error.
 
-    While `pass@k,t` is necessary to measure an agent's algorithmic search capability during benchmarking, traditional `pass@k` merely rewards at least one success in $k$ tries.^[**`pass@k`**: A software metric measuring whether at least one out of $k$ generated solutions passes the tests. In hardware, generating 99 unroutable netlists and 1 working netlist is an unacceptable waste of physical synthesis compute.] Deployment, however, usually needs the opposite property, high `pass^k` reliability (the probability that all $k$ runs succeed), so the agent does not fail on a single run and ruin a tape-out schedule. Furthermore, an abstract `pass@k` fails as a metric without rigorous physical place-and-route validation [@Kahng2018Machine]; an agent might achieve a high `pass@k` on logic-only tests or Verilog linting, but if those passing designs contain unroutable congestion or violate physical layout rules, the metric is misleading.
+    While `pass@k,t` is necessary to measure an agent's algorithmic search capability during benchmarking, traditional `pass@k` merely rewards at least one success in $k$ tries.[^fn-pass-at-k-c10] Deployment, however, usually needs the opposite property, high `pass^k` reliability (the probability that all $k$ runs succeed), so the agent does not fail on a single run and ruin a tape-out schedule. Furthermore, an abstract `pass@k` fails as a metric without rigorous physical place-and-route validation [@Kahng2018Machine]; an agent might achieve a high `pass@k` on logic-only tests or Verilog linting, but if those passing designs contain unroutable congestion or violate physical layout rules, the metric is misleading.
 
-*   **Wilcoxon Signed-Rank Test:** Use non-parametric tests to verify whether one agent's trajectory shows a consistent paired improvement over another across matched task suites. The test detects a shift in the median paired difference, which is a weaker and more defensible claim than full stochastic dominance.
+[^fn-pass-at-k-c10]: **`pass@k`**: A software metric measuring whether at least one of $k$ generated solutions passes the tests. In hardware the same score hides its cost, because generating 99 unroutable netlists alongside one working netlist still spends 100 physical-synthesis runs.
+
+*   **Wilcoxon Signed-Rank Test:** Use non-parametric tests to verify whether one agent's trajectory shows a consistent paired improvement over another across matched task suites. The test detects a shift in the median paired difference, which is a weaker and more defensible claim than full stochastic dominance.[^fn-wilcoxon-c10]
 *   **Bootstrapping Confidence Intervals:** When comparing Agent A to Agent B, authors must use bootstrap sampling (e.g., 10,000 resamples) to establish 95% confidence intervals around the expected Simulator Tax or PPA gain, as hardware sample sizes are often $N < 30$.
 *   **Regression Test Caching:** For CI/CD regression tracking, evaluators must recognize that $T=0$ (greedy decoding) does not guarantee deterministic outputs due to floating-point non-determinism in GPU batching and MoE routing; regression systems must instead rely on strict seed tracking and semantic hashing of outputs. ML-Sys platforms must cache EDA outputs mapped to specific generated Verilog SHAs to prevent wasting license hours on unchanged proposals.
+
+[^fn-wilcoxon-c10]: **Wilcoxon signed-rank test**: Pairs the two agents' scores task by task, ranks the absolute differences, and asks whether the positive ranks outweigh the negative ones by more than chance would produce. Because it uses only the ranks, it assumes nothing about the shape of the score distribution, which is what makes it the right instrument for the heavy-tailed results a paired t-test would misread.
 
 ### The Evaluator's Cheat Sheet: What to Report and Why
 
@@ -294,7 +304,9 @@ Any rigorous publication or production deployment should report the same base me
 
 : **A defensible autonomous-design claim reports cost, statistics, grounding, trajectory, convergence, diversity, null baselines, and system and environment identity together:** the base metrics a reviewer needs to quantify an agent's capability in hardware design. {#tbl-evaluator-cheat-sheet tbl-colwidths="[20,30,50]"}
 
-When a suite has twenty tasks, someone will average, and how they average can flip the winner. Architecture settled this in 1986, when Fleming and Wallace [-@FlemingWallace1986HowNotToLie] showed that the arithmetic mean of normalized ratios rewards whoever picked the baseline, which is why SPEC has reported geometric means of SPECratios ever since. Agent suites inherit the same law. Aggregate normalized scores with the geometric mean, publish the per-task results alongside, and treat any suite average whose winner changes under a different baseline as an artifact of arithmetic, not of capability.
+When a suite has twenty tasks, someone will average, and how they average can flip the winner. Architecture settled this in 1986, when Fleming and Wallace [-@FlemingWallace1986HowNotToLie] showed that the arithmetic mean of normalized ratios rewards whoever picked the baseline, which is why SPEC has reported geometric means of SPECratios ever since.[^fn-geometric-mean-c10] Agent suites inherit the same law. Aggregate normalized scores with the geometric mean, publish the per-task results alongside, and treat any suite average whose winner changes under a different baseline as an artifact of arithmetic, not of capability.
+
+[^fn-geometric-mean-c10]: **Geometric mean**: The nth root of the product of n numbers rather than their sum divided by n; a SPECratio is one such number, a workload's runtime normalized against the same workload's runtime on a fixed reference machine. The ranking a geometric mean produces does not change when every score is renormalized to a different baseline, which is precisely the manipulation an arithmetic mean of ratios rewards.
 
 ### Calibrating Autonomy to Evidence
 
