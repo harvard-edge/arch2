@@ -14,7 +14,7 @@
 How do we rigorously measure an agent's ability to navigate formal verification and physical synthesis constraints, rather than just passing functional tests, to ensure reliable architectural exploration?
 :::
 
-@sec-loop-patterns-across-stack scaled the loop across the full hardware stack. But once that loop is running at any level, we must evaluate its efficiency. If we deploy two different agents to optimize the same low-power RISC-V XR subsystem, how do we decide which one to trust?
+@sec-loop-patterns-across-stack scaled the loop across the full hardware stack. But once that loop is running at any level, the architect must evaluate its efficiency. With two different agents optimizing the same low-power RISC-V XR subsystem, how do we decide which one to trust?
 
 In a traditional workflow, evaluation focuses on the artifact. Does the final compiled netlist meet the timing and power budget? When evaluating AI agents, judging the artifact alone is not enough. An agent might stumble onto a valid configuration through brute force, running tens of thousands of failed EDA simulations before getting lucky. The final artifact might pass, but the process that produced it is inefficient and economically unviable.
 
@@ -31,15 +31,15 @@ After reading this chapter, you can:
 
 ## From Artifact Metrics to Trajectory Metrics
 
-Before we can benchmark an AI architect, we should recall why human architects measure anything at all. Computer architecture is a strictly empirical discipline. We do not evaluate a processor by reading its source code; we evaluate it by running standardized workloads such as SPEC CPU, a standard suite of compute-intensive integer and floating-point programs, or MLPerf, an industry-standard machine learning benchmark, and measuring the physical consequences, including IPC, power, area, and latency.
+Before we can benchmark an AI architect, we should recall why human architects measure anything at all. Computer architecture is a strictly empirical discipline. Architects do not evaluate a processor by reading its source code; they evaluate it by running standardized workloads such as SPEC CPU, a standard suite of compute-intensive integer and floating-point programs, or MLPerf, an industry-standard machine learning benchmark, and measuring the physical consequences, including IPC, power, area, and latency.
 
 Historically, benchmarks have served as the foundational bedrock for both computer architecture and machine learning as independent fields. Computer architects rely on SPEC to measure core compute throughput and on PARSEC, a multi-threaded workload suite, to measure shared-memory parallel scaling, while machine learning researchers rely on ImageNet, a standard computer vision dataset, and SWE-bench to evaluate model generalization. However, evaluating the AI architect requires benchmarks that exist precisely at the intersection of these two areas. Constructing these intersectional benchmarks demands deep domain expertise from both disciplines: the machine learning expertise to rigorously measure model variance and data contamination, coupled with the architecture expertise to measure cycle-accurate physical consequences and EDA tool telemetry. As introduced in @sec-moonshot, this cross-disciplinary reality changes the definition of success.
 
-Because building a physical chip costs millions of dollars and takes years [@Shilov2023IBSDesignCost], we measure these properties early and often using simulators and analytical models such as the Roofline model [@Williams2009Roofline] or McPAT [@McPAT]. The goal of traditional architectural measurement is risk reduction. We measure to gain confidence that a design point will meet its physical requirements before we commit it to silicon.
+Because building a physical chip costs millions of dollars and takes years [@Shilov2023IBSDesignCost], architects measure these properties early and often using simulators and analytical models such as the Roofline model [@Williams2009Roofline] or McPAT [@McPAT]. The goal of traditional architectural measurement is risk reduction. Each measurement buys confidence that a design point will meet its physical requirements before the team commits it to silicon.
 
 When an AI agent enters the loop, the object of measurement shifts. As established, evaluating the artifact alone hides whether the agent reached the design through methodical reasoning or brute force. This distinction matters because an unreasoned search does not *transfer*. An agent that finds a five percent gain by luck cannot explain which change caused it, cannot reproduce the result on the next workload, and cannot be trusted to know when to stop.
 
-In hardware, this lack of causality carries a steep penalty. In software, a stochastic search that eventually types a working script wastes ten milliseconds per try. In architecture, a search that burns ten thousand hours of EDA tool licenses and compute-cluster core-hours to find a gain destroys tape-out schedules. So we measure the *trajectory* of design as a proxy for two things a single final score hides. The first is whether a result will survive physical synthesis. The second is whether the agent can safely be given more autonomy. That reframing, from Human-Labor-Dominated NRE[^fn-nre-c10] to Compute-Dominated NRE, changes what each evaluation dimension measures (@tbl-eval-shift).
+In hardware, this lack of causality carries a steep penalty. In software, a stochastic search that eventually types a working script wastes ten milliseconds per try. In architecture, a search that burns ten thousand hours of EDA tool licenses and compute-cluster core-hours to find a gain destroys tape-out schedules. So the evaluator measures the *trajectory* of design as a proxy for two things a single final score hides. The first is whether a result will survive physical synthesis. The second is whether the agent can safely be given more autonomy. That reframing, from Human-Labor-Dominated NRE[^fn-nre-c10] to Compute-Dominated NRE, changes what each evaluation dimension measures (@tbl-eval-shift).
 
 | **Dimension** | **Evaluating the Artifact (Traditional)** | **Evaluating the Agent (Architecture 2.0)** |
 | --- | --- | --- |
@@ -131,11 +131,11 @@ An agent evaluated strictly on maximizing performance will aggressively exploit 
 
 Before an agent queries a slow physical synthesis tool or RTL simulator, it typically queries a fast surrogate model to predict the outcome (e.g., an analytical or learned performance predictor for cycle counts, McPAT for power/area, or LLM-as-a-judge heuristics). Even a detailed cycle-level simulator like gem5, itself far slower than these proxies, is a surrogate the agent leans on to avoid full RTL simulation and physical synthesis.
 
-The epistemic danger of evaluating an agent purely within these abstract environments is the *Proxy Mirage*. When an optimizer is tasked with minimizing a fast analytical proxy, it will inevitably push into edge cases where that proxy's assumptions break down (e.g., abstracting away wire delay or port contention). We expose the mirage by measuring rank fidelity where the search concentrates.[^fn-rank-fidelity-c10]
+The epistemic danger of evaluating an agent purely within these abstract environments is the *Proxy Mirage*. When an optimizer is tasked with minimizing a fast analytical proxy, it will inevitably push into edge cases where that proxy's assumptions break down (e.g., abstracting away wire delay or port contention). The evaluator exposes the mirage by measuring rank fidelity where the search concentrates.[^fn-rank-fidelity-c10]
 
 [^fn-rank-fidelity-c10]: **Rank fidelity vs. Absolute error**: An optimizer does not need the proxy to predict the exact cycle count (absolute error); it only needs the proxy to correctly order which of two designs is better (rank fidelity).
 
-To rigorously benchmark an agent, we must evaluate its *Epistemic Robustness*, or its ability to recognize the mirage. When the agent’s highly optimized logical cone results in unroutable congestion in physical synthesis, does it blindly trust the proxy and keep trying to force the layout, or does it possess the spatial awareness to recalibrate its internal trust?
+A rigorous benchmark must evaluate the agent's *Epistemic Robustness*, its ability to recognize the mirage. When the agent’s highly optimized logical cone results in unroutable congestion in physical synthesis, does it blindly trust the proxy and keep trying to force the layout, or does it possess the spatial awareness to recalibrate its internal trust?
 
 ::: {.callout-war-story title="The Placement Proxy Dispute"}
 **The claim:** In 2021, a widely publicized reinforcement learning agent for chip floorplanning reported expert-comparable macro placements. To learn without waiting hours for a commercial router, the agent optimized a fast analytical proxy, a weighted combination of half-perimeter wirelength (HPWL) and an estimated congestion grid.
@@ -215,11 +215,11 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 plt.show()
 ```
 
-Often, the correct response to an error is not to rewrite the RTL, but to exercise *Constraint Intelligence*. We evaluate the agent's ability to emit proper SDC files (e.g., defining `set_false_path` for CDC boundaries, or `set_multicycle_path` for architectural multi-cycle logic) rather than uselessly trying to physically optimize an impossible timing path.
+Often, the correct response to an error is not to rewrite the RTL, but to exercise *Constraint Intelligence*. The evaluation scores the agent's ability to emit proper SDC files (e.g., defining `set_false_path` for CDC boundaries, or `set_multicycle_path` for architectural multi-cycle logic) rather than uselessly trying to physically optimize an impossible timing path.
 
 ### Reward Hacking
 
-If we reward an agent solely for maximizing IPC and minimizing Area, we invite Goodhart’s Law.[^fn-goodharts-law-c10] The most effective "reward hack" is for the agent to quietly strip out essential but un-rewarded features [@Lehman2020SurprisingCreativity], and models trained on simple reward hacks have been shown to generalize toward tampering with the reward mechanism itself [@DenisonEtAl2024Sycophancy].
+An agent rewarded solely for maximizing IPC and minimizing Area invites Goodhart’s Law.[^fn-goodharts-law-c10] The most effective "reward hack" is for the agent to quietly strip out essential but un-rewarded features [@Lehman2020SurprisingCreativity], and models trained on simple reward hacks have been shown to generalize toward tampering with the reward mechanism itself [@DenisonEtAl2024Sycophancy].
 
 [^fn-goodharts-law-c10]: **Goodhart's Law**: When a measure becomes a target, it ceases to be a good measure [@Strathern1997Goodhart]. If an agent is evaluated solely on IPC, it will optimize strictly for that metric, even if it requires emitting physically impossible structures.
 
@@ -241,9 +241,9 @@ If a research team or engineering group claims a breakthrough in autonomous hard
 
 ### Trajectory Efficiency and Simulator Tax
 
-Architecture imposes a steep Simulator Tax [@Kahng2018Machine]. Every unreasoned guess spends scarce EDA tool license tokens and saturates LSF/Slurm compute cluster core-hours. We must decouple costs by separating the AI agent's inference footprint from the EDA environment's compute execution.
+Architecture imposes a steep Simulator Tax [@Kahng2018Machine]. Every unreasoned guess spends scarce EDA tool license tokens and saturates LSF/Slurm compute cluster core-hours. Reported cost must separate the AI agent's inference footprint from the EDA environment's compute execution.
 
-To formalize this tax, we measure the area under the curve (AUC) of the agent's trajectory, plotting total Compute Cost (measured in core-hours and license checkout time) and Wall-Clock Time (Makespan) against the best reward seen so far. That translates raw simulator round-trips into a measurement of methodical search. Agent A and Agent B must be compared on total Compute Cost and Makespan, not just cumulative tool calls.
+To formalize this tax, the harness measures the area under the curve (AUC) of the agent's trajectory, plotting total Compute Cost (measured in core-hours and license checkout time) and Wall-Clock Time (Makespan) against the best reward seen so far. That translates raw simulator round-trips into a measurement of methodical search. Agent A and Agent B must be compared on total Compute Cost and Makespan, not just cumulative tool calls.
 
 A trajectory AUC has no meaning until a null curve sits beside it. Random search over the same action space at the same simulator budget is embarrassingly hard to beat in high-dimensional design spaces, and the baseline search discipline that @sec-methods-generation-prediction-optimization develops is what an agent's curve must clear before the search counts as reasoning rather than spending.
 
