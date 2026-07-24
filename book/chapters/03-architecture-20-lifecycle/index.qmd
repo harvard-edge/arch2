@@ -71,11 +71,13 @@ To ground these abstract concepts in a practical reality, we use the XR subsyste
 
 ![**How an iterative architecture study proceeds.** An architect or AI method reads the recorded design state, makes an allowed change, runs a tool, and submits the result for review. The reviewer records what the evidence supports, and the decision owner determines what happens next.](images/F3-design-loop){#fig-design-loop width="85%" fig-alt="A design loop within a scoped architecture study. Represented state, permitted action, tool feedback, and evidence lead to claim review."}
 
-1. **Read Represented State:** The AI agent queries the current design state, observing the 2 MB baseline cache, the XRBench trace, and the remaining 1 W total power budget (dynamic + leakage).
+1. **Read Represented State:** The AI agent queries the current design state, observing the 2 MB baseline cache, the XRBench trace, and the 1\ W of headroom remaining in the subsystem's 3\ W budget (dynamic plus leakage).
 2. **Make Allowed Change:** The agent proposes expanding the cache to 3 MB. The ontology validates that this action is within the allowed design space.
 3. **Execute Tool (Feedback):** The proposed 3 MB configuration is dispatched to the cycle-accurate simulator (e.g., gem5) and the analytical power model (e.g., McPAT). The tools return raw feedback, with illustrative values for this walkthrough: a 12% reduction in capacity misses, resulting in decreased dynamic power (fewer DRAM accesses), but a 40 mW increase in leakage power and a 0.2 mm^2 increase in area.
 4. **Compile Evidence:** The raw feedback is packaged with its provenance (simulator version, trace name, time of execution) into an immutable evidence record.
-5. **Claim Review:** A deterministic check evaluates the evidence against the original bounded claim. Because the 40 mW leakage increase keeps the system well within the remaining 1 W total power budget, and the area fits the floorplan constraint, the check passes. The 3 MB configuration becomes the new baseline state for the next iteration.
+5. **Claim Review:** A deterministic check evaluates the evidence against the original bounded claim. Because the 40 mW leakage increase keeps the system well within that remaining 1\ W of headroom, and the area fits the floorplan constraint, the check passes. The 3 MB configuration becomes the new baseline state for the next iteration.
+
+The next turn shows the outcome the loop exists to produce. The agent proposes 4 MB, the ceiling of the declared space. The tools return, again with illustrative values, a further 4% reduction in capacity misses, but the larger array's access time no longer closes timing at the declared 2 GHz; the critical path through the 4 MB macro misses the cycle budget. The claim review fails on the timing gate. No judgment call is involved. The candidate is rejected, and the run is preserved as a negative trace with the same provenance the passing run carried. The study then stops at its declared commitment level, a simulation-grade recommendation to carry the 3 MB configuration into RTL evaluation and nothing stronger. The rejection is not wasted work. The preserved trace is what keeps the next study from re-proposing the same dead end.
 
 This formalized loop ensures that every AI-driven change is mechanically verified against physical constraints before it is accepted. The rest of this chapter walks through the six stages of this lifecycle, detailing the unique challenges an agent faces at each step.
 
@@ -113,11 +115,11 @@ Once the claim is stated, the architect must bound the design space. However, co
 When bounding the search space, an architect cannot simply set a naive upper limit like "L2 cache up to 4 MB." Scaling up an L2 cache doesn't just consume abstract area; it changes Network-on-Chip (NoC) routing distances, alters coherence snooping traffic, and introduces localized thermal hotspots (dark silicon). Furthermore, altering the cache banks or adding compute elements creates NoC congestion. Streaming high-resolution XR textures aggressively stresses coherence snooping and crossbar routing. In physical design, a 4 MB cache requires placing massive SRAM macros. These macros create hard routing blockages and pin density bottlenecks that threaten power integrity (IR drop). If an AI agent optimizes only for aggregate area, it will propose a subsystem that passes analytical proxies but is fundamentally unroutable in Place-and-Route (P&R).
 
 ::: {.callout-war-story title="The AI that collapsed the power grid"}
-**Context:** An AI optimizer was tasked with maximizing Instructions Per Cycle (IPC) for a high-performance core.
+**The claim.** An AI optimizer tasked with maximizing instructions per cycle for a high-performance core proposed a large, centralized SRAM macro, and every logical proxy scored it a clear win.
 
-**What happened:** The agent successfully maximized IPC by proposing a massive, centralized SRAM macro. It passed all logical proxies with flying colors.
+**The gap.** None of those proxies modeled current delivery. At the physical level the centralized macro caused severe IR drop, because the power rails could not supply the peak current density a single monolithic block demands. The bounded study had named the objective but not the power grid.
 
-**The mechanism:** At the physical level, the centralized SRAM caused catastrophic IR drop (power grid collapse) because the power rails couldn't supply the required peak current density to a single monolithic block. The team was forced into a painful rollback to a distributed, tiled design.
+**The lesson.** Formulation must carry the physical-delivery constraints the proxies cannot see, or the loop will optimize confidently into them. The forced rollback to a distributed, tiled design is the price of a boundary that names the metric but not the physics. This case is a composite of a failure pattern physical-design engineers report, not one published incident.
 :::
 
 Formulating a bounded study is incredibly difficult because it requires explicitly mapping these hidden entanglements and physical blockages. A well-formulated boundary prevents the agent from optimizing one local subsystem while silently starving the memory controller or rendering the floorplan unroutable.
@@ -314,7 +316,25 @@ The red return path in @fig-ontology-loop represents the most important element 
 
 When a design hits the Trust Barrier and fails, the negative evidence is fed directly back into the start. If the failure was due to an out-of-distribution proxy hallucination, the **Explore** stage uses the formatted negative evidence to update its Uncertainty Quantification and retrain its world model. If the failure occurred because the original constraints were physically impossible, the human architect uses the rejected Design-Loop Card to re-**Formulate** a narrower, more realistic claim, and the cycle begins anew.
 
+## Open Research Questions
+
+The lifecycle in this chapter is a framework, and a framework earns trust by being tested. These questions are where its own machinery remains unproven.
+
+1. **What is the smallest set of declarations that makes an architecture study replayable by a stranger?** The design-loop card in this chapter is one proposal. Whether a smaller or different set would let an independent architect re-run and challenge a study is an open, testable question.
+
+2. **Can lifecycle stage transitions be checked mechanically?** Deciding that exploration has genuinely finished, or that the evidence justifies moving a candidate into implementation, is judgment today. What recorded signals would let a check flag a premature transition?
+
+3. **How should negative traces be represented so a rejection transfers?** A preserved failure is only valuable if a later study can discover it and trust its scope. No standard representation for rejected candidates and their validity conditions exists yet.
+
+4. **What would make a claim's scope machine-checkable?** An agent that generalizes one workload's win into a broad recommendation has silently widened the claim. Encoding scope so that a tool can catch the widening remains unsolved.
+
+5. **When does the formality pay for itself?** Cards, gates, and records cost effort that a two-day study may never repay. Where the overhead threshold sits, and how it scales with study size and consequence, has not been measured.
+
 ## Conclusion
+
+::: {.callout-design-principle title="The loop cannot grant itself authority"}
+A design loop may execute any stage it is given, but it cannot widen its own scope, waive its own checks, or authorize its own commitment. Every enlargement of what the loop may do is a decision made outside the loop, by a named owner, on recorded evidence.
+:::
 
 The Architecture 2.0 lifecycle gives an AI agent real initiative inside the loop while keeping the checks that verify its work, the claim it is tested against, and the final authority outside its reach. Formalizing how we formulate, explore, implement, evaluate, explain, and defend our decisions transforms AI from a stochastic novelty into a trusted participant in the engineering of computer architecture.
 
@@ -331,4 +351,8 @@ The six stages are the book's spine, and the chapters that follow build the mach
 
 : **One spine, six stages:** each stage names what the design loop must supply and the chapter that builds it; Explain is exercised inside the worked study rather than in a chapter of its own. The right column is a one-time translation for readers arriving from reinforcement learning; the book's own vocabulary is the lifecycle. {#tbl-lifecycle-map tbl-colwidths="[16,32,36,16]"}
 
-In the next chapter, @sec-data-representations-world-models, we start where the Explore stage starts: how design state is represented so an AI method can perceive the limits of its world.
+::: {.callout-carry-forward}
+- **Carry forward:** The bounded study is the unit of work, and the six-stage lifecycle is the book's spine. A study declares its claim, legal actions, gates, and decision owner before any tool runs, and the loop that executes it cannot widen its own authority.
+- **Reader test:** For your next architecture question, can you write the bounded claim, name the check that could reject each candidate, and say who commits the result?
+- **Up next:** @sec-data-representations-world-models starts where the Explore stage starts: how design state is represented so an AI method can perceive the limits of its world.
+:::
