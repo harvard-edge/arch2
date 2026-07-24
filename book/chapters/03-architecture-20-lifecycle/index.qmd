@@ -47,7 +47,7 @@ Read @fig-structured-layer-above-rtl from top to bottom:
 * **The Middle Layer (Bounded Comparison)**: This turns intent into a bounded comparison. Its scope names the specific question, such as deciding whether a particular cache configuration merits RTL evaluation. The architectural claim says what will be reviewed. It is not another architecture tool; rather, it connects design intent to tool execution.
 * **The Lower Layer (Executable Tool Path)**: Simulators, compilers, RTL generators, and EDA flows carry out different parts of the comparison to return measurements that enter the evidence record.
 
-In software engineering, coding agents rely on structured environments like SWE-bench to provide a bounded issue, a known repository state, and executable tests. Architecture requires a similar structure, but building it is much harder because feedback (power, area, timing) is delayed, ambiguous, and subject to physical constraints.
+In software engineering, coding agents rely on structured environments like SWE-bench [@JimenezEtAl2024SWEBench] to provide a bounded issue, a known repository state, and executable tests. Architecture requires a similar structure, but building it is much harder because feedback (power, area, timing) is delayed, ambiguous, and subject to physical constraints.
 
 Because architecture state is scattered and tool feedback carries different costs and fidelity, an AI-assisted architecture study requires more than just an environment. It requires a bounded claim, evidence at the right fidelity, and a named person who owns the final decision.
 
@@ -67,7 +67,7 @@ Crucially, for AI-assisted architecture to be practical, this lifecycle operates
 
 > **Architecture design loop.** The repeated process of examining the current design, making an allowed change, running the relevant tools, interpreting the result, and deciding whether to revise, reject, or continue. Building on established Agile Hardware Development cycles (e.g., the Chisel ecosystem [@Izraelevitz2017Chisel]), each iteration retains enough information for another architect to see what led to the next step.
 
-To ground these abstract concepts in a practical reality, we use the XR subsystem design task from the Lighthouse prompt as our running example. The interaction between an agent's proposed candidates and the underlying tools forms a continuous execution cycle. @fig-design-loop expands this process into a single, concrete iteration:
+To ground these abstract concepts in a practical reality, we use the XR subsystem design task from the Lighthouse prompt as our running example. The interaction between an agent's proposed candidates and the underlying tools forms a continuous execution cycle. A single turn threads the agent's proposal through the tools and back to a claim check (@fig-design-loop):
 
 ![**How an iterative architecture study proceeds.** An architect or AI method reads the recorded design state, makes an allowed change, runs a tool, and submits the result for review. The reviewer records what the evidence supports, and the decision owner determines what happens next.](images/F3-design-loop){#fig-design-loop width="85%" fig-alt="A design loop within a scoped architecture study. Represented state, permitted action, tool feedback, and evidence lead to claim review."}
 
@@ -140,7 +140,7 @@ If an AI agent only receives the cache miss rates but remains blind to the area 
 
 ### The Modality Mismatch
 
-Even if the state is fully topological, exploration faces a fundamental **modality mismatch**. Modern AI models natively operate on sequential text tokens (LLMs) or fixed-length continuous vectors (Reinforcement Learning). Hardware, however, exists as rigid hierarchical netlists, Hardware Description Languages (Verilog/Chisel), and constraint graphs. An LLM might generate syntactically perfect Verilog that is structurally nonsensical, while an RL agent might produce continuous values that fail to map to discrete hardware parameters.
+Even if the state is fully topological, exploration faces a fundamental **modality mismatch**. Modern AI models natively operate on sequential text tokens (LLMs) or fixed-length continuous vectors (Reinforcement Learning). Hardware, however, exists as rigid hierarchical netlists, Hardware Description Languages (Verilog/Chisel), and constraint graphs. An LLM might generate syntactically perfect Verilog that is structurally nonsensical [@LiuEtAl2024CraftRTL], while an RL agent might produce continuous values that fail to map to discrete hardware parameters.
 
 ::: {.callout-war-story title="The flawless Verilog that deadlocked the emulator"}
 **Context:** An LLM was tasked with generating Verilog for a complex control module.
@@ -184,6 +184,8 @@ To operate effectively, an agent needs clear tool interfaces (like the ArchGym A
 
 Importantly, we must remind ourselves that we are now deep inside the **fast automated inner loop** (Explore ↔ Implement ↔ Evaluate), spinning thousands of times at machine speed, completely decoupled from the slow human-gated outer loop.
 
+Commercial EDA tools fail in a handful of recurring ways, each with a recovery move the loop can record (@tbl-toolchain-friction).
+
 | **Toolchain friction type** | **Agent recovery strategy** |
 | --- | --- |
 | FlexLM license hangs or timeouts | Implement exponential backoff, strict resource timeouts to prevent thread deadlocks, or query a lower-fidelity tool. |
@@ -193,6 +195,8 @@ Importantly, we must remind ourselves that we are now deep inside the **fast aut
 | Undocumented tool crashes | Log the failure, mark the configuration as invalid, and pivot to a nearby state. |
 | Silent output corruptions | Use secondary validation checks (e.g., verifying the netlist isn't empty) to flag anomalous results. |
 | Zero-exit-code parsing errors | Do not trust a `0` exit status. Validate physical outputs directly and cluster massive STA/DRC logs before ML ingestion. |
+
+: **Each EDA friction mode has a recovery move the loop can log:** Commercial-tool failure modes an automated agent meets, and the recovery each one demands. {#tbl-toolchain-friction tbl-colwidths="[42,58]"}
 
 A bounded study turns toolchain friction from a fatal obstacle into a recorded constraint. When an agent cannot evaluate a candidate due to a tool crash or a dirty Tcl state, it logs the failure as negative evidence and pivots. Planning for tool failures in advance lets the AI continue searching the viable portions of the design space.
 
@@ -236,7 +240,7 @@ When an AI agent changes a parameter and a tool completes the run, the result is
 **In the cache comparison.** A statement that one cache configuration remains inside the modeled 3 W envelope needs the named XRBench traces, RISC-V baseline, cache parameters, simulator and power-model versions, relevant software assumptions, uncertainty, and the check that would rule the configuration out.
 :::
 
-Rejected candidates, failed simulator runs, and proxy wins that disappear at higher fidelity all help mathematically map the valid design space. An AI agent shouldn't simply discard these failures; it must preserve them as negative evidence to prevent future agents from wasting expensive tool runs on known dead ends.
+Rejected candidates, failed simulator runs, and proxy wins that disappear at higher fidelity all help mathematically map the valid design space. An AI agent shouldn't simply discard these failures; it must preserve them as negative evidence to prevent future agents from wasting expensive tool runs on known dead ends [@ShinnEtAl2023Reflexion].
 
 ## Explaining: Mechanism and Interpretation
 
@@ -262,7 +266,7 @@ The architecture lifecycle poses a severe Reinforcement Learning challenge known
 
 The explanation stage mitigates the Clever Hans risk by isolating these causal mechanisms. However, modern CPUs are deeply pipelined and highly speculative, creating a "fog" where effects are decoupled from root causes. If an AI proposes our 3 MB XR cache and simulation shows a drop in IPC, the true cause might not be the miss rate (which improved), but the larger cache increasing hit latency, thereby stalling the deeply pipelined out-of-order execution engine.
 
-While techniques like SHAP explain the *surrogate proxy*, they provide *zero physical proof*. True explanation requires **Automated Counterfactual Generation**—agents orchestrating their own ground-truth simulator ablations to pierce the speculative fog. For example, an agent proves its hypothesis by locking specific cache ways or synthesizing micro-benchmarks to observe the isolated impact on capacity misses. A fluent LLM description is merely a hypothesis; the explanation stage proves it against physical telemetry.
+While techniques like SHAP [@LundbergLee2017SHAP] explain the *surrogate proxy*, they provide *zero physical proof*. True explanation requires **Automated Counterfactual Generation**—agents orchestrating their own ground-truth simulator ablations to pierce the speculative fog. For example, an agent proves its hypothesis by locking specific cache ways or synthesizing micro-benchmarks to observe the isolated impact on capacity misses. A fluent LLM description is merely a hypothesis; the explanation stage proves it against physical telemetry.
 
 ## Defending: Authority and the Design-Loop Card
 
@@ -300,7 +304,7 @@ The **Design-Loop Card** is the direct antidote to the Trust Barrier. It isn't j
 
 The ML community adopted a similar practice with model cards to make reporting more transparent [@MitchellEtAl2019ModelCards]. Just as model cards disclose evaluation data to prevent misuse of a trained model, the design-loop card aggregates these specific ML and physical proofs into a single, undeniable document (@fig-design-loop-card-example). The architect signs off because the card proves the physics hold.
 
-![**A design-loop card indexes one architecture study.** It points readers to the study scope, claim, execution process, evidence, and decision owner.](images/F4b-design-loop-card-example){#fig-design-loop-card-example width="85%" fig-alt="A compact study index card for the Lighthouse prompt, listing fields from intent through failed runs."}
+![**A design-loop card indexes one architecture study.** It points readers to the study scope, claim, execution process, evidence, and decision owner.](images/F4b-design-loop-card-example){#fig-design-loop-card-example width="85%" fig-alt="A compact study index card for the Lighthouse prompt, listing twelve fields from intent through rejection checks and the accountable decision."}
 
 A design-loop card cannot settle every dispute, but it can show a later reviewer which records a contested result actually disclosed. The card helps reviewers locate missing scope or evidence, preventing the name or capability of an AI agent from becoming a substitute for adequate architectural evidence.
 

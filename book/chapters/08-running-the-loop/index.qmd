@@ -14,7 +14,7 @@
 What must an architect fix, execute, and preserve so that one bounded AI-assisted study reaches no conclusion stronger than its recorded results?
 :::
 
-This crux addresses baseline shopping, a practical trap in AI-assisted architecture. Generative AI accelerates the creation of architectural candidates, but because simulators are configurable along many axes and models are sensitive to phrasing, it is easy to subconsciously baseline shop by tweaking simulator parameters after the fact to validate a plausible AI candidate. It is equally easy to prompt shop by silently discarding dozens of failed prompts until one produces the desired architecture.
+This crux addresses baseline shopping, a practical trap in AI-assisted architecture. Generative AI accelerates the creation of architectural candidates, but because simulators are configurable along many axes and models are sensitive to phrasing, it is easy to subconsciously baseline shop by tweaking simulator parameters after the fact to validate a plausible AI candidate. It is equally easy to prompt shop by silently discarding dozens of failed prompts until one produces the desired architecture. Post-hoc choices like these are the same kind that produced overoptimistic, irreproducible results across hundreds of machine-learning studies [@KapoorNarayanan2023Leakage].
 
 ::: {.callout-war-story title="The Shifting Baseline"}
 **The pitfall.** A design team celebrated a 20% architectural speedup from a novel accelerator proposal, only to discover weeks later that the baseline software was accidentally compiled without standard optimization flags (`-O3`). When the baseline was properly optimized, the entire architectural gain vanished.
@@ -150,26 +150,24 @@ before a broader decision relied on it.
 
 As established in @sec-data-representations-world-models, general knowledge is meaningless without explicit project constraints. The representation for this study is small, serving as a specific record rather than a general world model of the accelerator. The fifteen legal shapes, baseline, mutable array dimensions, fixed simulator conditions, local score, and workload matrices form the explicit design state. Formalizing these variables keeps authority over the design boundaries with the architect. In this instance, the candidate representation changes only the datapath's `ArrayHeight` and `ArrayWidth`, while the weight-stationary dataflow [@ChenEtAl2016Eyeriss], SRAM capacity, interface bandwidth, layout, workload, and simulator version remain fixed.
 
-That representation is useful only if a candidate change can be connected to a predicted consequence. The model proposed three shape deltas and predicted that a wider 16 by 64 array would better match the workload's N dimensions than its mirrored 64 by 16 alternative, further asserting that exchanging M and N in the workload would reverse the winner. The AI's ability to predict a directional outcome relies on its learned statistical priors, which must be tested against the simulator acting as the execution world model. The proposal therefore emitted both a design-state change and a testable consequence hypothesis that the simulator could challenge.
+That representation is useful only if a candidate change can be connected to a predicted consequence. The model proposed three shape deltas and predicted that a wider 16 by 64 array would better match the workload's N dimensions than its mirrored 64 by 16 alternative, further asserting that exchanging M and N in the workload would reverse the winner. The AI's ability to predict a directional outcome relies on its learned statistical priors, which can yield a fluent rationale that misstates the true cause of the answer [@TurpinEtAl2023Unfaithful] and therefore must be tested against the simulator acting as the execution world model. The proposal therefore emitted both a design-state change and a testable consequence hypothesis that the simulator could challenge.
 
-![**GEMM dimensions map onto the array.** M and N map to array height and width under weight-stationary mapping; transposing M and N does not simply swap the two.](images/F8-array-mapping){#fig-array-mapping fig-alt="A systolic array with GEMM M and N labels on its height and width, and a second panel showing the workload after M and N are exchanged, illustrating that the mapping to array height and width does not simply invert."}
+![**The intuitive axis mapping is what this study left unpinned:** under weight-stationary dataflow, M and N appear to map directly onto array height and width, so transposing them looks like a simple swap of orientation. The binding actually runs through the loaded weight tile, which is why the mechanism test could not cleanly isolate the N-side effect.](images/F8-array-mapping){#fig-array-mapping fig-alt="One GEMM workload box maps to a wide 16 by 64 array that fits the N dimension and a tall 64 by 16 array that fits the M dimension, with a transpose connector between the two arrays indicating that exchanging M and N swaps which orientation is favored."}
 
 The record omits one important part of that connection. It names GEMM M, N, and
 K dimensions and fixes SCALE-Sim's weight-stationary mode, but it does not state
 how those dimensions map onto `ArrayHeight` and `ArrayWidth` under the selected
-mapping (see @fig-array-mapping). @fig-array-mapping shows why that gap matters,
-since under weight-stationary mapping the GEMM axes bind to array height and
+mapping. Under weight-stationary mapping the GEMM axes bind to array height and
 width through the loaded weight tile, so exchanging M and N does not simply swap
 the two array dimensions and width does not cleanly correspond to the N-side
-effect. The explanation assumes that array width corresponds to the relevant
-N-side effect.
+effect (@fig-array-mapping). The explanation assumes that array width corresponds
+to the relevant N-side effect.
 
 That premise was not grounded in the retained study context. The transposition still distinguishes the model's exact directional prediction, but it is not a causally isolated test of orientation. Because the spatial mapping (e.g., which loop indices map to spatial X/Y dimensions in the weight-stationary setup) was not explicitly defined in the AI prompt before inference, the test probes the prompt's completeness rather than the AI's architectural reasoning. A stronger follow-up must pin the mapping semantics explicitly in the prompt and choose contrasts that causally isolate them.
 
 ### Fixing Environment and Roles
 
-@tbl-practitioner-path summarizes the completed design loop. The card is an
-index into the retained record rather than a substitute for it.
+The completed loop card indexes every artifact of the run (@tbl-practitioner-path).
 
 | **Card field** | **Completed study record** |
 | --- | --- |
@@ -181,7 +179,7 @@ index into the retained record rather than a substitute for it.
 | **Evidence** | The complete model response, all evaluations, and study result preserve proposals, measurements, claim dispositions, and the stopping status. |
 | **Decision status** | The bounded search stops with 32 by 32 as the status quo for the five evaluated shapes. The architecture action remains `awaiting_author_confirmation`, and no optimality claim follows. |
 
-: **Completed design-loop card for the bounded study.** The card points to the files that define the state, roles, checks, evidence, and decision status. {#tbl-practitioner-path tbl-colwidths="[21,69]"}
+: **The card indexes the record, it does not replace it:** each field points to the retained files that define the state, roles, checks, evidence, and decision status. {#tbl-practitioner-path tbl-colwidths="[21,69]"}
 
 The role separation in @tbl-practitioner-path matters because while the model and fixed heuristic select candidates, neither produces the measured score or approves an architecture change. The validator may reject malformed or illegal output but cannot decide whether the workload or objective is appropriate. SCALE-Sim calculates the recorded quantities without establishing its own fidelity, leaving the architect to own those judgments and the final stopping decision.
 
@@ -227,9 +225,9 @@ The subsequent call returned a schema-valid response. Since semantic validation 
 | **Interaction** | One valid proposal call, no repair call, and no observed tool calls. Prompt, schema, output, and provenance hashes are recorded. |
 | **Privacy** | No credential, session identifier, or private configuration is stored. |
 
-: **Recorded and unavailable model settings.** The record reports values supplied by the runtime and marks the remaining settings as unavailable. {#tbl-model-provenance tbl-colwidths="[27,63]"}
+: **Provenance is only as good as the runtime exposes:** the record reports the values the runtime supplied and marks the rest as unavailable rather than inferring them. {#tbl-model-provenance tbl-colwidths="[27,63]"}
 
-Two limits matter when interpreting this record. First, the valid proposal used one call and no repair, meaning later candidate replacement cannot explain the outcome. Evaluating generative models requires sampling multiple trajectories to measure expected utility. Future scaled iterations must adopt standard ML evaluation precedents, such as Pass [@Chen2021Codex], using non-zero temperature to measure the model's true search capability across a broader design space. Restricting the legal search space to just 15 array shapes guarantees overlap with a simple heuristic; truly evaluating AI requires exposing high-dimensional, non-linear choices like dataflow selection or SRAM partitioning where simple heuristics fail. Second, the requested alias is not a pinned model identity. The response hash pins the retained output rather than the hosted generator. The record therefore verifies what happened in this call but cannot recreate the generation exactly, although the SCALE-Sim runs remain replayable from their retained inputs.
+Two limits matter when interpreting this record. First, the valid proposal used one call and no repair, meaning later candidate replacement cannot explain the outcome. Evaluating generative models requires sampling multiple trajectories to measure expected utility. Future scaled iterations must adopt standard ML evaluation precedents, such as Pass [@Chen2021Codex], using non-zero temperature to measure the model's true search capability across a broader design space. Sampling more trajectories sharpens that estimate only if the checks behind it are strong, since weak test suites let incorrect candidates pass and inflate such scores [@LiuEtAl2023EvalPlus]. Restricting the legal search space to just 15 array shapes guarantees overlap with a simple heuristic; truly evaluating AI requires exposing high-dimensional, non-linear choices like dataflow selection or SRAM partitioning where simple heuristics fail. Second, the requested alias is not a pinned model identity, since a hosted model behind a fixed alias can measurably shift behavior between dated snapshots [@ChenEtAl2024ChatGPTBehavior]. The response hash pins the retained output rather than the hosted generator. The record therefore verifies what happened in this call but cannot recreate the generation exactly, although the SCALE-Sim runs remain replayable from their retained inputs.
 
 ### Interpreting Proposal Overlap
 
@@ -260,8 +258,8 @@ example, which therefore demonstrates them only in the passing direction.
 Showing them reject an illegal or over-cycle candidate would require a trace
 this bounded run does not contain. Several legal
 alternatives were dominated under the declared score, and no nonbaseline shape
-cleared the decision margin. @tbl-ai-study-results reports all eight arm
-evaluations.
+cleared the decision margin across all eight arm evaluations
+(@tbl-ai-study-results).
 
 | **Arm** | **Shape and source** | **Cycles** | **Average layer utilization** | **Local score** | **Result within arm** |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -286,7 +284,7 @@ This massive spike in off-chip DRAM writes is not just an isolated power metric 
 **The lesson.** A 1D proxy score hides multi-objective physical realities. Optimizing for compute utilization without accounting for data-movement energy will produce a chip that functions perfectly in simulation but acts as a space heater in reality.
 :::
 
-While strict preregistration prevents moving the goalposts to declare a false 'win,' an architect discovering this severe proxy mismatch in production (@sec-feedback-verification-trust) would explicitly abort the preregistered study, amend the objective function to incorporate multi-objective physical constraints directly into the rejection criteria (e.g., an Energy-Delay Product $E_{total} = E_{compute} + E_{SRAM} + E_{DRAM}$), and restart the bounded loop to co-optimize Power, Performance, and Area (PPA) simultaneously.
+While strict preregistration prevents moving the goalposts to declare a false 'win,' an architect discovering this severe proxy mismatch in production (@sec-feedback-verification-trust) would explicitly abort the preregistered study, amend the objective function to incorporate multi-objective physical constraints directly into the rejection criteria (e.g., an Energy-Delay Product $E_{total} = E_{compute} + E_{SRAM} + E_{DRAM}$ estimated by an architecture-level energy model [@WuEtAl2019Accelergy]), and restart the bounded loop to co-optimize Power, Performance, and Area (PPA) simultaneously.
 
 ```{python}
 #| label: fig-proxy-mismatch
@@ -502,8 +500,8 @@ parsed results, hashes, tests, and replay code. This study carries no proprietar
 
 ### Mapping Artifacts to Review Questions
 
-@tbl-study-archive maps each retained artifact to the review question it can
-answer.
+Each retained artifact answers a specific review question
+(@tbl-study-archive).
 
 | **Artifact** | **What it lets a reviewer check** |
 | --- | --- |
@@ -514,7 +512,7 @@ answer.
 | **Reference evaluations and execution provenance** | Exact topology, layout, SCALE-Sim configuration, raw run locations, parsed metrics, rejection results, and conclusions for all twelve evaluations. |
 | **Reference manifest and replay** | Whether retained files match their hashes and a network-free rerun regenerates every stable input, report, metric, and result. |
 
-: **Files and commands available for review.** These artifacts do not establish that the simulator is accurate or the workload representative. They preserve the declared run so that reviewers can examine those assumptions. {#tbl-study-archive tbl-colwidths="[26,64]"}
+: **Every review question maps to a retained artifact:** these files do not establish that the simulator is accurate or the workload representative, but they preserve the declared run so reviewers can examine those assumptions. {#tbl-study-archive tbl-colwidths="[26,64]"}
 
 ### Three Levels of Verification
 
@@ -526,7 +524,7 @@ These artifacts support verification across three distinct levels of scrutiny, a
 | **Reproduction** | Rerunning the AI agent with the same prompt and seed. | Highlights model drift, API changes, and non-determinism. |
 | **Independent validation** | A different team building a different model or testbench to evaluate the same architectural claim in RTL. | Establishes that the architectural mechanism holds in physical reality, using independent oracles. |
 
-: **Three levels of verification.** True architectural trust requires independent validation, while replay guarantees only that the study faithfully executed its own declared loop. {#tbl-verification-levels tbl-colwidths="[22,38,40]"}
+: **Replay proves honesty, not correctness:** true architectural trust requires independent validation, while replay guarantees only that the study faithfully executed its own declared loop. {#tbl-verification-levels tbl-colwidths="[22,38,40]"}
 
 ### Verifying the Replay
 

@@ -41,7 +41,7 @@ Hardware tools were built for humans, not APIs. For decades, architecture tools 
 
 This legacy breaks the familiar ML environment paradigm, creating a **semantic gap**. That gap separates the high-level semantic intent of a design ("increase the cache size to improve hit rate") from the low-level, unstructured mechanics of the tool itself. Instead of returning a simple scalar reward, EDA tools return gigabytes of unparsed logs, crash silently, or hang for days. The mismatch grows as design moves down the stack. The EDA tools at the bottom rely heavily on the tacit knowledge of physical design engineers to interpret unroutable netlists, whereas an AI system requires fully explicit, programmatic interfaces.
 
-Foundation models interact most reliably with external software through strict, typed APIs rather than unconstrained shell commands. Tool-use research points the same way. Toolformer trains a model to invoke typed APIs for subtasks it cannot perform reliably on its own [@SchickEtAl2023Toolformer]. This maps directly to the architectural domain. While "computer use" models can visually parse GUIs and move a mouse, relying on visual GUI automation for architecture design is brittle and computationally inefficient. Because of this, system intent, a GUI, and simple permission to call a tool are insufficient for real architecture work. Strict API boundaries instead of raw shell access keep control with the human architect, who can bound the AI's legal actions before spending cluster hours on unroutable silicon.
+Foundation models interact most reliably with external software through strict, typed APIs rather than unconstrained shell commands. Constraining generation to a typed, retrieved API surface sharply cuts the argument hallucinations that raw shell access invites [@PatilEtAl2024Gorilla]. Tool-use research points the same way. Toolformer trains a model to invoke typed APIs for subtasks it cannot perform reliably on its own [@SchickEtAl2023Toolformer], and ReAct interleaves reasoning with tool calls so the model consumes each observation before choosing its next action [@YaoEtAl2023ReAct]. This maps directly to the architectural domain. While "computer use" models can visually parse GUIs and move a mouse, relying on visual GUI automation for architecture design is brittle and computationally inefficient; on real desktop tasks the strongest such agents finish only a small fraction of what a human completes [@XieEtAl2024OSWorld]. Because of this, system intent, a GUI, and simple permission to call a tool are insufficient for real architecture work. Strict API boundaries instead of raw shell access keep control with the human architect, who can bound the AI's legal actions before spending cluster hours on unroutable silicon.
 
 A second mismatch is the brownfield reality. Most AI research focuses on greenfield design, generating a brand new core or accelerator from a blank slate. In industry, however, most of an architect's job is brownfield work [@Foster2022WilsonVerificationStudy]. This involves integrating legacy IP blocks, wrangling proprietary vendor protocols, and navigating undocumented system buses. To bridge this gap, the environment must expose structured hardware description standards. However, not all standards are equal. IP-XACT is a notoriously bloated XML standard; feeding raw IP-XACT to a generative model will immediately exhaust its context window with boilerplate. The environment's "Read Path" must distill heavy XML standards into lightweight JSON or YAML representations, whereas denser formats like SystemRDL might be read natively. This distillation allows the agent to programmatically discover and memory-map legacy AXI or TileLink interfaces without relying on unstructured text datasheets. If an AI agent cannot successfully wire up a black-box memory controller to a modern coherency fabric, it cannot design a real System-on-Chip. The environment must expose interfaces for both generating new IP and integrating messy, opaque legacy components.
 
@@ -83,7 +83,7 @@ An architecture environment must allow an agent to move systematically between t
 | FPGA Emulation | FireSim | ~20x slowdown | Full logic, mapped to FPGA fabric |
 | Physical Design | Yosys [@Yosys], OpenROAD  | Hours to Days | Power, Timing, Routing, DRC |
 
-: **Fidelity trades against speed.** An agent climbs this ladder as design candidates mature, paying more per observation at each rung. {#tbl-multi-fidelity-spectrum tbl-colwidths="[20,25,20,35]"}
+: **Fidelity trades against speed.** An agent climbs this ladder as design candidates mature, paying more per observation as fidelity rises, except where an FPGA buys the speed back at the cost of dedicated hardware. {#tbl-multi-fidelity-spectrum tbl-colwidths="[20,25,20,35]"}
 
 ```{python}
 #| label: fig-simulator-tax
@@ -142,11 +142,11 @@ fig.subplots_adjust(left=0.02, right=0.985, top=0.97, bottom=0.14)
 plt.show()
 ```
 
-The rungs are orders of magnitude apart. A cycle-accurate or RTL run is ten thousand to a hundred thousand times slower than the silicon it models, so an agent that optimizes for high-fidelity evidence can afford only a handful of samples; FPGA emulation buys the speed back only by committing dedicated hardware. That exponential cost turns climbing the ladder into a design decision in its own right.
+The rungs are orders of magnitude apart. A cycle-accurate or RTL run is ten thousand to thirty thousand times slower than the silicon it models, so an agent that optimizes for high-fidelity evidence can afford only a handful of samples; FPGA emulation buys the speed back only by committing dedicated hardware. That exponential cost turns climbing the ladder into a design decision in its own right.
 
 Hardware specialization tightly couples the stack. Optimizing one parameter (like dataflow) cascades into breaking constraints across siloed simulation tools (thermal, synthesis, compilation). This coupled constraint problem is not unique to architecture. In aerospace engineering, designing an aircraft requires balancing aerodynamics, structures, and acoustics [@Sobieski1998BLISS]. Instead of building a single monolithic simulator, aerospace multidisciplinary design optimization (MDO) orchestrates fast *surrogate models* for broad exploration, reserving expensive physics simulators for final verification. AI in computer architecture should similarly orchestrate existing tools rather than replace them.
 
-AI should act as an architectural control plane. Rather than just generating scripts, it must take declarative intent, measure actual state from simulators and EDA tools, and issue compensating actions, such as shrinking a cache to fix a thermal violation.
+AI should act as an architectural control plane. Rather than just generating scripts, it must take declarative intent, measure actual state from simulators and EDA tools, and issue compensating actions, such as shrinking a cache to fix a thermal violation. ChatEDA demonstrates one realization of this pattern, decomposing a natural-language design intent into subtasks that an autonomous agent then drives through a real EDA toolchain from RTL to GDSII [@HeEtAl2024ChatEDA].
 
 ### The Silicon ADMET Funnel
 
@@ -156,9 +156,9 @@ Like drug discovery, finding a high-performance design is often easier than pass
 
 [^fn-admet-c06]: **ADMET**: Absorption, distribution, metabolism, excretion, and toxicity, the five downstream viability properties a drug candidate must clear regardless of how potent it is.
 
-![**The "Silicon ADMET" funnel.** Drawing a parallel between the phased, rigorous filtering of drug discovery and the physical signoff funnel in computer architecture, both disciplines must weed out high-scoring "decoys" early using increasingly expensive and faithful evaluations.](images/F5-silicon-admet-funnel){#fig-silicon-admet-funnel fig-alt="The Silicon ADMET Funnel"}
+![**The "Silicon ADMET" funnel.** Drawing a parallel between the phased, rigorous filtering of drug discovery and the physical signoff funnel in computer architecture, both disciplines must weed out high-scoring "decoys" early using increasingly expensive and faithful evaluations.](images/F5-silicon-admet-funnel){#fig-silicon-admet-funnel fig-alt="Two parallel three-stage funnels. Drug discovery narrows from in-silico screening of ten thousand-plus candidates through in-vitro testing to clinical trials; silicon design narrows from fast ISA simulators through RTL and logic synthesis to physical signoff. An isomorphic-filters arrow links the two columns, and a bottom bar notes that both funnels weed out high-scoring decoys before the expensive high-fidelity stages."}
 
-Different tools therefore return different observations, and the environment cannot afford to blur them together. Physical-design tools make this staged feedback particularly clear. Logic synthesis, placement, routing, and signoff expose different observations and failure modes. The interface must state the stage, raw output, and tool-level status for each return. We detail this progression in @tbl-eda-stage-interface.
+Different tools therefore return different observations, and the environment cannot afford to blur them together. Physical-design tools make this staged feedback particularly clear. Logic synthesis, placement, routing, and signoff expose different observations and failure modes. The interface must state the stage, raw output, and tool-level status for each return. Each physical-design stage returns its own observation class, failure mode, and tool-level status to preserve, from logic synthesis through signoff (@tbl-eda-stage-interface).
 
 ::: {.callout-war-story title="Ariane 5 and the reused alignment module"}
 **The claim.** Ariane 5 reused the inertial-reference alignment software from Ariane 4 for its maiden flight [@LionsAriane1996]. The code was flight-proven, so the team carried it over as already validated.
@@ -204,7 +204,7 @@ A critical requirement of this asynchronous system is explicitly distinguishing 
 | Infrastructure failure | Host out of memory, EDA license checkout timeout, cluster node crash. | Flag as `RETRY_ELIGIBLE` or `TOOL_CRASH`. | None. The candidate remains untested and must not be penalized in the design space. |
 | Architectural constraint | Negative timing slack, unroutable netlist congestion, thermal violation > 3 W. | Flag as valid evaluation return. | Negative design feedback. The candidate is physically infeasible and should be rejected or penalized. |
 
-: **Distinguishing infrastructure from architecture.** The candidate remains untested and must not be penalized due to cluster flakiness. The environment harness must trap infrastructure failures and handle them separately from true physical design constraints. {#tbl-failure-taxonomy tbl-colwidths="[20,30,25,25]"}
+: **Cluster flakiness must never penalize a candidate:** When a host crash or license timeout aborts a run, the candidate remains untested and must not be down-weighted in the design space. The environment harness must trap infrastructure failures and handle them separately from true physical design constraints. {#tbl-failure-taxonomy tbl-colwidths="[20,30,25,25]"}
 
 The environment harness must catch infrastructure failures and flag them appropriately (@tbl-failure-taxonomy), preventing the agent from optimizing against false negative signals. Only true architectural failures, such as failing to meet a timing constraint in synthesis or causing a thermal violation in the system's 3 W envelope, should be passed back to the AI as negative design feedback.
 
@@ -218,7 +218,7 @@ A tool returns raw, unstructured text, but an architecture study needs structure
 
 ![**The architecture environment interface.** An architecture environment connects a system intent to legal actions and translates raw tool outputs into semantic observations. The wrapper checks the request, calls the tool, and parses the result, while the harness records the run and its provenance.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="A diagram showing how an architecture environment connects an architecture question and workload, an action schema, and declared constraints and metric definitions to a wrapper and harness."}
 
-As illustrated in @fig-environment-tool-interface, an architecture environment explicitly maps intent to actions and actions to observations. The wrapper acts as a protective boundary, intercepting high-level requests, validating them via the read path, executing tool commands via the action path, and distilling logs into a semantic vector via the return path.
+An architecture environment explicitly maps intent to actions and actions to observations (@fig-environment-tool-interface). The wrapper acts as a protective boundary, intercepting high-level requests, validating them via the read path, executing tool commands via the action path, and distilling logs into a semantic vector via the return path.
 
 ### Defending Against Reward Hacking
 
@@ -257,7 +257,7 @@ Rather than providing raw Python code, we can also formalize the overall executi
 ::: {.content-visible when-format="pdf"}
 ```{=latex}
 \begin{algorithm}[H]
-\caption{The Architecture Environment Interface}\label{lst-environment-interface}
+\caption{\textbf{One validated action becomes one recorded run:} the interface rejects illegal actions before touching a tool, submits work asynchronously, separates infrastructure crashes from architectural failures, and returns a typed observation with provenance.}\label{lst-environment-interface}
 \begin{algorithmic}[1]
 \Require \texttt{action\_request} (e.g., target L2 cache size, routing effort)
 \Ensure \texttt{observation\_vector}, \texttt{status\_flags}, \texttt{provenance\_metadata}
@@ -285,7 +285,7 @@ Rather than providing raw Python code, we can also formalize the overall executi
 :::
 
 ::: {.content-visible when-format="html"}
-::: {#lst-environment-interface .algorithm lst-cap="The Architecture Environment Interface"}
+::: {#lst-environment-interface .algorithm lst-cap="**One validated action becomes one recorded run:** the interface rejects illegal actions before touching a tool, submits work asynchronously, separates infrastructure crashes from architectural failures, and returns a typed observation with provenance."}
 **Require:** `action_request`
 **Ensure:** `observation_vector`, `status_flags`, `provenance_metadata`
 
@@ -363,9 +363,9 @@ For the human architect, these standardized representations form an indispensabl
 
 When a candidate design successfully navigates the Three-Path Interface and its intent is safely encoded in a standardized IR like MLIR, it must be translated into actionable physical tool commands. However, a single high-level intent rarely maps to a single tool. A hardware configuration might need to fan out to multiple distinct evaluation backends. These include an RTL simulator for functional correctness, a VLSI flow for power and area estimates, and an FPGA emulation path for full-stack software booting.
 
-![**The Chipyard framework.** Chipyard, an open-source RISC-V SoC generator, routes a single configuration downward to three backend evaluation paths: RTL simulation, VLSI flow, and FPGA emulation. This fan-out ensures one configuration reaches every evaluation path consistently.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard SoC-generation framework inside one bounding panel."}
+![**The Chipyard framework.** Chipyard, an open-source RISC-V SoC generator, routes a single configuration downward to three backend evaluation paths: RTL simulation, VLSI flow, and FPGA emulation. This fan-out ensures one configuration reaches every evaluation path consistently.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard SoC-generation framework. A configuration system feeds Chisel generators (Rocket, BOOM, Hwacha) into the FIRRTL compiler, which fans the single configuration out to three backend paths: RTL simulation, a VLSI flow, and FPGA emulation."}
 
-As shown in @fig-chipyard-framework, the environment framework ensures that one candidate architecture change routes downward to become several legal tool actions without losing its connection to the system intent.
+The environment framework routes one candidate architecture change downward into several legal tool actions without losing its connection to the system intent (@fig-chipyard-framework).
 
 ### Declarative Execution Planning
 
