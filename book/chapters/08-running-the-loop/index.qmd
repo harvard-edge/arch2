@@ -19,7 +19,7 @@ This crux addresses baseline shopping, a practical trap in AI-assisted architect
 ::: {.callout-war-story title="The Shifting Baseline"}
 **The pitfall.** A design team celebrated a 20% architectural speedup from a novel accelerator proposal, only to discover weeks later that the baseline software was accidentally compiled without standard optimization flags (`-O3`). When the baseline was properly optimized, the entire architectural gain vanished.
 
-**The lesson.** Unfixed baselines create illusions of progress. If the baseline is allowed to shift or remain untuned during an architectural study, any measured "improvement" is meaningless.
+**The lesson.** Unfixed baselines create illusions of progress. If the baseline is allowed to shift or remain untuned during an architectural study, any measured "improvement" is meaningless. This scenario is a composite of a recurring pattern in architecture evaluations, not a single documented incident.
 :::
 
 In a real EDA environment, the penalty for guessing wrong is large. Waiting eight hours for a physical routing failure consumes far more calendar time and limited FlexLM license checkouts than waiting ten milliseconds for a Python syntax error. This trial-and-error hides real physical costs. To combat this, the design loop must be strictly bounded.
@@ -46,7 +46,7 @@ One recorded model call proposes three legal systolic-array datapath shapes for 
 
 [^fn-study-arm-c08]: **Arm**: In experimental design, one of the parallel groups in a controlled comparison, as in the treatment and control arms of a clinical trial. The model and the fixed heuristic are this study's two proposal arms.
 
-The experiment still reaches a reviewable result, although no nonbaseline shape clears the declared decision margin. The model and fixed heuristic arms tie, and the model's directional prediction fails its contrast. The recorded status-quo recommendation is to retain the 32 by 32 baseline for the five unique evaluated shapes and stop this bounded search. For context, an illustrative system might use specific square or rectangular datapath dimensions (e.g., 256 by 256) optimized for its target workloads; our 32 by 32 baseline similarly serves as a fixed reference point rather than a claim of global optimality among all fifteen legal shapes. Another reader can inspect the proposal and rerun the recorded simulator computation without mistaking that replay for independent validation of the workload, score, or simulator.
+The experiment still reaches a reviewable result, although no nonbaseline shape clears the declared decision margin. The model and fixed heuristic arms tie, and the model's directional prediction fails its contrast. The recorded status-quo recommendation is to retain the 32 by 32 baseline for the five unique evaluated shapes and stop this bounded search. This shape-versus-utilization question is not a toy. Google's first TPU shipped a 256 by 256 weight-stationary systolic array [@JouppiEtAl2017TPU], and its successors retreated to 128 by 128 tiles after production traffic showed the giant array too often ran partly empty, the smaller geometry proving easier to keep utilized across real workloads. The most successful AI accelerator in deployment history changed its answer to exactly the question this study bounds, which is why the array-shape decision earns a disciplined loop rather than a default. Our 32 by 32 baseline serves as a fixed reference point rather than a claim of global optimality among all fifteen legal shapes. Another reader can inspect the proposal and rerun the recorded simulator computation without mistaking that replay for independent validation of the workload, score, or simulator.
 
 Most of this procedure is familiar architecture work where an architect defines the comparison, validates tool inputs, measures candidates, tests an explanation, and decides whether the evidence warrants a change. AI participation adds a proposal and explanation whose scope, output, budget, provenance, and authority must be controlled. This integration neither changes what SCALE-Sim measured nor grants the model authority to decide what happens next.
 
@@ -63,7 +63,7 @@ The architecture question is deliberately narrow to test a precise hypothesis wi
 > baseline, and does the model's directional prediction survive its declared
 > contrast?
 
-A 32x32 matrix unit was selected as the baseline because it perfectly aligns with the standard tensor shapes prevalent in our target mobile XR vision models. The workload contains three GEMM layers extracted from the XR platform's spatial tracking (SLAM) pipeline, serving as a compact test slice rather than a claim about a full XR application. This specific workload characterization is preregistered upfront, ensuring the AI model does not silently overfit to an unrepresentative trace. Only the datapath's array dimensions vary, while dataflow, on-chip scratchpad capacity, interface bandwidth, layout, simulator version, workload, deadline, and scoring rule remain fixed. This narrowness isolates the effect of proposal source and array shape by holding most of the environment still.
+A 32 by 32 matrix unit was selected as the baseline because it is a compact, square array that maps onto the workload's GEMM layers without the wire-length and utilization penalties that elongated shapes carry, not because of any claim of optimality. The workload contains three GEMM layers extracted from the XR platform's spatial tracking (SLAM) pipeline, serving as a compact test slice rather than a claim about a full XR application. Their (M, N, K) dimensions are 128 by 128 by 256, 64 by 192 by 128, and 32 by 128 by 192, and the mechanism test exchanges M and N in the two nonsquare layers. Printing these dimensions is what lets a later reader recompute the tie, the utilization figures, and the aspect-ratio ranking on paper. This specific workload characterization is preregistered upfront, ensuring the AI model does not silently overfit to an unrepresentative trace. Only the datapath's array dimensions vary, while dataflow, on-chip scratchpad capacity, interface bandwidth, layout, simulator version, workload, deadline, and scoring rule remain fixed. This narrowness isolates the effect of proposal source and array shape by holding most of the environment still.
 
 ### The Four Judgments
 
@@ -111,7 +111,7 @@ S = \frac{\text{total cycles}}
          {\text{average layer utilization}/100},
 $$
 
-with lower values preferred. While this naive composite score mathematically double-counts the penalty for underutilization compared to a true Area-Delay Product (ADP), it serves as a predeclared selection rule for this study, not a universal measure of accelerator quality or a physical measurement. This specific scoring formula is used to prevent the search from collapsing to degenerate solutions like massively oversized arrays that remain mostly idle, enforcing a strict penalty for wasted silicon area. Reporting cycles and utilization separately keeps the composite score from hiding the two ingredients it combines, though it cannot reveal an axis the score leaves out, such as memory traffic.
+with lower values preferred. This composite is not a true Area-Delay Product (ADP). Substituting utilization $\approx \text{work}/(\text{PE}\cdot\text{cycles})$ gives $S \propto \text{PE}\cdot\text{cycles}^2/\text{work}$, so the cycle (delay) term enters squared relative to ADP; the score double-counts delay rather than penalizing underutilization as such. It serves as a predeclared selection rule for this study, not a universal measure of accelerator quality or a physical measurement. The formula does discourage degenerate solutions such as oversized arrays that remain mostly idle, though it is the 1,024-processing-element legality cap, not the score, that actually forecloses oversized arrays. Reporting cycles and utilization separately keeps the composite score from hiding the two ingredients it combines, though it cannot reveal an axis the score leaves out, such as memory traffic.
 
 A fair comparison requires the evaluation budget, workload, simulator settings,
 rejection criteria, and decision boundary to be frozen before either arm
@@ -140,11 +140,24 @@ the final row leaves approval outside both the model and simulator.
 
 Predeclaring these choices forces any change to the candidate, metric, or stopping rule out into the open, where it can be checked against the record instead of silently validating a flawed candidate.
 
+Preregistration does not outlaw tinkering; it timestamps it. The architect is free to iterate on prompts, scores, and baselines for a week, and that exploratory phase is where most real understanding forms. The Prompt development row exists to log exactly that phase rather than to forbid it. The discipline asks only that the exploration be labeled as exploration, and that the confirmatory run which feeds a decision start after the freeze, on terms the exploration did not get to grade. Exploration generates the hypothesis; confirmation is not allowed to reuse the runs that suggested it.
+
 Preregistration does not intrinsically justify the
 three-layer workload, local score, 32 by 32 baseline, 1 percent decision margin,
 90,000-cycle cutoff, SCALE-Sim abstraction, or four-call budget. Each remains
 an architecture choice that would need a rationale and sensitivity analysis
 before a broader decision relied on it.
+
+The 1 percent margin deserves one more question, 1 percent of what? SCALE-Sim's
+cycle counts are not accurate to within 1 percent of silicon; no analytical model
+is, and its absolute error against fabricated hardware runs orders of magnitude
+larger than the margin the decision rule reads off it. The margin survives that
+gap only because both arms run through the same frozen model, so the systematic
+error is shared and mostly cancels when candidates are ordered against each other.
+That is the standing bargain of architecture simulation. A frozen simulator
+supports relative judgments between candidates it treats identically, never
+absolute claims about any one of them, and the decision margin must sit above
+whatever residual error does not cancel across the compared pair.
 
 ### The Mechanism Hypothesis
 
@@ -198,7 +211,7 @@ While this schema error was simple API friction, real hardware environments invo
 ::: {.callout-war-story title="The License Server Hallucination"}
 **The incident.** An automated AI design agent was tasked with optimizing a block's floorplan area. During a sweeping exploration, the EDA tool's `FlexLM` license server temporarily went down, causing synthesis jobs to fail. The agent misinterpreted the generic tool timeouts as physical routing congestion failures, assuming its proposed designs were too dense. In response, it endlessly and incorrectly shrank the design area until it proposed an unbuildable, zero-area degenerate layout.
 
-**The lesson.** Agents must precisely distinguish between transient infrastructure faults and true architectural violations; feeding toolchain noise back as a physical constraint will systematically derail AI-driven search.
+**The lesson.** Agents must precisely distinguish between transient infrastructure faults and true architectural violations; feeding toolchain noise back as a physical constraint will systematically derail AI-driven search. This incident is a composite of failure modes practitioners report, not a single documented case.
 :::
 
 ::: {.callout-war-story title="The illusion of zero-shot success"}
@@ -211,12 +224,12 @@ While this schema error was simple API friction, real hardware environments invo
 
 ### Capturing Call Provenance
 
-The subsequent call returned a schema-valid response. Since semantic validation found three unique legal candidates, no repair call was made. The complete response is retained, not only the candidate coordinates or a prose summary. The runtime exposed only part of the provenance needed to identify the call, so @tbl-model-provenance records the supplied values and marks the rest as unavailable instead of inferring them.
+The subsequent call returned a schema-valid response. Since semantic validation found three unique legal candidates, no repair call was made. The complete response is retained, not only the candidate coordinates or a prose summary. The runtime exposed only part of the provenance needed to identify the call, so @tbl-model-provenance records the supplied values and marks the rest as unavailable instead of inferring them. A production EDA run would fill the execution-environment field far more heavily, pinning the PDK version, standard-cell library PVT corners, binary patches, and Tcl setup scripts through Nix or containers to prevent environmental drift; this study carried none of that toolchain, so the field is recorded as empty rather than left to inference.
 
 | **Provenance field** | **Recorded value** |
 | --- | --- |
 | **Provider and interface** | OpenAI through Codex CLI 0.144.4, noninteractive ephemeral execution, read-only empty workspace. |
-| **Execution environment** | In production EDA, requires recording PDK version, standard cell library PVT corners, binary patches, and Tcl setup scripts (e.g., via Nix or containers) to prevent environmental drift. |
+| **Execution environment** | None beyond the runtime above; the study ran in a read-only empty workspace with no EDA toolchain, PDK, or standard-cell libraries in play. |
 | **Requested and accepted model alias** | gpt-5.4; provider revision or digest was not exposed. |
 | **Time** | 2026-07-14 18:21:51--18:22:24 UTC; 32.90 seconds wall time. |
 | **Settings** | Medium reasoning effort; temperature, top-p, and seed were not exposed or available through the runtime. |
@@ -227,7 +240,7 @@ The subsequent call returned a schema-valid response. Since semantic validation 
 
 : **Provenance is only as good as the runtime exposes:** the record reports the values the runtime supplied and marks the rest as unavailable rather than inferring them. {#tbl-model-provenance tbl-colwidths="[27,63]"}
 
-Two limits matter when interpreting this record. First, the valid proposal used one call and no repair, meaning later candidate replacement cannot explain the outcome. Evaluating generative models requires sampling multiple trajectories to measure expected utility. Future scaled iterations must adopt standard ML evaluation precedents, such as Pass [@Chen2021Codex], using non-zero temperature to measure the model's true search capability across a broader design space. Sampling more trajectories sharpens that estimate only if the checks behind it are strong, since weak test suites let incorrect candidates pass and inflate such scores [@LiuEtAl2023EvalPlus]. Restricting the legal search space to just 15 array shapes guarantees overlap with a simple heuristic; truly evaluating AI requires exposing high-dimensional, non-linear choices like dataflow selection or SRAM partitioning where simple heuristics fail. Second, the requested alias is not a pinned model identity, since a hosted model behind a fixed alias can measurably shift behavior between dated snapshots [@ChenEtAl2024ChatGPTBehavior]. The response hash pins the retained output rather than the hosted generator. The record therefore verifies what happened in this call but cannot recreate the generation exactly, although the SCALE-Sim runs remain replayable from their retained inputs.
+Two limits matter when interpreting this record. First, the valid proposal used one call and no repair, meaning later candidate replacement cannot explain the outcome. Evaluating generative models requires sampling multiple trajectories to measure expected utility. Future scaled iterations must adopt standard ML evaluation precedents, such as the pass@k metric [@Chen2021Codex], using non-zero temperature to measure the model's true search capability across a broader design space. Sampling more trajectories sharpens that estimate only if the checks behind it are strong, since weak test suites let incorrect candidates pass and inflate such scores [@LiuEtAl2023EvalPlus]. Restricting the legal search space to just 15 array shapes guarantees overlap with a simple heuristic; truly evaluating AI requires exposing high-dimensional, non-linear choices like dataflow selection or SRAM partitioning where simple heuristics fail. Second, the requested alias is not a pinned model identity, since a hosted model behind a fixed alias can measurably shift behavior between dated snapshots [@ChenEtAl2024ChatGPTBehavior]. The response hash pins the retained output rather than the hosted generator. The record therefore verifies what happened in this call but cannot recreate the generation exactly, although the SCALE-Sim runs remain replayable from their retained inputs.
 
 The record also stops short of one cost it declared it would track. It preserves the single clean proposal call and the one schema rejection that preceded it, but it does not log the exploratory prompt iterations and author hours spent before the protocol was frozen. A complete accounting of this study would include that human cost, and its absence here is a stated limitation rather than an oversight.
 
@@ -244,11 +257,11 @@ This overlap matters because the shared choices cannot be attributed uniquely to
 model. The arms agree on two of their three proposals and differ in only one,
 where the model's 32 by 16 and the heuristic's 64 by 16 are each dominated. With
 only fifteen legal shapes and two competent proposers converging this closely,
-the comparison had little power[^fn-statistical-power-c08] to separate them from the start. A tie was the
+the comparison had little resolving power[^fn-resolving-power-c08] to separate them from the start. A tie was the
 likely outcome before either arm ran, so it reports low resolving power between
 the two proposers rather than measured parity, whatever the model's quality.
 
-[^fn-statistical-power-c08]: **Statistical power**: The probability that a comparison detects a real difference when one exists. A study with few distinct candidates and overlapping proposals has low power, so a tie is expected even when the proposers genuinely differ.
+[^fn-resolving-power-c08]: **Resolving power**: A design's ability to separate genuinely different candidates. This comparison is deterministic and noise-free, so the limit is not statistical power in the sampling sense (there is no sampling distribution to detect an effect against) but discrimination. With few distinct legal shapes and two proposers converging on the same candidates, no fixed contrast could have separated them, and a tie was expected regardless of the proposers' true quality.
 
 ## Reporting Selected Candidates
 
@@ -258,7 +271,17 @@ illegal-shape rejection, or the 90,000-cycle cutoff. Those three declared
 control checks are asserted as protections but never fire on this single worked
 example, which therefore demonstrates them only in the passing direction.
 Showing them reject an illegal or over-cycle candidate would require a trace
-this bounded run does not contain. Several legal
+this bounded run does not contain.
+
+A check that has never fired is a claim, not a protection. The standing remedy
+is a positive control, the same one every wet lab runs on every assay. Preregister
+one canary alongside the real candidates, a shape that violates the
+processing-element budget or a run known to blow the cycle cutoff, and require the
+harness to reject it before the arms are scored. If the canary passes, the run is
+invalid regardless of what the candidates did, because the study has just measured
+its own guardrails and found them absent.
+
+Several legal
 alternatives were dominated under the declared score, and no nonbaseline shape
 cleared the decision margin across all eight arm evaluations
 (@tbl-ai-study-results).
@@ -267,16 +290,16 @@ cleared the decision margin across all eight arm evaluations
 | --- | --- | ---: | ---: | ---: | --- |
 | Model | 32 by 32 baseline | 13,917 | 41.196% | 33,782.40 | Tied best |
 | Model | 16 by 64 proposal | 13,917 | 41.196% | 33,782.40 | Tied best |
-| Model | 8 by 128 proposal | 19,405 | 29.704% | 65,327.45 | Dominated |
-| Model | 32 by 16 proposal | 25,277 | 45.438% | 55,629.61 | Dominated |
+| Model | 8 by 128 proposal | 19,405 | 29.704% | 65,327.45 | Ranked worse |
+| Model | 32 by 16 proposal | 25,277 | 45.438% | 55,629.61 | Ranked worse |
 | Heuristic | 32 by 32 baseline | 13,917 | 41.196% | 33,782.40 | Tied best |
 | Heuristic | 16 by 64 proposal | 13,917 | 41.196% | 33,782.40 | Tied best |
-| Heuristic | 8 by 128 proposal | 19,405 | 29.704% | 65,327.45 | Dominated |
-| Heuristic | 64 by 16 proposal | 17,757 | 32.294% | 54,985.25 | Dominated |
+| Heuristic | 8 by 128 proposal | 19,405 | 29.704% | 65,327.45 | Ranked worse |
+| Heuristic | 64 by 16 proposal | 17,757 | 32.294% | 54,985.25 | Ranked worse |
 
 : **The model and fixed heuristic arms tie under equal simulator-call budgets.** Neither finds a nonbaseline candidate that clears the predeclared 1 percent decision margin over 32 by 32. Values are computed by SCALE-Sim, not measured on silicon. {#tbl-ai-study-results tbl-colwidths="[12,23,11,18,14,22]"}
 
-The 16 by 64 candidate exactly matches the baseline's cycles, average layer utilization, and local score. The exact tie is not a coincidence, and the reason is narrower than equal resources, since the 8 by 128 shape has the same 1,024 processing elements yet takes 39% more cycles. For this workload the recorded per-layer cycle counts of the two tied shapes are identical because the layers fold onto 32 by 32 and 16 by 64 in the same number of tiles with the same edge effects; the shapes differ only in how those tiles move data. Calling the candidate the new winner would improperly convert a tie into an improvement by changing the rule after seeing the output. The tie also hides a difference the score never registers.[^fn-dram-traffic] Because the local score combines only cycles and utilization, it reads the two shapes as equal while their off-chip write traffic differs by a factor of two. For a 3W mobile XR chip, data movement energy typically dominates compute [@Horowitz2014Energy]. This means the 16 by 64 candidate is realistically worse, being Pareto-dominated on a memory axis the simulator measured but the score ignored (@fig-proxy-mismatch).
+The 16 by 64 candidate exactly matches the baseline's cycles, average layer utilization, and local score. The exact tie is not a coincidence, and the reason is narrower than equal resources, since the 8 by 128 shape has the same 1,024 processing elements yet takes 39% more cycles. For this workload the recorded per-layer cycle counts of the two tied shapes are identical because the layers fold onto 32 by 32 and 16 by 64 in the same number of tiles with the same edge effects; the shapes differ only in how those tiles move data. That arithmetic fits on an index card, and it exposes an uncomfortable feature of this study. Cycles under a frozen dataflow follow the ceil-divided tile counts and edge waste of each shape, a closed-form quantity, so all fifteen legal shapes were rankable on paper before the first simulator call. A budget spent watching the simulator confirm ceil-division is a budget the analytical zeroth arm should have consumed for free; a call that only reproduces paper arithmetic is a spent unit. Calling the candidate the new winner would improperly convert a tie into an improvement by changing the rule after seeing the output. The tie also hides a difference the score never registers.[^fn-dram-traffic] Because the local score combines only cycles and utilization, it reads the two shapes as equal while their off-chip write traffic differs by a factor of two. For a 3W mobile XR chip, data movement energy typically dominates compute [@Horowitz2014Energy]. This means the 16 by 64 candidate is realistically worse, being Pareto-dominated on a memory axis the simulator measured but the score ignored (@fig-proxy-mismatch).
 
 ```{python}
 #| label: energy-gap-computation
@@ -330,7 +353,7 @@ This massive spike in off-chip DRAM writes is not just an isolated power metric 
 ::: {.callout-war-story title="The Space Heater"}
 **The incident.** A hardware team optimized a mobile vision accelerator solely for a compute-bound proxy metric (utilization and cycle count) during their architectural exploration. The design taped out successfully, but when integrated into the final device, the unmeasured off-chip data-movement energy was so massive that the chip instantly thermally throttled in production, rendering the performance gains unusable.
 
-**The lesson.** A 1D proxy score hides multi-objective physical realities. Optimizing for compute utilization without accounting for data-movement energy will produce a chip that functions perfectly in simulation but acts as a space heater in reality.
+**The lesson.** A 1D proxy score hides multi-objective physical realities. Optimizing for compute utilization without accounting for data-movement energy will produce a chip that functions perfectly in simulation but acts as a space heater in reality. This incident is a composite of a recurring proxy-mismatch pattern, not a single documented tapeout.
 :::
 
 While strict preregistration prevents moving the goalposts to declare a false 'win,' an architect discovering this severe proxy mismatch in production (@sec-feedback-verification-trust) would explicitly abort the preregistered study, amend the objective function to incorporate multi-objective physical constraints directly into the rejection criteria (e.g., an Energy-Delay Product $E_{total} = E_{compute} + E_{SRAM} + E_{DRAM}$ estimated by an architecture-level energy model [@WuEtAl2019Accelergy]), and restart the bounded loop to co-optimize Power, Performance, and Area (PPA) simultaneously.
@@ -569,7 +592,7 @@ These artifacts support verification across three distinct levels of scrutiny, a
 
 | **Verification Level** | **Action** | **What It Establishes** |
 | --- | --- | --- |
-| **Replay** | Rerunning the exact same simulator logs with the same deterministic inputs. | Establishes that the execution is honest and the math adds up. |
+| **Replay** | Rerunning the exact same simulator logs with the same deterministic inputs. | Establishes that the recorded execution is unaltered and the math adds up. |
 | **Reproduction** | Rerunning the AI agent with the same prompt and seed. | Highlights model drift, API changes, and non-determinism. |
 | **Independent validation** | A different team building a different model or testbench to evaluate the same architectural claim in RTL. | Establishes that the architectural mechanism holds in physical reality, using independent oracles. |
 

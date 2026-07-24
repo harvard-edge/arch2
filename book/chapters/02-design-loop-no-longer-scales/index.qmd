@@ -53,7 +53,7 @@ SPEC CPU 2017 provides an industry-standard suite for compute-intensive performa
 
 The challenge arises because experienced architects also carry important context implicitly. They know which workloads were excluded, which tool settings are trusted, why a previous candidate failed, and what decision is actually under review. As projects scale, keeping this context synchronized across larger teams and more complex toolchains becomes a major bottleneck.
 
-AI methods provide a powerful way to manage this explicit and implicit context. Language models and retrieval systems can suggest cache configurations, prepare simulator runs, group failures, and compare new results with earlier experiments . This allows an automated assistant to handle the repetitive mechanics of the design loop. We need to think about how we structure explicit engineering artifacts so that an automated optimizer can reliably execute and track these comparisons, keeping the loop moving efficiently.
+AI methods provide a powerful way to manage this explicit and implicit context. Language models and retrieval systems can suggest cache configurations, prepare simulator runs, group failures, and compare new results with earlier experiments. This allows an automated assistant to handle the repetitive mechanics of the design loop. We need to think about how we structure explicit engineering artifacts so that an automated optimizer can reliably execute and track these comparisons, keeping the loop moving efficiently.
 
 ### Explicit Inputs and Checks
 
@@ -83,7 +83,11 @@ shared contract. Mead--Conway methods and logic synthesis connect a design to
 the rules and tools that can accept or reject it. SPEC makes results comparable
 across machines, and RISC shows why a hardware claim must include the workload,
 compiler, and implementation cost. In each case, progress depended on making
-more of the design work visible to other people and tools.
+more of the design work visible to other people and tools. Several of these
+shifts also raised the level of abstraction so that one engineer's decision
+governed more of the design, the mechanism by which the field has repeatedly
+closed a widening gap between what can be fabricated and what a team can design
+(@fig-scissors-gap).
 
 Release strategy shows what it looks like to make such a rule explicit rather than leave it to judgment. Intel's tick-tock model stated one publicly. A known microarchitecture moved to a new process in one release, and a new microarchitecture followed on the now-proven process in the next, so no release attempted both at once. The rule held only while the process cadence did. As node transitions lengthened, Intel retired the two-step model and stated that it would keep each process technology in use longer, adding an optimization step to the sequence [@Intel2016Form10K]. The schedule changed because the earlier division of technical risk no longer fit the work, which is the useful part of the example. An explicit rule can be checked against the conditions that justified it, and revised in public when those conditions move.
 
@@ -106,7 +110,7 @@ consistent at once.
 
 ### Design State Connections
 
-For decades, computing advanced through a layered stack of technology, architecture, and optimization, which this book abbreviates TAO. Device scaling supplied faster transistors, microarchitecture organized them, and compilers mapped software onto the result. The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept power density constant as transistors shrank, added a fourth layer, specialization, extending TAO to TAOS, because physical limits at the device level now shape every layer above rather than receding beneath them (@fig-tao-vs-taos). Because a chip's transistors could no longer all switch within its power budget, a growing fraction had to stay dark at any moment, the dark-silicon or utilization-wall problem [@EsmaeilzadehEtAl2011DarkSilicon], which made specialized, selectively powered blocks the primary route to further efficiency.
+For decades, computing advanced through a layered stack of technology, architecture, and optimization, which this book abbreviates TAO. Device scaling supplied faster transistors, microarchitecture organized them, and compilers mapped software onto the result. The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept power density constant as transistors shrank, added a fourth layer, specialization, extending TAO to TAOS, because physical limits at the device level now shape every layer above rather than receding beneath them (@fig-tao-vs-taos). Because a chip's transistors could no longer all switch within its power budget, a growing fraction had to stay dark at any moment, the dark-silicon problem [@EsmaeilzadehEtAl2011DarkSilicon], which made specialized, selectively powered blocks the primary route to further efficiency.
 
 ![**Specialization becomes a fourth axis coupled to every layer:** The older TAO stack flows top-down from technology, while the newer TAOS view adds a Specialization dimension bound to optimization, architecture, and technology alike and encloses the whole stack in the physical constraints that scaling once absorbed.](images/ch2_tao_vs_taos){#fig-tao-vs-taos width="100%" fig-alt="Two side-by-side stack diagrams. On the left, the TAO stack lists Optimization, Architecture, and Technology with arrows flowing top-down from technology. On the right, the TAOS view keeps the same three layers but adds a Specialization panel joined by double-headed arrows to every layer, and a red dashed boundary labeled tightly coupled physical constraints encloses the entire stack."}
 
@@ -207,7 +211,7 @@ apply_style()
 # stated peak performance and power. Values are dataset-transcribed.
 # Accessed 2026-07-19. Receipt: data/source-receipts/chapter1-accelerator-landscape.csv
 _root = Path(_ap.__file__).resolve().parents[2]
-rows =
+rows = []
 with open(_root / "data" / "source-receipts" / "chapter1-accelerator-landscape.csv", encoding="utf-8") as fh:
     for d in csv.DictReader(fh):
         try:
@@ -267,7 +271,7 @@ An architect must decide what to specialize, where the specialized function belo
 
 This explosion in specialization relegates the traditional "general purpose" core to control-plane tasks, while the bulk of the computational heavy lifting is done by a heterogeneous mosaic of Domain Specific Architectures (DSAs). Each new DSA introduces its own bespoke programming model, instruction set, and toolchain.
 
-For an automated optimizer attempting to navigate this space, the challenge is proposing a complete hardware-software co-design that a real compiler can actually target. If a search generates a custom MAC array with irregular register strides that no existing LLVM backend can map to, the proposed hardware is effectively useless. Furthermore, specialization ties a candidate's worth to one workload's efficiency measure. For the XR subsystem, a vector unit sized for the throughput of one SLAM[^fn-slam-c02] [@DurrantWhyteBailey2006SLAM] matrix-multiplication kernel might post the best performance per watt but still be the wrong block if it misses the fixed per-frame display deadline.
+For an automated optimizer attempting to navigate this space, the challenge is proposing a complete hardware-software co-design that a real compiler can actually target. If a search generates a custom MAC array with irregular register strides that no existing LLVM backend can map to, the proposed hardware is effectively useless. Furthermore, specialization ties a candidate's worth to one workload's efficiency measure. For the XR subsystem, a vector unit sized for the throughput of one SLAM[^fn-slam-c02] [@DurrantWhyteBailey2006SLAM] matrix-multiplication kernel might post the best performance per watt but still be the wrong block if it misses the fixed per-frame display deadline. Before sizing any specialized block, a veteran asks Amdahl's question first, namely what fraction of the deployed workload the block actually covers [@Amdahl1967ValiditySingleProcessor]. If SLAM kernels are half the frame time, an accelerator that runs them ten times faster buys at most a 1.8-fold frame-time gain, because the untouched half now dominates. Specialization's ceiling is set by the residue it leaves behind on the general-purpose core, which is why workload coverage, not the block's peak efficiency, is the first number in the comparison.
 
 Generative methods can enumerate and score specialized options rapidly, and design-space exploration frameworks like Apollo have shown that learned heuristics transfer across workloads in large accelerator spaces [@yazdanbakhsh2021apollo]. The binding constraint is the objective, not the search. Unless the declared constraints encode the metrics the deployment actually rewards, the method tunes candidates to the wrong target, and no check inside the loop will notice. Constraint structure, not raw search speed, is what makes the exploration usable.
 
@@ -275,16 +279,16 @@ Generative methods can enumerate and score specialized options rapidly, and desi
 
 ### SoC and Chiplet Composition
 
-Specialized blocks rarely ship alone. Architects compose them into a system-on-chip and, increasingly, across multiple chiplets. Chiplets make it possible to mix process technologies, IP blocks, and memory, improving yield and letting mature nodes host blocks that do not need the leading edge. Open standards such as UCIe stabilize the interface while leaving partitioning and implementation to architects [@UCIeConsortium2026Spec].
+Specialized blocks rarely ship alone. Architects compose them into a system-on-chip and, increasingly, across multiple chiplets. Chiplets exist in large part because of a yield law. Defects land roughly at random across a wafer, so the fraction of good dies falls off exponentially with die area times defect density, and a reticle-limited die on a young process can yield below half while four quarter-size dies each yield far better. Splitting one large die into chiplets converts an exponential cost into a nearly linear one, which is why chiplets improve yield and let mature nodes host blocks that do not need the leading edge. The Known-Good-Die requirement is the tax that conversion charges at assembly. Chiplets also let architects mix process technologies, IP blocks, and memory. Open standards such as UCIe stabilize the interface while leaving partitioning and implementation to architects [@UCIeConsortium2026Spec].
 
 The challenge is that composition adds a dense layer of coupled choices. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
 
 ::: {.callout-war-story title="The silent SoC deadlock"}
 **The claim.** Independently verified IP blocks can be seamlessly integrated into a working System-on-Chip.
 
-**The gap.** In a notorious multi-vendor IP integration failure, two blocks with perfectly verified individual behavior were combined on the same interconnect. A mismatched Network-on-Chip (NoC) credit-return protocol between the two individually verified IP blocks created an unresolvable cycle of dependencies.
+**The gap.** The following is a representative composite of multi-vendor IP integration failures rather than one named incident. Two blocks with perfectly verified individual behavior are combined on the same interconnect, and a mismatched Network-on-Chip (NoC) credit-return protocol between them creates an unresolvable cycle of dependencies.
 
-**The lesson.** This undocumented interface quirk caused a silent system hang that eluded simulation and took months to debug in post-silicon bring-up, proving that system-level deadlocks often only emerge when the full SoC is assembled.
+**The lesson.** An undocumented interface quirk of this kind causes a silent system hang that eludes simulation and can take months to debug in post-silicon bring-up, which is why system-level deadlocks often emerge only when the full SoC is assembled.
 :::
 
 In the XR Lighthouse, this composition challenge extends directly to routing congestion. The Lighthouse Network-on-Chip (NoC) must arbitrate between the bursty traffic of the SLAM accelerator and the absolute, rigid latency deadlines of the display engine.
@@ -441,7 +445,7 @@ As architectures expand beyond the boundaries of a single package, the boundary 
 
 The challenge of navigating this space is that component failure is a continuous reality, and simulating the system accurately is nearly impossible. Cycle-accurate simulation of 100,000 nodes is out of the question, while trace-driven modeling often misses the dynamic network congestion that creates severe "tail at scale" latency bottlenecks [@DeanBarroso2013TailAtScale]. A node design that appears highly efficient in isolation may become completely paralyzed by network stragglers or distributed coherence overhead when deployed across a cluster. Because standard deterministic simulators cannot scale, architects are often forced to rely on overly simplified analytical models or wait for silicon deployment to discover system-level deadlocks.
 
-Learned methods have optimized real warehouse-scale mechanisms. Reconfigurable optical interconnect in TPU v4 pods [@JouppiEtAl2023TPUv4] and learned cluster scheduling [@MaoEtAl2016DeepRM] both replaced hand-built heuristics inside bounded, well-instrumented subsystems, and that bounding is the lesson. Each win sat behind an operational check, traffic telemetry or scheduler rollback, that could reject the learned policy in production. Treating the whole warehouse as one co-designed target still awaits evidence at that scale.
+Automation has already reshaped real warehouse-scale mechanisms inside bounded, well-instrumented subsystems. Google's TPU v4 pods reconfigure an optical circuit-switched interconnect to route around failures and match communication patterns [@JouppiEtAl2023TPUv4], and reinforcement-learning schedulers such as DeepRM showed in research that a learned policy can manage cluster resources [@MaoEtAl2016DeepRM]. The lesson is the bounding rather than the learning. Each mechanism sits behind an operational check, traffic telemetry or scheduler rollback, that could reject a change before it reaches production. Treating the whole warehouse as one co-designed target still awaits evidence at that scale.
 
 ## The Software Contract
 
@@ -646,7 +650,7 @@ def _year(text):
             continue
     return None
 
-pts =
+pts = []
 with open(_root / "data" / "source-receipts" / "chapter2-training-compute.csv", encoding="utf-8") as fh:
     for row in csv.DictReader(fh):
         yr = _year(row["publication_date"])
@@ -820,7 +824,7 @@ E_{\mathrm{compute}} + E_{\mathrm{memory}} +
 E_{\mathrm{interconnect}} + E_{\mathrm{control}} +
 E_{\mathrm{leakage}} .
 $$
-This decomposition reflects Amdahl's Law applied to energy. Optimizing the compute fraction yields diminishing system-level returns if the unoptimized data movement and leakage terms dominate the power budget. This decomposition is not a circuit-level energy model. It helps an architect
+This is a decomposition, not a circuit-level energy model, and it carries a diminishing-returns lesson. Optimizing the compute term yields shrinking system-level returns once the unoptimized data-movement and leakage terms dominate the power budget. It helps an architect
 check whether the comparison includes every major source of energy that could
 change the decision. A candidate that reduces arithmetic but increases memory
 movement, interconnect traffic, control overhead, or leakage may make the
@@ -842,17 +846,17 @@ protocols limit what a design can sustain. This requires separating logical synt
 
 Timing, placement, routing, IR drop, thermal behavior, power delivery, leakage, signoff, and test may also overturn an architectural choice, so architects must consider the relevant EDA and physical-design constraints early. Evaluating these requires invoking commercial EDA tools that rely on stateful, Tcl-driven environments. Driving these legacy APIs creates an actuation mismatch: automated agents can struggle with syntax when generating the required proprietary Tcl scripts. Furthermore, if an automated search iterates a parameter and re-runs synthesis in the same workspace, leftover constraints or cached netlists ("dirty state") can silently corrupt the result. Scaling a robust loop requires infrastructure for isolated workspaces to prevent the search from optimizing against invalid constraints. Power and thermal density can flag a dense accelerator mapping as risky before implementation.
 
-Later IR-drop and thermal signoff can confirm or clear that risk once a placed netlist and current profile exist. Crucially, average power (TDP) is not the only limit; transient power often breaks modern chips. When a large specialized vector unit wakes up simultaneously, it causes a sudden current spike—a voltage droop (di/dt)—that can crash the SoC. Evaluating decoupling-capacitor placement and di/dt requires predicting dynamic workload behavior before physical synthesis. This exposes an organizational divide: microarchitects often hand off RTL to physical designers, only to find out weeks later that the design is unroutable. Predictive models are needed to bridge this gap early.
+Later IR-drop and thermal signoff can confirm or clear that risk once a placed netlist and current profile exist. Crucially, thermal design power (TDP), a target for sizing the cooling solution rather than a measure of sustained draw, is not the only limit; transient power often breaks modern chips. When a large specialized vector unit wakes up simultaneously, it causes a sudden current spike—a voltage droop (di/dt)—that can crash the SoC. Evaluating decoupling-capacitor placement and di/dt requires predicting dynamic workload behavior before physical synthesis. This exposes an organizational divide: microarchitects often hand off RTL to physical designers, only to find out weeks later that the design is unroutable. Predictive models are needed to bridge this gap early.
 
 ::: {.callout-war-story title="The AVX-512 frequency penalty"}
 **The claim.** Adding ultra-wide 512-bit vector units to general-purpose CPU cores would deliver massive leaps in peak floating-point throughput.
 
 **The gap.** When these dense vector units woke up and began executing heavy matrix workloads, they drew so much current so quickly that the resulting voltage droop (di/dt) threatened to crash the processor.
 
-**The lesson.** To survive these transients, early AVX-512 implementations were forced to implement aggressive, hard-coded frequency downclocking specifically to survive dense matrix workloads, erasing much of the promised peak performance gains.
+**The lesson.** To stay inside power and voltage guardbands, thermal and delivery alike, early AVX-512 implementations downclocked whenever these wide units were active. Code dominated by AVX-512 still gained from the wider datapath, but the lowered frequency penalized the mixed workloads that shared the same core, which is where much of the promised gain leaked away.
 :::
 
-Signoff runs each of these checks across multiple process, voltage, and temperature corners and operating modes. At advanced nodes, closing timing requires checking on the order of a hundred Multi-Corner Multi-Mode (MCMM) scenarios (e.g., Fast-Fast transistors at -40°C for hold timing, Slow-Slow at 125°C for setup timing). Every generated candidate triggers a combinatorial explosion of STA runs, which is why a candidate can clear one corner and fail another. Because physical-design tools rely on heuristic optimization, one failed closure attempt cannot reveal whether the candidate or the tool setup caused the failure. Comparing constraints, seeds, and repeated outcomes helps separate the two.
+Signoff runs each of these checks across multiple process, voltage, and temperature corners and operating modes. At advanced nodes, closing timing requires checking on the order of a hundred Multi-Corner Multi-Mode (MCMM) scenarios (for example, Fast-Fast transistors for hold timing and Slow-Slow for setup, though temperature inversion at advanced nodes often makes the cold, low-voltage Slow-Slow corner the setup-critical one rather than the hot corner older intuition expects). Every generated candidate triggers a combinatorial explosion of STA runs, which is why a candidate can clear one corner and fail another. Because physical-design tools rely on heuristic optimization, one failed closure attempt cannot reveal whether the candidate or the tool setup caused the failure. Comparing constraints, seeds, and repeated outcomes helps separate the two.
 
 Architecture research already uses predictive models to reduce the number of
 detailed simulations needed to explore a design space
@@ -890,6 +894,15 @@ review consume different mixtures of compute, licenses, schedule, and human
 attention. Feedback becomes scarce when the project requires more of that work
 than the available people and tools can provide.
 
+Evaluation tools form a ladder whose rungs sit orders of magnitude apart in
+throughput. A cycle-accurate simulator retires perhaps ten to a hundred thousand
+instructions per second, five to six orders of magnitude short of the silicon it
+models; emulation buys back about three of those orders at millions of dollars
+per box; an FPGA prototype runs at tens of megahertz after weeks of bring-up. One
+second of deployed workload is therefore days of detailed simulation, which is why
+the budget question is never whether a candidate can be measured but which
+candidates earn a rung.
+
 Intelligent triage helps. Active-learning methods measure model uncertainty and recommend expensive EDA runs only for candidates that push the frontier, and surrogate-guided search has accelerated architectural exploration in practice [@KrishnanEtAl2023ArchGym]. Two costs bind the approach. The search must stay computationally cheaper than the simulator it replaces, inclusive of the surrogate's training. And training that surrogate requires supervised data generated by the same slow tools it is meant to bypass, a cold-start paradox every project pays once. Triage changes where the evaluation budget is spent; it does not repeal it. The classical response to the same cost problem was statistical sampling, with SimPoint selecting representative program regions [@SherwoodEtAl2002SimPoint] and SMARTS bounding the error of sampled simulation [@WunderlichEtAl2003SMARTS]; AI-guided triage extends that lineage from sampling within one run to choosing which candidates deserve runs at all.
 
 The allocation decision is itself difficult. Generating or scoring another
@@ -913,6 +926,14 @@ IP qualification, and related development costs are included
 than masks or wafers. They reflect architecture, design, validation,
 verification, IP, tools, and engineering labor.
 
+The last rung of the ladder carries a sticker price of its own. A full mask set
+at a leading node runs to tens of millions of dollars, an order-of-magnitude
+anchor rather than a quoted price, and a respin costs that again plus months of
+fab turnaround and bring-up before the team learns anything new. That is the cost
+of one iteration of the design loop at final fidelity. Everything upstream,
+simulation, emulation, and signoff, exists to make sure a project spends that
+iteration exactly once.
+
 ### Physical Limiters: Packaging, Thermals, and Yield
 
 Beyond the initial design costs, physical and manufacturing limiters have become first-class constraints. Modern systems are increasingly bottlenecked not by logic density, but by power delivery networks (PDN), thermal dissipation ceilings, and the complex yield curves of 2.5D and 3D packaging. A chiplet-based architecture might look optimal on a spreadsheet, but if the interposer yields at 50% or the concentrated logic creates uncoolable "hot spots," the design will fail economically or physically in the real world. For the XR Lighthouse, the 3 W limit is not just a battery constraint; it is a strict skin-temperature constraint for a face-worn device. A dense MAC array might pass average TDP checks but create a localized hotspot that makes the headset physically unwearable.
@@ -922,9 +943,9 @@ We must also face the final physical constraints: Design Rule Checks (DRC). At a
 ::: {.callout-war-story title="The DRC whack-a-mole"}
 **The claim.** A minor late-stage macro block shift to improve timing should be a quick fix.
 
-**The gap.** In a 3nm tapeout trench, a physical design team attempting to resolve a single via-enclosure violation found that the layout tool rippled the changes outward, instantly spawning three new violations in adjacent polygons.
+**The gap.** This is a representative advanced-node scenario rather than one named tapeout. A physical design team resolving a single via-enclosure violation finds that the layout tool ripples the change outward, instantly spawning three new violations in adjacent polygons.
 
-**The lesson.** The team became stuck in a multi-week loop of fixing one error only to spawn three more, illustrating exactly why human-guided feedback loops break at this scale.
+**The lesson.** A team can become stuck in a multi-week loop of fixing one error only to spawn three more, which illustrates why human-guided feedback loops break at this scale.
 :::
 
 In a traditional design loop, these physical constraints are often verified late in the process during physical signoff. Discovering a fatal thermal hotspot or a severe IR drop after the microarchitecture has been frozen forces massive, expensive rework that can derail an entire product schedule. This exposes a semantic credit-assignment problem: if a generator emits high-level RTL, and a physical synthesis tool reports a thermal failure hours later, it is difficult to trace that physical error back to the specific line of RTL. Furthermore, the inherent stochasticity of modern generative models breaks traditional traceability; an architect cannot always deterministically reproduce a winning topology generation step. This proxy-to-signoff gap paralyzes traditional feedback loops. Evaluating these physical constraints requires bridging the semantic gap between high-level architectural proposals and the legacy EDA formats (e.g., LEF/DEF, Liberty timing files) that are difficult to generate or parse directly.
@@ -933,11 +954,13 @@ In a traditional design loop, these physical constraints are often verified late
 
 ### The Verification Bottleneck
 
-The driver of verification cost creates a similar, exponential bottleneck. When a designer adds a single state-holding element (like a flip-flop) to an integrated circuit, the size of the design increases linearly, but the number of possible states the system can inhabit doubles ($2^n$). As designs scale into billions of transistors and hundreds of specialized IP blocks, the state space that must be verified grows exponentially, far outpacing the linear growth of the design effort itself.
+The driver of verification cost creates a similar, exponential bottleneck. Adding a single state-holding element (like a flip-flop) to an integrated circuit doubles the number of reachable states, so a design with $n$ such elements can inhabit as many as $2^n$ states. As designs scale into billions of transistors and hundreds of specialized IP blocks, the state space that must be verified grows exponentially, far faster than the design itself grows in size.
+
+No project verifies a design in the exhaustive sense; the $2^n$ arithmetic forecloses that on the first page. Teams instead run verification as a statistical stopping problem. They define coverage goals, drive constrained-random stimulus at them, and watch the rate at which new bugs surface. Tapeout happens when that curve flattens, not when it reaches zero, and the flattening is a risk judgment rather than a proof. A flood of novel candidates asks the team to restart each design's bug curve from its steep end.
 
 This means automated optimizers must target more than just Power, Performance, and Area (PPA). They must also target verifiability. An architect might propose a highly aggressive, speculative cache coherence protocol that yields a 5% performance boost. However, if that protocol creates so many un-testable edge cases that the verification team will spend a year trying to prove it safe, it is ultimately a bad architecture.
 
-Formal verification and simulation currently struggle to cover this explosion, turning verification into the single largest bottleneck in modern hardware development. Functional verification now consumes a dominant share of the project schedule, compute budget, and headcount. The state space of a coherent, multi-chiplet SoC is massive, straining traditional constrained-random testing methodologies. If an automated generator proposes many novel architectural variants, the human verification team cannot absorb them due to the verification liability. A scalable loop must co-generate the verification collateral alongside the design, an approach early LLM-based testbench generators have begun to demonstrate [@QiuEtAl2024AutoBench]. This state-space explosion fundamentally limits Bounded Model Checking (BMC) and formal equivalence verification, forcing teams to rely heavily on constrained-random simulation instead [@Clarke2018ModelChecking]. This theoretical explosion has severe practical consequences on engineering teams, making the human cost of the design loop highly visible.
+Formal verification and simulation currently struggle to cover this explosion, turning verification into the single largest bottleneck in modern hardware development. Functional verification now consumes a dominant share of the project schedule, compute budget, and headcount. The state space of a coherent, multi-chiplet SoC is massive, straining traditional constrained-random testing methodologies. If an automated generator proposes many novel architectural variants, the human verification team cannot absorb them due to the verification liability. A scalable loop must co-generate the verification collateral alongside the design, an approach early LLM-based testbench generators have begun to demonstrate [@QiuEtAl2024AutoBench]. This state-space explosion limits sequential model checking, including Bounded Model Checking (BMC); combinational equivalence checking sidesteps it by ignoring sequential state and runs routinely at full-chip scale, but sequential coverage still forces teams to rely heavily on constrained-random simulation [@Clarke2018ModelChecking]. This theoretical explosion has severe practical consequences on engineering teams, making the human cost of the design loop highly visible.
 
 If a search outputs dozens of novel RTL accelerators a week, but a verification engineer requires weeks to write the testbenches and covergroups for just one, the generation speed is wasted. This gap grounds the state-space explosion in the daily reality of an RTL team. Foster's summary of the 2022 Wilson Research Group functional-verification study reports that demand for IC/ASIC verification engineers grew nearly three times as much as demand for design engineers from 2007 to 2022, about 146 percent versus 50 percent (@fig-verification-demand-scissors). Mean peak staffing was roughly one verification engineer per design engineer across most market segments, processor projects reached ratios as high as five to one, and design engineers spent 49 percent of their time on verification in 2022 [@Foster2022WilsonVerificationStudy]. Every invalid candidate that reaches these stages consumes compute and scarce engineering time. Generated candidates are cheap only until they require tools, verification, and expert review.
 
@@ -1076,7 +1099,7 @@ for label, value, colour, hatch in segments:
 
 ax.set_xlim(0, total_musd)
 ax.set_ylim(-0.95, 0.5)
-ax.set_yticks()
+ax.set_yticks([])
 ax.set_xticks([0, 200, 400, 600, total_musd])
 ax.set_xlabel("cumulative design cost for one 2 nm chip (USD millions)",
               fontsize=6.6, labelpad=2)
@@ -1144,6 +1167,16 @@ verification-staffing data provide one measured example of the engineering
 effort needed to check increasingly complex designs. Together, they show how
 new choices and results can arrive faster than architects can evaluate them and
 reach a decision.
+
+The scissors in @fig-scissors-gap has a famous ancestor. In 1999 the
+International Technology Roadmap for Semiconductors measured transistor budgets
+compounding at roughly 58 percent a year against designer productivity at 21
+percent and named the difference the design productivity gap. The industry never
+closed that gap by hiring; it closed it by raising abstraction, first RTL
+synthesis and then IP reuse, so that one engineer's decision governed more
+transistors. That history sets the bar for what follows in this book. An
+AI-assisted loop earns its place the way synthesis did, when its checks are as
+trustworthy as the manual work it replaced.
 
 A growing evaluation or review queue makes the problem visible. A project can
 still be in trouble even when no queue is visible. It may be missing
