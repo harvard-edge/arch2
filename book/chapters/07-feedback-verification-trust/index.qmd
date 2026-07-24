@@ -1,4 +1,3 @@
----
 # Feedback, Verification, and Trust {#sec-feedback-verification-trust}
 
 ::: {.epigraph}
@@ -15,9 +14,9 @@
 When does a returned observation count as evidence for a bounded architecture claim, what independent check could overturn that claim, and what separate decisions determine whether the result updates project knowledge or changes the design?
 :::
 
-In the previous chapters, we constructed the first three pillars of the autonomous design loop: **The State** (@sec-data-representations-world-models), **The Policy** (@sec-methods-generation-prediction-optimization), and **The Environment** (@sec-architecture-environments-tool-interfaces). When an agent executes an action within that environment, it produces a raw result. This chapter focuses on the final pillar: **The Reward**—the process of converting raw tool results into verified feedback and architectural trust. Crucially, formal verification and physical sign-off are the *only* safe mechanisms to calculate and deliver a grounded Reward back to the policy, officially closing the agentic loop.
+The previous chapters gave the loop a represented state, methods that propose changes, and an environment that executes them. When a method acts, the environment returns a raw result. This chapter converts those raw results into verified feedback and architectural trust, the foundation of everything the Evaluate stage does. A reader arriving from reinforcement learning would call this the reward signal. The chapter's central argument is that the analogy must be resisted, because feedback treated as a reward to maximize invites exactly the proxy gaming the loop exists to prevent.
 
-This introduces a core epistemic dilemma: the distinction between a *Reward* and a *Verification Oracle*[^fn-independent-oracles-c07]. An AI agent relies on a fast, continuous, and often probabilistic *Reward* to guide its search gradients. The human architect, however, relies on a slow, sparse, deterministic *Oracle* to establish ground truth. A decision requires evidence, not merely a reward signal. The bottleneck is proxy mismatch, where fast surrogate rewards diverge from physical reality. AI sharpens that bottleneck by generating plausible but invalid results faster than ever, which demands independent oracles rather than consensus among correlated models.
+This introduces a core epistemic dilemma: the distinction between a *Reward* and a *Verification Oracle*[^fn-independent-oracles-c07]. An AI agent relies on a fast, continuous, and often probabilistic *Reward* to guide its search gradients. The human architect, however, relies on a slow, sparse, physically grounded *Oracle* to establish ground truth. A decision requires evidence, not merely a reward signal. The bottleneck is proxy mismatch, where fast surrogate rewards diverge from physical reality. AI sharpens that bottleneck by generating plausible but invalid results faster than ever, which demands independent oracles rather than consensus among correlated models.
 
 [^fn-independent-oracles-c07]: **Test oracle**: In software testing, the trusted mechanism that decides whether an output is correct. In hardware flows the role falls to physics-grounded EDA tools, for example proving safety properties mathematically or confirming the synthesized netlist matches the RTL.
 
@@ -37,7 +36,7 @@ After reading this chapter, you can:
 
 At the core of AI-assisted architecture is a strict epistemic boundary between *probabilistic generation* and *deterministic validation*. Large Language Models and Reinforcement Learning agents operate in continuous, probabilistic latent spaces;[^fn-latent-space-c07] they optimize likelihoods and expected returns rather than absolute physical truths. An AI does not compute that a pipeline stage is correct in the Boolean sense; it predicts that the token sequence is highly probable.
 
-Bridging this gap is fundamentally difficult due to the **non-differentiable landscape** of hardware design. The design space is a jagged, discontinuous landscape where a single-bit flip can break compilation, creating a step function in the reward landscape. Because standard machine learning relies on smooth gradients, and EDA tools (like SAT solvers and logic synthesis) block backpropagation, AI cannot flow gradients directly from physical constraints . It is forced to rely on inefficient black-box optimization (like RL or evolutionary strategies).
+Bridging this gap is fundamentally difficult due to the **non-differentiable landscape** of hardware design. The design space is a jagged, discontinuous landscape where a single-bit flip can break compilation, creating a step function in the reward landscape. Because standard machine learning relies on smooth gradients, and EDA tools (like SAT solvers and logic synthesis) block backpropagation, AI cannot flow gradients directly from physical constraints. It is forced to rely on inefficient black-box optimization (like RL or evolutionary strategies).
 
 [^fn-latent-space-c07]: **Latent space**: The continuous internal vector space in which a neural network represents its inputs and predictions. Distances there encode statistical similarity, not logical truth, so proximity to a correct design is not correctness.
 
@@ -45,22 +44,26 @@ Bridging this gap is fundamentally difficult due to the **non-differentiable lan
 
 Consequently, architects must structurally separate the AI's *intent* (the rationale or ungrounded objective function) from its *implementation* (the emitted RTL). Epistemic trust requires passing the generated artifact across the boundary into deterministic, physics-bound solvers. We enforce this through mathematical property checking and equivalence checking.
 
-**Mathematical Property Checking:** To check an AI's implementation, we translate high-level constraints into cycle-accurate assertions, then use mathematical solvers to prove them. *Bounded* Model Checking (BMC) mathematically explores edge cases and bugs up to *k* cycles. However, BMC only provides bounded confidence. To mathematically guarantee the absence of deadlocks or safety violations, *Unbounded* Model Checking (UMC, such as IC3 or k-induction) is required. A major caveat applies to AI-generated assertions: translating abstract intent into cycle-accurate SystemVerilog Assertions (SVA) is highly error-prone . If an AI generates both the RTL and the SVA, the assertions might perfectly describe a broken implementation, generating vacuous passes.
+**Mathematical Property Checking:** To check an AI's implementation, we translate high-level constraints into cycle-accurate assertions, then use mathematical solvers to prove them. *Bounded* Model Checking (BMC) exhaustively checks every behavior up to a depth of *k* cycles, and that exhaustiveness is what lets a passing bound carry authority within its horizon rather than reading as smart sampling. To guarantee the absence of deadlocks or safety violations beyond any fixed bound, *Unbounded* Model Checking (UMC, such as IC3 or k-induction) is required. These proofs do not remove trust; they relocate it. A proof that the RTL satisfies its properties is exhaustive on one side and silent on the other, because no tool can check the properties against the architect's intent. That is the classical split between verification, building the thing right, and validation, building the right thing. Translating abstract intent into cycle-accurate SystemVerilog Assertions (SVA) is itself highly error-prone [@FangEtAl2025AssertLLM], and when an AI writes both the RTL and the assertions, both sides of the proof move inside the same untrusted producer. The assertions can then faithfully describe a broken implementation, so the proof passes while the design is wrong, and human review of the specification becomes the last independent check left.
 
-**Equivalence Checking:** To mathematically prove that two graphs of boolean logic are structurally identical across transformations (completely bypassing dynamic stimuli), EDA tools reduce them to canonical mathematical forms (like And-Inverter Graphs, AIGs, or Binary Decision Diagrams, BDDs). Standard Logic Equivalence Checking (LEC) easily matches state elements (flops) from RTL to a synthesized netlist. However, if an AI proposes a structural microarchitectural change—such as retiming logic or altering pipeline stages—standard LEC breaks immediately. Proving equivalence across such AI-driven mutants requires Sequential Equivalence Checking (SEC), which remains a massive scalability bottleneck in modern EDA.
+**Equivalence Checking:** To mathematically prove that two structurally different circuits compute the same Boolean function across transformations (completely bypassing dynamic stimuli), EDA tools reduce them to compact logic representations such as And-Inverter Graphs (AIGs) or Binary Decision Diagrams (BDDs). BDDs are canonical, so equivalent functions collapse to the same graph, while AIGs are only partially canonicalized by structural hashing and hand the residual gap to a solver. Standard Logic Equivalence Checking (LEC) easily matches state elements (flops) from RTL to a synthesized netlist. However, if an AI proposes a structural microarchitectural change (such as retiming logic or altering pipeline stages), standard LEC breaks immediately. Proving equivalence across such AI-driven mutants requires Sequential Equivalence Checking (SEC), which remains a massive scalability bottleneck in modern EDA.
 
 ### Dynamic Simulation and Coverage
 
 While formal methods prove specific assertions, full-system validation requires dynamic simulation. Because the state space of sequential logic ($2^N$ for $N$ flip-flops) is astronomically vast, exhaustive dynamic simulation is a mathematical impossibility. This forces the necessity of statistical sampling through constrained-random stimuli.
 
-To measure the completeness of this statistical sampling, architects rely on *coverage models* (statement, branch, toggle, condition, FSM, and functional coverage). A coverage model quantifies what parts of the vast state space the testbench actually reached. Furthermore, AI-generated RTL is highly susceptible to X-propagation bugs (where uninitialized states simulate favorably as deterministic values but synthesize to unpredictable hardware) , making explicit X-optimism and X-pessimism EDA checks mandatory.
+To measure the completeness of this statistical sampling, architects rely on *coverage models* (statement, branch, toggle, condition, FSM, and functional coverage). A coverage model quantifies what parts of the vast state space the testbench actually reached.
+
+A coverage model is authored the same way the design is, by someone deciding in advance which questions matter. Reaching 100% functional coverage means the testbench asked every question the verification plan wrote down, not that the design is correct. That makes the coverage percentage an optimization target like any other proxy in this chapter. A generator told to close coverage will close bins, and the bins it closes most cheaply are exactly the ones too weak to catch its own bugs.
+
+Simulation semantics add a failure mode of their own. AI-generated RTL is highly susceptible to X-propagation bugs (where uninitialized states simulate favorably as deterministic values but synthesize to unpredictable hardware), making explicit X-optimism and X-pessimism EDA checks mandatory.
 
 ::: {.callout-war-story title="The Limits of Statistical Sampling: The Pentium FDIV Bug"}
 **The claim.** In 1994, Intel's new Pentium processor passed extensive statistical testing, leading the design team to believe its floating-point unit was functionally correct for all practical workloads.
 
-**The gap.** A missing entry in a programmable logic array (PLA) used for the radix-4 SRT division algorithm caused the processor to return incorrect results for specific floating-point division operations. Because the flaw only manifested on rare operand pairs, constrained-random simulation missed it. The bug was discovered post-silicon by a mathematician (Thomas Nicely) who noticed inconsistencies in twin prime calculations.
+**The gap.** A missing entry in a programmable logic array (PLA) used for the radix-4 SRT division algorithm caused the processor to return incorrect results for specific floating-point division operations. Because the flaw only manifested on rare operand pairs, the directed and random tests Intel ran missed it. The bug was discovered post-silicon by a mathematician (Thomas Nicely) who noticed inconsistencies in twin prime calculations.
 
-**The lesson.** Statistical sampling and dynamic simulation cannot guarantee the absence of bugs in vast state spaces. The ensuing $475 million recall catalyzed the industry's shift toward formal verification. Today, complex datapaths are mathematically proven correct using theorem provers and equivalence checkers rather than relying solely on simulation coverage, proving that formal oracles are necessary to establish ground truth.
+**The lesson.** Statistical sampling and dynamic simulation cannot guarantee the absence of bugs in vast state spaces. The ensuing $475 million recall catalyzed the industry's shift toward formal verification. Today, complex datapaths are mathematically proven correct using theorem provers and equivalence checkers rather than relying solely on simulation coverage, since formal methods catch error classes that sampling alone cannot.
 :::
 
 ## Observation, Evidence, and Decision {#sec-from-feedback-to-decision}
@@ -75,15 +78,15 @@ First, a tool return does not automatically become a valid architecture observat
 Second, a valid observation does not automatically become evidence for the claim unless it is strictly relevant to the property, comparison, state, and scope.
 Third, evidence and a review result do not automatically become either training data or an architecture decision without explicit human authorization.
 
-@fig-evidence-flow and @tbl-six-part-branch map this progression. They separate the evaluation of a claim from the two independent choices that follow, namely the knowledge-update branch and the architecture-action branch.
+Feedback becomes evidence only by passing through a tool observation, an evidence relation, and a review before it can authorize a knowledge update or an architecture action (@fig-evidence-flow, @tbl-six-part-branch). These steps separate the evaluation of a claim from the two independent choices that follow, namely the knowledge-update branch and the architecture-action branch.
 
 ### The Spatial and Temporal Credit Assignment Problem
 
-While the evidence flow successfully protects the human architect, it highlights the fundamental bottleneck of AI in hardware: the **Spatial and Temporal Credit Assignment Problem**. If a 3-day post-route synthesis run fails to meet timing, the evidence clearly rejects the candidate. But for an RL agent, which of the 10,000 architectural tokens or parameters it generated is to blame? A binary "timing failed" report provides virtually zero actionable learning signal. Hardware generators require localized, structurally-aware feedback (such as node-level slack in a graph) to update their policies effectively, not just boolean failure flags at the end of a multi-day horizon.
+While the evidence flow successfully protects the human architect, it highlights the fundamental bottleneck of AI in hardware: the **Spatial and Temporal Credit Assignment Problem**. If a three-day place-and-route and static-timing signoff run fails to meet timing, the evidence clearly rejects the candidate. But for an RL agent, which of the 10,000 architectural tokens or parameters it generated is to blame? A binary "timing failed" report provides virtually zero actionable learning signal. Hardware generators require localized, structurally-aware feedback (such as node-level slack in a graph) to update their policies effectively, not just boolean failure flags at the end of a multi-day horizon.
 
 ### The Six-Part Branching Flow
 
-![**The six-part branching evidence flow.** Feedback transitions into a tool observation, evidence relation, and review result before authorizing a knowledge update or architecture action. Invalid inferences, such as automated bypass to action, are explicitly highlighted.](images/F8-evidence-flow){#fig-evidence-flow width="100%" fig-alt="Flowchart diagram mapping the six-part path from initial feedback to an authorized architecture action, highlighting invalid inferences."}
+![**Feedback earns authority only by traversing the chain:** it transitions into a tool observation, an evidence relation, and a review result before it can authorize a knowledge update or an architecture action. Invalid inferences, such as an automated bypass straight to action, are explicitly highlighted.](images/F8-evidence-flow){#fig-evidence-flow width="100%" fig-alt="Flowchart diagram mapping the six-part path from initial feedback to an authorized architecture action, highlighting invalid inferences."}
 
 | **Part** | **Visible record** | **Question answered** | **Invalid inference to avoid** |
 | --- | --- | --- | --- |
@@ -94,7 +97,7 @@ While the evidence flow successfully protects the human architect, it highlights
 | **Knowledge-update branch** | Named update surface and acceptance criteria | What project or model knowledge should change? | Every result should become training data or parameter change. |
 | **Architecture-action branch** | Stop, continue, reject, revise, escalate, waive, implement | What action is authorized? | The tool or evidence grants its own permission, or the knowledge update must occur first. |
 
-: **The six-part branching result map.** A claim is reviewed against evidence. From that review result, knowledge updates and architecture actions branch independently. {#tbl-six-part-branch tbl-colwidths="[18,25,25,32]"}
+: **A reviewed claim feeds two branches that diverge independently:** a claim is reviewed against evidence, and from that review result, knowledge updates and architecture actions branch separately. {#tbl-six-part-branch tbl-colwidths="[18,25,25,32]"}
 
 The design-loop card introduced in @sec-architecture-20-ontology acts as the binding artifact across these stages. It points to the observation, evidence, review, update, and decision records rather than trying to contain every detail itself.
 
@@ -102,7 +105,7 @@ The design-loop card introduced in @sec-architecture-20-ontology acts as the bin
 
 While the design-loop card tracks the overall flow, the evidence record itself has no useful strength independent of a specific claim. An observation bears on a property for a candidate relative to a comparator under a stated workload, design state, tool path, metric, assumptions, validity region, uncertainty, and proposed action. A cycle estimate can support a bounded performance comparison while remaining irrelevant to power, timing, isolation, software usability, or system intent (@fig-claim-frame).
 
-![**The compact claim frame.** The diagram visualizes the relational graph linking the artifact candidate to its measurement metrics and environmental constraints.](images/F7-claim-frame){#fig-claim-frame width="100%" fig-alt="The Compact Claim Frame diagram visualizes the relational graph linking the artifact candidate to its measurement metrics and environmental constraints."}
+![**A claim binds one candidate-and-comparator to a single property and metric, valid only inside a stated scope:** three columns organize the frame, artifact (candidate and comparator), measurement (property and metric), and scope and validity (workload, tool path, and validity region).](images/F7-claim-frame){#fig-claim-frame width="100%" fig-alt="Three-column diagram of the compact claim frame: an artifact column pairing candidate and comparator, a measurement column pairing property and metric, and a scope-and-validity column, with arrows fanning the metric out to the workload, tool path, and validity region conditions."}
 
 A compact claim frame reads: candidate and comparator; property and metric; workload and design state; tool path, **system software assumptions, and HW/SW contracts**; validity region and uncertainty; proposed action and nonclaims.
 
@@ -110,7 +113,7 @@ This traceable link among claim, assumption, evidence, and challenge mirrors the
 
 For the 3\ W RISC-V XR subsystem, a structural check can reject a malformed custom instruction encoding. A regression suite can support functional behavior for covered cases. Workload experiments can support a bounded performance comparison for its spatial accelerator matrix and memory hierarchy. A synthesis report can address timing, routing congestion across the interconnect, and area under its constraints. None of those checks silently establishes the other properties.
 
-@tbl-verification-authorities provides a taxonomy of architecture checks, showing how different tools address separate property classes.
+Throughout this book, a gate is a declared pass/fail check with named authority to block a transition; a check that merely informs is advisory, and a review or milestone is neither. Architecture checks split into property classes, each tool addressing a separate class and each failure blocking a different transition; every row of @tbl-verification-authorities is a gate in exactly this sense.
 
 | **Check scope** | **Representative checks or signals** | **What a failure can block** |
 | --- | --- | --- |
@@ -118,12 +121,15 @@ For the 3\ W RISC-V XR subsystem, a structural check can reject a malformed cust
 | Functional | Unit tests, reference outputs, assertions, formal equivalence, regressions | Candidates that compute the wrong behavior before performance matters. |
 | Model and workload | Baseline replay, sensitivity studies, calibration, coverage, drift tests | Proxy wins outside the represented workload or calibrated support. |
 | Implementation | CDC/RDC (Clock/Reset Domain Crossing) analysis, structural linting, Synthesis constraints, timing closure, power envelopes, area budgets, Gate-Level Simulation (GLS), Design Rule Checks (DRC) | Architecture candidates that violate physical limits or pre-silicon validation. |
+| Security | Information-flow tracking, security assertions and property checks, side-channel analysis, formal path sensitization | Candidates that leak state, bypass isolation, or weaken mitigations before silicon commits them. |
+| Power integrity and reliability | Static IR drop, dynamic di/dt droop, electromigration limits, aging margins | Layouts whose logic is correct but whose power delivery or lifetime margins fail signoff. |
+| Manufacturing test | Design-for-test (DFT) rule linting, scan-chain integrity, automatic test pattern generation (ATPG) fault-coverage targets | Designs that simulate correctly but cannot be tested, screened, or yielded in production. |
 | Operational | SLOs, canary rollouts, rollback, telemetry, reliability, security, incident review | Claims that do not survive deployment conditions or policy boundaries. |
 | Expert review | Design review, waived-warning review, evidence-adequacy, residual-risk review | Results whose evidence is too weak for the proposed transition. |
 
-: **Architecture check taxonomy.** Checks are grouped by the property class they cover and the transition their failure can block. {#tbl-verification-authorities tbl-colwidths="[20,38,42]"}
+: **No single check covers every property, so each guards a different transition:** checks are grouped by the property class they cover and the transition their failure can block. {#tbl-verification-authorities tbl-colwidths="[20,38,42]"}
 
-Evidence types cannot be ranked on one universal fidelity scale. Cheap legality checks can decisively reject a candidate, while expensive out-of-scope measurements might be useless for the specific transition. @tbl-evidence-dimensions lists what an evidence record must capture.
+Evidence types cannot be ranked on one universal fidelity scale. Cheap legality checks can decisively reject a candidate, while expensive out-of-scope measurements might be useless for the specific transition. An evidence record is only reusable if it captures six dimensions, from producer and status through shared assumptions (@tbl-evidence-dimensions).
 
 Seen together, these observations are noisy, partial readings of a quantity no tool reports directly, the design's true performance, power, and area in deployment. Inferring that hidden quantity from imperfect measurements is the problem control theory calls state estimation.[^fn-state-estimation-c07] The analogy is a discipline rather than a formula. It requires the architect to treat each proxy, simulator, and synthesis result as a measurement with a characteristic bias and variance rather than as ground truth, weighting a reading by how much it actually constrains the hidden quantity for this decision, and stating the residual uncertainty that no available measurement removes.
 
@@ -138,7 +144,7 @@ Seen together, these observations are noisy, partial readings of a quantity no t
 | **Integrity and provenance** | Which versions, inputs, outputs, commands, and hashes associate the record with the run? |
 | **Shared assumptions** | What models, data, workloads, and paths are shared? (See @sec-independent-checks-and-correlated-errors for check independence.) |
 
-: **Dimensions of an evidence record.** {#tbl-evidence-dimensions tbl-colwidths="[26,74]"}
+: **A record supports re-review only if it captures who produced the result and under what scope:** these six dimensions are the minimum an evidence packet must answer. {#tbl-evidence-dimensions tbl-colwidths="[26,74]"}
 
 ## Proxy Mismatch and the PPA Pareto Frontier {#sec-proxy-mismatch-metric-gaming-and-calibration}
 
@@ -157,7 +163,7 @@ The optimization process naturally exploits the gap between fast proxies and phy
 
 If an architect asks an AI to optimize estimated instructions per cycle (IPC) without checking physical constraints, the optimization process will converge on architectural shortcuts that mimic the CoastRunners loophole[^fn-coastrunners-c07] [@CoastRunners]. It might strip out decoupling queues or introduce combinational loops to artificially boost throughput in a high-level CPU simulator. That modification maximizes the proxy metric but guarantees failure during downstream physical routing and timing closure.
 
-This leads to the ML-Sys challenge of **Reward Shaping**. Simply relying on physical oracles is insufficient for training, because they are too slow. Developers must carefully shape reward functions to gently penalize PPA constraint violations without causing the model's learning process to collapse. The fundamental limit is that finding a continuous reward function that perfectly aligns with discontinuous physical constraints (like a strict 3W thermal envelope or a boolean DRC violation) is mathematically intractable. This is especially true when an agent trades one physical metric for another—such as adhering to a peak Power constraint by stretching out execution time, inadvertently inflating total Energy (Joules) consumed and destroying the Energy-Delay Product (EDP).
+This leads to the ML-Sys challenge of **Reward Shaping**. Simply relying on physical oracles is insufficient for training, because they are too slow. Developers must carefully shape reward functions to gently penalize PPA constraint violations without causing the model's learning process to collapse. The fundamental limit is that finding a continuous reward function that closely aligns with discontinuous physical constraints (like a strict 3\ W thermal envelope or a boolean DRC violation) has no clean general solution. The difficulty sharpens when an agent trades one physical metric for another. Adhering to a peak-power constraint by stretching out execution time need not raise total energy, since running at half the power for twice as long leaves the power-time product roughly unchanged, but the longer delay still degrades the Energy-Delay Product (EDP) through its delay term.
 
 This was precisely the core technical dispute surrounding AlphaChip's placement claims. The literature debate wasn't solely about reproducible datasets; it centered on whether intermediate proxy metrics (like half-perimeter wirelength and proxy congestion) genuinely correlated with the physical ground truth (post-route PPA and timing closure) [@ChengEtAl2026UpdatedAssessment]. When an AI optimizes an intermediate proxy, it risks discovering regions where the proxy diverges from reality.
 
@@ -165,13 +171,13 @@ This was precisely the core technical dispute surrounding AlphaChip's placement 
 
 It is a form of Goodhart's law [@Goodhart1975MonetaryManagement; @Strathern1997Goodhart], under which a measure that served well as an indicator stops serving once it becomes the optimization target. Fast proxies that worked well for human architects break down when an AI optimizes against them. As illustrated in @fig-trust-calibration, simulator inaccuracies are no longer just random noise; they become loopholes the AI exploits. Consequently, the architect must anchor AI proposals with physical ground-truth oracles to prevent these escapes.
 
-![**Schematic trust-calibration curve.** As an AI optimizes a surrogate proxy, the metric initially correlates with physical ground truth. However, beyond the calibration boundary, the AI exploits the proxy's blind spots (reward hacking), causing the ground truth value to collapse while the proxy score continues to rise.](images/F9-trust-calibration){#fig-trust-calibration width="100%" fig-alt="A line graph showing surrogate proxy score increasing monotonically while the physical ground truth curve collapses sharply after crossing the calibration boundary."}
+![**Past the calibration boundary, the proxy and physical reality diverge:** as an AI optimizes a surrogate proxy, the metric initially correlates with physical ground truth, but beyond the calibration boundary the AI exploits the proxy's blind spots (reward hacking), causing the ground-truth value to collapse while the proxy score continues to rise.](images/F9-trust-calibration){#fig-trust-calibration width="100%" fig-alt="A line graph showing surrogate proxy score increasing monotonically while the physical ground truth curve collapses sharply after crossing the calibration boundary."}
 
 The curve shows this failure directly. Up to the calibration boundary, the proxy tracks the ground truth, so optimizing the proxy also improves the real design. Past that boundary, the two diverge. The proxy score keeps climbing because the AI has found the shapes the surrogate rewards, while the physical ground truth falls away because those shapes break timing, area, or power that the surrogate never modeled. The widening gap between the two lines is the reward hacking, and it is invisible to anyone watching only the proxy.
 
 ### Diagnosing Weak Evidence
 
-@tbl-proxy-diagnostics pairs these concerns with diagnostic checks.
+Each concern has a diagnostic check that can expose it (@tbl-proxy-diagnostics).
 
 | **Concern** | **Diagnostic check** | **What a failure means** |
 | --- | --- | --- |
@@ -181,7 +187,7 @@ The curve shows this failure directly. Up to the calibration boundary, the proxy
 | Nondeterminism | Repeat runs, preserve seeds and state, report variance or ranking stability, distinguish flaky status from measured variability. | A single run or mean without dispersion may not resolve the decision margin. |
 | Selection bias | Re-evaluate the chosen candidate on held-out seeds and workloads not used in the search. | The search maximum is optimistically biased, so the apparent margin may not survive independent re-measurement. |
 
-: **Diagnostics for weak evidence.** Each check is tied to a specific failure it can expose. {#tbl-proxy-diagnostics tbl-colwidths="[18,41,41]"}
+: **Each weakness has a check that can expose it before the result is trusted:** every diagnostic below is tied to a specific failure it can surface. {#tbl-proxy-diagnostics tbl-colwidths="[18,41,41]"}
 
 For the illustrative 3\ W RISC-V XR subsystem, an early fast Python ISA simulator acts as a surrogate biomarker,[^fn-biomarker-proxy-c07] estimating performance improvements for a new instruction extension. However, the Phase III trial (physical placement and routing closure) might reverse the apparent preference due to timing degradation. Or, if the performance check omits thermal considerations, the new instruction implementation might create a thermal hotspot that violates the 3\ W limit. Before reaching RTL, an optimization run proposing an SoC topology might game a high-level Transaction-Level Model (TLM) by saturating a bus without modeling protocol arbitration overhead or memory controller queueing delays, requiring Electronic System Level (ESL) calibration before committing to RTL generation.
 
@@ -197,7 +203,7 @@ Has the architect stated when a candidate falls outside the range where the gene
 
 Passing a fast software simulation does not guarantee RTL timing closure, and an AI maximizing a high-level proxy metric does not establish that the hardware is physically viable. This distinction separates hardware benchmarking from software benchmarking. A software LLM agent on SWE-bench, a software engineering benchmark, is scored by passing unit tests, but those tests are themselves an incomplete proxy, which is why the curated SWE-bench Verified subset was introduced and why optimization can still game the tests it is graded against [@OpenAI2024SWEBenchVerified].
 
-Hardware agents add an orthogonal set of physical requirements that a functional proxy cannot observe. These include proving timing across varying voltage and temperature extremes (multi-corner multi-mode, MCMM, which tests across various voltage and temperature combinations), adhering to dynamic clocking rules (DVFS), respecting power delivery network limits (static IR drop and transient di/dt droop), and passing physical layout constraints (DRC). At advanced nodes, wire delay dominates logic delay; an AI's 5-stage pipeline may fail during post-route STA (Static Timing Analysis) when long wire RC-constants erode the setup time margins. An AI winning a zero-delay RTL simulation or surrogate proxy metric never constitutes architectural evidence without a sign-off grade physical audit. The sim-to-silicon gap is what puts a tapeout at risk, so the architect must maintain a strict boundary between fast proxies used for exploration and the ground-truth oracles required for silicon success.
+Hardware agents add an orthogonal set of physical requirements that a functional proxy cannot observe. These include proving timing across process, voltage, and temperature corners and across the design's operating modes such as functional, scan, and test, each carrying its own constraint set (multi-corner multi-mode, MCMM), adhering to dynamic clocking rules (DVFS), respecting power delivery network limits (static IR drop and transient di/dt droop), and passing physical layout constraints (DRC). At advanced nodes, wire delay dominates logic delay; an AI's 5-stage pipeline may fail during post-route STA (Static Timing Analysis) when long wire RC-constants erode the setup time margins. An AI winning a zero-delay RTL simulation or surrogate proxy metric never constitutes architectural evidence without a signoff-grade physical audit. The sim-to-silicon gap is what puts a tapeout at risk, so the architect must maintain a strict boundary between fast proxies used for exploration and the ground-truth oracles required for silicon success.
 
 Nondeterministic observations require careful interpretation relative to the decision margin. Recording a seed is not enough. The review question is whether the observed variation, whether a stochastic tool measurement, an unstable ranking across workloads, or a flaky execution path, is small enough, and sampled appropriately enough, to support the declared margin and ordering. When a generator relies on heuristic search, or an ML-driven place-and-route tool returns a different floorplan under a new random seed, a single deterministic run is fragile evidence. The architect must evaluate the candidate across a distribution of seeds, preferring a shape that stays within its limits across that distribution, to guard against a design that only survives one lucky run.
 
@@ -207,9 +213,11 @@ Guarding a single candidate against a lucky run is not the same as guarding the 
 
 Re-measuring on fresh workloads or applying proxy diagnostics is useful only when a purportedly stronger check observes the missing property and is not merely another expression of the same assumptions. Independence is relative to a claim and a failure class, not a binary property of components (@fig-independent-checks).
 
-![**Correlated errors vs. independent checks.** A correlated check shares the generator's blind spots. A physical simulator provides an independent, orthogonal modality shift.](images/ch7_independent_checks){#fig-independent-checks width="100%" fig-alt="Correlated Error vs Independent Modality Shift diagram"}
+![**A second model shares the first's blind spots; only a physics-grounded oracle is independent:** a correlated check inherits the generator's omissions, while a physical simulator provides an orthogonal modality shift that can reject what the generator missed.](images/ch7_independent_checks){#fig-independent-checks width="100%" fig-alt="Two-column diagram. The left correlated-error column runs from a generator LLM to a critic LLM sharing the same blind spots, ending in red false confidence. The right independent-modality-shift column runs from the generator LLM to a physical simulator applying deterministic physics, ending in green grounded verification."}
 
 A useful check has two properties that independence does not supply. Its coverage fixes which failures the check can observe, so a passing check is only as strong as its coverage; testing can show the presence of defects but never their absence. Its soundness, meaning a reported failure is a real failure rather than a false alarm, makes a genuine failure decisive, so a rejection settles the bounded claim the check observes.
+
+Every check also chooses which direction it is allowed to be wrong. Static timing analysis stacks corner derates and on-chip-variation margins so that a false failure is possible but a false pass is not, and that engineered asymmetry is the only reason a timing pass carries signoff authority. Simulation makes the opposite trade. Its stimulus is sampled, so a pass overclaims in exactly the direction that matters. Before trusting any check, ask which way it errs; a conservative tool's pass and an optimistic tool's fail are the two results that mean something.
 
 Independence matters only after a check observes the relevant property, and only when the check does not share the producer's critical model, training data, objective, workload, implementation, tool path, or architectural assumption. Separate prompts, agent names, or reports do not create independence. Correlated checks can still find defects, but the architect should describe agreement among them as corroboration, not independent validation.
 
@@ -248,7 +256,7 @@ apply_style()
 # academic-only proposals and the pathological >800% microbenchmark are excluded.
 # Accessed 2026-07-19. Receipt: data/source-receipts/chapter7-mitigation-overhead.csv
 _root = Path(_ap.__file__).resolve().parents[2]
-rows =
+rows = []
 with open(_root / "data" / "source-receipts" / "chapter7-mitigation-overhead.csv", encoding="utf-8") as fh:
     for d in csv.DictReader(fh):
         rows.append({"m": d["mitigation"], "t": d["threat"], "lo": float(d["low_pct"]), "hi": float(d["high_pct"])})
@@ -292,11 +300,13 @@ AI proposals require independent, out-of-distribution checks. When a generator, 
 
 If an LLM generates both the Verilog RTL and the SystemVerilog testbench, those two artifacts share the same semantic omissions. The testbench will pass the broken design, creating a false sense of security. To break that shared blind spot, the architect must demand an independent oracle rather than accepting consensus among correlated models.
 
-Using an AI to check an AI is flawed if it lacks physical grounding. True independence requires a modality shift, where the verification path does not share the generator's assumptions. In hardware, this means using established electronic design automation (EDA) tools as independent oracles. A consensus among LLM-driven checkers is not an independent rejection path. The architect must demand independent ground truth oracles to authorize architecture transitions.
+Using an AI to check an AI is flawed if it lacks physical grounding [@HuangEtAl2024SelfCorrect]. True independence requires a modality shift, where the verification path does not share the generator's assumptions. In hardware, this means using established electronic design automation (EDA) tools as independent oracles. A consensus among LLM-driven checkers is not an independent rejection path. The architect must demand independent ground truth oracles to authorize architecture transitions.
 
-Independence assumes the checks come from outside the thing they judge. In an AI loop that assumption can quietly fail, because the agent that generates a candidate can also generate its unit tests, its assertions, and the assurance argument that ties them to the claim. A suite the generator authored can pass because it omits the case its own design gets wrong, so a green result reports assumed coverage rather than demonstrated coverage. Mutation testing is one probe of the checks themselves. It injects known faults into the design and confirms the suite actually catches them, measuring whether the checks observe the failures they are trusted to cover [@DeMilloLiptonSayward1978Hints].
+Even these EDA oracles sit one step above the ground truth. Signoff static timing analysis is not physics. It is a contractual model, calibrated against SPICE circuit simulation and ultimately against measured silicon. The final oracle arrives at first silicon, in bring-up, characterization, and shmoo plots, and post-silicon validation exists precisely because pre-silicon signoff has escapes. FDIV was found in the field by a customer running twin prime calculations, not by a stronger testbench.
 
-@tbl-independence-check separates check independence from the property observed.
+Independence assumes the checks come from outside the thing they judge. In an AI loop that assumption can quietly fail, because the agent that generates a candidate can also generate its unit tests, its assertions, and the assurance argument that ties them to the claim [@KandeEtAl2024SecurityAssertions]. A suite the generator authored can pass because it omits the case its own design gets wrong, so a green result reports assumed coverage rather than demonstrated coverage. Mutation testing is one probe of the checks themselves. It injects known faults into the design and confirms the suite actually catches them, measuring whether the checks observe the failures they are trusted to cover [@DeMilloLiptonSayward1978Hints].
+
+Check independence is a separate question from which property the check observes, and both must be stated before a pass counts (@tbl-independence-check).
 
 | **Check property** | **Question** |
 | --- | --- |
@@ -306,7 +316,7 @@ Independence assumes the checks come from outside the thing they judge. In an AI
 | **Independence basis** | Which models, data, objectives, workloads, code, tools, and assumptions are shared or different? |
 | **Effect of failure** | Which bounded claim or proposed transition must stop, narrow, or escalate? |
 
-: **Evaluating check independence and rejection paths.** {#tbl-independence-check tbl-colwidths="[26,74]"}
+: **A check is only as strong as the property it observes and its independence from the producer:** each row records what the check can reject, what it can miss, and what its failure forces. {#tbl-independence-check tbl-colwidths="[26,74]"}
 
 Not every check needs to be an expensive independent oracle. Because an AI generator can emit syntactically plausible but invalid RTL or scripts, and can propose faster than a human can review, fast deterministic checks belong ahead of expensive ones. A linter, a static bounds check, and a syntax verifier reject a malformed candidate before a simulator or synthesis run is spent on it. Requiring an agent to clear those checks and attach the passing result before it escalates a proposal keeps the volume of generated candidates from overwhelming the reviewer.
 
@@ -314,7 +324,7 @@ Not every check needs to be an expensive independent oracle. Because an AI gener
 
 Generative AI introduces structural security risks that perfectly highlight why traditional coverage models and correlated proxies are insufficient. The hallucinated vulnerability or the maliciously injected hardware trojan acts as the ultimate stress test for an epistemic boundary.
 
-In traditional architecture, a backdoor required a rogue engineer. Today, a generator trained on unvetted, scraped open-source RTL can inadvertently reproduce buried trojans, or an adversary could poison the foundation model's training data . Because these malicious structures (such as a finite state machine that bypasses a privilege check after a specific sequence of branch mispredicts) are structurally valid and functionally silent, they easily evade dynamic simulation coverage models.
+In traditional architecture, a backdoor required a rogue engineer. Today, a generator trained on unvetted, scraped open-source RTL can inadvertently reproduce buried trojans, a corpus-reproduction risk first measured for software code assistants [@PearceEtAl2022Asleep], or an adversary could poison the foundation model's training data. Because these malicious structures (such as a finite state machine that bypasses a privilege check after a specific sequence of branch mispredicts) are structurally valid and functionally silent, they easily evade dynamic simulation coverage models.
 
 To defend against poisoned models, architects must employ formal path-sensitization and Information Flow Tracking (IFT) to prove the absence of undocumented data-exfiltration paths. However, applying IFT to detect trojans suffers from massive state-space explosion. While it works on specific IP blocks (like a crypto core's isolation boundary), "proving the absence" of trojans across an entire SoC remains largely an unsolved EDA capacity problem.
 
@@ -328,7 +338,7 @@ The AlphaChip dispute (introduced earlier regarding proxy mismatch) also perfect
 
 Neither side could collapse the disagreement into one shared experiment because the strongest results depended on a proprietary setup that the public cases did not match. A public claim about AI-assisted placement stays within what an outside reviewer can inspect or reproduce, even when a stronger internal result exists.
 
-@tbl-alphachip-evidence-comparison separates what each public record contributes from what it cannot establish.
+Each public record in the dispute contributes something specific and leaves something it cannot establish (@tbl-alphachip-evidence-comparison).
 
 | **Public record** | **What it directly contributes** | **What it cannot establish** |
 | --- | --- | --- |
@@ -337,7 +347,7 @@ Neither side could collapse the disagreement into one shared experiment because 
 | Authors' response | Identified disputed differences and argued the assessments did not reproduce the reported method. | A response can clarify missing conditions but cannot turn unmatched evaluations into a shared experiment. |
 | ChiPBench [@WangEtAl2025ChiPBench] | Provides an end-to-end placement benchmark using final metrics rather than an intermediate proxy. | It supplies a new framework; it does not retroactively align earlier training inputs, budgets, or tools. |
 
-: **Why the records support different claims.** {#tbl-alphachip-evidence-comparison tbl-colwidths="[25,37,38]"}
+: **Why the records support different claims:** each row pairs what a public artifact directly contributes with the stronger proprietary result it cannot independently establish. {#tbl-alphachip-evidence-comparison tbl-colwidths="[25,37,38]"}
 
 A protected evidence frame must document the restricted data class, allowed tool access, authorized reviewer, method and scope visible to the reviewer, redaction limits, public nonclaims, and the bounded conclusion.
 
@@ -349,13 +359,15 @@ State which evidence is restricted, which AI tools may access it, and who can in
 
 Just as confidentiality limits who can inspect an observation, computational and human cost limits which observations an architect can obtain in the first place. However, cost does not assign confidence or evidentiary strength. A cheap legality check may decisively reject an invalid candidate. An expensive post-route result may still be irrelevant to a security claim. The useful next check is one whose plausible outcomes could change the claim disposition, candidate ordering, scope, or proposed action enough to justify its expense.
 
-Verification schedule and review bandwidth are constrained resources. Available capacity limits both compute and expert attention. This introduces the fundamental architectural principle of the **Fidelity vs. Latency Trade-off**. We must use low-fidelity, low-latency proxies early in the loop (like Analytical Models or ISA Simulators) before escalating to high-fidelity, high-latency tools (like 3-day VCS RTL simulations or Palladium emulation or Protium FPGA prototyping).
+Verification schedule and review bandwidth are constrained resources. Available capacity limits both compute and expert attention. The constraint is not hypothetical; industry surveys consistently find verification consuming roughly half of total project engineering effort, with design engineers spending about half their time on it [@Foster2022WilsonVerificationStudy]. This introduces the fundamental architectural principle of the **Fidelity vs. Latency Trade-off**. We must use low-fidelity, low-latency proxies early in the loop (like Analytical Models or ISA Simulators) before escalating to high-fidelity, high-latency tools (like 3-day VCS RTL simulations or Palladium emulation or Protium FPGA prototyping).
+
+No verification effort ends with a proof that the design is correct. Teams tape out on a statistical argument. The bug discovery rate has flattened week over week, coverage closure is complete against the plan, and the open-issue list holds no must-fix items. That flattening curve is the industry's stopping rule, and it is a bounded claim with stated assumptions, exactly what this chapter's frames exist to record. An AI that floods the loop with fresh candidates resets the curve, because each candidate restarts its own discovery clock.
 
 ### The Feedback Density Paradox
 
-This tool abstraction ladder creates the **Feedback Density Paradox** for ML-Sys. Machine learning models fundamentally require *dense, immediate* feedback to explore state spaces and converge efficiently. We rely on linters and fast simulators because they provide this dense reward. However, physical ground-truth oracles provide *sparse, delayed* feedback. Thus, the dense feedback needed for AI learning is exactly the surrogate proxy that leads to reward hacking, while the sparse ground-truth feedback needed for trust is too infrequent to learn from. A feedback budget must record latency, execution cost, fidelity, uncertainty, failure budget, interpretation time, and review cost.
+This ladder of proxies, from linter to signoff oracle, creates the **Feedback Density Paradox** for ML-Sys. Machine learning models fundamentally require *dense, immediate* feedback to explore state spaces and converge efficiently. We rely on linters and fast simulators because they provide this dense reward. However, physical ground-truth oracles provide *sparse, delayed* feedback. Thus, the dense feedback needed for AI learning is exactly the surrogate proxy that leads to reward hacking, while the sparse ground-truth feedback needed for trust is too infrequent to learn from. The paradox is the second half of the credit assignment problem raised earlier in this chapter. There, sparse ground truth could not tell the generator which of its ten thousand choices was at fault; here, the dense signal that could teach it is exactly the proxy that invites gaming. A feedback budget must record latency, execution cost, fidelity, uncertainty, failure budget, interpretation time, and review cost.
 
-The burden of proof depends heavily on the action being considered. The proposed action and its reversibility determine how much evidence is adequate (see @tbl-evidence-by-consequence).
+The burden of proof escalates because the cost of an escape does. The working rule of thumb is that a bug grows roughly ten times more expensive at each stage it survives, from RTL review to full-chip regression to post-silicon to the field. At an advanced node the endpoint is concrete. A full mask set costs tens of millions of dollars, and a respin costs a quarter or more of a project's schedule. That escalating cost, not temperament, is what sets the evidence bar at signoff, and it is why the proposed action and its reversibility determine how much evidence is adequate (see @tbl-evidence-by-consequence).
 
 | **Proposed transition** | **Consequence cues** | **Evidence and review requirements** |
 | --- | --- | --- |
@@ -364,7 +376,7 @@ The burden of proof depends heavily on the action being considered. The proposed
 | Change an implementation or interface | RTL, generator, chiplet, security, or cross-component change. | Regression evidence, cross-tool challenge, residual-risk review. |
 | Authorize signoff or deployment | Rollback is difficult, formal obligation or customer effect. | Independent evidence, specified rejection checks, audit trail, recorded waivers. |
 
-: **Evidence burden follows consequence.** {#tbl-evidence-by-consequence tbl-colwidths="[28,30,42]"}
+: **Evidence burden follows consequence:** as a transition becomes harder to reverse, from local exploration to signoff, the evidence and review it demands escalate. {#tbl-evidence-by-consequence tbl-colwidths="[28,30,42]"}
 
 Returning to the illustrative RISC-V XR subsystem prototype, a cheap structural check rejects illegal parameters quickly. Simulation determines if a performance hypothesis deserves scarce synthesis time. A synthesis flow exposes a timing failure. Security review might be more valuable than an additional cycle estimate if it reveals a shared-state flaw. Each check has a different cost and a different decision job.
 
@@ -390,7 +402,7 @@ The design-loop card acts as the compact index for the disputed claim, review re
 | 8. What separately changes in knowledge and architecture? | Named update surface destination, and explicit next action. |
 | 9. What event reopens the claim? | Drift, tool upgrades, new data, or new lifecycle bounds. |
 
-: **Checklist for reviewing a design claim.** {#tbl-trust-checklist tbl-colwidths="[30,70]"}
+: **A credible review answers all nine questions before committing:** each pairs a review question with what a defensible answer must contain. {#tbl-trust-checklist tbl-colwidths="[30,70]"}
 
 ## Open Research Questions
 
@@ -401,9 +413,9 @@ While the review checklist formalizes how human architects manage evidence today
 - What invariant physical constraints must be embedded into fast surrogate EDA models so that RL agents cannot metric-hack the routing and timing limits those models leave unmodeled?
 - Can red-team agents be trained to surface the loopholes in an evaluation environment before the optimizing agent finds and exploits them?
 
-**Theme 2: Automated Verification Collateral.** An agent that writes its own assertions and testbenches has to be kept from writing ones that are vacuously true.
+**Theme 2: Automated Verification Collateral.** An agent that writes its own assertions and testbenches has to be kept from writing ones that pass without constraining the design.
 
-- When an agent synthesizes its own assertions and formal properties, what methods detect that those assertions are vacuously true rather than genuinely constraining the design?
+- Commercial formal tools already flag classic vacuity, where an assertion's antecedent never triggers. When an agent synthesizes its own properties at scale, what methods detect the harder case of assertions that are technically non-vacuous yet semantically weak, faithfully describing a broken design rather than the intended one?
 - Can an agent generate constrained-random testbenches that concentrate coverage on the highest-uncertainty regions of its own proposed RTL?
 
 **Theme 3: Formalizing Semantic Equivalence.** Checking an AI-generated design against intent needs equivalence methods that scale to structures no human would have written.
@@ -418,7 +430,7 @@ While the review checklist formalizes how human architects manage evidence today
 ## Conclusion {#sec-trust-boundary-conclusion}
 
 ::: {.callout-design-principle title="Evidence over Plausibility"}
-The fluency of an AI-generated artifact is not proof of its architectural validity. Trust is established not by the sophistication of the model, but by the transparency, reproducibility, and cryptographic provenance of the tool runs that verify the artifact. Evidence must survive the degradation of the model that produced it.
+The fluency of an AI-generated artifact is not proof of its architectural validity. Trust is established not by the sophistication of the model, but by the transparency, reproducibility, and recorded provenance of the tool runs that verify the artifact. Evidence must survive the degradation of the model that produced it.
 :::
 
 
