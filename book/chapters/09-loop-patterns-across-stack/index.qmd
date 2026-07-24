@@ -34,7 +34,7 @@ Start with the next architecture decision rather than the AI method. The artifac
 
 > **Operating condition:** An operating condition describes one property of the next decision, such as feedback latency, reversibility, interface span, consequence, or check independence. The architect uses the conditions that apply together to decide what an AI method may do, which evidence and checks are needed, how the AI's internal representation must be updated, and whether the result can advance. An operating condition is not a stack layer, a maturity score, or a property of an AI model.
 
-### The Four Operating Quadrants
+### Operating Conditions That Overlap and Accumulate
 
 Four recurring combinations of operating conditions organize the cases considered here. These conditions overlap and accumulate. A kernel schedule may have fast feedback during tuning, cross an interface contract when deployed, and become difficult to reverse when hardware is frozen around it. A chiplet study can simultaneously be model-mediated, cross-interface, and high consequence. When several conditions apply, the stricter requirements of each accumulate.
 
@@ -216,9 +216,9 @@ A specialization claim is credible only when a domain holds six properties toget
 Formalizing this limitation, Amdahl's law [@Amdahl1967ValiditySingleProcessor] and the LogCA model [@AltafWood2017LogCA] require an end-to-end perspective. Extending Amdahl's law with explicit architectural cost terms follows Hill and Marty's multicore analysis [@HillMarty2008Amdahl], which recast the bound around the resource cost of each core. A compact Amdahl-style form that folds interface and software cost into the fraction-based bound is
 $$
 S_{\mathrm{system}} \le
-\frac{1}{(1-f) + f/s + \epsilon_{\mathrm{interface}} + \epsilon_{\mathrm{software}}}.
+\frac{1}{(1-\phi) + \phi/s + \epsilon_{\mathrm{interface}} + \epsilon_{\mathrm{software}}}.
 $$
-Here, $f$ is the improvable fraction of baseline time, $s$ is local speedup, and the $\epsilon$ terms are interface and software overheads normalized to the same baseline. The compact form expresses $\epsilon$ as static fractions, which hides where the nonlinearity actually lives. The overhead term is linear in the invocation count $N$ and the data volume; what bends is the end-to-end speedup as a function of offload granularity. The $\epsilon_{\mathrm{interface}}$ term is functionally $(N \times L_{\mathrm{startup}} + \frac{\text{Data Volume}}{\text{Bandwidth}}) / T_{\mathrm{baseline}}$. This teaches the fundamental architectural lesson that an accelerator can fail the Amdahl bound either because it is invoked too many times ($N$ dominates) or because it starves for data (Bandwidth dominates). For the XR Lighthouse subsystem, consider a dedicated accelerator for spatial tracking (SLAM) matrices. If this SLAM accelerator is placed too far from the local SRAM, the cost of feeding it is dominated by interconnect latency and the energy of moving data, not by the computation itself. Transporting those matrices across the interconnect on every invocation can exceed the 3 W thermal budget, erasing the accelerator's theoretical efficiency. The specialization helps only when each invocation amortizes those overheads and data remains localized.
+Here, $\phi$ is the improvable fraction of baseline time, $s$ is local speedup, and the $\epsilon$ terms are interface and software overheads normalized to the same baseline. The compact form expresses $\epsilon$ as static fractions, which hides where the nonlinearity actually lives. The overhead term is linear in the invocation count $N$ and the data volume; what bends is the end-to-end speedup as a function of offload granularity. The $\epsilon_{\mathrm{interface}}$ term is functionally $(N \times L_{\mathrm{startup}} + \frac{\text{Data Volume}}{\text{Bandwidth}}) / T_{\mathrm{baseline}}$. This teaches the fundamental architectural lesson that an accelerator can fail the Amdahl bound either because it is invoked too many times ($N$ dominates) or because it starves for data (Bandwidth dominates). For the XR Lighthouse subsystem, consider a dedicated accelerator for spatial tracking (SLAM) matrices. If this SLAM accelerator is placed too far from the local SRAM, the cost of feeding it is dominated by interconnect latency and the energy of moving data, not by the computation itself. Transporting those matrices across the interconnect on every invocation can exceed the 3 W thermal budget, erasing the accelerator's theoretical efficiency. The specialization helps only when each invocation amortizes those overheads and data remains localized.
 
 That equation summarizes the tax as a single fraction. A simplified LogCA-style calculation in @fig-logca-breakeven resolves the same tax by offload granularity, a complementary view of the same interface cost rather than the same formula.
 
@@ -646,7 +646,11 @@ Before reusing a method or artifact at another decision boundary, ask three ques
 
 2. **Can the cheaper check be trusted here?**
 
-   Audit samples of both accepts and rejects against the new reference path.
+   Audit samples of both accepts and rejects against the new reference path. That audit is
+   what produces a number rather than an impression. The share of cases the cheap check
+   settles correctly is the validated coverage $f$ that bounds review throughput later in
+   this chapter, so a team that never runs the audit cannot report the one quantity a
+   review-speedup claim turns on.
 
 3. **Did the AI role or decision rights change?**
 
