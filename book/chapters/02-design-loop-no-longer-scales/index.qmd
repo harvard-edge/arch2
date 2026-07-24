@@ -843,7 +843,7 @@ Interconnect costs deserve the same attention as memory movement. On-chip
 networks, package links, memory interfaces, collectives, and host-device
 protocols limit what a design can sustain. This requires separating logical synthesis from physical synthesis (place-and-route). An automated optimizer will frequently propose a highly parallelized accelerator that achieves strong metrics in logical synthesis, where wire delays are idealized. However, in physical synthesis, the resulting web of interconnects causes severe routing congestion and parasitic RC delays, failing timing closure. If the evaluation loop relies only on logical synthesis, the optimizer will exploit the idealized wires—proposing topologies that score well on the fast proxy but are physically impossible to build, a failure mode akin to overfitting the simulator.
 
-Timing, placement, routing, IR drop, thermal behavior, power delivery, leakage, signoff, and test may also overturn an architectural choice, so architects must consider the relevant EDA and physical-design constraints early. Evaluating these requires invoking commercial EDA tools that rely on stateful, Tcl-driven environments. Driving these legacy APIs creates an actuation mismatch: automated agents can struggle with syntax when generating the required proprietary Tcl scripts. Furthermore, if an automated search iterates a parameter and re-runs synthesis in the same workspace, leftover constraints or cached netlists ("dirty state") can silently corrupt the result. Scaling a robust loop requires infrastructure for isolated workspaces to prevent the search from optimizing against invalid constraints. Power and thermal density can flag a dense accelerator mapping as risky before implementation.
+Timing, placement, routing, IR drop, thermal behavior, power delivery, leakage, signoff, and test may also overturn an architectural choice, so architects must consider the relevant EDA and physical-design constraints early. Evaluating these requires invoking commercial EDA tools that rely on stateful, Tcl-driven environments. Driving these legacy APIs creates an actuation mismatch: automated agents can struggle with syntax when generating the required proprietary Tcl scripts. Furthermore, if an automated search iterates a parameter and re-runs synthesis in the same workspace, leftover constraints or cached netlists ("dirty state") can silently corrupt the result. Scaling a robust loop requires infrastructure for isolated workspaces to prevent the search from optimizing against invalid constraints. Power and thermal density can flag a dense accelerator mapping as risky before implementation. For the Lighthouse, the 3\ W limit is not only a battery constraint but a skin-temperature constraint on a face-worn device, and a dense MAC array can pass an average-TDP check while creating a localized hotspot that makes the headset unwearable.
 
 Later IR-drop and thermal signoff can confirm or clear that risk once a placed netlist and current profile exist. Crucially, thermal design power (TDP), a target for sizing the cooling solution rather than a measure of sustained draw, is not the only limit; transient power often breaks modern chips. When a large specialized vector unit wakes up simultaneously, it causes a sudden current spike—a voltage droop (di/dt)—that can crash the SoC. Evaluating decoupling-capacitor placement and di/dt requires predicting dynamic workload behavior before physical synthesis. This exposes an organizational divide: microarchitects often hand off RTL to physical designers, only to find out weeks later that the design is unroutable. Predictive models are needed to bridge this gap early.
 
@@ -856,6 +856,18 @@ Later IR-drop and thermal signoff can confirm or clear that risk once a placed n
 :::
 
 Signoff runs each of these checks across multiple process, voltage, and temperature corners and operating modes. At advanced nodes, closing timing requires checking on the order of a hundred Multi-Corner Multi-Mode (MCMM) scenarios (for example, Fast-Fast transistors for hold timing and Slow-Slow for setup, though temperature inversion at advanced nodes often makes the cold, low-voltage Slow-Slow corner the setup-critical one rather than the hot corner older intuition expects). Every generated candidate triggers a combinatorial explosion of STA runs, which is why a candidate can clear one corner and fail another. Because physical-design tools rely on heuristic optimization, one failed closure attempt cannot reveal whether the candidate or the tool setup caused the failure. Comparing constraints, seeds, and repeated outcomes helps separate the two.
+
+Design Rule Checks (DRC) are the wall's final course. At advanced nodes the rule decks run to thousands of geometrical rules (multi-patterning coloring, via enclosure, minimum-metal spacing), with exact counts held foundry-confidential, and a floorplanner that shifts one macro block can instantly create thousands of discrete violations. If the automated loop cannot parse these spatial markers and fix them, the output requires manual cleanup.
+
+::: {.callout-war-story title="The DRC whack-a-mole"}
+**The claim.** A minor late-stage macro block shift to improve timing should be a quick fix.
+
+**The gap.** This is a representative advanced-node scenario rather than one named tapeout. A physical design team resolving a single via-enclosure violation finds that the layout tool ripples the change outward, instantly spawning three new violations in adjacent polygons.
+
+**The lesson.** A team can become stuck in a multi-week loop of fixing one error only to spawn three more, which illustrates why human-guided feedback loops break at this scale.
+:::
+
+Automation adds a traceability problem to every one of these walls. If a generator emits high-level RTL and a physical synthesis tool reports a thermal failure hours later, tracing that failure back to the specific line of RTL is a semantic credit-assignment problem, and the stochasticity of generative models means an architect cannot always deterministically reproduce a winning topology. Evaluating physical constraints therefore also requires bridging the semantic gap between high-level architectural proposals and the legacy EDA formats (LEF/DEF, Liberty timing files) that are difficult to generate or parse directly.
 
 Architecture research already uses predictive models to reduce the number of
 detailed simulations needed to explore a design space
@@ -932,24 +944,6 @@ fab turnaround and bring-up before the team learns anything new. That is the cos
 of one iteration of the design loop at final fidelity. Everything upstream,
 simulation, emulation, and signoff, exists to make sure a project spends that
 iteration exactly once.
-
-### Physical Limiters: Packaging, Thermals, and Yield
-
-Beyond the initial design costs, physical and manufacturing limiters have become first-class constraints. Modern systems are increasingly bottlenecked not by logic density, but by power delivery networks (PDN), thermal dissipation ceilings, and the complex yield curves of 2.5D and 3D packaging. A chiplet-based architecture might look optimal on a spreadsheet, but if the interposer yields at 50% or the concentrated logic creates uncoolable "hot spots," the design will fail economically or physically in the real world. For the XR Lighthouse, the 3 W limit is not just a battery constraint; it is a strict skin-temperature constraint for a face-worn device. A dense MAC array might pass average TDP checks but create a localized hotspot that makes the headset physically unwearable.
-
-We must also face the final physical constraints: Design Rule Checks (DRC). At advanced nodes, the rule decks run to thousands of geometrical rules (multi-patterning coloring, via enclosure, min-metal spacing), with exact counts held foundry-confidential. If a floorplanner shifts a macro block, it might instantly create thousands of discrete DRC violations. If the automated loop cannot parse these spatial markers and fix them, the output requires manual cleanup.
-
-::: {.callout-war-story title="The DRC whack-a-mole"}
-**The claim.** A minor late-stage macro block shift to improve timing should be a quick fix.
-
-**The gap.** This is a representative advanced-node scenario rather than one named tapeout. A physical design team resolving a single via-enclosure violation finds that the layout tool ripples the change outward, instantly spawning three new violations in adjacent polygons.
-
-**The lesson.** A team can become stuck in a multi-week loop of fixing one error only to spawn three more, which illustrates why human-guided feedback loops break at this scale.
-:::
-
-In a traditional design loop, these physical constraints are often verified late in the process during physical signoff. Discovering a fatal thermal hotspot or a severe IR drop after the microarchitecture has been frozen forces massive, expensive rework that can derail an entire product schedule. This exposes a semantic credit-assignment problem: if a generator emits high-level RTL, and a physical synthesis tool reports a thermal failure hours later, it is difficult to trace that physical error back to the specific line of RTL. Furthermore, the inherent stochasticity of modern generative models breaks traditional traceability; an architect cannot always deterministically reproduce a winning topology generation step. This proxy-to-signoff gap paralyzes traditional feedback loops. Evaluating these physical constraints requires bridging the semantic gap between high-level architectural proposals and the legacy EDA formats (e.g., LEF/DEF, Liberty timing files) that are difficult to generate or parse directly.
-
-
 
 ### The Verification Bottleneck
 
