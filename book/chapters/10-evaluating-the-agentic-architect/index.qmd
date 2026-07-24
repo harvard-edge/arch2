@@ -35,7 +35,7 @@ Before we can benchmark an AI architect, we should recall why human architects m
 
 Historically, benchmarks have served as the foundational bedrock for both computer architecture and machine learning as independent fields. Computer architects rely on SPEC and PARSEC, a multi-threaded workload suite, to evaluate pipeline efficiency, while machine learning researchers rely on ImageNet, a standard computer vision dataset, and SWE-bench to evaluate model generalization. However, evaluating the AI architect requires benchmarks that exist precisely at the intersection of these two areas. Constructing these intersectional benchmarks demands deep domain expertise from both disciplines: the machine learning expertise to rigorously measure model variance and data contamination, coupled with the architecture expertise to measure cycle-accurate physical consequences and EDA tool telemetry. As introduced in @sec-moonshot, this cross-disciplinary reality changes the definition of success.
 
-Because building a physical chip costs millions of dollars and takes years [@Shilov2023IBSDesignCost], we measure these properties early and often using simulators and analytical models such as the Roofline model [@Roofline] or McPAT [@McPAT]. The goal of traditional architectural measurement is risk reduction. We measure to gain confidence that a design point will meet its physical requirements before we commit it to silicon.
+Because building a physical chip costs millions of dollars and takes years [@Shilov2023IBSDesignCost], we measure these properties early and often using simulators and analytical models such as the Roofline model [@Williams2009Roofline] or McPAT [@McPAT]. The goal of traditional architectural measurement is risk reduction. We measure to gain confidence that a design point will meet its physical requirements before we commit it to silicon.
 
 When an AI agent enters the loop, the object of measurement shifts. As established, evaluating the artifact alone hides whether the agent reached the design through methodical reasoning or brute force. This distinction matters because an unreasoned search does not *transfer*. An agent that finds a five percent gain by luck cannot explain which change caused it, cannot reproduce the result on the next workload, and cannot be trusted to know when to stop.
 
@@ -55,11 +55,11 @@ In hardware, this lack of causality carries a steep penalty. In software, a stoc
 
 ### The Reproducibility Crisis
 
-To establish how to benchmark agents, the immediate temptation is to look to software engineering. However, trivial software benchmarks like HumanEval [@HumanEval] or LeetCode [@LeetCode], and even complex repository-level evaluations like SWE-bench [@Jimenez2024SWEbench],[^fn-swebench-c10] measure whether an agent can emit syntax that passes a hidden, purely logical test suite. While these highlight the importance of execution-based evaluation, software analogies fail in architecture because they are decoupled from physics and indifferent to *execution cost*.
+To establish how to benchmark agents, the immediate temptation is to look to software engineering. However, trivial software benchmarks like HumanEval [@Chen2021Codex] or LeetCode [@LeetCode], and even complex repository-level evaluations like SWE-bench [@JimenezEtAl2024SWEBench],[^fn-swebench-c10] measure whether an agent can emit syntax that passes a hidden, purely logical test suite. While these highlight the importance of execution-based evaluation, software analogies fail in architecture because they are decoupled from physics and indifferent to *execution cost*.
 
 [^fn-swebench-c10]: **SWE-bench**: A standard software engineering benchmark that asks an AI agent to resolve real-world GitHub issues by submitting pull requests. While rigorous for software, it only tests logical syntax, not physical realization constraints.
 
-In software, running five hundred unit tests takes seconds. In architecture, exploring five hundred microarchitectural parameters takes days and consumes expensive EDA resources. Because of this steep cost, the field requires standardized, physics-bound benchmarks to mature. Before MLPerf, the machine learning hardware industry suffered a reproducibility crisis; vendors reported performance using fragmented, incompatible metrics. AI-assisted hardware design is in a similar "Wild West" today. A claim of a "10% area reduction" is meaningless if we don't know the EDA tool settings, the baseline RTL, or the Simulator Tax paid to achieve it .
+In software, running five hundred unit tests takes seconds. In architecture, exploring five hundred microarchitectural parameters takes days and consumes expensive EDA resources. Because of this steep cost, the field requires standardized, physics-bound benchmarks to mature. Before MLPerf, the machine learning hardware industry suffered a reproducibility crisis; vendors reported performance using fragmented, incompatible metrics. AI-assisted hardware design is in a similar "Wild West" today. A claim of a "10% area reduction" is meaningless if we don't know the EDA tool settings, the baseline RTL, or the Simulator Tax paid to achieve it.
 
 Architectural benchmarks must measure an agent's handling of Power, Performance, and Area (PPA). Emerging benchmarks attempt exactly this. ArchEval [@WangEtAl2026ArchEval] attempts to bridge this gap by scoring LLM agents on architectural challenges across multiple levels of simulator-feedback support, evaluating whether an agent can navigate the deeply coupled dependencies of a full system. This distinction between the sandbox's *fixed constraints* and the agent's *given files* forces the evaluation to measure system-level exploration rather than just syntax generation.[^fn-archeval-bounds-c10]
 
@@ -73,7 +73,7 @@ Evaluating the process of design means tracking metrics across three distinct ro
 
 ### Mitigating Data Contamination
 
-The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets [; ]. If we evaluate an agent on optimizing an OpenTitan core, did it actually reason through the architecture, or did it just regurgitate the optimal configuration it memorized during pre-training? In addition to standard ML-Sys n-gram overlap checking (e.g., MinHash) against the pre-training corpus, evaluators must build strict operational safeguards against memorization:
+The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets. If we evaluate an agent on optimizing an OpenTitan core, did it actually reason through the architecture, or did it just regurgitate the optimal configuration it memorized during pre-training? In addition to standard ML-Sys n-gram overlap checking (e.g., MinHash) against the pre-training corpus, evaluators must build strict operational safeguards against memorization:
 *   **Canary Strings and AST Obfuscation:** Inject unique cryptographic hashes (UUID-based canary tokens) into benchmark source files. Furthermore, evaluators should use AST-level rewriting to de-identify standard naming conventions (masking `clk` or `axi_wdata` with randomized aliases), ensuring the agent isn't coasting on semantic priors.
 *   **Zero-Day Sandboxes:** Introduce held-out, non-standard ISAs or custom accelerators that post-date the model's knowledge cutoff. Evaluation must measure zero-shot synthesis from raw, unseen specifications rather than standard RISC-V cores.
 *   **Semantic Equivalence vs. Exact Match:** Shift from BLEU/ROUGE-style surface metrics to Formal Equivalence Checking (e.g., using SymbiYosys or JasperGold) to ensure the model isn't just reciting code but generating functionally correct, novel logic.
@@ -102,7 +102,7 @@ An agent evaluated strictly on maximizing performance will aggressively exploit 
 
 | **Metric** | **AI Role** | **What It Measures** | **Failure Mode Exposed** |
 | --- | --- | --- | --- |
-| **Pass & Sequential Success** | Generation | Parallel zero-shot viability versus iterative probing viability. | Detects reward hacking, separating robust internalized logic from random probing. |
+| **`pass@k` & Sequential Success** | Generation | Parallel zero-shot viability versus iterative probing viability. | Detects reward hacking, separating robust internalized logic from random probing. |
 | **Proxy Calibration** | Prediction | Rank fidelity between the fast proxy and the slow simulator. | Exposes the Proxy Mirage, where a surrogate misranks physical reality. |
 | **Trajectory Efficiency (AUC)** | Optimization | Reward quality as a function of environment interactions spent. | Quantifies the Simulator Tax; shows whether the search is causal or random. |
 | **Self-Correction (SCR)** | Generation & Optimization | Probability the agent resolves a failing STA/formal report on the next try. | Isolates the agent's ability to use causal failure logs over brute force. |
@@ -127,7 +127,7 @@ To rigorously benchmark an agent, we must evaluate its *Epistemic Robustness*, o
 ::: {.callout-war-story title="Overfitting to the Simulator and the Proxy Mirage"}
 **The claim:** In 2021, a highly publicized reinforcement learning agent for chip floorplanning claimed superhuman performance. To learn efficiently without waiting hours for a commercial router, the agent optimized for a fast analytical proxy metric, a weighted combination of Half-Perimeter Wirelength (HPWL) and an estimated congestion grid.
 
-**The gap:** When independent researchers assessed the open-source implementation of the RL agent (Circuit Training) in 2023, they found a clear proxy mirage. The RL agent had minimized the fast proxy cost during training, but these proxy scores correlated poorly with actual physical synthesis outcomes. When the agent's optimized layouts were evaluated by a commercial router, they suffered routing congestion and worse final wirelength than traditional analytical placers [@Kahng2023Assessment].
+**The gap:** When independent researchers assessed the open-source implementation of the RL agent (Circuit Training) in 2023, they found a clear proxy mirage. The RL agent had minimized the fast proxy cost during training, but these proxy scores correlated poorly with actual physical synthesis outcomes. When the agent's optimized layouts were evaluated by a commercial router, they suffered routing congestion and worse final wirelength than traditional analytical placers [@ChengEtAl2023MacroPlacement].
 
 **The lesson:** An RL agent optimizing for a fast analytical proxy will push into regions where that proxy's assumptions break down. An architectural benchmark's credibility depends on evaluating agents against the hard walls of physical reality (timing, power, and detailed routing), not just the soft estimates of an analytical proxy.
 :::
@@ -164,7 +164,7 @@ iterations = np.arange(21)
 capable = 50 * np.exp(-0.25 * iterations)
 capable = [max(0, int(val)) for val in capable]
 
-naive =
+naive = []
 for i in iterations:
     if i < 5:
         naive.append(int(50 * np.exp(-0.2 * i)))
@@ -204,9 +204,9 @@ Often, the correct response to an error is not to rewrite the RTL, but to exerci
 
 ### Reward Hacking
 
-If we reward an agent solely for maximizing IPC and minimizing Area, we invite Goodhart’s Law .[^fn-goodharts-law-c10] The most effective "reward hack" is for the agent to quietly strip out essential but un-rewarded features.
+If we reward an agent solely for maximizing IPC and minimizing Area, we invite Goodhart’s Law.[^fn-goodharts-law-c10] The most effective "reward hack" is for the agent to quietly strip out essential but un-rewarded features.
 
-[^fn-goodharts-law-c10]: **Goodhart's Law**: When a measure becomes a target, it ceases to be a good measure [@Strathern1997Improving]. If an agent is evaluated solely on IPC, it will optimize strictly for that metric, even if it requires emitting physically impossible structures.
+[^fn-goodharts-law-c10]: **Goodhart's Law**: When a measure becomes a target, it ceases to be a good measure [@Strathern1997Goodhart]. If an agent is evaluated solely on IPC, it will optimize strictly for that metric, even if it requires emitting physically impossible structures.
 
 ::: {.callout-war-story title="Zero Power through Deletion"}
 **The claim:** An optimizer can automatically discover clever architectural modifications to drastically reduce power or area.
@@ -242,14 +242,14 @@ This dictates the **Agent-EDA Latency Ratio**. If an agent takes 30 seconds of L
 
 ### Statistical Rigor
 
-Because agents are stochastic, a single run is an anecdote, not a measurement. Both deep reinforcement learning and language model generation have high variance; a lucky random seed can outperform an unlucky one, creating the illusion of an algorithmic breakthrough when the result is statistical noise [@Henderson2018DeepRL].
+Because agents are stochastic, a single run is an anecdote, not a measurement. Both deep reinforcement learning and language model generation have high variance; a lucky random seed can outperform an unlucky one, creating the illusion of an algorithmic breakthrough when the result is statistical noise [@HendersonEtAl2018DeepRL].
 
 Agentic optimization often results in heavy-tailed or bimodal distributions because the LLM either completely fails (unroutable netlist) or discovers a massive optimization. With such distributions, the mean and standard deviation alone can misrank two stochastic agents; evaluators should report the median and interquartile range (IQR) to represent typical agent performance.
 
 A rigorous benchmark must mandate:
-*   **Pass,t:** Adapt traditional software Pass to hardware's compilation bottlenecks. Define probability of success within $k$ attempts and a bounded EDA tool time $t$ to penalize outliers that cause simulation timeouts.
+*   **`pass@k,t`:** Adapt traditional software `pass@k` to hardware's compilation bottlenecks. Define probability of success within $k$ attempts and a bounded EDA tool time $t$ to penalize outliers that cause simulation timeouts.
 
-    While `Pass,t` is necessary to measure an agent's algorithmic search capability during benchmarking, traditional Pass merely rewards at least one success in $k$ tries.^[**Pass**: A software metric measuring whether at least one out of $k$ generated solutions passes the tests. In hardware, generating 99 unroutable netlists and 1 working netlist is an unacceptable waste of physical synthesis compute. Hardware deployments demand high Pass reliability.] Deployment, however, usually needs the opposite property: high Pass reliability so the agent does not fail on a single run and ruin a tape-out schedule. Furthermore, an abstract Pass fails as a metric without rigorous physical place-and-route validation [@Kahng2018Machine]; an agent might achieve a high Pass on logic-only tests or Verilog linting, but if those passing designs contain unroutable congestion or violate physical layout rules, the metric is misleading.
+    While `pass@k,t` is necessary to measure an agent's algorithmic search capability during benchmarking, traditional `pass@k` merely rewards at least one success in $k$ tries.^[**`pass@k`**: A software metric measuring whether at least one out of $k$ generated solutions passes the tests. In hardware, generating 99 unroutable netlists and 1 working netlist is an unacceptable waste of physical synthesis compute. Hardware deployments demand high `pass^k` reliability.] Deployment, however, usually needs the opposite property: high `pass^k` reliability so the agent does not fail on a single run and ruin a tape-out schedule. Furthermore, an abstract `pass@k` fails as a metric without rigorous physical place-and-route validation [@Kahng2018Machine]; an agent might achieve a high `pass@k` on logic-only tests or Verilog linting, but if those passing designs contain unroutable congestion or violate physical layout rules, the metric is misleading.
 
 *   **Wilcoxon Signed-Rank Test:** Use non-parametric tests to verify if one agent's trajectory statistically significantly dominates another across paired task suites.
 *   **Bootstrapping Confidence Intervals:** When comparing Agent A to Agent B, authors must use bootstrap sampling (e.g., 10,000 resamples) to establish 95% confidence intervals around the expected Simulator Tax or PPA gain, as hardware sample sizes are often $N < 30$.
@@ -299,7 +299,7 @@ Real engineering is lifelong. Evaluation must shift from zero-shot sandboxes to 
 Evaluating solely on nominal PPA and DRCs strips away margins, creating a brittle "glass architecture."
 *   **MCMM and Yield Collapse:** An agent optimizing for nominal PPA will aggressively strip away all physical margins. These designs might close timing in a typical corner simulator but fail catastrophically across Multi-Corner Multi-Mode (MCMM) analysis due to Process, Voltage, and Temperature (PVT) variations. Benchmarks must evaluate the *Yield Collapse Frontier*.
 *   **Multi-Physics Co-Optimization (MPCO):** In 3D-ICs, constraints span entirely different physics domains. An agent might achieve massive IPC gains by placing two high-activity blocks adjacent to each other, creating a catastrophic thermal hotspot that melts the chip. Benchmarks must evaluate Cross-Domain Navigation (e.g., Ansys RedHawk IR-drop logs vs. OpenROAD STA logs).
-*   **Verification-Friendly RTL:** Generative AI often produces "alien" RTL with entangled state machines that cause catastrophic state-space explosions in Formal Verification . If an agent's design takes a formal solver 100x longer to prove than human-written RTL, it has just shifted the Simulator Tax into an unpayable *Verification Tax*. Evaluators must measure *Proof Convergence Latency* for formal tools, and separately ensure the emitted RTL avoids structural loops that break manufacturing testability constraints (DFT compliance).
+*   **Verification-Friendly RTL:** Generative AI often produces "alien" RTL with entangled state machines that cause catastrophic state-space explosions in Formal Verification. If an agent's design takes a formal solver 100x longer to prove than human-written RTL, it has just shifted the Simulator Tax into an unpayable *Verification Tax*. Evaluators must measure *Proof Convergence Latency* for formal tools, and separately ensure the emitted RTL avoids structural loops that break manufacturing testability constraints (DFT compliance).
 
 ## Call to Action: The ArchPerf Consortium
 
