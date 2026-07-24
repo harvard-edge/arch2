@@ -238,7 +238,15 @@ The cost axis cannot be waved away, because total search compute is a U-shape wi
 
 ![**The economics of agentic evaluation:** The total computational cost forms a U-shaped curve. Weak agents incur a large EDA Simulator Tax through brute-force interaction. Frontier agents minimize simulation but incur a high Transformer inference cost.](images/F10-compute-economics){#fig-compute-economics fig-alt="A U-shaped curve showing that total evaluation compute is a trade-off between inference cost and simulation cost." width=80%}
 
-This dictates the **Agent-EDA Latency Ratio**. If an agent takes 30 seconds of LLM inference to generate a TCL script and synthesis takes 10 seconds, the agent is the bottleneck. If synthesis takes 10 hours, the LLM is effectively "free."
+This dictates the ratio of agent latency to tool latency. If an agent takes 30 seconds of LLM inference to generate a Tcl script and synthesis takes 10 seconds, the agent is the bottleneck. If synthesis takes 10 hours, the model's inference time is effectively free. The same ratio bounds how much unsupervised iteration is affordable, because an unattended loop can convert a cheap disagreement into an expensive one.
+
+::: {.callout-war-story title="The Infinite Loop of the Automated CI/CD"}
+**The claim:** Two agentic systems, a Generator and a Verifier, can autonomously close RTL bugs without human intervention.
+
+**The gap:** Over a weekend, an automated CI/CD actor-critic agent pair burned thousands of dollars in cloud compute because it got trapped in an infinite loop. The Generator fixed a simple Verilator lint error by renaming a signal, which immediately triggered a formal equivalence failure. The Verifier demanded a fix, so the Generator reverted the change, re-introducing the lint error. The agents repeated this endless cycle for 48 hours.
+
+**The lesson:** Multi-agent systems without cycle detection and strict retry limits will happily convert simple logical conflicts into catastrophic cloud billing events. Cost metrics must be part of the evaluation, not an afterthought.
+:::
 
 ### Statistical Rigor
 
@@ -257,7 +265,7 @@ A rigorous benchmark must mandate:
 
 ### The Evaluator's Cheat Sheet: What to Report and Why
 
-Any rigorous publication or production deployment should report the same base metrics, one per concept (@tbl-evaluator-cheat-sheet).
+Any rigorous publication or production deployment should report the same base metrics, one per concept (@tbl-evaluator-cheat-sheet). The rows compress the metric catalog of @tbl-agent-metrics into what a claim must publish.
 
 | **The Concept** | **The Metric to Report** | **Why It Must Be Reported** |
 | --- | --- | --- |
@@ -270,45 +278,39 @@ Any rigorous publication or production deployment should report the same base me
 
 : **A defensible autonomous-design claim reports cost, statistics, grounding, trajectory, convergence, and diversity together:** the base metrics a reviewer needs to quantify an agent's capability in hardware design. {#tbl-evaluator-cheat-sheet tbl-colwidths="[20,30,50]"}
 
-## The Frontiers of Agentic Evaluation
+### Calibrating Autonomy to Evidence
 
-While the metrics outlined above establish the canonical standard for evaluating episodic, monolithic agents today, the rapid evolution of ML-Sys and advanced packaging will soon break these paradigms. As we look to the next decade, evaluation teams must expand their harnesses to cover three emerging frontiers.
+The reporting standard's purpose is a decision, not a scorecard. The evaluation's output is an autonomy grant: a statement of what the agent may now do unsupervised, justified by the evidence level its results reached. A working calibration maps one to the other directly.
 
-### Multi-Agent Fault Cascades
+*   **Uncalibrated proxy evidence.** The agent's results exist only in a fast surrogate whose rank fidelity is unmeasured. The agent proposes; every candidate crosses a human review before any serious tool budget is spent on it.
+*   **Calibrated proxy evidence.** Rank fidelity is measured and acceptable in the region the search concentrates on, and the budgets are declared. The agent may iterate unsupervised inside the declared budget, and gating checks may auto-reject its candidates without escalation.
+*   **Signoff-grade evidence with stable trajectories.** Candidates survive independent implementation checks, and the trajectory metrics show monotone convergence and genuine self-correction. The agent may batch its work and commit candidates directly into the human review queue.
+*   **At no evidence level** does the agent waive its own gates, modify the checks that score it, or advance a candidate past the commitment boundary. Those rights stay assigned to people, which is where @sec-what-architect-owns picks up.
 
-Future systems will deploy specialized agent swarms (e.g., a Generator agent and a Verifier agent). Benchmarks must evolve to measure *Fault Containment Rates*.
-*   **Verifier Red-Teaming (Fault Injection):** Evaluate the critic/verifier agent by explicitly injecting known, subtle RTL bugs (e.g., missing default cases in state machines, combinational loops). Measure the verifier's recall in catching these before they cascade to the physical synthesis stage.
-*   **Cyclic Degeneration Tracking:** Quantify \"feedback loop saturation\" where actor-critic agent pairs get trapped in infinite edit-compile-test cycles. Benchmarks must track context window exhaustion, prompt token inflation rates, and edit-distance decay to enforce bounded retry limits.
+## Open Research Questions
 
-::: {.callout-war-story title="The Infinite Loop of the Automated CI/CD"}
-**The claim:** Two agentic systems, a Generator and a Verifier, can autonomously close RTL bugs without human intervention.
+The metrics above standardize how an episodic agent is scored today. The questions that remain open concern what those scores cannot yet see.
 
-**The gap:** Over a weekend, an automated CI/CD actor-critic agent pair burned thousands of dollars in cloud compute because it got trapped in an infinite loop. The Generator fixed a simple Verilator lint error by renaming a signal, which immediately triggered a formal equivalence failure. The Verifier demanded a fix, so the Generator reverted the change, re-introducing the lint error. The agents repeated this endless cycle for 48 hours.
+1. **How should an evaluation price the margins an agent removes?** Nominal PPA scoring rewards stripping guard bands, and a design can pass a typical corner while failing across process, voltage, and temperature variation. No standard score yet catches the collapse before signoff does.
 
-**The lesson:** Multi-agent systems without cyclic degeneration tracking and strict retry limits will happily convert simple logical conflicts into catastrophic cloud billing events.
-:::
+2. **Can an evaluation measure whether generated hardware is verifiable, not just correct?** Generated RTL can multiply the state space a formal tool must search, shifting cost from design into verification. Proof effort is measurable in principle [@KangEtAl2024FVEval], but no benchmark yet scores a design by the work needed to prove it.
 
-### Tapeout-to-Tapeout Transfer
+3. **Does capability learned on one process node transfer to the next?** Real engineering is lifelong, yet agents are evaluated in episodic sandboxes. A continual-learning evaluation would measure forward transfer across nodes and check that adapting to a new process design kit does not degrade what the model already knew.
 
-Real engineering is lifelong. Evaluation must shift from zero-shot sandboxes to testing *Continual Learning*.
-*   **Forward Transfer Efficiency (FTE):** If an agent heavily prompted or fine-tuned on TSMC 28nm learns a routing heuristic, how much does it accelerate timing closure on Intel 18A? $FTE = (Time_{base} - Time_{transfer}) / Time_{base}$.
-*   **Catastrophic Forgetting:** For models utilizing LoRA on new Process Design Kits (PDKs), benchmarks must periodically re-test on legacy nodes to ensure base RTL syntax and generalized logic synthesis capabilities haven't degraded.
+4. **How is fault containment measured in a system of cooperating agents?** A generator and a verifier can trap each other in cycles that burn compute without progress. Injected-bug recall, retry bounds, and cycle detection are candidate instruments, but none of them is yet standard.
 
-### The Glass Architecture
+5. **Who can host the shared benchmark that would make agent claims comparable?** Comparability needs a neutral corpus of physically realistic designs and public, auditable trajectories, and both currently sit behind proprietary walls. Building that shared infrastructure is less a technical problem than a governance one.
 
-Evaluating solely on nominal PPA and DRCs strips away margins, creating a brittle "glass architecture."
-*   **MCMM and Yield Collapse:** An agent optimizing for nominal PPA will aggressively strip away all physical margins. These designs might close timing in a typical corner simulator but fail catastrophically across Multi-Corner Multi-Mode (MCMM) analysis due to Process, Voltage, and Temperature (PVT) variations. Benchmarks must evaluate the *Yield Collapse Frontier*.
-*   **Multi-Physics Co-Optimization (MPCO):** In 3D-ICs, constraints span entirely different physics domains. An agent might achieve massive IPC gains by placing two high-activity blocks adjacent to each other, creating a catastrophic thermal hotspot that melts the chip. Benchmarks must evaluate Cross-Domain Navigation (e.g., Ansys RedHawk IR-drop logs vs. OpenROAD STA logs).
-*   **Verification-Friendly RTL:** Generative AI often produces "alien" RTL with entangled state machines that cause catastrophic state-space explosions in Formal Verification. If an agent's design takes a formal solver 100x longer to prove than human-written RTL, it has just shifted the Simulator Tax into an unpayable *Verification Tax*. Evaluators must measure *Proof Convergence Latency* for formal tools, using instruments like FVEval [@KangEtAl2024FVEval] that score LLM formal-verification performance with industry FV tools, and separately ensure the emitted RTL avoids structural loops that break manufacturing testability constraints (DFT compliance).
-
-## Call to Action: The ArchPerf Consortium
-
-Metrics and harnesses alone do not create a standard; communities do. To move past fragmented academic claims and address the reproducibility crisis in AI-assisted hardware design, the field must establish a neutral, multi-vendor benchmarking consortium, an ArchPerf for AI architects.
-
-This requires EDA vendors, fabless designers, and academia to pool non-commercial but physically realistic RTL into a shared corpus, bypassing the proprietary IP wall. Furthermore, we must host auditable public leaderboards where the full agent trajectories, prompts, tool calls, and Simulator Tax logs—not just the final PPA scores—are published for peer verification. Only through a unified, open-source consortium can we establish trust in the AI architect and accelerate the transition to Compute-Dominated NRE.
+## Conclusion
 
 ::: {.callout-design-principle title="End-to-End Burden Reduction"}
 An AI method is successful only if it reduces the total wall-clock time and engineering effort required to reach a defensible, tape-out-ready decision. Metrics that celebrate localized speedups, such as time-to-first-compile, are invalid if they merely shift the burden downstream to physical synthesis, verification debugging, or human review.
 :::
 
-Evaluating an AI architect is a different discipline than evaluating a compiled netlist. Hardware engineers must borrow the statistical rigor of machine learning evaluations, and ML researchers must constrain their agents with the uncompromising physical realities of the EDA toolchain. Measuring the search trajectory, checking for the Proxy Mirage, and enforcing CI/CD determinism replaces blind optimism with quantifiable engineering trust.
+Evaluating an AI architect is a different discipline than evaluating a compiled netlist. Hardware engineers must borrow the statistical rigor of machine learning evaluations, and ML researchers must constrain their agents with the uncompromising physical realities of the EDA toolchain. Measuring the search trajectory, checking proxy rank fidelity where the search concentrates, and pricing the full cost of the search replaces blind optimism with quantifiable engineering trust.
+
+::: {.callout-carry-forward}
+- **Carry forward:** Score the agent, not only the design: trajectory efficiency against compute spent, proxy rank fidelity where the search concentrates, contamination-resistant tasks, and enough seeds and intervals to separate skill from luck. The evaluation's output is an autonomy grant, not just a number.
+- **Reader test:** For an agent you are about to trust with more autonomy, can you name the evidence level its results reached, the metric that would expose it gaming the proxy, and the budget at which its search stops being worth the compute?
+- **Up next:** @sec-what-architect-owns turns the autonomy grant into the human side of the boundary: what an organization can delegate, and what a named architect must own.
+:::
