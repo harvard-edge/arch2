@@ -39,7 +39,7 @@ In modern machine learning, an agent interacts with an environment such as an Op
 
 Hardware tools were built for humans, not APIs. For decades, architecture tools such as CACTI [@MuralimanoharEtAl2009CACTI], DRAMSys [@WeisEtAl2021DRAMSys], or gem5 were engineered around manual workflows, assuming an architect who can read dense log files, debug build errors interactively, and interpret color-coded waveforms. Modifying a real design means navigating a disconnected stack. Inserting a custom vector block into an XR subsystem requires modifying Chisel, changing linker scripts, and hacking a Device Tree Blob (DTB). Forcing these messy realities into a standard ML environment loop without exposing their low-level details prevents the human architect from verifying physical constraints like timing and power.
 
-This legacy breaks the familiar ML environment paradigm, creating a **semantic gap**. That gap separates the high-level semantic intent of a design ("increase the cache size to improve hit rate") from the low-level, unstructured mechanics of the tool itself. Instead of returning a simple scalar reward, EDA tools return gigabytes of unparsed logs, crash silently, or hang for days. This mismatch is a direct consequence of the transparency gradient introduced in @sec-design-loop-no-longer-scales: the EDA tools at the bottom of the stack rely heavily on the tacit knowledge of physical design engineers to interpret unroutable netlists, whereas an AI system requires fully explicit, programmatic interfaces.
+This legacy breaks the familiar ML environment paradigm, creating a **semantic gap**. That gap separates the high-level semantic intent of a design ("increase the cache size to improve hit rate") from the low-level, unstructured mechanics of the tool itself. Instead of returning a simple scalar reward, EDA tools return gigabytes of unparsed logs, crash silently, or hang for days. The mismatch grows as design moves down the stack. The EDA tools at the bottom rely heavily on the tacit knowledge of physical design engineers to interpret unroutable netlists, whereas an AI system requires fully explicit, programmatic interfaces.
 
 Foundation models interact most reliably with external software through strict, typed APIs rather than unconstrained shell commands. Tool-use research points the same way. Toolformer trains a model to invoke typed APIs for subtasks it cannot perform reliably on its own [@SchickEtAl2023Toolformer]. This maps directly to the architectural domain. While "computer use" models can visually parse GUIs and move a mouse, relying on visual GUI automation for architecture design is brittle and computationally inefficient. Because of this, system intent, a GUI, and simple permission to call a tool are insufficient for real architecture work. Strict API boundaries instead of raw shell access keep control with the human architect, who can bound the AI's legal actions before spending cluster hours on unroutable silicon.
 
@@ -69,18 +69,19 @@ Hardware design is bound by tight time and compute constraints. Unlike software 
 
 To navigate this economic reality, we can look to the robotics community's approach of sim-to-real transfer. Rather than training a robotic arm directly in the physical world, which is slow and risks damaging hardware, researchers train the agent in a fast physics simulator and transfer the learned policy to the real robot [@OpenAI2019Rubik]. Architecture benefits from a similar pipeline by working across a multi-fidelity spectrum (@tbl-multi-fidelity-spectrum). The simulator is not a single tool, but a ladder.
 
-At the top are fast analytical models (ISA-level or spreadsheet models) that act as the "Sim", screening millions of candidates in seconds. In the middle are Cycle-Accurate C++ simulators, like gem5, that model timing but abstract physics. At the bottom are RTL synthesis and VLSI physical design tools, the "Real", that enforce true physical laws like power, thermals, and routing congestion.
+At the top are fast analytical models (ISA-level or spreadsheet models) that act as the "Sim", screening millions of candidates in seconds. In the middle are Cycle-Accurate C++ simulators, like gem5, that model timing but abstract physics. At the bottom are RTL synthesis and VLSI physical design tools, the "Real", that enforce true physical laws like power, timing, and routing congestion.
 
 An architecture environment must allow an agent to move systematically between these levels (@fig-simulator-tax). This requires managing significant mechanical friction. For instance, the environment must manage **trace provenance**: if an AI mutates a core's branch predictor, pre-recorded memory traces become structurally invalid because speculative execution paths change. The environment must be configured to determine when to regenerate functional traces versus when to safely replay them. Furthermore, the environment must abstract **checkpointing and workload warm-up**. An AI agent running full-system gem5 cannot afford to simulate Linux booting on every iteration, nor should it optimize a cache based on cold-misses during OS boot. The environment API must abstract Region of Interest (ROI) fast-forwarding so the AI is rewarded on steady-state behavior, not initialization noise. Because navigating this ladder requires balancing conflicting physical limits, hardware specialization tightly couples the stack.
 
 | **Fidelity Level** | **Example Tools** | **Speed** | **Physical Laws Enforced** |
 | --- | --- | --- | --- |
-| Analytical / ISA | Spreadsheet, gem5 (Atomic) | ~30x slowdown | None (Execution only) |
+| Analytical | Spreadsheet, CACTI-class models | Near-instant (no execution) | None (closed-form estimates) |
+| Functional / ISA | Spike, QEMU | ~30x slowdown | None (execution only) |
 | Cycle-Approximate | ZSim [@ZSim], Sniper [@Sniper] | ~1,000x slowdown | Structural pipeline abstractions |
 | Cycle-Accurate | gem5 (O3) | ~15,000x slowdown | Detailed timing, abstract physics |
 | RTL Simulation | Verilator  | ~30,000x slowdown | Full logic behavior |
 | FPGA Emulation | FireSim | ~20x slowdown | Full logic, mapped to FPGA fabric |
-| Physical Design | Yosys [@Yosys], OpenROAD  | Hours to Days | Power, Thermals, Routing, DRC |
+| Physical Design | Yosys [@Yosys], OpenROAD  | Hours to Days | Power, Timing, Routing, DRC |
 
 : **Fidelity trades against speed.** An agent climbs this ladder as design candidates mature, paying more per observation at each rung. {#tbl-multi-fidelity-spectrum tbl-colwidths="[20,25,20,35]"}
 
@@ -108,7 +109,7 @@ apply_style()
 # workload/config/host dependent. Accessed 2026-07-19.
 # Receipt: data/source-receipts/chapter5-simulator-tax.csv
 _root = Path(_ap.__file__).resolve().parents[2]
-rungs =
+rungs = []
 with open(_root / "data" / "source-receipts" / "chapter5-simulator-tax.csv", encoding="utf-8") as fh:
     for d in csv.DictReader(fh):
         rungs.append({"rung": d["rung"], "example": d["example"], "slow": float(d["slowdown_vs_silicon"])})
@@ -129,7 +130,7 @@ for i, r in enumerate(rungs):
 ax.set_xscale("log")
 ax.set_xlim(1, 6e5)
 ax.set_ylim(-0.7, n - 0.2)
-ax.set_yticks()
+ax.set_yticks([])
 ax.set_xlabel("Slowdown versus real hardware (log)", fontsize=7.2)
 ax.set_xticks([1, 1e1, 1e2, 1e3, 1e4, 1e5])
 ax.set_xticklabels(["1×", "10×", "100×", "1,000×", "10,000×", "100,000×"], fontsize=6.2)
