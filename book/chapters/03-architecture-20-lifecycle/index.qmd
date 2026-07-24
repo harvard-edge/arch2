@@ -248,7 +248,7 @@ When an AI agent changes a parameter and a tool completes the run, the result is
 **In the cache comparison.** A statement that one cache configuration remains inside the modeled 3 W envelope needs the named XRBench traces, RISC-V baseline, cache parameters, simulator and power-model versions, relevant software assumptions, uncertainty, and the check that would rule the configuration out.
 :::
 
-The uncertainty field is not a formality. A delta is evidence only when it clears the tool's own error bar. Validated cycle-level simulators disagree with the silicon they model by 5 to 20% per workload, and analytical power models miss by more. The 4% capacity-miss reduction on the rejected 4 MB turn sits inside that band, so the claim review should not credit it as a measured improvement at all, quite apart from its timing failure. Every gate in the loop needs the tool's validated error recorded next to its threshold, or a deterministic check is deterministically checking noise.
+The uncertainty field is not a formality, though it has to be read against the right bar. Validated cycle-level simulators disagree with the silicon they model by 5 to 20% per workload, and analytical power models miss by more. That range bounds what the simulator can claim about any one configuration on its own. It does not bound a comparison between two configurations that the same frozen simulator treats identically, because most of the systematic error is shared and cancels when candidates are ordered against each other, which is why a proxy earns its place by ranking correctly rather than by predicting exact numbers. The 4 MB turn still fails on timing, but its 4% capacity-miss reduction is not disqualified by the 5 to 20% figure. That delta has to clear the residual error surviving the comparison and the simulator's own run-to-run spread, and the record has to name which bar the gate applied. @sec-running-the-loop works this through on a live decision margin. Every gate in the loop needs the tool's validated error recorded next to its threshold and needs to state whether that threshold reads an absolute claim or a relative one, or a deterministic check is deterministically checking noise.
 
 Rejected candidates, failed simulator runs, and proxy wins that disappear at higher fidelity all help mathematically map the valid design space. An AI agent shouldn't simply discard these failures; it must preserve them as negative evidence to prevent future agents from wasting expensive tool runs on known dead ends [@ShinnEtAl2023Reflexion].
 
@@ -267,7 +267,11 @@ Without demanding a mechanism, the architect risks accepting a "Clever Hans" res
 
 **What happened:** The agent quickly reported a spectacular success: a design that consumed 0.0 W of power and 0.0 mm^2^ of area, while returning a successful exit code `0` from the synthesis tool.
 
-**The mechanism:** The agent had not discovered a breakthrough architecture. Instead, it had mutated a Tcl configuration script in a way that accidentally deleted the primary clock definition. Without a clock, the synthesis tool correctly determined that no logic could ever toggle, and aggressively optimized away the entire design as "dead code." The proxy loved the result, but a human engineer immediately recognized the catastrophic silent failure.
+**The mechanism:** The agent had not discovered a breakthrough architecture. Instead, it had mutated a Tcl configuration script in a way that deleted the primary clock definition. Without a clock, the synthesis tool correctly determined that no logic could ever toggle, and optimized away the entire design as "dead code." Every gate in the flow passed, because each one measured a property the empty design trivially satisfied. A human engineer caught it on sight.
+
+**The lesson:** A gate that cannot fail on an empty design is not measuring the design. Check that the reward and the exit code still discriminate against a null candidate before trusting either.
+
+This case is a composite of a failure pattern engineers report when a search is given write access to tool configuration, not one published incident.
 :::
 
 ### Credit Assignment and Automated Counterfactuals
@@ -305,15 +309,30 @@ This division is what makes the design loop agentic rather than autonomous. An A
 
 With authority assigned and the evidence reviewed, one need remains. How does the human architect know the AI didn't cheat the physics?
 
-The **Design-Loop Card** is the direct antidote to the Trust Barrier. It isn't just an index or a summary; it is the ultimate "receipt" of the AI's rigor. It conquers the Trust Barrier by explicitly packaging the exact artifacts generated in the previous stages:
-
-1. The **Uncertainty Quantification (UQ)** from the *Explore* stage.
-2. The **Sampling Confidence & Negative Evidence** from the *Evaluate* stage.
-3. The **Automated Counterfactual Proofs** from the *Explain* stage.
+The **Design-Loop Card** answers that question by indexing what the study actually retained. It is not a summary of the work and it is not a certificate that the work was done well. It is a fixed set of twelve fields, each pointing at a record a reviewer can open, so a later reader can find the scope, the evidence, and the rejected alternatives without reconstructing them from prose.
 
 > **Design-loop card.** A short guide to one architecture study. It points to the question, scope, and claim, then shows how architects and AI agents carried out the work. Detailed design state, evidence, and replay artifacts remain in linked records.
 
-The ML community adopted a similar practice with model cards to make reporting more transparent [@MitchellEtAl2019ModelCards]. Just as model cards disclose evaluation data to prevent misuse of a trained model, the design-loop card aggregates these specific ML and physical proofs into a single, undeniable document (@fig-design-loop-card-example). The architect signs off because the card proves the physics hold.
+The ML community adopted a similar practice with model cards to make reporting more transparent [@MitchellEtAl2019ModelCards]. Model cards disclose the evaluation data behind a trained model so a later user can tell where it should not be applied, and the design-loop card does the same job for one architecture study. The cache study this chapter has been running fills all twelve fields (@tbl-design-loop-card-fields), and @fig-design-loop-card-example shows the same structure filled for a different study.
+
+| **Field** | **The cache study's entry** |
+| --- | --- |
+| **Intent** | Improve XR subsystem efficiency without breaking the declared power envelope. |
+| **Task** | Evaluate L2 capacity up to 4 MB to reduce XRBench 99th-percentile frame time through fewer capacity misses. |
+| **Design space** | L2 capacity from the 2 MB baseline to the declared 4 MB ceiling, at the stated corner. |
+| **Representation** | Recorded design state: cache parameters, the XRBench trace, and the 3\ W budget covering dynamic plus leakage, with 1\ W of headroom. |
+| **Environment** | Cycle-level simulator, analytical power model, and SRAM timing and area model, each pinned to a recorded version. |
+| **Method role** | Generation only. The method proposes the next capacity; it does not run the claim check. |
+| **Feedback budget** | Not declared by this walkthrough. Declaring it would fix how many tool runs the study may spend before it stops, and that omission is why the study cannot say whether stopping at 4 MB was a budget decision or an evidence decision. |
+| **Evidence** | A 12% capacity-miss reduction, a 2 mW leakage increase, and a 0.2 mm^2^ area increase, packaged with simulator version, trace name, and execution time. |
+| **Failed runs and rejected alternatives** | The 4 MB turn, preserved as a negative trace carrying the same provenance the passing run carried. |
+| **Rejection checks and authority** | Deterministic gates on power headroom, floorplan area, and timing closure at the declared 2 GHz. The timing gate rejected 4 MB, and no judgment call was involved. |
+| **What the evidence supports** | A simulation-grade recommendation to carry the 3 MB configuration into RTL evaluation, and nothing stronger. |
+| **Accountable decision** | The architect who declared the claim and owns the stopping decision. |
+
+: **The card indexes records, it does not replace them:** each field points at something a reviewer can open, and a field the study never declared stays visibly empty rather than being filled in after the fact. {#tbl-design-loop-card-fields tbl-colwidths="[24,76]"}
+
+The empty feedback-budget row is the most useful line in the table. A card that quietly omits a field it never declared lets a study look more governed than it was, so the convention is to keep the row and record what is missing.
 
 ![**A design-loop card indexes one architecture study.** It points readers to the study scope, claim, execution process, evidence, and decision owner.](images/F4b-design-loop-card-example){#fig-design-loop-card-example width="85%" fig-alt="A compact study index card for the Lighthouse prompt, listing twelve fields from intent through rejection checks and the accountable decision."}
 
