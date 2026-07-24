@@ -44,7 +44,7 @@ The columns describe conditions, not fixed ranks (@tbl-loop-patterns). Fast feed
 | **Operating condition** | **Feedback and reversibility** | **Interface span and check independence** | **Evidence requirements and representation updates** |
 | --- | --- | --- | --- |
 | Fast and reversible | Tests, traces, profiles, or benchmarks return quickly; a failed local change can usually be discarded or rolled back. | Usually one artifact or software boundary; automatic checks may be close to the producer. | Automate bounded generation and tuning. Fast feedback directly updates the AI's short-term cost models and in-context working sets. |
-| Model-mediated architecture | Proxies, simulators, and staged tools are slower or scarcer; candidates are cheap to discard before implementation. | Several architecture assumptions may interact; model and reference checks can share blind spots. | Require stronger evidence before implementation. Delayed simulation telemetry updates surrogate uncertainty bounds and model parameters. |
+| Model-mediated architecture | Proxies, simulators, and staged tools are slower or scarcer; candidates are cheap to discard before implementation. | Several architecture assumptions may interact, and model and reference checks can share blind spots; fidelity escalation is the gate, so a candidate advances only when a higher-fidelity check confirms the lower-fidelity signal. | Require stronger evidence before implementation. Delayed simulation telemetry updates surrogate uncertainty bounds and model parameters. |
 | Cross-interface and deployment | Feedback spans layers, organizational boundaries, or live cohorts; rollback is guarded and can still impose user or operational cost. | Multiple owners and interfaces; telemetry may be noisy, confounded, private, or only partly independent. | Record cross-layer tradeoffs. Noisy field telemetry updates execution histories and retrieval corpora, not fast-tuning loops. |
 | High consequence | Tool feedback is slow and expensive; rollback becomes difficult toward signoff, tapeout, or irreversible deployment. | Independent flows, experts, and formal or physical checks become central; every waiver requires a recorded decision. | Use AI to narrow search or repair bounded artifacts. Severe failures (e.g., routing DRCs) append negative constraints to explicit design states. |
 
@@ -56,7 +56,7 @@ The columns describe conditions, not fixed ranks (@tbl-loop-patterns). Fast feed
 \Needspace{11\baselineskip}
 ```
 
-The contrast is clearest at the endpoints. A local software change can often be executed and rolled back under close tests, while a silicon-facing change needs independent checks, a named waiver holder, and a decision owner before it advances.
+A single relation underlies the four rows. The expected cost of a wrong commitment is approximately the probability of a false accept times the cost of reversal, and every operating condition in the table moves one of those two factors. The contrast is then clearest at the endpoints. A local software change can often be executed and rolled back under close tests, while a silicon-facing change needs independent checks, a named waiver holder, and a decision owner before it advances.
 
 ### Three Questions for Classification
 
@@ -112,7 +112,7 @@ AlphaChip is a concrete instance of model-mediated exploration [@MirhoseiniEtAl2
 
 [^fn-rl-policy-c09]: **Policy (reinforcement learning)**: The learned mapping from an observed state to the next action, trained by trial and error against a reward signal. In placement, the policy maps the current partial layout to the next macro position.
 
-In @sec-running-the-loop's array study, SCALE-Sim was used to compare array geometries under a frozen workload and software path. A simulator can support a no-change decision for the represented metrics. Moving a candidate toward implementation requires compiler mapping semantics, a memory-system model, end-to-end offload granularity, RTL legality, and later physical checks.
+In @sec-running-the-loop's array study, SCALE-Sim was used to compare array geometries under a frozen workload and software path. A simulator can support a no-change decision for the represented metrics. Moving a candidate toward implementation requires compiler mapping semantics, a memory-system model, end-to-end offload granularity, RTL legality, and later physical checks. Fidelity escalation is the gate for this regime. A candidate advances only when a higher-fidelity check confirms the lower-fidelity signal that first surfaced it, so a proxy win authorizes the next, slower evaluation rather than implementation itself.
 
 ### Specialization Paths
 
@@ -212,7 +212,7 @@ A specialization claim is credible only when a domain holds six properties toget
 
 ![**A domain is worth specializing for only when six properties hold together:** a stable kernel family, fixed data and precision, predictable memory behavior, a durable program interface, bounded deployment and quality-of-service targets, and manageable drift and verification. Miss any one and interface and software overhead erase the accelerator's theoretical gain.](images/F9a-domain-specificity-shapes){#fig-domain-specificity-shapes width="100%" fig-alt="Central hub asking what shape is stable enough to specialize, ringed by six labeled shapes: kernel family, data and precision, memory behavior, program interface, deployment and quality-of-service, and drift and verification."}
 
-Formalizing this limitation, Amdahl's law [@Amdahl1967ValiditySingleProcessor] and the LogCA model [@AltafWood2017LogCA] require an end-to-end perspective. A compact Amdahl-style form that folds interface and software cost into the fraction-based bound is
+Formalizing this limitation, Amdahl's law [@Amdahl1967ValiditySingleProcessor] and the LogCA model [@AltafWood2017LogCA] require an end-to-end perspective. Extending Amdahl's law with explicit architectural cost terms follows Hill and Marty's multicore analysis [@HillMarty2008Amdahl], which recast the bound around the resource cost of each core. A compact Amdahl-style form that folds interface and software cost into the fraction-based bound is
 $$
 S_{\mathrm{system}} \le
 \frac{1}{(1-f) + f/s + \epsilon_{\mathrm{interface}} + \epsilon_{\mathrm{software}}}.
@@ -472,6 +472,8 @@ An LLM generated Verilog for a complex control block that passed all behavioral 
 When delayed physical checks do return a failure, that telemetry must translate into negative constraints within the explicit design state. However, because synthesis tools aggressively flatten and retime RTL, mapping a post-route DRC hotspot back to a specific RTL construct requires traceability tools like complex naming maps and structural tracing, not just topological graphs. Because of this semantic gap, the most realistic high-consequence entry point for AI in physical design is the Engineering Change Order (ECO) loop. Rather than restarting a multi-day placement run, an AI agent can execute surgically bounded gate sizing or local routing detours on a frozen database using fast incremental STA checks.
 
 Functional verification is itself a feedback loop, and its central check is a proxy. Coverage metrics, whether functional, code, or formal, record how much of the intended behavior the tests exercised, not whether the design is correct. A passing coverage target cannot bound the failure classes that were never stimulated, so a clean run never means the space is covered, only that the observed cases held. This is the earlier limit again, that a check can reject only the failures it can observe. AI can generate constrained random tests, read formal counter-examples, close coverage holes, and triage failing runs, but whether signoff coverage is sufficient is a judgment that stays with the named roles that own it.
+
+Formal methods partly escape this limit. Equivalence checking and model checking reject entire classes of behavior rather than the sampled stimuli a simulation happens to exercise, so a passing proof rules out a whole failure class instead of a set of observed cases. That reach is bounded by state-space explosion, which is why the RTL regime pairs simulation coverage with formal checks on the blocks and properties where the proof still scales.
 
 Public reports indicate learning methods can contribute to physical-implementation search, such as in peer-reviewed synthesis for parallel-prefix circuits and learning-assisted placement (whose evidence review was discussed in @sec-feedback-verification-trust). A vendor-reported DSO.ai system, a commercial machine-learning EDA tool, has also searched the physical-implementation flow for commercial tapeouts [@Synopsys2023DSOai]. These are bounded learned subflows, not automated tapeout authority. The record must include tool versions, failed candidates, signoff checks, waivers, escalation points, and the named decision owner.
 
