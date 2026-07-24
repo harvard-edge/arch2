@@ -274,7 +274,54 @@ cleared the decision margin across all eight arm evaluations
 
 : **The model and fixed heuristic arms tie under equal simulator-call budgets.** Neither finds a nonbaseline candidate that clears the predeclared 1 percent decision margin over 32 by 32. Values are computed by SCALE-Sim, not measured on silicon. {#tbl-ai-study-results tbl-colwidths="[12,23,11,18,14,22]"}
 
-The 16 by 64 candidate exactly matches the baseline's cycles, average layer utilization, and local score. Calling it the new winner would improperly convert a tie into an improvement by changing the rule after seeing the output. The tie also hides a difference the score never registers.[^fn-dram-traffic] Because the local score combines only cycles and utilization, it reads the two shapes as equal while their off-chip write traffic differs by a factor of two. For a 3W mobile XR chip, data movement energy typically dominates compute [@Horowitz2014Energy]. This means the 16 by 64 candidate is realistically worse, being Pareto-dominated on the unmeasured memory axis (@fig-proxy-mismatch).
+The 16 by 64 candidate exactly matches the baseline's cycles, average layer utilization, and local score. The exact tie is not a coincidence. Both shapes are 1,024-processing-element arrays executing the same compute schedule, so their cycle counts agree to the digit; the shapes differ only in how that schedule moves data. Calling the candidate the new winner would improperly convert a tie into an improvement by changing the rule after seeing the output. The tie also hides a difference the score never registers.[^fn-dram-traffic] Because the local score combines only cycles and utilization, it reads the two shapes as equal while their off-chip write traffic differs by a factor of two. For a 3W mobile XR chip, data movement energy typically dominates compute [@Horowitz2014Energy]. This means the 16 by 64 candidate is realistically worse, being Pareto-dominated on a memory axis the simulator measured but the score ignored (@fig-proxy-mismatch).
+
+```{python}
+#| label: energy-gap-computation
+#| echo: false
+#| output: asis
+import json
+from pathlib import Path
+
+import _python.plots as _ap
+
+# Price the tie from the recorded study results and the Horowitz per-access
+# anchors receipted in data/source-receipts/chapter2-horowitz-energy.csv
+# (DRAM: 1300-2600 pJ per 64-bit access at the 45 nm anchor). The values
+# regenerate from the record on every build.
+_root = Path(_ap.__file__).resolve().parents[2]
+_runs = {}
+
+
+def _collect(obj):
+    if isinstance(obj, dict):
+        if obj.get("candidate_id") and "metrics" in obj:
+            _runs[obj["candidate_id"]] = obj["metrics"]
+        for v in obj.values():
+            _collect(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            _collect(v)
+
+
+with open(_root / "labs" / "examples" / "ai_systolic_array_study" / "recorded" / "reference" / "study_results.json", encoding="utf-8") as fh:
+    _collect(json.load(fh))
+_base = _runs["conventional_baseline_32x32"]["dram_accesses"]
+_cand = _runs["heuristic_16x64"]["dram_accesses"]
+_extra = _cand - _base
+_lo_uj = _extra * 1300e-12 * 1e6
+_hi_uj = _extra * 2600e-12 * 1e6
+print(
+    f"The record also prices the gap. The 16 by 64 candidate performs {_cand:,} "
+    f"DRAM accesses to the baseline's {_base:,}, a {_cand / _base:.2f}x difference. "
+    f"At the 1300 to 2600 pJ per-access anchors, those {_extra:,} extra accesses "
+    f"cost roughly {_lo_uj:.0f} to {_hi_uj:.0f} microjoules more per workload pass, "
+    f"in a subsystem whose entire budget is 3\\ W. The anchors are order-of-magnitude "
+    f"technology constants rather than signoff numbers, but the direction is "
+    f"unambiguous. The two designs the score called identical are not identical "
+    f"in energy."
+)
+```
 
 This massive spike in off-chip DRAM writes is not just an isolated power metric failure. At the system level, the 16 by 64 SLAM subsystem aggressively steals limited, shared memory bandwidth away from the RISC-V host cores and the XR display engine, risking system-wide contention. Furthermore, under the thermal realities of wearables, blowing the 3W limit on data movement translates directly to rapid battery drain and unacceptable thermal throttling on a user's face.
 
