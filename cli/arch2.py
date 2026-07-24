@@ -5275,7 +5275,7 @@ def preview(
         console.print(f"[cyan]preview[/cyan] rendering {target_match} to {fmt}...")
         _run(render_cmd, cwd=ROOT)
         console.print(f"[green]Done.[/green]")
-        
+
         # Determine the generated file and open it
         if fmt == "pdf":
             out_file = BUILD_DIR / "Architecture-2.0.pdf"
@@ -5285,10 +5285,11 @@ def preview(
             out_file = BUILD_DIR / "Architecture-2.0.epub"
         else:
             out_file = None
-            
+
         if out_file and out_file.exists():
             console.print(f"[cyan]Opening {out_file.name}...[/cyan]")
             import subprocess
+
             subprocess.run(["open", str(out_file)])
 
     finally:
