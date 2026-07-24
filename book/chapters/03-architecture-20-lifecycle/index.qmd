@@ -18,7 +18,7 @@ How do we structure our hypotheses, constraints, and toolchains so that an AI ag
 
 The preceding chapters established a hard reality: modern architecture spaces have grown too complex for us to explore manually, yet unguided AI risks optimizing proxy metrics at the expense of physical silicon constraints. We cannot simply hand over a prompt and expect a taped-out chip in return. To safely delegate exploration to an AI agent, the tacit human knowledge we naturally carry—such as implicit workload expectations, unstated thermal limits, and trusted tool combinations—must become explicit, machine-readable state.
 
-This requires a formal ontology: a conceptual model of our work that strictly defines what an agent can see, what it can change, and how we will judge its results. Without this structure, we risk building AI systems that hallucinate successful simulations or optimize for the wrong goals entirely. By formalizing our intent and constraints, we turn stochastic models from autonomous novelties into accountable participants in our design loop.
+This requires a formal ontology: a conceptual model of our work that strictly defines what an agent can see, what it can change, and how we will judge its results. Without this structure, we risk building AI systems that hallucinate successful simulations or optimize for the wrong goals entirely. Formalizing our intent and constraints turns stochastic models from autonomous novelties into accountable participants in our design loop.
 
 This chapter establishes the Architecture 2.0 lifecycle, a structured engineering discipline for AI-assisted architecture. We establish the bounded architecture study as the fundamental unit of work, ensuring that every AI-driven exploration remains anchored to a testable claim. We then introduce the six-stage lifecycle that carries this claim from formulation to defense, ensuring our design loop remains inspectable, rigorous, and firmly under our control.
 
@@ -73,9 +73,9 @@ To ground these abstract concepts in a practical reality, we use the XR subsyste
 
 1. **Read Represented State:** The AI agent queries the current design state, observing the 2 MB baseline cache, the XRBench trace, and the 1\ W of headroom remaining in the subsystem's 3\ W budget (dynamic plus leakage).
 2. **Make Allowed Change:** The agent proposes expanding the cache to 3 MB. The ontology validates that this action is within the allowed design space.
-3. **Execute Tool (Feedback):** The proposed 3 MB configuration is dispatched to the cycle-level simulator (e.g., gem5) and the analytical power model (e.g., McPAT). The tools return raw feedback, with illustrative values for this walkthrough: a 12% reduction in capacity misses, resulting in decreased dynamic power (fewer DRAM accesses), but a 2 mW increase in leakage power and a 0.2 mm^2 increase in area.
+3. **Execute Tool (Feedback):** The proposed 3 MB configuration is dispatched to the cycle-level simulator (e.g., gem5), the analytical power model (e.g., McPAT), and an SRAM timing and area model (e.g., CACTI). The tools return raw feedback, with illustrative values for this walkthrough: a 12% reduction in capacity misses, resulting in decreased dynamic power (fewer DRAM accesses), but a 2 mW increase in leakage power and a 0.2 mm^2^ increase in area.
 4. **Compile Evidence:** The raw feedback is packaged with its provenance (simulator version, trace name, time of execution) into an immutable evidence record.
-5. **Claim Review:** A deterministic check evaluates the evidence against the original bounded claim. Because the 2 mW leakage increase keeps the system well within that remaining 1\ W of headroom, and the area fits the floorplan constraint, the check passes. The 3 MB configuration becomes the new baseline state for the next iteration.
+5. **Claim Review:** A deterministic check evaluates the evidence against the original bounded claim. Because the 2 mW leakage increase keeps the system well within that remaining 1\ W of headroom, the area fits the floorplan constraint, and the 3 MB macro's reported access time still closes timing at the declared 2 GHz, the check passes. The 3 MB configuration becomes the new baseline state for the next iteration.
 
 The next turn shows the outcome the loop exists to produce. The agent proposes 4 MB, the ceiling of the declared space. The tools return, again with illustrative values, a further 4% reduction in capacity misses, but the larger array's access time no longer closes timing at the declared 2 GHz; the critical path through the 4 MB macro misses the cycle budget. The claim review fails on the timing gate. No judgment call is involved. The candidate is rejected, and the run is preserved as a negative trace with the same provenance the passing run carried. The study then stops at its declared commitment level, a simulation-grade recommendation to carry the 3 MB configuration into RTL evaluation and nothing stronger. The rejection is not wasted work. The preserved trace is what keeps the next study from re-proposing the same dead end.
 
@@ -110,7 +110,7 @@ Without a bounded claim, an agent might endlessly tune parameters without a stop
 
 Notice that the bounded claim names a tail metric rather than a throughput average. The Lighthouse workload is real-time, and real-time workloads are judged by deadlines, not throughput. A cache that raises average IPC by 8% while lengthening the worst-case frame is a regression for an XR subsystem, where what matters is whether every frame meets its motion-to-photon budget. The claim names the 99th-percentile frame time under the 3 W envelope for exactly this reason. An agent handed IPC will faithfully optimize a number the product does not ship on.
 
-The bounded claim also invites a check that costs nothing to run. Before the loop runs, run the study on paper. If XRBench spends 18% of its cycles stalled on L2 capacity misses, a perfect cache buys back at most those cycles, an Amdahl-style ceiling [@HillMarty2008Amdahl], and every buildable configuration buys less. That one-line bound, computed before any tool is invoked, is the cheapest rejection check in the lifecycle. A study whose claim exceeds its own limit study is not bounded, it is wishful.
+The bounded claim also invites a check that costs nothing to run. Before the loop runs, run the study on paper. If XRBench spends 18% of its cycles stalled on L2 capacity misses, a perfect cache buys back at most those cycles, an Amdahl-style ceiling [@HillMarty2008Amdahl], and every buildable configuration buys less. That one-line limit study, computed before any tool is invoked, is the cheapest rejection check in the lifecycle. A study whose claim exceeds its own limit study is not bounded; it is wishful.
 
 ### The Curse of Entangled Constraints
 
@@ -118,7 +118,7 @@ Once the claim is stated, the architect must bound the design space. However, co
 
 When bounding the search space, an architect cannot simply set a naive upper limit like "L2 cache up to 4 MB." Scaling up an L2 cache doesn't just consume abstract area; it changes Network-on-Chip (NoC) routing distances, alters coherence snooping traffic, and introduces localized thermal hotspots. Furthermore, altering the cache banks or adding compute elements creates NoC congestion. Streaming high-resolution XR textures aggressively stresses coherence snooping and crossbar routing. In physical design, a 4 MB cache requires placing massive SRAM macros. These macros create hard routing blockages and pin density bottlenecks that threaten power integrity (IR drop). If an AI agent optimizes only for aggregate area, it will propose a subsystem that passes analytical proxies but is fundamentally unroutable in Place-and-Route (P&R).
 
-The constraints themselves are also underspecified until the study names its corner. The 3 W gate and the 2 GHz gate mean nothing until the study says where they are checked, because silicon signs off at worst-case process, voltage, and temperature, and a design that closes timing at the typical corner routinely fails at slow-slow and 125 degrees. The bounded study must declare which corner each constraint is checked at and how much guardband it reserves for model error. An agent gated at nominal will otherwise pass candidates that no sign-off flow would accept.
+The constraints themselves are also underspecified until the study names its corner. The 3 W gate and the 2 GHz gate mean nothing until the study says where they are checked, because silicon signs off at worst-case process, voltage, and temperature, and a design that closes timing at the typical corner routinely fails at slow-slow and 125 °C. The bounded study must declare which corner each constraint is checked at and how much guardband it reserves for model error. An agent gated at nominal will otherwise pass candidates that no sign-off flow would accept.
 
 ::: {.callout-war-story title="The AI that collapsed the power grid"}
 **The claim.** An AI optimizer tasked with maximizing instructions per cycle for a high-performance core proposed a large, centralized SRAM macro, and every logical proxy scored it a clear win.
@@ -150,7 +150,7 @@ If an AI agent only receives the cache miss rates but remains blind to the area 
 
 Even if the state is fully topological, exploration faces a fundamental **modality mismatch**. Modern AI models natively consume sequential text tokens (LLMs) or fixed-shape numeric tensors (most neural predictors and policies). Hardware, however, exists as rigid hierarchical netlists, Hardware Description Languages (Verilog/Chisel), and constraint graphs. An LLM might generate syntactically perfect Verilog that is structurally nonsensical [@LiuEtAl2024CraftRTL], while an agent with a continuous action head might emit values that fail to map onto discrete hardware parameters. Graph and discrete action spaces are standard in reinforcement learning, so the mismatch is one of chosen representation, not an inherent limit of the method.
 
-::: {.callout-war-story title="The flawless Verilog that deadlocked the emulator"}
+::: {.callout-war-story title="The flawless Verilog that hung the emulator"}
 **Context:** An LLM was tasked with generating Verilog for a complex control module.
 
 **What happened:** The LLM generated syntactically flawless Verilog that passed 100% of the UVM functional testbenches.
@@ -272,7 +272,7 @@ Without demanding a mechanism, the architect risks accepting a "Clever Hans" res
 
 ### Credit Assignment and Automated Counterfactuals
 
-The architecture lifecycle poses a severe Reinforcement Learning challenge known as **credit assignment**. If an agent makes 50 distinct micro-architectural tweaks and a 12-hour simulation returns a single aggregated IPC score, how does it learn *which* tweak was responsible? Solving this sparse, delayed reward problem requires extracting dense intermediate telemetry. Classical experimental design offers a partial answer, since fractional factorial and Plackett-Burman screening attribute an aggregate score across dozens of parameters in a logarithmic number of runs, an approach @sec-methods-generation-prediction-optimization develops for search.
+The architecture lifecycle poses a severe Reinforcement Learning challenge known as **credit assignment**. If an agent makes 50 distinct micro-architectural tweaks and a 12-hour simulation returns a single aggregated IPC score, how does it learn *which* tweak was responsible? Solving this sparse, delayed reward problem requires extracting dense intermediate telemetry. Classical experimental design offers a partial answer, since fractional factorial and Plackett-Burman screening [@PlackettBurman1946Design] attribute an aggregate score across dozens of parameters in a logarithmic number of runs, an approach @sec-methods-generation-prediction-optimization develops for search.
 
 The explanation stage mitigates the Clever Hans risk by isolating these causal mechanisms. However, modern CPUs are deeply pipelined and highly speculative, creating a "fog" where effects are decoupled from root causes. If an AI proposes our 3 MB XR cache and simulation shows a drop in IPC, the true cause might not be the miss rate (which improved), but the larger cache increasing hit latency, thereby stalling the deeply pipelined out-of-order execution engine.
 
@@ -328,15 +328,11 @@ When a design hits the Trust Barrier and fails, the negative evidence is fed dir
 
 The lifecycle in this chapter is a framework, and a framework earns trust by being tested. These questions are where its own machinery remains unproven.
 
-1. **What is the smallest set of declarations that makes an architecture study replayable by a stranger?** The design-loop card in this chapter is one proposal. Whether a smaller or different set would let an independent architect re-run and challenge a study is an open, testable question.
+**Theme 1: Replayable Studies and Transferable Rejections.** What is the smallest set of declarations that makes an architecture study replayable by a stranger? The design-loop card in this chapter is one proposal; whether a smaller or different set would let an independent architect re-run and challenge a study is an open, testable question. Rejections raise the same transfer problem. A preserved failure is only valuable if a later study can discover it and trust its scope, and no standard representation for rejected candidates and their validity conditions exists yet.
 
-2. **Can lifecycle stage transitions be checked mechanically?** Deciding that exploration has genuinely finished, or that the evidence justifies moving a candidate into implementation, is judgment today. What recorded signals would let a check flag a premature transition?
+**Theme 2: Mechanical Checks on Judgment Calls.** Can lifecycle stage transitions be checked mechanically? Deciding that exploration has genuinely finished, or that the evidence justifies moving a candidate into implementation, is judgment today, and no recorded signal yet lets a check flag a premature transition. Claim scope is the same gap in another costume. An agent that generalizes one workload's win into a broad recommendation has silently widened the claim, and encoding scope so that a tool can catch the widening remains unsolved.
 
-3. **How should negative traces be represented so a rejection transfers?** A preserved failure is only valuable if a later study can discover it and trust its scope. No standard representation for rejected candidates and their validity conditions exists yet.
-
-4. **What would make a claim's scope machine-checkable?** An agent that generalizes one workload's win into a broad recommendation has silently widened the claim. Encoding scope so that a tool can catch the widening remains unsolved.
-
-5. **When does the formality pay for itself?** Cards, gates, and records cost effort that a two-day study may never repay. Where the overhead threshold sits, and how it scales with study size and consequence, has not been measured.
+**Theme 3: The Price of Formality.** When does the formality pay for itself? Cards, gates, and records cost effort that a two-day study may never repay. Where the overhead threshold sits, and how it scales with study size and consequence, has not been measured.
 
 ## Conclusion
 
@@ -346,14 +342,14 @@ A design loop may execute any stage it is given, but it cannot widen its own sco
 
 The Architecture 2.0 lifecycle gives an AI agent real initiative inside the loop while keeping the checks that verify its work, the claim it is tested against, and the final authority outside its reach. Formalizing how we formulate, explore, implement, evaluate, explain, and defend our decisions transforms AI from a stochastic novelty into a trusted participant in the engineering of computer architecture.
 
-The six stages are the book's spine, and the chapters that follow build the machinery each stage consumes, in lifecycle order (@tbl-lifecycle-map). Readers arriving from reinforcement learning will recognize the shapes here, and the table's last column makes that translation once. The book then stays in its own vocabulary, because the fit is imperfect in ways that matter. The search methods of @sec-methods-generation-prediction-optimization are mostly not policies in the RL sense, and the whole argument of @sec-feedback-verification-trust is that tool feedback must not be treated as a reward to maximize.
+The six stages are the book's spine, and the chapters that follow build the machinery each stage consumes (@tbl-lifecycle-map). Readers arriving from reinforcement learning will recognize the shapes here, and the table's last column makes that translation once. The book then stays in its own vocabulary, because the fit is imperfect in ways that matter. The search methods of @sec-methods-generation-prediction-optimization are mostly not policies in the RL sense, and the whole argument of @sec-feedback-verification-trust is that tool feedback must not be treated as a reward to maximize.
 
 | **Lifecycle stage** | **What the loop must supply** | **Where the book builds it** | **An RL reader's term** |
 | --- | --- | --- | --- |
 | Formulate | the bounded study and its claim | this chapter | the task |
 | Explore | represented design state and search methods | @sec-data-representations-world-models, @sec-methods-generation-prediction-optimization | state, policy |
 | Implement | an execution environment over real tools | @sec-architecture-environments-tool-interfaces | environment |
-| Evaluate | feedback converted into evidence | @sec-feedback-verification-trust through @sec-evaluating-agentic-architect | reward, with a caveat |
+| Evaluate | feedback converted into evidence | @sec-feedback-verification-trust, @sec-evaluating-agentic-architect | reward, with a caveat |
 | Explain | a tested mechanism account | @sec-running-the-loop | (none) |
 | Defend | ownership and commitment | @sec-what-architect-owns | (none) |
 
@@ -362,5 +358,5 @@ The six stages are the book's spine, and the chapters that follow build the mach
 ::: {.callout-carry-forward}
 - **Carry forward:** The bounded study is the unit of work, and the six-stage lifecycle is the book's spine. A study declares its claim, legal actions, gates, and decision owner before any tool runs, and the loop that executes it cannot widen its own authority.
 - **Reader test:** For your next architecture question, can you write the bounded claim, name the check that could reject each candidate, and say who commits the result?
-- **Up next:** @sec-data-representations-world-models starts where the Explore stage starts: how design state is represented so an AI method can perceive the limits of its world.
+- **Up next:** @sec-data-representations-world-models starts where the Explore stage starts, with how design state is represented so an AI method can perceive the limits of its world.
 :::
