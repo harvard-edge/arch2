@@ -160,7 +160,7 @@ def test_chapter_3_filled_card_figure_names_all_canonical_fields() -> None:
         ROOT
         / "book"
         / "chapters"
-        / "03-architecture-20-framework"
+        / "03-architecture-20-lifecycle"
         / "images"
         / "F4b-design-loop-card-example.svg"
     )
@@ -190,7 +190,7 @@ def test_chapter_3_filled_card_figure_names_all_canonical_fields() -> None:
 
 
 def test_design_loop_figure_separates_evidence_stage_from_governance() -> None:
-    chapter_root = ROOT / "book" / "chapters" / "03-architecture-20-framework"
+    chapter_root = ROOT / "book" / "chapters" / "03-architecture-20-lifecycle"
     svg = (chapter_root / "images" / "F3-design-loop.svg").read_text(encoding="utf-8")
     chapter = (chapter_root / "index.qmd").read_text(encoding="utf-8")
     assert "evidence stages may raise fidelity and cost" in svg
@@ -203,6 +203,9 @@ def test_design_loop_figure_separates_evidence_stage_from_governance() -> None:
     assert "fidelity, cost, and commitment rise" not in chapter
 
 
+@pytest.mark.skip(
+    reason="appendix-b-design-loop-card was removed in 356e66f and the appendix set was\n    deliberately not rebuilt (card content moved to chapter 3). These assertions pin prose\n    that no longer exists anywhere in the book. Kept rather than deleted so the contract is\n    recoverable if that appendix ever returns; un-skip together with the content."
+)
 def test_appendix_b_distinguishes_fixture_lab_and_context_drafting() -> None:
     appendix = (
         ROOT / "book" / "appendices" / "appendix-b-design-loop-card" / "index.qmd"
@@ -214,6 +217,9 @@ def test_appendix_b_distinguishes_fixture_lab_and_context_drafting() -> None:
     assert "Draft and validate the study boundary" in appendix
 
 
+@pytest.mark.skip(
+    reason="appendix-b-design-loop-card was removed in 356e66f and the appendix set was\n    deliberately not rebuilt (card content moved to chapter 3). These assertions pin prose\n    that no longer exists anywhere in the book. Kept rather than deleted so the contract is\n    recoverable if that appendix ever returns; un-skip together with the content."
+)
 def test_appendix_b_does_not_treat_logs_or_crashes_as_proof() -> None:
     appendix = (
         ROOT / "book" / "appendices" / "appendix-b-design-loop-card" / "index.qmd"
@@ -226,6 +232,9 @@ def test_appendix_b_does_not_treat_logs_or_crashes_as_proof() -> None:
     assert "enough to prove you explored the space" not in appendix
 
 
+@pytest.mark.skip(
+    reason="appendix-b-design-loop-card was removed in 356e66f and the appendix set was\n    deliberately not rebuilt (card content moved to chapter 3). These assertions pin prose\n    that no longer exists anywhere in the book. Kept rather than deleted so the contract is\n    recoverable if that appendix ever returns; un-skip together with the content."
+)
 def test_appendix_b_keeps_card_evidence_and_receipt_contained() -> None:
     appendix = (
         ROOT / "book" / "appendices" / "appendix-b-design-loop-card" / "index.qmd"
@@ -239,6 +248,9 @@ def test_appendix_b_keeps_card_evidence_and_receipt_contained() -> None:
     assert 'do not need separate "claim cards" or "evidence ledgers"' not in normalized
 
 
+@pytest.mark.skip(
+    reason="appendix-b-design-loop-card was removed in 356e66f and the appendix set was\n    deliberately not rebuilt (card content moved to chapter 3). These assertions pin prose\n    that no longer exists anywhere in the book. Kept rather than deleted so the contract is\n    recoverable if that appendix ever returns; un-skip together with the content."
+)
 def test_appendix_b_bounds_profile_and_replay_claims() -> None:
     appendix = (
         ROOT / "book" / "appendices" / "appendix-b-design-loop-card" / "index.qmd"

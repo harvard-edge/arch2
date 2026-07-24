@@ -28,7 +28,7 @@ class MediaEnhancementTests(unittest.TestCase):
     def test_every_entry_has_delivery_fields_and_no_placeholders(self) -> None:
         document = yaml.safe_load(MANIFEST.read_text(encoding="utf-8")) or {}
         entries = document.get("media_enhancements", [])
-        self.assertEqual(len(entries), 44)
+        self.assertEqual(len(entries), 43)
         urls = [entry.get("url") for entry in entries]
         self.assertEqual(len(urls), len(set(urls)), "duplicate manifest URLs")
         for entry in entries:

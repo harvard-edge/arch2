@@ -22,12 +22,16 @@ MANUSCRIPT_UNITS = {
         f"ch{number:02d}": next(
             (ROOT / "book" / "chapters").glob(f"{number:02d}-*/index.qmd")
         )
-        for number in range(1, 11)
+        for number in range(1, 12)
     },
-    "appA": ROOT / "book" / "appendices" / "appendix-a-bootstrapping" / "index.qmd",
-    "appB": ROOT / "book" / "appendices" / "appendix-b-design-loop-card" / "index.qmd",
-    # appendix-c-architecture-20-resources was refactored out (commit 84316bc5); its
-    # tool/lab/repo links were pruned from COMPANION_METADATA below on 2026-07-19.
+    # Appendices are discovered rather than hardcoded. The previous map named
+    # appendix-a-bootstrapping and appendix-b-design-loop-card, both removed in
+    # 356e66f, which made this script raise FileNotFoundError and left the
+    # manifest test permanently red. Globbing keeps it correct across renames.
+    **{
+        f"app{path.parent.name.split('-')[1].upper()}": path
+        for path in sorted((ROOT / "book" / "appendices").glob("appendix-*/index.qmd"))
+    },
 }
 
 PROJECT_OWNER = "Vijay Janapa Reddi / Harvard Edge project"
@@ -57,12 +61,10 @@ COMPANION_METADATA: dict[str, dict[str, str]] = {
         "nature": "schema",
         "description": "Published JSON Schema for design-loop card version 2.0.",
     },
-    "https://arch2.mlsysbook.ai/start.html": {
-        "purpose": "guided companion workflow",
-        "owner": PROJECT_OWNER,
-        "nature": "site",
-        "description": "Thirty-minute workflow for drafting and validating a bounded context-profile card.",
-    },
+    # start.html removed 2026-07-25: it was referenced only by
+    # appendix-a-bootstrapping, deleted in 356e66f. No manuscript text points at
+    # it and the page has no verifiable source in www/, so it is not shipped as a
+    # companion link. Restore this entry together with any text that links it.
     # Pruned 2026-07-19: six tool/lab/repo links formerly surfaced only by the
     # refactored-out appendix-c-architecture-20-resources; no longer present in the book.
 }
