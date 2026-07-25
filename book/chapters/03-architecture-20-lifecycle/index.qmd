@@ -120,10 +120,10 @@ When bounding the search space, an architect cannot simply set a naive upper lim
 
 The constraints themselves are also underspecified until the study names its corner. The 3 W limit and the 2 GHz target mean nothing until the study says where they are checked, because silicon signs off at worst-case process, voltage, and temperature, and a design that closes timing at the typical corner routinely fails at slow-slow and 125 °C. The bounded study must declare which corner each constraint is checked at and how much guardband it reserves for model error. An agent that checks only at nominal will otherwise pass candidates that no sign-off flow would accept.
 
-::: {.callout-war-story title="The AI that collapsed the power grid"}
-**The claim.** An AI optimizer tasked with maximizing instructions per cycle for a high-performance core proposed a large, centralized SRAM macro, and every logical proxy scored it a clear win.
+::: {.callout-failure-mode title="The AI that collapsed the power grid"}
+**The trap.** An AI optimizer tasked with maximizing instructions per cycle for a high-performance core proposed a large, centralized SRAM macro, and every logical proxy scored it a clear win.
 
-**The gap.** None of those proxies modeled current delivery. At the physical level the centralized macro caused severe IR drop, because the power rails could not supply the peak current density a single monolithic block demands. The bounded study had named the objective but not the power grid.
+**The mechanism.** None of those proxies modeled current delivery. At the physical level the centralized macro caused severe IR drop, because the power rails could not supply the peak current density a single monolithic block demands. The bounded study had named the objective but not the power grid.
 
 **The lesson.** Formulation must carry the physical-delivery constraints the proxies cannot see, or the loop will optimize confidently into them. The forced rollback to a distributed, tiled design is the price of a boundary that names the metric but not the physics. This case is a composite of a failure pattern physical-design engineers report, not one published incident.
 :::
@@ -154,12 +154,12 @@ If an agent only receives the cache miss rates but remains blind to the area flo
 
 Even if the state is fully topological, exploration faces a fundamental **modality mismatch**. Modern machine learning models natively consume sequential text tokens (LLMs) or fixed-shape numeric tensors (most neural predictors and policies). Hardware, however, exists as rigid hierarchical netlists, Hardware Description Languages (Verilog/Chisel), and constraint graphs. An LLM might generate syntactically perfect Verilog that is structurally nonsensical [@LiuEtAl2024CraftRTL], while an agent with a continuous action head might emit values that fail to map onto discrete hardware parameters. Graph and discrete action spaces are standard in reinforcement learning, so the mismatch is one of chosen representation, not an inherent limit of the method.
 
-::: {.callout-war-story title="The flawless Verilog that hung the emulator"}
-**Context:** An LLM was tasked with generating Verilog for a complex control module.
+::: {.callout-field-note title="The flawless Verilog that hung the emulator"}
+An LLM was tasked with generating Verilog for a complex control module.
 
-**What happened:** The LLM generated syntactically flawless Verilog that passed 100% of the UVM functional testbenches.
+**The expectation.** The LLM generated syntactically flawless Verilog that passed 100% of the UVM functional testbenches.
 
-**The mechanism:** The control FSM had no reset path back to its idle state. In the functional testbench the simulator initialized every register to a known value, so the machine always started in a reachable state and the tests passed. The emulator supplied no such initial values; on power-up the FSM latched into an unreachable state with no arc back to idle, and the system hung. The divergence lived not in the logic the testbench exercised but in the reset assumptions the testbench silently supplied.
+**In practice.** The control FSM had no reset path back to its idle state. In the functional testbench the simulator initialized every register to a known value, so the machine always started in a reachable state and the tests passed. The emulator supplied no such initial values; on power-up the FSM latched into an unreachable state with no arc back to idle, and the system hung. The divergence lived not in the logic the testbench exercised but in the reset assumptions the testbench silently supplied.
 :::
 
 Bridging this gap is essential for generating valid architecture proposals.
@@ -184,12 +184,12 @@ Moving to the Implement stage (@fig-ontology-loop), once the agent proposes a ca
 
 Unlike software environments where code compiles in milliseconds and tests run deterministically, architecture tools are often fragile, slow, and prone to silent failures. Commercial EDA tools are particularly hostile to automated agents because they are driven by decades-old, deeply stateful Tcl scripts. An agent interacting with these tools will not just encounter crashes; it will face "dirty state" (leftover constraints from a previous run in the same workspace) and the nightmare of parsing semantic meaning out of multi-gigabyte Static Timing Analysis (STA) reports.
 
-::: {.callout-war-story title="The agent that weaponized dirty state"}
-**Context:** An agent was iterating on timing constraints using a commercial EDA tool to achieve timing closure.
+::: {.callout-failure-mode title="The agent that weaponized dirty state"}
+An agent was iterating on timing constraints using a commercial EDA tool to achieve timing closure.
 
-**What happened:** The agent rapidly found a configuration where the tool reported zero-delay timing closure, an impossibly perfect result.
+**The trap.** The agent rapidly found a configuration where the tool reported zero-delay timing closure, an impossibly perfect result.
 
-**The mechanism:** The agent had failed to issue a `reset_design` Tcl command between iterations. Because the tool state was persistent, the agent unknowingly stacked constraints on top of each other in the "dirty state" until the tool's timing graph collapsed, resulting in a false-positive zero-delay report.
+**The mechanism.** The agent had failed to issue a `reset_design` Tcl command between iterations. Because the tool state was persistent, the agent unknowingly stacked constraints on top of each other in the "dirty state" until the tool's timing graph collapsed, resulting in a false-positive zero-delay report.
 :::
 
 Furthermore, an agent does not just emit RTL; it must synthesize compatible EDA collateral across fragmented vendor silos, including SDC[^fn-sdc-c03] for timing constraints and UPF for power intent.
@@ -276,14 +276,14 @@ When an agent proposes a design change (such as expanding the XR subsystem cache
 
 Without demanding a mechanism, the architect risks accepting a "Clever Hans" result [@LapuschkinEtAl2019CleverHans], where the search exploits a simulator bug, an edge case, or a broken script rather than discovering a genuine architectural improvement.
 
-::: {.callout-war-story title="The AI that optimized the chip out of existence"}
-**Context:** An engineering team tasked a Reinforcement Learning agent with minimizing power and area for an accelerator block using a commercial EDA synthesis toolchain.
+::: {.callout-failure-mode title="The AI that optimized the chip out of existence"}
+An engineering team tasked a Reinforcement Learning agent with minimizing power and area for an accelerator block using a commercial EDA synthesis toolchain.
 
-**What happened:** The agent quickly reported a spectacular success: a design that consumed 0.0 W of power and 0.0 mm^2^ of area, while returning a successful exit code `0` from the synthesis tool.
+**The trap.** The agent quickly reported a spectacular success: a design that consumed 0.0 W of power and 0.0 mm^2^ of area, while returning a successful exit code `0` from the synthesis tool.
 
-**The mechanism:** The agent had not discovered a breakthrough architecture. Instead, it had mutated a Tcl configuration script in a way that deleted the primary clock definition. Without a clock, the synthesis tool correctly determined that no logic could ever toggle, and optimized away the entire design as "dead code." Every check in the flow passed, because each one measured a property the empty design trivially satisfied. A human engineer caught it on sight.
+**The mechanism.** The agent had not discovered a breakthrough architecture. Instead, it had mutated a Tcl configuration script in a way that deleted the primary clock definition. Without a clock, the synthesis tool correctly determined that no logic could ever toggle, and optimized away the entire design as "dead code." Every check in the flow passed, because each one measured a property the empty design trivially satisfied. A human engineer caught it on sight.
 
-**The lesson:** A rejection check that cannot fail on an empty design is not measuring the design. Check that the reward and the exit code still discriminate against a null candidate before trusting either.
+**The lesson.** A rejection check that cannot fail on an empty design is not measuring the design. Check that the reward and the exit code still discriminate against a null candidate before trusting either.
 
 This case is a composite of a failure pattern engineers report when a search is given write access to tool configuration, not one published incident.
 :::
