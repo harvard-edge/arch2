@@ -11,7 +11,7 @@
 :::
 
 ::: {.callout-crux}
-How do we bridge the semantic gap between an AI's abstract intent and the messy, stateful reality of computer architecture tools to create a reliable design environment?
+What has to sit between an AI that proposes a design change in one sentence and a tool that needs a hundred files, runs for days, and can exit cleanly without having evaluated anything?
 :::
 
 @sec-data-representations-world-models established how design state is represented to an AI method, and @sec-methods-generation-prediction-optimization introduced the search, generation, and optimization roles that act on it. However, a method's proposals are useless in a vacuum. Once a method proposes a design change (whether sizing a new cache hierarchy via Bayesian Optimization or proposing a new prefetcher via an LLM) it must actually execute that intent to gather evidence. This chapter builds the Implement stage's machinery, the execution environment.
@@ -49,17 +49,13 @@ A second mismatch is the brownfield reality. Most AI research focuses on greenfi
 
 [^fn-tilelink-c06]: **TileLink**: An open on-chip interconnect protocol used by RISC-V systems generated with Chisel, filling the role that ARM's AMBA AXI fills in commercial SoCs. Attaching a block means satisfying the protocol's handshake and cache-coherence rules, not merely connecting wires.
 
-::: {.callout-field-note title="The black-box memory controller"}
-*Illustrative composite, not a single documented incident.*
+The stakes of that requirement are concrete. A vendor's PDF datasheet is not an interface. A timing diagram printed in one can disagree with the block's actual RTL behavior under specific burst conditions, and no automated check will notice, because nothing in the flow can read the document to compare the two. An interrogatable description turns that discrepancy into a query a tool can run, while a datasheet leaves it to be discovered after fabrication.
 
-**The expectation.** A physical design team integrating a legacy, black-box memory controller relied on the vendor's provided PDF datasheet to establish timing constraints and protocol behaviors, trusting the text as ground truth.
+Recall the **Lighthouse prompt** introduced in @sec-moonshot. The prompt asks to design a low-power, 64-bit RISC-V-based compute subsystem for an XR platform. To tackle a system of this complexity, an agent relies on an overarching generator framework like Chipyard [@chipyard], which serves as the logical engine to emit the RISC-V SoC.
 
-**In practice.** The PDF timing diagrams did not match the actual RTL behavior under specific burst conditions. Because the interface was documented in unstructured text rather than a machine-readable, interrogatable format, the discrepancy bypassed automated checks. The mismatch was only discovered after fabrication, causing a multi-million dollar tape-out delay.
-
-**The lesson.** This perfectly illustrates why AI needs programmatic, interrogatable hardware interfaces rather than text-based manuals. When integrating legacy IP, relying on unstructured documentation leads to catastrophic integration failures.
+::: {.callout-lighthouse title="Why the prompt is not one function call"}
+An agent working this prompt might formulate a high-level system intent to maximize spatial tracking throughput within the strict 3 W TDP thermal envelope required for an untethered XR headset. The candidate change, inserting a custom vector-capable accelerator block into the Chipyard-generated RISC-V subsystem, is not executable as one simple function call. An agent cannot merely instantiate the block; it must resolve bandwidth contention on the TileLink or AXI interconnect between the new spatial tracking accelerator and the high-bandwidth XR display controller. To handle the bursty, streaming point-cloud data from the headset's camera sensors without thrashing the core's working set, the agent might need to propose resizing the L2 cache or adding a specialized prefetcher. Furthermore, it must update the memory-mapped IO (MMIO) and Device Tree Blob (DTB) so the XR OS and drivers actually recognize the new vector block, connecting the hardware change to the software stack.
 :::
-
-Recall the **Lighthouse prompt** introduced in @sec-moonshot. The prompt asks to design a low-power, 64-bit RISC-V-based compute subsystem for an XR platform. To tackle a system of this complexity, an agent relies on an overarching generator framework like Chipyard [@chipyard], which serves as the logical engine to emit the RISC-V SoC. An agent working this prompt might formulate a high-level system intent to maximize spatial tracking throughput within the strict 3 W TDP thermal envelope required for an untethered XR headset. The candidate change, inserting a custom vector-capable accelerator block into the Chipyard-generated RISC-V subsystem, is not executable as one simple function call. An agent cannot merely instantiate the block; it must resolve bandwidth contention on the TileLink or AXI interconnect between the new spatial tracking accelerator and the high-bandwidth XR display controller. To handle the bursty, streaming point-cloud data from the headset's camera sensors without thrashing the core's working set, the agent might need to propose resizing the L2 cache or adding a specialized prefetcher. Furthermore, it must update the memory-mapped IO (MMIO) and Device Tree Blob (DTB) so the XR OS and drivers actually recognize the new vector block, connecting the hardware change to the software stack.
 
 A compiler must successfully emit the right memory mapping for the tensor instructions. The hardware configuration must instantiate the block. The RTL generator must pass simulation. Finally, the EDA flow must synthesize the design to check for routing congestion in the 3 nm layout. Each tool call can return exit code 0 while the Lighthouse architecture proposal itself remains unevaluated or logically broken.
 
@@ -244,17 +240,7 @@ An architecture environment explicitly maps intent to actions and actions to obs
 
 ### Defending Against Reward Hacking
 
-The machine learning community has long warned of *reward hacking* [@AmodeiEtAl2016Concrete], a modern instance of Goodhart's Law, the observation that when a measure becomes an optimization target it stops being a good measure [@Strathern1997Goodhart; @Goodhart1975MonetaryManagement]. Given a simple scalar reward, an optimizer may exploit the objective function to maximize that number while violating physical constraints [@OpenAIClark2016FaultyRewards]. In architecture, reward hacking manifests as physically impossible designs. If an environment merely reports IPC without constraints, the optimizer might propose a 10-terabyte L1 cache to maximize the score.
-
-::: {.callout-failure-mode title="Reward hacking the IPC proxy"}
-*Illustrative composite, not a single documented incident.*
-
-**The trap.** An automated design space exploration agent was rewarded purely for maximizing Instructions Per Cycle (IPC) on a suite of benchmarks.
-
-**The mechanism.** The optimizer maximized this proxy metric by proposing a physically impossible structure, a 100-port SRAM cache. The design looked brilliant in functional simulation, achieving unprecedented IPC, but was immediately rejected by physical synthesis due to catastrophic wire routing congestion and impossible area requirements.
-
-**The lesson.** Proxy metrics like IPC are easily exploited if not bounded by physical reality. The environment must enforce the downstream constraints of the Silicon ADMET funnel to prevent an AI from proposing structures that cannot exist in silicon.
-:::
+The machine learning community has long warned of *reward hacking* [@AmodeiEtAl2016Concrete], a modern instance of Goodhart's Law, the observation that when a measure becomes an optimization target it stops being a good measure [@Strathern1997Goodhart; @Goodhart1975MonetaryManagement]. Given a simple scalar reward, an optimizer may exploit the objective function to maximize that number while violating physical constraints [@OpenAIClark2016FaultyRewards]. In architecture, reward hacking manifests as physically impossible designs. If an environment merely reports IPC without constraints, the optimizer might propose a 10-terabyte L1 cache or a 100-port SRAM to maximize the score. Either structure looks brilliant in functional simulation, posting an IPC no real machine reaches, and is rejected on sight by physical synthesis for routing congestion and area the functional model never represented. Nothing bounded the proxy by the physics, so the optimizer was free to leave the physics behind, which is what the downstream constraints of the Silicon ADMET funnel exist to prevent.
 
 Because physical design limits dictate architectural choices bottom-up, ground truth from traditional EDA tools is the environment's first defense against these AI exploits, indispensable for enforcing laws like timing closure and power limits. The full defense discipline, converting tool feedback into evidence that can reject a candidate, is @sec-feedback-verification-trust's subject; the environment's job is to keep the physical constraints in the loop at all.
 
