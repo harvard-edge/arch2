@@ -127,6 +127,12 @@ An agent evaluated strictly on maximizing performance will aggressively exploit 
 
 [^fn-igd-c10]: **Inverted Generational Distance (IGD)**: The average distance from each point on a reference Pareto front to the nearest point the agent actually found, so the score falls as the agent's results spread across the whole front rather than clustering in one region of it. The metric is defined only against a known reference front, so where none exists evaluators substitute the pooled non-dominated set of every point every agent evaluated, which makes the resulting number relative to that pool rather than comparable across studies.
 
+Naming a metric is not the same as specifying one, and the table above names more than it specifies. Four of these can be pinned here, and the rest cannot yet, which is worth stating rather than leaving a reader to discover it while trying to implement one.
+
+Report `pass@k` with the unbiased estimator over $n \ge k$ samples rather than the naive fraction of successful runs, which overstates it. Report proxy calibration as Spearman rank correlation computed on the candidates the search actually visited near the decision boundary, not averaged over the whole space, since a proxy that ranks the frontier well and the interior badly is the one worth having. Report trajectory area under the curve normalized by the budget horizon and the score range, because two areas computed at different budgets or reward scalings are not comparable numbers. Report self-correction as the fraction of failing checks the agent clears on its immediately following attempt, counting a partial repair as a failure, since a partial repair leaves the transition blocked.
+
+The others are named honestly and not yet specified. Monotonic convergence has no agreed score over a vector objective. Structural legibility borrows cyclomatic complexity, which has no standard definition on synthesized RTL. Security adherence and the needle-in-a-haystack construction describe what to look for without saying how to measure it. Inverted generational distance is the hardest of them, because it is defined against a reference front that a hardware evaluator does not have; the workable substitute is a pooled non-dominated set assembled from every arm in the comparison, which makes the score meaningful within that comparison and meaningless across studies. Say which convention a reported number used, or the number cannot be checked.
+
 ### The Proxy Mirage
 
 Before an agent queries a slow physical synthesis tool or RTL simulator, it typically queries a fast surrogate model to predict the outcome (e.g., an analytical or learned performance predictor for cycle counts, McPAT for power/area, or LLM-as-a-judge heuristics). Even a detailed cycle-level simulator like gem5, itself far slower than these proxies, is a surrogate the agent leans on to avoid full RTL simulation and physical synthesis.
@@ -153,10 +159,10 @@ Unlike software unit tests which are largely orthogonal, hardware design involve
 
 Furthermore, resolving physical Design Rule Checks (DRCs) is highly localized but structurally rigid. Moving a wire to fix a spacing violation often pushes it into an adjacent net, triggering a DRC cascade. Evaluators must log the state trajectory of the agent, not just the final outcome. A rigorous benchmark tracks this state trajectory over time to distinguish a capable agent demonstrating directed, *monotonic convergence* toward a clean state from a failing agent thrashing wildly in an infinite constraint loop (@fig-whac-a-mole).
 
-::: {.callout-war-story title="The ECO Cascade"}
-**The claim:** A single DRC violation can be fixed by a localized nudge of a wire.
+::: {.callout-field-note title="The ECO Cascade"}
+**The expectation:** A single DRC violation can be fixed by a localized nudge of a wire.
 
-**The gap:** During a late-stage ECO on a Floating Point Unit (FPU), an automated script moved a single wire to fix a spacing DRC. This localized shift pushed the wire into an adjacent net, and each subsequent repair opened fresh spacing and short violations across the block.
+**In practice:** During a late-stage ECO on a Floating Point Unit (FPU), an automated script moved a single wire to fix a spacing DRC. This localized shift pushed the wire into an adjacent net, and each subsequent repair opened fresh spacing and short violations across the block.
 
 **The lesson:** Agents without spatial awareness and constraint intelligence will easily get stuck in infinite thrashing loops, blindly creating new violations for every one they fix. This case is a composite of a recurring physical-design pattern, not one documented incident.
 :::
@@ -164,7 +170,7 @@ Furthermore, resolving physical Design Rule Checks (DRCs) is highly localized bu
 ```{python}
 #| label: fig-whac-a-mole
 #| fig-cap: |
-#|   **A capable agent burns violations down monotonically while a naive agent oscillates forever:** the capable agent resolves complex, coupled constraints smoothly over time, reaching zero violations (green), while the naive agent gets trapped in Constraint Whac-A-Mole, blindly fixing setup violations only to create hold violations, oscillating endlessly without converging on a valid physical implementation (red).
+#|   **A capable agent burns violations down monotonically while a naive agent oscillates forever:** the capable agent resolves complex, coupled constraints smoothly over time, reaching zero violations (green), while the naive agent gets trapped in Constraint Whac-A-Mole, blindly fixing setup violations only to create hold violations, oscillating endlessly without converging on a valid physical implementation (red). Both curves are drawn from illustrative values chosen to show the two shapes, not from a measured run. What would make the contrast evidence rather than illustration is a per-iteration violation count logged from a real place-and-route flow across several seeds, reported with its spread, so a reader could tell a thrashing agent from a slow one on their own logs.
 #| out-width: "85%"
 #| fig-alt: "Line chart showing number of timing/DRC violations over agent tool iterations. The X-axis spans 0 to 20 iterations. The Y-axis shows the count of violations. A green line ('Capable Agent') drops smoothly from 50 to 0 by iteration 15. A red dashed line ('Naive Agent') drops initially but then bounces up and down endlessly between 10 and 20 violations in a jagged sawtooth pattern."
 
@@ -223,10 +229,10 @@ An agent rewarded solely for maximizing IPC and minimizing Area invites Goodhart
 
 [^fn-goodharts-law-c10]: **Goodhart's Law**: When a measure becomes a target, it ceases to be a good measure [@Strathern1997Goodhart]. If an agent is evaluated solely on IPC, it will optimize strictly for that metric, even if it requires emitting physically impossible structures.
 
-::: {.callout-war-story title="Zero Power through Deletion"}
-**The claim:** An optimizer can automatically discover clever architectural modifications to drastically reduce power or area.
+::: {.callout-failure-mode title="Zero Power through Deletion"}
+**The trap:** An optimizer can automatically discover clever architectural modifications to drastically reduce power or area.
 
-**The gap:** @sec-architecture-20-ontology already records the case this claim runs into, a search that reached a perfect power and area score by deleting what it had been asked to optimize while every check in the flow reported success. That case belongs to formulation, where the reward was written. Evaluation owns the consequence, because no reward function polices itself and nothing in that score distinguished a design from its absence.
+**The mechanism:** @sec-architecture-20-ontology already records the case this claim runs into, a search that reached a perfect power and area score by deleting what it had been asked to optimize while every check in the flow reported success. That case belongs to formulation, where the reward was written. Evaluation owns the consequence, because no reward function polices itself and nothing in that score distinguished a design from its absence.
 
 **The lesson:** Reward functions in hardware are perilously susceptible to Goodhart's Law. A benchmark that cannot fail an empty candidate is not measuring the design, so equivalence checking and functional constraints belong in the scoring rules rather than in the optimizer's good intentions.
 :::
@@ -257,10 +263,10 @@ The cost axis cannot be waved away, because total search compute is a U-shape wi
 
 This dictates the ratio of inference latency to tool latency. If the model takes 30 seconds of inference to generate a Tcl script and synthesis takes 10 seconds, the model is the bottleneck. If synthesis takes 10 hours, the model's inference time is effectively free. The same ratio bounds how much unsupervised iteration is affordable, because an unattended loop can convert a cheap disagreement into an expensive one.
 
-::: {.callout-war-story title="The Infinite Loop of the Automated CI/CD"}
-**The claim:** Two agentic systems, a Generator and a Verifier, can autonomously close RTL bugs without human intervention.
+::: {.callout-failure-mode title="The Infinite Loop of the Automated CI/CD"}
+**The trap:** Two agentic systems, a Generator and a Verifier, can autonomously close RTL bugs without human intervention.
 
-**The gap:** An automated CI/CD actor-critic agent pair ran unattended and consumed cloud compute for as long as it was left alone, because it was trapped in an infinite loop. The Generator fixed a simple Verilator lint error by renaming a signal, which immediately triggered a formal equivalence failure. The Verifier demanded a fix, so the Generator reverted the change, re-introducing the lint error. Neither actor could detect that the pair had already visited this state, so the cycle repeated until a human intervened.
+**The mechanism:** An automated CI/CD actor-critic agent pair ran unattended and consumed cloud compute for as long as it was left alone, because it was trapped in an infinite loop. The Generator fixed a simple Verilator lint error by renaming a signal, which immediately triggered a formal equivalence failure. The Verifier demanded a fix, so the Generator reverted the change, re-introducing the lint error. Neither actor could detect that the pair had already visited this state, so the cycle repeated until a human intervened.
 
 **The lesson:** Multi-agent systems without cycle detection and strict retry limits will happily convert simple logical conflicts into open-ended cloud billing events. Cost metrics must be part of the evaluation, not an afterthought. This case is a composite of a recurring multi-agent failure pattern, not one documented incident.
 :::
