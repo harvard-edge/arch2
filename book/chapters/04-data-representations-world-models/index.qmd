@@ -48,11 +48,7 @@ An AI method needs both. General knowledge cannot reveal that the project lead j
 
 ### Design History and Episodic Memory
 
-When a human architect tries a cache coherence protocol and it deadlocks, they remember it. For an AI architect, this requires Retrieval-Augmented Generation (RAG) over past simulation logs, failed RTL patches, and git commit history. This grounds the ML concept of continuous learning in the practical need to retain architectural state and prevent repeating the same costly simulator errors across design iterations. It functions as the agent's episodic memory.
-
-::: {.callout-field-note title="The Cost of Forgetting a Deadlock"}
-A cache coherence deadlock in a legacy processor required a costly microcode patch post-silicon to resolve. The architectural root cause had been encountered and dismissed as a testbench artifact earlier during simulation. Retaining *failed* execution traces as episodic memory is far cheaper than re-discovering those same deadlocks in physical silicon. This case is a composite of a failure pattern verification engineers report, not one documented incident.
-:::
+When a human architect tries a cache coherence protocol and it deadlocks, they remember it. The expensive case is the deadlock that was seen and then discarded, dismissed during simulation as a testbench artifact and paid for again after silicon with a microcode patch. The run that could have prevented it existed, but nothing in it carried a verdict. For an AI architect, retaining that history requires Retrieval-Augmented Generation (RAG) over past simulation logs, failed RTL patches, and git commit history. This grounds the ML concept of continuous learning in the practical need to retain architectural state and prevent repeating the same costly simulator errors across design iterations. It functions as the agent's episodic memory.
 
 ### Sources and Datasets
 
@@ -232,7 +228,11 @@ An explicit design state must distinguish the fields that an AI method may mutat
 
 [^fn-mcmm-c04]: **Multi-Corner Multi-Mode (MCMM)**: The practice of verifying a physical design across a matrix of different operating modes (e.g., test, sleep, active) and physical corners (variations in manufacturing process, voltage, and temperature).
 
-If an optimizer is tasked with optimizing against a Lighthouse comparison, the representation might declare that the SRAM capacity and MAC array dimensions are mutable. The peak power limit and the target workload mix are fixed constraints. If these boundaries are not explicit, the optimizer might propose a candidate that achieves high performance by silently violating a power constraint or altering the workload mix, invalidating the comparison.
+::: {.callout-lighthouse title="Mutable fields and fixed constraints, declared before the search"}
+**Context.** The boundary binds the search only when it is written into the represented state, not when it is assumed by the architect who set the study up.
+
+**In the XR subsystem comparison.** The representation declares that SRAM capacity and MAC array dimensions are mutable, while the peak power limit and the target workload mix are fixed constraints. If these boundaries are not explicit, the optimizer might propose a candidate that achieves high performance by silently violating a power constraint or altering the workload mix, invalidating the comparison.
+:::
 
 Within these boundaries, we must explicitly distinguish two types of legal moves. The first is *parametric tuning*, such as resizing a buffer, changing queue depths, or adjusting cache associativity. This represents a continuous or bounded discrete search where the pipeline topology remains unchanged, and it requires only a simple scalar or JSON schema to govern the action space. In this context, Bayesian Optimization (BO) is highly effective for low-dimensional, high-cost parameter searches where sample efficiency is paramount, often outperforming reinforcement learning (RL) methods like PPO[^fn-ppo-c04] that require massive interaction data.
 
@@ -280,11 +280,7 @@ This is fundamentally different from a true *World Model*. In artificial intelli
 
 When a cost model predicts the consequences of an architectural mutation, the search it guides drifts toward structures that are most efficient in isolation. A mathematically optimal design is still useless if it breaks the software ecosystem it has to run inside. The cost model has to carry backward compatibility as an explicit part of the environment it reasons about.
 
-Design does not happen in a vacuum. It sits beneath billions of lines of existing code. A generative model might propose a memory interleaving scheme that improves average-case latency by 15%, yet if the scheme quietly violates the memory consistency models that legacy software assumes, it breaks every multithreaded operating-system kernel running on it. A non-standard interrupt controller might save area while violating platform architecture specifications (e.g., ARM SBSA) or OS Hardware Abstraction Layer (HAL) assumptions, forcing rewrites across millions of lines of legacy OS drivers.
-
-::: {.callout-failure-mode title="When Hardware Savings Eclipse Software Costs"}
-A clever hardware optimization saved die area but subtly broke a strict memory consistency model and an OS Hardware Abstraction Layer assumption. The resulting system instability took a long sequence of complex software driver rewrites to fix, and that engineering cost eclipsed the benefit of the initial hardware savings. This case is a composite of a recurring hardware and software co-design pattern, not one documented incident.
-:::
+Design does not happen in a vacuum. It sits beneath billions of lines of existing code. A generative model might propose a memory interleaving scheme that improves average-case latency by 15%, yet if the scheme quietly violates the memory consistency models that legacy software assumes, it breaks every multithreaded operating-system kernel running on it. A non-standard interrupt controller might save area while violating platform architecture specifications (e.g., ARM SBSA) or OS Hardware Abstraction Layer (HAL) assumptions, forcing rewrites across millions of lines of legacy OS drivers. The engineering bill for that rewrite can exceed the die area the optimization saved, which is why the saving and the software work it creates belong in the same comparison rather than on separate teams' budgets.
 
 These boundaries are hard architectural constraints, not suggestions. A useful cost model cannot optimize for IPC (Instructions Per Cycle) or PPA (Power, Performance, Area) alone. It has to stay bounded by the backward-compatibility contracts, ISA semantics, and memory consistency models that define the environment the chip will inhabit. Strip those constraints out of the representation and the generator will propose optimized but unbootable silicon.
 
@@ -444,5 +440,5 @@ A learned cost model maps the represented state and a semantic action to a bound
 ::: {.callout-carry-forward}
 - **Carry forward:** The encoding fixes the geometry an optimizer searches, and the system must package the current design state, the proposed semantic action, and the predicted consequence into a connected semantic handoff.
 - **Reader test:** Can you identify what the model learned, what it retrieved, which current state it used, what the cost model predicted, and which conditions rejected a candidate you kept?
-- **Up next:** The design state is now represented and versioned, but a state is only useful if a method can act on it. In the next chapter, @sec-methods-generation-prediction-optimization, we introduce the method roles: the generation, prediction, and optimization machinery that navigates this state to propose new architectures.
+- **Up next:** The design state is now represented and versioned, but a state is only useful if a method can act on it. @sec-methods-generation-prediction-optimization introduces the method roles, the generation, prediction, and optimization machinery that navigates this state to propose new architectures.
 :::

@@ -283,15 +283,7 @@ Generative methods can enumerate and score specialized options rapidly, and desi
 
 Specialized blocks rarely ship alone. Architects compose them into a system-on-chip and, increasingly, across multiple chiplets. Chiplets exist in large part because of a yield law. Defects land roughly at random across a wafer, so the fraction of good dies falls off exponentially with die area times defect density, and a reticle-limited die on a young process can yield below half while four quarter-size dies each yield far better. Splitting one large die into chiplets converts an exponential cost into a nearly linear one, which is why chiplets improve yield and let mature nodes host blocks that do not need the leading edge. Chiplets also let architects mix process technologies, IP blocks, and memory. Open standards such as UCIe stabilize the interface while leaving partitioning and implementation to architects [@UCIeConsortium2026Spec].
 
-The challenge is that composition adds a dense layer of coupled choices. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
-
-::: {.callout-failure-mode title="The silent SoC deadlock"}
-**The trap.** Independently verified IP blocks can be seamlessly integrated into a working System-on-Chip.
-
-**The mechanism.** The following is a representative composite of multi-vendor IP integration failures rather than one named incident. Two blocks with perfectly verified individual behavior are combined on the same interconnect, and a mismatched Network-on-Chip (NoC) credit-return protocol between them creates an unresolvable cycle of dependencies.
-
-**The lesson.** An undocumented interface quirk of this kind causes a silent system hang that eludes simulation and can take months to debug in post-silicon bring-up, which is why system-level deadlocks often emerge only when the full SoC is assembled.
-:::
+The challenge is that composition adds a dense layer of coupled choices. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Two blocks whose individual behavior is perfectly verified can hang the system when a mismatched credit-return protocol between them closes a cycle of dependencies, and a hang of that kind survives block-level simulation and can cost months of post-silicon bring-up to locate. Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
 
 In the XR Lighthouse, this composition challenge extends directly to routing congestion. The Lighthouse Network-on-Chip (NoC) must arbitrate between the bursty traffic of the SLAM accelerator and the absolute, rigid latency deadlines of the display engine.
 
@@ -864,15 +856,7 @@ Later IR-drop and thermal signoff can confirm or clear that risk once a placed n
 
 Signoff runs each of these checks across multiple process, voltage, and temperature corners and operating modes. At advanced nodes, closing timing requires checking on the order of a hundred Multi-Corner Multi-Mode (MCMM) scenarios (for example, Fast-Fast transistors for hold timing and Slow-Slow for setup, though temperature inversion at advanced nodes often makes the cold, low-voltage Slow-Slow corner the setup-critical one rather than the hot corner older intuition expects). Every generated candidate triggers a combinatorial explosion of STA runs, which is why a candidate can clear one corner and fail another. Because physical-design tools rely on heuristic optimization, one failed closure attempt cannot reveal whether the candidate or the tool setup caused the failure. Comparing constraints, seeds, and repeated outcomes helps separate the two.
 
-Design Rule Checks (DRC) are the wall's final course. At advanced nodes the rule decks run to thousands of geometrical rules (multi-patterning coloring, via enclosure, minimum-metal spacing), with exact counts held foundry-confidential, and a floorplanner that shifts one macro block can instantly create thousands of discrete violations. If the automated loop cannot parse these spatial markers and fix them, the output requires manual cleanup.
-
-::: {.callout-field-note title="The DRC whack-a-mole"}
-**The expectation.** A minor late-stage macro block shift to improve timing should be a quick fix.
-
-**In practice.** This is a representative advanced-node scenario rather than one named tapeout. A physical design team resolving a single via-enclosure violation finds that the layout tool ripples the change outward, instantly spawning three new violations in adjacent polygons.
-
-**The lesson.** A team can become stuck in a multi-week loop of fixing one error only to spawn three more, which illustrates why human-guided feedback loops break at this scale.
-:::
+Design Rule Checks (DRC) are the wall's final course. At advanced nodes the rule decks run to thousands of geometrical rules (multi-patterning coloring, via enclosure, minimum-metal spacing), with exact counts held foundry-confidential, and a floorplanner that shifts one macro block can instantly create thousands of discrete violations. Nor do the violations resolve one at a time. Clearing a single via-enclosure error moves metal that the tool then reroutes, spawning fresh violations in adjacent polygons, and a team can spend weeks trading one error for three. If the automated loop cannot parse these spatial markers and fix them, the output requires manual cleanup.
 
 Automation adds a traceability problem to every one of these walls. If a generator emits high-level RTL and a physical synthesis tool reports a thermal failure hours later, tracing that failure back to the specific line of RTL is a semantic credit-assignment problem, and the stochasticity of generative models means an architect cannot always deterministically reproduce a winning topology. Evaluating physical constraints therefore also requires bridging the semantic gap between high-level architectural proposals and the legacy EDA formats (LEF/DEF, Liberty timing files)[^fn-lef-def-c02] that are difficult to generate or parse directly.
 
@@ -1343,16 +1327,16 @@ These pressures do not share a single remedy. @tbl-loop-bottleneck-diagnostic se
 Producing more candidates does not help if the checks remain unaffordable or the next action stays unclear. Identify the limiting pressure first, then judge any AI method by whether it reduced that specific work without moving the burden to a less visible part of the project.
 
 ::: {.callout-carry-forward}
-- **Carry forward.** A project stalls in one of five ways, and the remedy
+- **Carry forward:** A project stalls in one of five ways, and the remedy
   follows from that mode rather than from the layer that produced it. Match AI's
   role to the mode, keep the check it must not weaken independent of the model,
   and remember that a project's limit is how much it can evaluate well enough to
   decide, not how many candidates it can enumerate.
-- **Reader test.** Can you say which of the five failures limits a project, name
+- **Reader test:** Can you say which of the five failures limits a project, name
   the measurements that would prove it is the binding one, and state what
   evidence would show that AI reduced the burden rather than shifted it
   elsewhere?
-- **Up next.** @sec-architecture-20-ontology shows what architects must make
+- **Up next:** @sec-architecture-20-ontology shows what architects must make
   explicit about the question, available choices, tool path, evidence, and next
   decision so an AI system and another architect can work on the same problem.
 
