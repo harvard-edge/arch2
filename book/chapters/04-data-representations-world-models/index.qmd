@@ -27,11 +27,11 @@ We must build verifiable frameworks where the representation tracks what the AI 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Distinguish general architectural priors from the explicit constraints of the current project version.
-- Recognize when an encoding breaks an optimizer's smoothness assumption, and re-encode a parametric field to restore it.
-- Treat a learned cost model as a scoped search heuristic rather than a world model.
+- Separate slow-moving architectural priors, the current project version's explicit constraints, and the live state a tool just returned, and route each to the ingestion path its volatility allows.
+- Recognize when an encoding breaks an optimizer's smoothness assumption, and re-encode a parametric field onto the quantity the physics is smooth in or the set the tools can build.
+- Treat a learned cost model as a scoped search heuristic rather than a world model, and name the observation that would falsify the difference.
 - Preserve a model's prediction, a tool's observation, and a rejected candidate as separate dated records carrying the conditions that produced them.
-- Test whether a represented design state still describes the artifact it claims to describe, and stop a run when it does not.
+- Test whether a represented design state still describes the artifact it claims to, stop a run when it does not, and refuse a request at the tool interface when the claim on offer is not worth the evidence it would cost.
 
 :::
 
@@ -199,6 +199,8 @@ However, writing back to EDA tools presents a massive impedance mismatch. While 
 
 Beyond graphs, bridging the semantic gap requires multi-modal representations. Visual Language Models (VLMs) and spatial encodings move past text tokens, letting agents reason directly over 2D floorplans and physical layouts. When projecting discrete hardware graphs into continuous latent spaces (embeddings), a central ML-Sys challenge is maintaining structural validity, preserving graph invariants so that decoded candidates remain physically realizable. This shift from 1D sequence tokenization to structurally valid graph embeddings is the core data representation problem in AI-assisted architecture.
 
+What an encoding can express and whether it can be written back are two of its three properties. The third is the geometry it imposes on any search that runs over it, which decides whether an optimizer's assumptions about the space hold at all. That property only becomes visible once the loop starts mutating state, which is where the next section takes it up.
+
 ## Design State, Not Text
 
 Token stream or graph embedding, the encoding decides what a method can express, not what it is allowed to do. A method that works on a design does not emit text about it. It mutates a constrained state machine.
@@ -240,6 +242,8 @@ Within these boundaries, we must explicitly distinguish two types of legal moves
 [^fn-ppo-c04]: **Proximal Policy Optimization (PPO)**: A standard reinforcement-learning algorithm that updates a policy in small clipped steps, so no single batch of experience can collapse what the agent has already learned. That stability is bought with sample efficiency, since it needs many thousands of environment interactions, which is exactly what an expensive architectural simulator cannot supply.
 
 The choice of encoding is what makes that search tractable or hopeless, and it reconciles two facts the chapter has stated in tension. The design space is punctuated by hard cliffs, yet Bayesian optimization works only because it assumes nearby candidates have similar costs. The representation decides whether that assumption holds. Encode cache capacity on a linear axis and a step from 512 KB to 1 MB looks the same size as a step from 4 MB to 4.5 MB, even though miss rate falls with the logarithm of capacity and the first step changes far more; encode a netlist so that a one-bit change flips routability, and a cliff sits between adjacent points where no smoothness prior can bridge it. Choosing the representation is choosing the geometry the optimizer believes in, which is why the regression models of classical design-space exploration spent their effort on variable transformations before spending any on model capacity [@LeeBrooks2006RegressionModeling].
+
+Two moves follow, and both are cheap. The recognition test is an adjacent-pair check on the encoded axis: take one step at each end of the range and compare how far the metric moves. If a step from 512 KB to 1 MB shifts miss rate several times more than a step from 4 MB to 4.5 MB does, the axis is lying about distance, and every smoothness prior built on it is wrong. The repair for a parametric field is to re-encode it on the quantity the physics is smooth in, or on the set the tools can actually build. Miss rate falls with the logarithm of capacity, so a log axis restores comparable steps. Better still, an L2 is assembled from SRAM macros of fixed geometry, so 4.5 MB is not a point in the space at all; an index over the realizable macro configurations makes every step a real step and deletes candidates the memory compiler would have refused anyway.
 
 *Structural mutation*, the second type, changes the space rather than moving within it. Adding a pipeline stage, swapping a mesh interconnect for a ring, or inserting a bespoke accelerator block does not reparameterize a fixed set of fields; it replaces the field set, so there is no axis left to transform and no smoothness to restore. Governing this action space is far harder. Structural mutation requires a graph-based representation grounded in actual EDA intermediate representations (e.g., structural Verilog or And-Inverter Graphs [AIGs]). Translating between an ML agent's abstract graph and an EDA tool's netlist often introduces semantic gaps where verification fails, making it critical to enforce physical connectivity, validate interface protocols, and maintain coherence rules during the transformation.
 
