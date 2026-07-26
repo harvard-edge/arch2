@@ -261,9 +261,9 @@ The mitigations that later closed these channels were not free, and their cost f
 ```{python}
 #| label: fig-mitigation-overhead
 #| fig-cap: |
-#|   **Closing the channel had a real, uneven cost.** Reported performance overhead of the shipped Spectre/Meltdown mitigations; each bar spans compute-bound work (low system-call rate) to syscall- and I/O-heavy work. Cheap software mitigations such as retpoline cost 5--10%, while the microcode mitigations IBRS and STIBP reach 20--50% on syscall-heavy code, because the cost is paid on each user/kernel crossing. Compiled from Canella et al. Table 11 [@CanellaEtAl2019Transient], with figures from Gregg (2018) and Phoronix (2018--2019); overhead varies with CPU generation, kernel version, and which mitigations are enabled.
+#|   **Closing the channel had a real, uneven cost.** Reported performance overhead of the shipped Spectre/Meltdown mitigations, where each bar spans the lowest to the highest overhead reported across the workloads cited for that mitigation. The cost does not come from a single mechanism. KPTI, retpoline, and IBRS tax privilege transitions and kernel indirect branches, so their overhead tracks system-call and I/O rate, while STIBP's 30--50% comes from denying SMT siblings a shared indirect-branch predictor and therefore lands on parallel compute-bound work, and SSBD's 2--8% comes from disabling speculative store bypass and is paid broadly. Compiled from Canella et al. Table 11 [@CanellaEtAl2019Transient], with figures from Gregg (2018) and Phoronix (2018--2019); overhead varies with CPU generation, kernel version, and which mitigations are enabled.
 #| out-width: "92%"
-#| fig-alt: "Horizontal range chart of Spectre and Meltdown mitigation overhead in percent. KPTI spans about 0 to 5 percent, SSBD 2 to 8, retpoline 5 to 10, all default mitigations 7 to 16, IBRS 20 to 30, and STIBP 30 to 50 percent. Each bar's left end is compute-bound work and its right end is syscall or I/O-heavy work; the microcode mitigations are the most expensive."
+#| fig-alt: "Horizontal range chart of Spectre and Meltdown mitigation overhead in percent. KPTI spans about 0 to 5 percent, SSBD 2 to 8, retpoline 5 to 10, all default mitigations 7 to 16, IBRS 20 to 30, and STIBP 30 to 50 percent. Each bar spans the lowest to the highest overhead reported across the workloads cited for that mitigation; the microcode mitigations are the most expensive."
 
 import csv
 from pathlib import Path
@@ -277,7 +277,8 @@ apply_style()
 # Data: reported overhead of shipped transient-execution mitigations, compiled
 # from Canella et al. 2019 Table 11 [@CanellaEtAl2019Transient] with production
 # figures from Gregg (2018) and benchmark roundups from Phoronix (2018-2019).
-# Ranges span compute-bound to syscall/IO-heavy work on 2016-2019-era parts;
+# Ranges span the lowest to highest reported overhead across the workloads cited
+# for each mitigation, on 2016-2019-era parts;
 # academic-only proposals and the pathological >800% microbenchmark are excluded.
 # Accessed 2026-07-19. Receipt: data/source-receipts/chapter7-mitigation-overhead.csv
 _root = Path(_ap.__file__).resolve().parents[2]
@@ -310,12 +311,12 @@ ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
 for _sp in ("top", "right"):
     ax.spines[_sp].set_visible(False)
 ax.grid(axis="x", color=COLORS["row"], linewidth=0.4, zorder=0)
-ax.text(59, len(rows) - 0.75, "each bar: compute-bound → syscall / I/O-heavy",
+ax.text(59, len(rows) - 0.75, "each bar: lowest to highest reported overhead",
         fontsize=5.0, fontstyle="italic", color=COLORS["muted"], ha="right", va="center")
 fig.subplots_adjust(left=0.22, right=0.97, top=0.94, bottom=0.15)
 ```
 
-Compute-bound code that rarely crosses the kernel boundary pays almost nothing, while system-call- and I/O-heavy work can slow by tens of percent, because the mitigations tax exactly the privilege transitions the leak abused. A property left unobserved at verification did not disappear; it reappeared as a permanent tax on every workload that touches that boundary.
+The mitigations that guard the privilege boundary behave the way the leak suggests they should. KPTI, retpoline, and IBRS tax kernel entries and kernel indirect branches, so compute-bound code that rarely crosses the boundary pays almost nothing while system-call- and I/O-heavy work slows by tens of percent. The two most expensive mitigations do not work that way at all. STIBP stops SMT siblings from sharing an indirect-branch predictor, so its 30 to 50 percent falls on parallel compute-bound code, and SSBD disables speculative store bypass at a cost paid broadly across memory-intensive work. A property left unobserved at verification did not disappear; it reappeared as a permanent tax, and one whose incidence reaches well past the boundary the original leak abused.
 
 Passing a suite of performance tests provides no evidence for security properties, so a public claim for a shipped design needs checks that observe information flow and physical behavior directly, not more of the checks that were already blind to them. A coverage gap is also not the only defect that survives verification. A functional bug already committed to silicon is harder to undo than a patchable side channel, since it can force a respin rather than a microcode update.
 

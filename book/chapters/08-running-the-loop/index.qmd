@@ -179,18 +179,19 @@ As established in @sec-data-representations-world-models, general knowledge is m
 
 That representation is useful only if a candidate change can be connected to a predicted consequence. The model proposed three shape deltas and predicted that a wider 16 by 64 array would better match the workload's N dimensions than its mirrored 64 by 16 alternative, further asserting that exchanging M and N in the workload would reverse the winner. The AI's ability to predict a directional outcome relies on its learned statistical priors, which can yield a fluent rationale that misstates the true cause of the answer [@TurpinEtAl2023Unfaithful] and therefore must be tested against the simulator acting as the execution world model. The proposal therefore emitted both a design-state change and a testable consequence hypothesis that the simulator could challenge.
 
-![**The intuitive axis mapping is what this study left unpinned:** under weight-stationary dataflow, M and N appear to map directly onto array height and width, so transposing them looks like a simple swap of orientation. The binding actually runs through the loaded weight tile, which is why the mechanism test could not cleanly isolate the N-side effect.](images/F8-array-mapping){#fig-array-mapping fig-alt="One GEMM workload box maps to a wide 16 by 64 array that fits the N dimension and a tall 64 by 16 array that fits the M dimension, with a transpose connector between the two arrays indicating that exchanging M and N swaps which orientation is favored."}
+![**The axis binding this study never wrote down:** under SCALE-Sim's weight-stationary GEMM mode the resident weight tile is K by N, so array height carries the reduction dimension K, array width carries N, and M streams through the array rather than occupying a dimension of it. Transposing M and N therefore looks like a swap of orientation but is not one, because K stays where it is and a mirrored pair such as 16 by 64 and 64 by 16 moves the height and width fold counts together. The prompt fixed the dataflow without ever stating this binding, which is why the mechanism contrast cannot causally isolate orientation.](images/F8-array-mapping){#fig-array-mapping fig-alt="A GEMM workload box feeds a resident weight tile of K by N, which maps onto two array orientations, a wide 16 by 64 array and a tall 64 by 16 array, each labeled with K over height and N over width. A dashed transpose connector below them notes that K is unchanged, so the mirrored pair moves both fold counts."}
 
 The record omits one important part of that connection. It names GEMM M, N, and
 K dimensions and fixes SCALE-Sim's weight-stationary mode, but it does not state
 how those dimensions map onto `ArrayHeight` and `ArrayWidth` under the selected
-mapping. Under weight-stationary mapping the GEMM axes bind to array height and
-width through the loaded weight tile, so exchanging M and N does not simply swap
-the two array dimensions and width does not cleanly correspond to the N-side
-effect (@fig-array-mapping). The explanation assumes that array width corresponds
-to the relevant N-side effect.
+mapping. Under that mapping the resident weight tile is K by N, so array height
+carries the reduction dimension K, array width carries N, and M streams through
+the array rather than occupying a dimension of it (@fig-array-mapping). The
+model's assumption that width tracks N was therefore the conventional one, but
+the prompt never pinned it, so the study cannot show that the model reasoned to
+that binding rather than defaulted to it.
 
-That premise was not grounded in the retained study context. The transposition still distinguishes the model's exact directional prediction, but it is not a causally isolated test of orientation. Because the spatial mapping (e.g., which loop indices map to spatial X/Y dimensions in the weight-stationary setup) was not explicitly defined in the AI prompt before inference, the test probes the prompt's completeness rather than the AI's architectural reasoning. A stronger follow-up must pin the mapping semantics explicitly in the prompt and choose contrasts that causally isolate them.
+The deeper problem lies in the contrast itself. The transposition still distinguishes the model's exact directional prediction, but it is not a causally isolated test of orientation, because exchanging M and N leaves K untouched. A mirrored pair such as 16 by 64 and 64 by 16 therefore changes the N-fold count on the width axis and the K-fold count on the height axis at once, while M never migrates to an array dimension at all. Because the mapping was not defined in the AI prompt before inference, and because the contrast moves two fold counts together, the test probes the prompt's completeness and the contrast's design rather than the AI's architectural reasoning. A stronger follow-up must pin the mapping semantics explicitly in the prompt and choose contrasts that vary one fold count at a time.
 
 ### Fixing Environment and Roles
 
@@ -602,7 +603,7 @@ These artifacts support verification across three distinct levels of scrutiny, a
 | --- | --- | --- |
 | **Replay** | Rerunning the exact same simulator logs with the same deterministic inputs. | Establishes that the recorded execution is unaltered and the math adds up. |
 | **Reproduction** | Rerunning the AI agent with the same prompt and seed. | Highlights model drift, API changes, and non-determinism. |
-| **Independent validation** | A different team building a different model or testbench to evaluate the same architectural claim in RTL. | Establishes that the architectural mechanism holds in physical reality, using independent oracles. |
+| **Independent validation** | A different team building a different model or testbench to evaluate the same architectural claim in RTL. | Establishes that the architectural mechanism survives an independent implementation and a different set of modeling assumptions, removing shared-toolchain artifacts as an explanation. It remains a pre-silicon result, since physical behavior is established only by measurement on fabricated hardware. |
 
 : **Replay proves fidelity, not correctness:** true architectural trust requires independent validation, while replay guarantees only that the study faithfully executed its own declared loop. {#tbl-verification-levels tbl-colwidths="[22,38,40]"}
 
@@ -681,7 +682,7 @@ The study also demonstrates how to evaluate AI fairly. The declared contrast tes
 Catching schema errors before simulation shows why structured output must be validated into legal simulator actions. One small experiment does not validate the complete Architecture 2.0 discipline, but it shows that an adopted proposal can be tied to measured performance rather than to a persuasive model output.
 
 ::: {.callout-carry-forward}
-- **Carry forward:** Freeze the workload, score, decision margin, and budget before the first candidate is measured. Keep the architecture outcome, AI contribution, mechanism explanation, and stopping decision separate. Validate structured AI intent into legal simulator actions. Test a directional explanation against a matched contrast declared before any result is seen, and treat the explanation as unsupported when that contrast fails to separate the arms. Preserve every evaluated candidate, even when the final result is a no-change tie or an unsupported mechanism explanation.
+- **Carry forward:** Freeze the workload, score, decision margin, and budget before the first candidate is measured. Keep the architecture outcome, AI contribution, mechanism explanation, and stopping decision separate. Validate structured AI intent into legal simulator actions. Test a directional explanation against a matched contrast declared before any result is seen, and treat the explanation as unsupported when the contrast does not move in the predicted direction, even when the compared conditions separate cleanly. Preserve every evaluated candidate, even when the final result is a no-change tie or an unsupported mechanism explanation.
 - **Reader test:** Can another architect distinguish replay of the fixed computation from independent reproduction, identify the missing mapping semantics, and explain why stopping does not imply optimality?
 - **Up next:** The same loop must now work across very different decisions, and what changes is not the size of the artifact. @sec-loop-patterns-across-stack classifies the next decision by how slow it is to evaluate, how many interfaces it spans, how hard it is to reverse, and what it costs to get wrong, then sets what the AI may do and who may let the result advance from that classification rather than from the artifact's name.
 :::
