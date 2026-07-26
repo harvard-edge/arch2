@@ -1704,9 +1704,9 @@ def manifest_findings() -> list[Finding]:
                 )
             )
 
-    # A finalized foreword may be added before the acknowledgments, but it is
-    # not required front matter.
-    optional_frontmatter = {"foreword.qmd"}
+    # A finalized foreword may be added before the acknowledgments, and the AI
+    # disclosure page trails the author bio; neither is required front matter.
+    optional_frontmatter = {"foreword.qmd", "disclosure.qmd"}
     optional_paths = {BOOK_DIR / name for name in optional_frontmatter}
     for path in sorted(actual_qmds - entry_set - optional_paths):
         findings.append(
@@ -1739,6 +1739,7 @@ def manifest_findings() -> list[Finding]:
         "foreword.qmd",
         "acknowledgments.qmd",
         "about-the-author.qmd",
+        "disclosure.qmd",
     ]
     present_frontmatter = [
         name
@@ -4183,11 +4184,15 @@ STRIPPED_VOCABULARY: dict[str, str] = {
     "scaffolding": "harness",
 }
 
+# "By spring, ..." is a date, not the banned construction. Kept deliberately
+# short: every other -ing word after a sentence-initial "By" is a gerund.
+BY_GERUND_EXEMPT = frozenset({"spring", "morning", "evening"})
+
 
 def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Flag mechanical prose-style regressions that a manual sweep cannot hold.
 
-    Two classes, both settled by ``.claude/rules/prose-style.md`` and both prone
+    Three classes, all settled by ``.claude/rules/prose-style.md`` and all prone
     to silent reintroduction whenever a passage is rewritten.
 
     Stripped vocabulary. An earlier sweep replaced a set of process metaphors
@@ -4198,6 +4203,12 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
 
     Em-dashes. Banned in running prose. The only sanctioned use is an epigraph or
     signature attribution, which always opens its line with the dash.
+
+    "By <gerund>" sentence openers. Banned since the rule file was written, swept
+    by hand more than once, and back in three chapters by 2026-07-26. The shape
+    buries the actor in a participial phrase and reads as machine-generated, which
+    is the same defect the active-voice rule exists to catch. Only the gerund form
+    is matched, so "By contrast" and "By 2030" stay legal.
 
     ``gate`` and ``cadence`` are deliberately absent. Both carry heavy literal
     architecture senses (gate delay, clock gating, gate-level netlist), so a
@@ -4213,6 +4224,10 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     vocabulary = re.compile(
         r"\b(" + "|".join(sorted(STRIPPED_VOCABULARY)) + r")s?\b", re.IGNORECASE
     )
+    # Sentence-initial, allowing for the list bullets, blockquote marks, and bold
+    # callout labels that can sit in front of the first word of a sentence.
+    by_gerund = re.compile(r"(?:^|[.!?]\s+|\*\*\s+)By\s+(\w+ing)\b")
+    line_opener = re.compile(r"^(?:[-*+>]\s+|\d+\.\s+|\*\*)+")
     findings: list[Finding] = []
     for path in targets:
         in_fence = False
@@ -4243,6 +4258,18 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                         f"{_relative(path)}:{lineno}",
                         "em-dash in running prose; recast with a period, comma, "
                         "or colon (attribution lines are the only exemption)",
+                    )
+                )
+            for match in by_gerund.finditer(line_opener.sub("", prose)):
+                if match.group(1).lower() in BY_GERUND_EXEMPT:
+                    continue
+                findings.append(
+                    Finding(
+                        "error",
+                        "by-gerund-opener",
+                        f"{_relative(path)}:{lineno}",
+                        f'"By {match.group(1)}" opens a sentence; name the actor '
+                        "and give it a verb instead of a participial phrase",
                     )
                 )
     return findings
