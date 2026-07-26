@@ -4171,8 +4171,89 @@ def footnote_in_table_findings(paths: list[Path] | None = None) -> list[Finding]
     return findings
 
 
+STRIPPED_VOCABULARY: dict[str, str] = {
+    "flywheel": "compounding loop",
+    "guardrail": "constraint",
+    "ladder": "fidelity spectrum",
+    "ledger": "record",
+    "moat": "advantage",
+    "onboarding": "setup",
+    "rung": "tier",
+    "scaffold": "harness",
+    "scaffolding": "harness",
+}
+
+
+def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Flag mechanical prose-style regressions that a manual sweep cannot hold.
+
+    Two classes, both settled by ``.claude/rules/prose-style.md`` and both prone
+    to silent reintroduction whenever a passage is rewritten.
+
+    Stripped vocabulary. An earlier sweep replaced a set of process metaphors
+    with plainer terms, but nothing enforced the result, so survivors persisted
+    in the front matter and appendix A until a register audit found them. Figure
+    anchors and image paths are stripped before matching, because an anchor name
+    is not reader-visible prose; rename those deliberately, not under this check.
+
+    Em-dashes. Banned in running prose. The only sanctioned use is an epigraph or
+    signature attribution, which always opens its line with the dash.
+
+    ``gate`` and ``cadence`` are deliberately absent. Both carry heavy literal
+    architecture senses (gate delay, clock gating, gate-level netlist), so a
+    pattern broad enough to catch the process metaphor would bury real findings
+    in noise. Those two stay a reading judgment.
+    """
+    targets = paths if paths is not None else content_qmd_files()
+    anchors = re.compile(
+        r"\]\([^)]*\)"  # image and link targets, which carry asset filenames
+        r"|[@{#]*(?:fig|tbl|sec|lst|eq)-[a-z0-9-]+"  # cross-reference anchors
+        r"|\S+\.(?:svg|png|pdf|jpe?g)"  # bare asset paths
+    )
+    vocabulary = re.compile(
+        r"\b(" + "|".join(sorted(STRIPPED_VOCABULARY)) + r")s?\b", re.IGNORECASE
+    )
+    findings: list[Finding] = []
+    for path in targets:
+        in_fence = False
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            prose = anchors.sub("", line)
+            for match in vocabulary.finditer(prose):
+                replacement = STRIPPED_VOCABULARY[match.group(1).lower()]
+                findings.append(
+                    Finding(
+                        "error",
+                        "stripped-vocabulary",
+                        f"{_relative(path)}:{lineno}",
+                        f'"{match.group(0)}" was stripped from the manuscript '
+                        f'vocabulary; use "{replacement}" or plainer wording',
+                    )
+                )
+            if "\u2014" in prose and not prose.lstrip("> ").startswith("\u2014"):
+                findings.append(
+                    Finding(
+                        "error",
+                        "em-dash",
+                        f"{_relative(path)}:{lineno}",
+                        "em-dash in running prose; recast with a period, comma, "
+                        "or colon (attribution lines are the only exemption)",
+                    )
+                )
+    return findings
+
+
 def run_footnote_table_check() -> None:
     _exit_on_findings(footnote_in_table_findings(), title="footnotes in tables")
+
+
+def run_prose_style_check() -> None:
+    _exit_on_findings(prose_style_findings(), title="prose style")
 
 
 def run_html_check(html: Path = HTML_PATH) -> None:
@@ -5452,6 +5533,12 @@ def validate_footnotes() -> None:
     run_footnote_table_check()
 
 
+@validate_app.command("prose")
+def validate_prose() -> None:
+    """Check mechanical prose-style rules: stripped vocabulary and em-dashes."""
+    run_prose_style_check()
+
+
 @verify_app.command("figures")
 def verify_figures(
     pdf: Path = typer.Option(PDF_PATH, "--pdf", help="Rendered PDF to inspect."),
@@ -5559,6 +5646,7 @@ def check_precommit() -> None:
     run_refs_check()
     run_bibliography_check()
     run_footnote_table_check()
+    run_prose_style_check()
     run_concept_check()
     run_disclosure_check()
     run_citation_check(show_context=False)
