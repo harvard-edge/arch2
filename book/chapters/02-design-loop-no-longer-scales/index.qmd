@@ -7,7 +7,7 @@
 :::
 
 ::: {.column-margin}
-**Author's Note:** Norbert Wiener, who founded cybernetics, made feedback the defining property of control. In the passage quoted, he separates feedback that merely regulates a system from feedback that changes how the system acts. Architecture work turns on the same distinction. This chapter examines why the familiar feedback loops of design practice no longer scale, and where AI might reduce the burden without weakening the evidence behind a decision.
+**Author's Note:** Norbert Wiener, who founded cybernetics, made feedback the defining property of control. In the passage quoted, he separates feedback that merely regulates a system from feedback that changes how the system acts. Architecture work turns on the same distinction, and this chapter is about what happens when the regulating kind stops being enough.
 :::
 
 ::: {.callout-crux}
@@ -43,21 +43,20 @@ After reading this chapter, you can:
 
 :::
 
-## Architecture State and Evaluation
+## How the Loop Absorbed Complexity
 
-Computer architecture has always advanced through feedback and revision. A typical project begins with an aim such as improving latency, reducing energy, raising throughput, supporting a workload, or fitting a system within a power and cost envelope. The architect chooses an abstraction, builds or selects a model, runs an analysis or simulation, studies the result, and revises the design so that work surviving this cycle eventually reaches implementation, validation, verification, and signoff. Textbooks and industrial practice both follow this basic pattern.
+Computer architecture has always advanced through feedback and revision, and the loop absorbed decades of growing complexity by making more of that revision inspectable to people and tools outside the architect's own head. A typical project begins with an aim such as improving latency, reducing energy, raising throughput, supporting a workload, or fitting a system within a power and cost envelope. The architect chooses an abstraction, builds or selects a model, runs an analysis or simulation, studies the result, and revises the design so that work surviving this cycle eventually reaches implementation, validation, verification, and signoff. Textbooks and industrial practice both follow this basic pattern.
 
 Consider a traditional SPEC CPU study. An architect selects workloads, proposes a cache-hierarchy or branch-predictor change, runs a simulator or performance model, and inspects instructions per cycle (IPC), miss rates, branch-misprediction rates, and area and power estimates. Candidates that help one workload while harming others may be revised or discarded. Human judgment shapes the comparison throughout, from workload selection and proxy choice to the decision that a candidate deserves deeper analysis.
 
 SPEC CPU 2017 provides an industry-standard suite for compute-intensive performance across processor, memory-system, and compiler behavior [@SPEC2017CPU]. What matters here is how the comparison is bounded. It uses a stated workload set, model, and metrics and rejects weak candidates explicitly.
 
-The challenge arises because experienced architects also carry important context implicitly. They know which workloads were excluded, which tool settings are trusted, why a previous candidate failed, and what decision is actually under review. As projects scale, keeping this context synchronized across larger teams and more complex toolchains becomes a major bottleneck.
+What makes that comparison sound is not all written into it. Experienced architects carry the rest implicitly. They know which workloads were excluded, which tool settings are trusted, why a previous candidate failed, and what decision is actually under review. As projects scale, keeping that context synchronized across larger teams and more complex toolchains becomes a major bottleneck.
 
-Learned methods can carry part of this explicit and implicit context. Language models and retrieval systems can suggest cache configurations, prepare simulator runs, group failures, and compare new results with earlier experiments. This allows an automated assistant to handle the repetitive mechanics of the design loop. An optimizer can execute and track those comparisons only against context that has been written down, so the implicit knowledge an experienced architect carries has to become an explicit artifact first.
+Learned methods can carry part of this explicit and implicit context. Language models and retrieval systems can suggest cache configurations, prepare simulator runs, group failures, and compare new results with earlier experiments, and both halves of that premise have been built: models adapted to a company's own design collateral and agents that drive EDA tools from a natural-language request [@LiuEtAl2023ChipNeMo; @HeEtAl2024ChatEDA]. This allows an automated assistant to handle the repetitive mechanics of the design loop. An optimizer can execute and track those comparisons only against context that has been written down, so the implicit knowledge an experienced architect carries has to become an explicit artifact first.
 
-### Explicit Inputs and Checks
-
-Architects have repeatedly changed their working methods when informal
+Turning implicit knowledge into an inspectable artifact is not a demand that AI
+invented. Architects have repeatedly changed their working methods when informal
 coordination stopped being sufficient. Some changes stabilized an interface.
 Others established shared design rules, benchmarks, tool paths, or criteria
 for rejecting a candidate. Each shift made a different part of the design work
@@ -84,9 +83,10 @@ across machines, and RISC shows why a hardware claim must include the workload,
 compiler, and implementation cost. In each case, progress depended on making
 more of the design work visible to other people and tools. Several of these
 shifts also raised the level of abstraction so that one engineer's decision
-governed more of the design, the mechanism by which the field has repeatedly
-closed a widening gap between what can be fabricated and what a team can design,
-a gap with the same scissors shape @fig-scissors-gap shows for today's loop. The shape is two diverging lines, what the process can build pulling away from what a team can design and verify, and it has a measured ancestor this chapter returns to later.
+governed more of the design. That is the mechanism by which the field has
+repeatedly closed a widening gap between what a process can fabricate and what a
+team can design, and the measured version of that gap returns in
+@sec-compounding-design-loop-pressure once today's version is in view.
 
 Release strategy shows what it looks like to make such a rule explicit rather than leave it to judgment. Intel's tick-tock model stated one publicly. A known microarchitecture moved to a new process in one release, and a new microarchitecture followed on the now-proven process in the next, so no release attempted both at once. The rule held only while the process schedule did. As node transitions lengthened, Intel retired the two-step model and stated that it would keep each process technology in use longer, adding an optimization step to the sequence [@Intel2016Form10K]. The schedule changed because the earlier division of technical risk no longer fit the work, which is the useful part of the example. An explicit rule can be checked against the conditions that justified it, and revised in public when those conditions move.
 
@@ -107,55 +107,38 @@ tool checks helped architecture scale because they stabilized a particular
 boundary. Modern specialization requires several of those boundaries to remain
 consistent at once.
 
-### Design State Connections
+## What a Fair Comparison Must Carry
 
-Those precedents describe how the field made design work explicit over time. The pressure that now makes explicitness unavoidable is better read across the stack than across the decades, so the rest of this chapter re-sorts the same material by layer, and the layers introduced here are the ones the next three sections work through in turn.
+For decades, computing advanced through a layered stack of technology, architecture, and optimization, abbreviated here as TAO. Device scaling supplied faster transistors, microarchitecture organized them, and compilers mapped software onto the result. Each layer could largely be reasoned about on terms the layer beneath it supplied, which is what kept those boundaries usable. The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept power density constant as transistors shrank, ended that arrangement. Because a chip's transistors could no longer all switch within its power budget, a growing fraction had to stay dark at any moment, the dark-silicon problem [@EsmaeilzadehEtAl2011DarkSilicon], which made specialized, selectively powered blocks the primary route to further efficiency.
 
-For decades, computing advanced through a layered stack of technology, architecture, and optimization, which this book abbreviates TAO. Device scaling supplied faster transistors, microarchitecture organized them, and compilers mapped software onto the result. The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept power density constant as transistors shrank, added a fourth layer, specialization, extending TAO to TAOS, because physical limits at the device level now shape every layer above rather than receding beneath them (@fig-tao-vs-taos). Because a chip's transistors could no longer all switch within its power budget, a growing fraction had to stay dark at any moment, the dark-silicon problem [@EsmaeilzadehEtAl2011DarkSilicon], which made specialized, selectively powered blocks the primary route to further efficiency.
+That three-layer reading is the conventional one; the redrawing in @fig-tao-vs-taos is this book's. Specialization enters as a fourth axis coupled to all three layers rather than as a fourth layer stacked on top, which is the TAOS panel in the figure, and the physical constraints that scaling once absorbed enclose the whole stack instead of sitting beneath it. Power, thermal, and area limits now shape the organization and the software mapping rather than following from them.
 
-![**Specialization becomes a fourth axis coupled to every layer:** The older TAO stack layers optimization over architecture over technology, with technology at the bottom setting the terms for the layers above, while the newer TAOS view adds a Specialization dimension bound to optimization, architecture, and technology alike and encloses the whole stack in the physical constraints that scaling once absorbed.](images/ch2_tao_vs_taos){#fig-tao-vs-taos width="100%" fig-alt="Two side-by-side stack diagrams. On the left, the TAO stack lists Optimization, Architecture, and Technology in a vertical column with technology at the base. On the right, the TAOS view keeps the same three layers but adds a Specialization panel joined by double-headed arrows to every layer, and a red dashed boundary labeled tightly coupled physical constraints encloses the entire stack."}
+![**Specialization becomes a fourth axis coupled to every layer:** An accelerator decision changes the architecture, the technology it requires, and the software mapping together, so none of the three can be evaluated on terms the others supply.](images/ch2_tao_vs_taos){#fig-tao-vs-taos width="100%" fig-alt="Two side-by-side stack diagrams. On the left, the TAO stack lists Optimization, Architecture, and Technology in a vertical column with technology at the base. On the right, the TAOS view keeps the same three layers but adds a Specialization panel joined by double-headed arrows to every layer, and a red dashed boundary labeled tightly coupled physical constraints encloses the entire stack."}
 
-@fig-tao-vs-taos shows the shift. The older view is top-down, with device
-technology setting the terms for the architecture and optimization layers above
-it. The newer view is constrained from below, because power, thermal, and area
-limits now shape the organization and the software mapping rather than following
-from them. Leaning harder on caches, speculation, vector units, multicore
-processors, accelerators, and system-level optimization recovered efficiency,
-but each lever also increased the information an architect needs to compare two
-designs fairly.
-
-Each lever adds its own information to the comparison. The sections that
-follow do not take one lever each, because the levers do not separate that
-cleanly in practice. Scaling and optimization run through all of the others
-rather than standing alone, so what the chapter walks is the places where the
-comparison gets harder. Microarchitecture and multicore execution add
-policies, corner cases, and coherence; specialization adds interfaces and
-verification work; composition into systems-on-chip and chiplets adds package
-and integration boundaries; and the software contract and physical evidence
-decide whether a choice survives. A comparison that omits one of these
-interactions can rank a candidate highly for reasons that do not survive later
-evaluation.
-
-Architects adopt these levers to recover efficiency, but every added policy,
-interface, or physical boundary creates another way for an early model to rank
-the wrong candidate. The information a fair comparison must carry accumulates as
-the design moves from device scaling toward specialization and system
-composition (@fig-architecture-levers).
+Leaning harder on caches, speculation, vector units, multicore processors,
+accelerators, and system-level optimization recovered efficiency, and every one
+of those levers also created a new way for an early model to rank the wrong
+candidate. What a fair comparison must carry grows with each of them, from
+device scaling through specialization to system composition
+(@fig-architecture-levers).
 
 ![**Each architecture lever adds information to the comparison.** Scaling, microarchitecture, optimization, specialization, and composition create new opportunities for efficiency. Each also adds constraints, interfaces, tool feedback, rejected alternatives, and evidence that a credible comparison must include.](images/F2-architecture-levers){#fig-architecture-levers width="85%" fig-alt="Horizontal chain of architecture levers from scaling through composition, showing that each efficiency lever adds design information and evidence requirements."}
 
-The figure is not a sequence in which one design method replaces another.
-Modern systems use all five. Device scaling changes the available transistor
-budget, microarchitecture adds policies and mechanisms, optimization connects
-those mechanisms to workloads and software, specialization introduces new
-interfaces, and composition adds package and integration boundaries. An architect
-may have to represent all of these at once, which is why an apparently
-narrow design choice can require evidence from several parts of the stack.
+The five levers are not a sequence in which one design method replaces another.
+Modern systems use all of them, and scaling and optimization in particular run
+through the others rather than standing alone. Device scaling changes the
+available transistor budget, microarchitecture adds policies and mechanisms,
+optimization connects those mechanisms to workloads and software, specialization
+introduces new interfaces, and composition adds package and integration
+boundaries. An architect may have to represent all of these at once, which is
+why an apparently narrow design choice can require evidence from several parts
+of the stack, and why the sections that follow are organized around the places a
+comparison gets harder rather than around one lever each.
 
 A larger design space is useful only when architects have the information
 needed to compare its choices. Because that information now spans several
-sources, AI can help flag missing fields or conflicting assumptions before a
-search begins.
+sources, the same retrieval machinery that assembles design context can flag
+missing fields or conflicting assumptions before a search begins.
 
 That help is limited by what the system can inspect. If a package constraint,
 compiler dependency, or process assumption is absent from its inputs, it may
@@ -169,13 +152,13 @@ exploration to begin.
 
 ## Scaling the Hardware
 
-To understand why evaluating an architecture has become so difficult, we must first look at the physical artifact itself. Over the past several decades, the definition of "the computer" has ballooned from a single microprocessor to a sprawling, interconnected facility. At every step of this physical expansion, the number of design parameters and interacting components grows exponentially, overwhelming traditional human-guided design loops.
+The places where a comparison gets harder track the growth of what counts as the computer. Microarchitecture adds policies inside one core, specialization ties a block to one workload, composition puts many blocks in one package, and warehouse-scale deployment puts many packages behind one power budget. Each step multiplies the parameters an architect can set, and it multiplies the interactions a fair comparison cannot leave out. Those two do not grow at the same rate, which is where the section ends up.
 
 ### Microarchitecture Complexity
 
 Start with the levers already in every architect's toolkit. A deeper pipeline, a more aggressive branch predictor, a speculative scheduler, or a larger cache hierarchy each recovers performance. That is the material of microarchitecture.
 
-The challenge is that each lever adds corner cases a fair comparison must cover. A prefetcher that helps one access pattern can pollute a cache under another. A speculation policy that raises throughput can raise energy, and the same speculative machinery later proved able to leak data across protection boundaries, as Spectre and Meltdown showed [@KocherEtAl2019Spectre; @LippEtAl2018Meltdown]. A gain measured on one workload can carry a cost that surfaces only under another.
+Each of those levers also adds corner cases a fair comparison must cover. A prefetcher that helps one access pattern can pollute a cache under another. A speculation policy that raises throughput can raise energy, and the same speculative machinery later proved able to leak data across protection boundaries, as Spectre and Meltdown showed [@KocherEtAl2019Spectre; @LippEtAl2018Meltdown]. A gain measured on one workload can carry a cost that surfaces only under another.
 
 That these levers have intrinsic limits is not a recent discovery. Palacharla, Jouppi, and Smith showed that the wakeup, selection, and bypass logic of a wide issue window scales badly enough to bound the clock it can support [@PalacharlaEtAl1997ComplexityEffective]. Agarwal and colleagues then projected that wire delay and clock scaling together would end the frequency-first road for conventional microarchitectures [@AgarwalEtAl2000ClockRateVersusIPC].
 
@@ -183,7 +166,7 @@ These costs are not hypothetical. Intel's Pentium 4, built on the NetBurst micro
 
 That turn to multiple cores added a further layer. Coherence protocols, memory-ordering rules, synchronization costs, and workload partitioning all shape how a candidate behaves under a real workload, and none of them shows up in a single-thread proxy. Even here, before any specialized block is added, the information a comparison must carry has already outgrown a single number.
 
-AI can help screen this space by ranking microarchitectural configurations with surrogate models trained on high-fidelity data. What the ranking cannot do is certify itself. Cheap proxies can hide coherence traffic and speculative-energy costs, so a ranked shortlist earns review time only after a cycle-accurate check confirms the surrogate's ordering on the cases that matter. The open engineering problem is training these surrogates on the right corner cases so that microarchitectural risks surface early rather than in silicon.
+AI can help screen this space by ranking microarchitectural configurations with surrogate models trained on high-fidelity data, the approach architecture research established when predictive and regression models first cut the number of detailed simulations a design-space study required [@IpekEtAl2006PredictiveDSE; @LeeBrooks2006RegressionModeling]. What the ranking cannot do is certify itself. Cheap proxies can hide coherence traffic and speculative-energy costs, so a ranked shortlist earns review time only after a cycle-accurate check confirms the surrogate's ordering on the cases that matter. The open engineering problem is training these surrogates on the right corner cases so that microarchitectural risks surface early rather than in silicon.
 
 ### The Specialization Explosion
 
@@ -285,7 +268,7 @@ Generative methods can enumerate and score specialized options rapidly, and desi
 
 Specialized blocks rarely ship alone. Architects compose them into a system-on-chip and, increasingly, across multiple chiplets. Chiplets exist in large part because of a yield law. Defects land roughly at random across a wafer, so the fraction of good dies falls off exponentially with die area times defect density, and a reticle-limited die on a young process can yield below half while four quarter-size dies each yield far better. Splitting one large die into chiplets converts an exponential cost into a nearly linear one, which is why chiplets improve yield and let mature nodes host blocks that do not need the leading edge. Chiplets also let architects mix process technologies, IP blocks, and memory. Open standards such as UCIe stabilize the interface while leaving partitioning and implementation to architects [@UCIeConsortium2026Spec].
 
-The challenge is that composition adds a dense layer of coupled choices. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Two blocks whose individual behavior is perfectly verified can hang the system when a mismatched credit-return protocol between them closes a cycle of dependencies, and a hang of that kind survives block-level simulation and can cost months of post-silicon bring-up to locate. Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
+Composition adds a dense layer of coupled choices in return. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Two blocks whose individual behavior is perfectly verified can hang the system when a mismatched credit-return protocol between them closes a cycle of dependencies, and a hang of that kind survives block-level simulation and can cost months of post-silicon bring-up to locate. Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
 
 In the XR Lighthouse, this composition challenge extends directly to routing congestion. The Lighthouse Network-on-Chip (NoC) must arbitrate between the bursty traffic of the SLAM accelerator and the absolute, rigid latency deadlines of the display engine.
 
@@ -300,6 +283,30 @@ change needed to satisfy the task. Before the search begins, the architect
 needs to state which transformations are permitted, which interfaces are
 fixed, what makes a combination valid, and how much reliable evaluation is
 available. Candidate count alone answers none of those questions.
+
+Across a multi-vendor package, some of those answers do not exist to be stated. The Semiconductor Research Corporation's MAPT roadmap argues that design automation for packaged multi-vendor systems is blocked by the absence of standard data formats, syntax, and semantics across suppliers, on the grounds that a non-process cannot be automated [@SemiconductorResearchCorporation2023MAPT]. An optimizer cannot check an integration rule that no supplier has written down in a form it can read.
+
+Composition multiplies the physical and economic constraints a candidate must satisfy, and each one adds evaluation the search cannot skip. Software bring-up runs trillions of cycles, past the reach of software simulation, so it falls to hardware emulation and FPGA prototyping, which compile in days and give far less debug visibility than a simulator. Chiplet stacking adds a manufacturing constraint. In 2.5D and 3D integration such as TSMC CoWoS [@TSMCCoWoS] or Intel Foveros [@IntelFoveros], a defective die found only after packaging ruins the whole assembly, including the silicon interposer and the High Bandwidth Memory stacks, so a proposed partition is valid only if it preserves pre-bond test access to every die, the Known-Good-Die constraint.[^fn-known-good-die-c02]
+
+[^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: A bare die that has been tested to full quality before it is packaged. Single-die parts can be tested after packaging, so the term rarely comes up; multi-die assembly turns it into a hard constraint, because one bad die is discovered only after bonding and takes the whole package with it.
+
+The remaining constraints work the same way. Sharing speculative-state buffers or execution units across secure and non-secure domains can save power while opening side channels, so security must be checked by formal methods or penetration testing that performance proxies cannot stand in for. Pushing hundreds of amps through a dense package produces IR drop and localized hotspots, so a Power Delivery Network (PDN) and thermomechanical model, not an aggregate-power proxy, decides whether a layout passes signoff. Much of the SoC is opaque as well. Third-party blocks arrive with varying degrees of opacity. Analog and mixed-signal PHYs, such as those for PCIe, DDR, and SerDes, arrive as hard macros with only abstract timing and power views. Much digital IP, including Arm CPU cores and memory controllers, arrives as encrypted or licensed RTL that simulates and synthesizes but cannot be inspected or modified. Either way the search cannot see inside, which forces integration-level testing across interfaces whose internals are unavailable to it.
+
+None of these constraints stops at the package. The same limits reappear a level up as megawatt power-provisioning caps, stranded data-center power, and the thermal ceiling of rack-level liquid cooling. Every one of them removes designs from the valid set and adds a check the search must pay for before deployment.
+
+### Warehouse-Scale Computing and Distributed Systems
+
+As architectures expand beyond the boundaries of a single package, the boundary of the computer ceases to be the chip and instead becomes the entire data center. Modern infrastructure relies on scale-out fabrics, distributed memory pooling (like CXL),[^fn-cxl-c02] and massive optical networks to handle data-parallel workloads. At this scale, we enter the domain of Warehouse-Scale Computing (WSC) [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem expands to encompass thousands of heterogeneous servers, shared cooling infrastructure, megawatts of provisioned power, and cluster-level scheduling.
+
+[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect standard layered on top of PCI Express that lets a processor address memory physically attached to another device or to a shared pool. It turns memory capacity into something provisioned across a rack rather than soldered next to one socket, which moves a capacity decision out of the chip's design space and into the facility's.
+
+Nothing at that scale can be simulated the way a chip can, and component failure is a continuous condition rather than an exceptional case. Cycle-accurate simulation of 100,000 nodes is out of the question, while trace-driven modeling often misses the dynamic network congestion that creates severe "tail at scale" latency bottlenecks [@DeanBarroso2013TailAtScale]. A node design that appears highly efficient in isolation may become completely paralyzed by network stragglers or distributed coherence overhead when deployed across a cluster. Because standard deterministic simulators cannot scale, architects are often forced to rely on overly simplified analytical models or wait for silicon deployment to discover system-level deadlocks.
+
+Automation has already reshaped real warehouse-scale mechanisms inside bounded, well-instrumented subsystems. Google's TPU v4 pods reconfigure an optical circuit-switched interconnect to route around failures and match communication patterns [@JouppiEtAl2023TPUv4], and reinforcement-learning schedulers such as DeepRM showed in research that a learned policy can manage cluster resources [@MaoEtAl2016DeepRM]. The lesson is the bounding rather than the learning. Each mechanism sits behind an operational check, traffic telemetry or scheduler rollback, that could reject a change before it reaches production. Treating the whole warehouse as one co-designed target still awaits evidence at that scale.
+
+### Evaluation Capacity Bounds the Search {#sec-evaluation-capacity-bounds-search}
+
+Each layer above widened the set of designs an architect can propose, and none of them widened the set that can be checked at the same rate. The two quantities are easy to conflate because only one of them is easy to count.
 
 Even a narrow comparison can contain many combinations, and the following arithmetic is illustrative rather than measured. Suppose an architect explores an accelerator and memory subsystem for one XRBench workload family and considers five compute organizations, four vector or accelerator interface choices, six memory hierarchy choices, four interconnect choices, three voltage/frequency policies, and three compiler/runtime policies. The product is
 
@@ -429,41 +436,28 @@ have the same evaluation cost. That difference shows why candidate count cannot
 stand in for progress. The architect must decide which choices are worth
 testing and how many reliable evaluations the project can afford.
 
-Composition multiplies the physical and economic constraints a candidate must satisfy, and each one adds evaluation the search cannot skip. Software bring-up runs trillions of cycles, past the reach of software simulation, so it falls to hardware emulation and FPGA prototyping, which compile in days and give far less debug visibility than a simulator. Chiplet stacking adds a manufacturing constraint. In 2.5D and 3D integration such as TSMC CoWoS [@TSMCCoWoS] or Intel Foveros [@IntelFoveros], a defective die found only after packaging ruins the whole assembly, including the silicon interposer and the High Bandwidth Memory stacks, so a proposed partition is valid only if it preserves pre-bond test access to every die, the Known-Good-Die constraint.[^fn-known-good-die-c02]
-
-[^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: A bare die that has been tested to full quality before it is packaged. Single-die parts can be tested after packaging, so the term rarely comes up; multi-die assembly turns it into a hard constraint, because one bad die is discovered only after bonding and takes the whole package with it.
-
-The remaining constraints work the same way. Sharing speculative-state buffers or execution units across secure and non-secure domains can save power while opening side channels, so security must be checked by formal methods or penetration testing that performance proxies cannot stand in for. Pushing hundreds of amps through a dense package produces IR drop and localized hotspots, so a Power Delivery Network (PDN) and thermomechanical model, not an aggregate-power proxy, decides whether a layout passes signoff. Much of the SoC is opaque as well. Third-party blocks arrive with varying degrees of opacity. Analog and mixed-signal PHYs, such as those for PCIe, DDR, and SerDes, arrive as hard macros with only abstract timing and power views. Much digital IP, including Arm CPU cores and memory controllers, arrives as encrypted or licensed RTL that simulates and synthesizes but cannot be inspected or modified. Either way the search cannot see inside, which forces integration-level testing across interfaces whose internals are unavailable to it.
-
-Furthermore, as we scale to the data center, physical walls expand to the facility level. It is no longer just about chip-level IR drop; architects must design within megawatt power provisioning caps, stranded data-center power limits, and the thermal constraints of rack-level liquid cooling. Every one of these constraints removes designs from the valid set and adds a check the search must pay for before deployment.
-
-### Warehouse-Scale Computing and Distributed Systems
-
-As architectures expand beyond the boundaries of a single package, the boundary of the computer ceases to be the chip and instead becomes the entire data center. Modern infrastructure relies on scale-out fabrics, distributed memory pooling (like CXL),[^fn-cxl-c02] and massive optical networks to handle data-parallel workloads. At this scale, we enter the domain of Warehouse-Scale Computing (WSC) [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem expands to encompass thousands of heterogeneous servers, shared cooling infrastructure, megawatts of provisioned power, and cluster-level scheduling.
-
-[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect standard layered on top of PCI Express that lets a processor address memory physically attached to another device or to a shared pool. It turns memory capacity into something provisioned across a rack rather than soldered next to one socket, which moves a capacity decision out of the chip's design space and into the facility's.
-
-The challenge of navigating this space is that component failure is a continuous reality, and simulating the system accurately is nearly impossible. Cycle-accurate simulation of 100,000 nodes is out of the question, while trace-driven modeling often misses the dynamic network congestion that creates severe "tail at scale" latency bottlenecks [@DeanBarroso2013TailAtScale]. A node design that appears highly efficient in isolation may become completely paralyzed by network stragglers or distributed coherence overhead when deployed across a cluster. Because standard deterministic simulators cannot scale, architects are often forced to rely on overly simplified analytical models or wait for silicon deployment to discover system-level deadlocks.
-
-Automation has already reshaped real warehouse-scale mechanisms inside bounded, well-instrumented subsystems. Google's TPU v4 pods reconfigure an optical circuit-switched interconnect to route around failures and match communication patterns [@JouppiEtAl2023TPUv4], and reinforcement-learning schedulers such as DeepRM showed in research that a learned policy can manage cluster resources [@MaoEtAl2016DeepRM]. The lesson is the bounding rather than the learning. Each mechanism sits behind an operational check, traffic telemetry or scheduler rollback, that could reject a change before it reaches production. Treating the whole warehouse as one co-designed target still awaits evidence at that scale.
+Learned methods act on only one of those two quantities. A surrogate trained on prior
+runs scores candidates far faster than the tool it stands in for, which raises
+how many candidates receive an estimate. It does not raise how many receive an
+estimate strong enough to commit to, because the surrogate carries the coverage
+of the data behind it and gives no warning when a candidate falls outside that
+coverage. Search capacity and evaluation capacity are separate budgets, which is
+why a comparison between exploration methods means something only when the
+sample budget is held equal across them [@KrishnanEtAl2023ArchGym].
 
 ## The Software Contract
 
-Hardware scale is only half of the complexity crisis. A physical chip or cluster is useless without the immense stack of compilers, runtimes, and libraries required to map workloads onto it. This creates a binding "software contract" between the architect and the programmer. Designing hardware without simultaneously navigating this software ecosystem guarantees that the resulting silicon will either be unprogrammable or obsolete before it ships.
+Everything above is hardware, and none of it does anything without the compilers, runtimes, and libraries that map a workload onto it. That dependency is a contract between the architect and the programmer, and it can break in two directions. A mechanism no compiler can target buys nothing at all, and a decision made against a software stack that then turns over buys less than the comparison predicted. The two failures need different responses, so the sections below take them separately.
 
 ### Executable Software Paths
 
 Even when a hardware candidate clears physical constraints and evaluation budgets, software must still be able to use it. This is the executable software path: the programmers, compilers, runtimes, libraries, and deployment systems needed to use a hardware mechanism without losing its benefit to data movement or overhead. Historical shifts like RISC and CUDA succeeded because they provided the necessary compiler support and programming models to make the hardware accessible. Conversely, a design with high peak FLOPS can fail if its software contract is unusable. The IBM/Sony/Toshiba Cell Broadband Engine (the PlayStation 3 processor) required developers to manually manage local SRAM stores via explicit DMA transfers [@KahleEtAl2005Cell]. The chip shipped in tens of millions of consoles and powered the Roadrunner supercomputer, but because the compiler could not hide that complexity, adoption outside its captive markets stalled and the processor line ended there. Specialization without a usable software path forfeits most of the market it was built for.
 
-The challenge is that hardware proposals are incomplete if architects cannot inspect and test the software path needed to use them. Modern tensor programs add a massive software search problem. Frameworks like Halide and MLIR make scheduling, lowering, and intermediate representations part of the performance comparison [@RaganKelleyEtAl2017HalideCACM; @LattnerEtAl2020MLIR]. A hardware optimizer might select a mechanism that the compiler cannot target, or whose software overhead erases the predicted gain. A credible comparison must cover an executable hardware-software path, not a hardware block in isolation.
+A hardware proposal is therefore incomplete until architects can inspect and test the software path needed to use it, and modern tensor programs make that path a search problem of its own. Frameworks like Halide and MLIR make scheduling, lowering, and intermediate representations part of the performance comparison [@RaganKelleyEtAl2017HalideCACM; @LattnerEtAl2020MLIR]. A hardware optimizer might select a mechanism that the compiler cannot target, or whose software overhead erases the predicted gain. A credible comparison must cover an executable hardware-software path, not a hardware block in isolation.
 
 A joint search can, in principle, vary compiler schedules alongside hardware parameters, using a shared schema such as an MLIR dialect to co-generate the intermediate representation and the RTL. Combinations found together can beat anything either domain finds alone. The demonstrated half is software. Autotuners search billions of tensor-program schedules [@ChenEtAl2018AutoTVM]. The joint claim, hardware and schedule co-optimized together, still depends on an evaluation that can score both sides at matched fidelity, and that evaluation, not the search, is where co-design efforts stall.
 
 At the distributed scale, this software path becomes even more complex. It is not enough to compile code for a single node; the software path must include distributed communication primitives (like MPI or NCCL) and cluster-aware compilers (like Alpa [@ZhengEtAl2022Alpa] or Megatron [@NarayananEtAl2021Megatron]) that can map tensor operations across thousands of GPUs over optical networks.
-
-For the mobile XR subsystem example, the "64-bit RISC-V" constraint brings ABI, memory-model,
-toolchain, and executable-test obligations into the architecture claim. The
-software path is part of the architectural claim.
 
 ::: {.callout-lighthouse title="RISC-V is a software contract"}
 **Context.** The ISA phrase specifies more than an instruction encoding. It
@@ -568,12 +562,17 @@ evidence no longer supports the original commitment.
 
 [^fn-block-scale-formats-c02]: **Block-scale formats**: Low-precision number formats that share one exponent across a block of mantissas, preserving dynamic range at a small memory cost. Committing to one in silicon fixes datapath choices years before deployment, so the architect must judge whether the format and its workload will still matter then.
 
-The target moves in two different periods. Before release, hardware and software
-teams can revise the design together, although late changes become increasingly
-expensive. After release, the hardware is fixed but compilers, kernels,
-libraries, runtimes, and deployment policies can continue to improve. A useful
-comparison must say which period it covers because design-time co-design and
-post-release enablement create different architectural evidence.
+The target moves in two different periods, and a useful comparison has to say
+which one it covers. Before release, hardware and software teams can revise the
+design together, although late changes become increasingly expensive. After
+release the hardware is fixed, but compilers, kernels, libraries, runtimes, and
+deployment policies keep improving, and that improvement changes performance the
+initial evaluation never captured. A claim about post-release gains needs paired
+hardware, workload, and software versions, as developed in
+@sec-loop-patterns-across-stack, and it needs the architect to separate
+improvements made for this hardware from unrelated change in the workload. The
+first strengthens the case for the existing design; the second makes its
+original evidence stale.
 
 AI can reduce some of the work needed to track this change. A system can compare
 workload traces, compiler versions, and benchmark definitions, then flag an
@@ -588,23 +587,11 @@ comparison or leaves it intact. Detecting that two traces or software versions
 differ does not answer that question. The architect must identify which differences
 could reverse the decision and which measurements would test that possibility.
 
-Whatever drives the change, a silicon program can target a software snapshot
-that changes before deployment, while fabrication and physical closure still
-impose a lower bound on the hardware schedule.
-
 Specialization can improve efficiency while making a design less tolerant of
 workload drift. Generality preserves flexibility, often at a cost in
 performance per watt. The architect should therefore bound the workload, measure how
 it changes, and revisit the hardware decision when its original assumptions no
 longer hold.
-
-Software can also adapt to deployed hardware. Compilers, kernels, and runtimes
-may improve after launch, changing performance that the initial evaluation did
-not capture. A claim about that change requires paired hardware, workload, and
-software versions, as developed in @sec-loop-patterns-across-stack. The
-architect should distinguish improvements made for the hardware from unrelated
-changes in the workload. The former can strengthen the case for an existing
-design, while the latter can make its original evidence stale.
 
 AI workloads provide an unusually visible example of changing scale and shifting computation. Traditional convolutional networks performed fixed, deterministic computation, but modern generative models perform dynamic, iterative computation where memory access patterns change constantly due to growing key-value caches, variable sequence lengths, sparse mixture-of-experts[^fn-mixture-of-experts-c02] routing, and the split between prefill and decode phases that serving systems now place on separate hardware. An analysis of Epoch AI's model database estimated roughly four- to fivefold annual growth in training compute for recent notable and frontier models through May 2024 (@fig-training-compute-growth), with results that depend on model class, outliers, and the form of the fit [@SevillaRoldan2024ComputeGrowth]. Compute growth is not itself
 workload drift. It does show why evidence tied to one model scale, software
@@ -702,9 +689,7 @@ ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, lab
 fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.12)
 ```
 
-The fitted line shows the mismatch directly. Training compute has climbed more than fourfold a year for over a decade, far outpacing the one- to two-year cycle at which the silicon underneath it turns over, so a design tuned to one model scale meets a different workload by the time it reaches silicon.
-
-The challenge is that a hardware comparison can become outdated while the chip is still being designed. During a multiyear silicon program, AI models, precision formats, sparsity patterns, compiler passes, and benchmarks can all change. If the software stack changes faster than the hardware schedule can absorb, the design may optimize yesterday's workload.
+The fitted line puts one rate beside another. Training compute has climbed more than fourfold a year for over a decade, while the silicon underneath it turns over on a one- to two-year cycle. That mismatch does not by itself age a design, since a larger model is not automatically a different workload. What it does mean is that the model a comparison was sized against is rarely the model that runs, which is why the versions behind the comparison have to be recorded rather than assumed.
 
 Automation narrows the distance between the software's rate of change and the hardware schedule without closing it. A nightly regression loop can ingest new compiler builds, re-run the architectural benchmarks, and report that a candidate's standing has moved since the last run. What it cannot report is whether that move invalidates the comparison or leaves it intact, which is the judgment the architect still has to make. Such a loop earns its license and compute cost when it reduces the manual re-evaluation burden without weakening the evidence behind the decision it feeds, not when it raises the run frequency.
 
@@ -718,17 +703,14 @@ the same shift. Abstractions remain essential, but architects must now represent
 more of the workload, software, hardware, and physical information that earlier
 abstractions could safely hide.
 
-Benchmarks provide one way to keep changing workloads comparable. MLPerf
+Benchmarks are one way to keep a changing workload comparable. MLPerf
 defines shared tasks and reporting rules for machine-learning systems
-[@MattsonEtAl2020MLPerf]. Its inference benchmark
-addressed a field with more than 100 organizations building ML inference chips
-and systems spanning at least three orders of magnitude in power and five in
-performance. The first submission round produced more than 600 reproducible
-measurements from 14 organizations [@ReddiEtAl2020MLPerfInference]. Those
-measurements are comparable because the benchmark specifies scenarios, latency
-constraints, accuracy targets, and reporting rules while allowing submitters
+[@MattsonEtAl2020MLPerf], and its inference results stay comparable across a
+field of vendors that share almost no hardware assumptions
+[@ReddiEtAl2020MLPerfInference] because the benchmark fixes scenarios, latency
+constraints, accuracy targets, and reporting rules while leaving submitters free
 to optimize their own software toolchains [@ReddiEtAl2021VisionBehindMLPerf].
-A benchmark remains useful only while the
+That comparability is maintained rather than inherent. It holds only while the
 community maintains the tasks and run rules that make results comparable.[^fn-metrology-calibration-c02]
 When those rules change, an earlier comparison may no longer answer the same
 question.
@@ -752,13 +734,11 @@ comparison when one of those inputs changes.
 
 ## The Hard Limits
 
-If hardware scale and software complexity were the only challenges, architects could theoretically solve them given infinite time and resources. However, the design loop is bounded by unforgiving physical and economic realities. The laws of physics dictate what can actually be built and powered, while the realities of product cycles dictate how much time we have to evaluate it. These hard limits form the final gauntlet that forces the adoption of AI-assisted design.
+The pressures so far enlarge the comparison. The ones in this section bound it. Physics decides what can be built, powered, and cooled at all, and the project's budget and schedule decide how much of that can be checked before someone has to commit. Neither yields to more effort, which is what separates them from every pressure above.
 
 ### The Physical Wall {#sec-physical-constraints-move-into-architecture}
 
-The layers so far (microarchitecture, specialization, composition, and the software contract) each add to what a comparison must represent. These expanding demands increase the required simulation volume far beyond what high-fidelity tools can support for every candidate.
-
-The challenge here is the physical reality of the chip and the cost of evaluating it. Physical effects create two distinct problems for an architecture comparison: an early model may omit an effect that later overturns the ranking, and the measurement needed to resolve that uncertainty may cost too much to run on every candidate. Furthermore, even if we got all the architectural designs right, physical limits like thermal hotspots or severe IR drop can still derail the project. Reliability narrows the space again. Soft errors, silicon aging such as Negative Bias Temperature Instability (NBTI) and Hot Carrier Injection (HCI), and process variation [@Borkar2005ReliableSystems] decide viability in domains such as automotive systems under ISO 26262 [@ISO2018Iso26262], and they are measured by statistical fault injection and aging simulation rather than deterministic cycle counts. Data movement alone can reverse an early ranking based on compute: moving data through a memory hierarchy often costs orders of magnitude more energy than arithmetic.
+Physical effects create two distinct problems for an architecture comparison. An early model may omit an effect that later overturns the ranking, and the measurement that would settle the question may cost too much to run on every candidate. A design can be right in every architectural respect and still fail on a thermal hotspot or severe IR drop. Reliability narrows the space again. Soft errors, silicon aging such as Negative Bias Temperature Instability (NBTI) and Hot Carrier Injection (HCI), and process variation [@Borkar2005ReliableSystems] decide viability in domains such as automotive systems under ISO 26262 [@ISO2018Iso26262], and they are measured by statistical fault injection and aging simulation rather than deterministic cycle counts.
 
 Data-movement estimates, for example, can reverse an early ranking based on
 compute alone. Moving data through a memory hierarchy often costs far more
@@ -864,12 +844,11 @@ Automation adds a traceability problem to every one of these walls. If a generat
 
 [^fn-lef-def-c02]: **LEF/DEF and Liberty**: The interchange formats a physical-design flow actually runs on, where LEF describes a standard cell's abstract geometry and pin locations, DEF records the placed and routed instance of one specific design, and a Liberty file holds a cell library's characterized timing and power at one corner. They are verbose and positional rather than semantic, so a generator fluent in RTL is far less able to emit or read them than the source it was trained on.
 
-Architecture research already uses predictive models to reduce the number of
-detailed simulations needed to explore a design space
-[@IpekEtAl2006PredictiveDSE; @LeeBrooks2006RegressionModeling]. Multifidelity methods use the same basic strategy
-across engineering optimization. They combine many inexpensive estimates with
+The predictive models that screen microarchitectural configurations have a
+general form. Multifidelity methods combine many inexpensive estimates with
 selected high-fidelity evaluations and retain the stronger model to check
-accuracy [@PeherstorferWillcoxGunzburger2018Multifidelity]. Physical constraints
+accuracy, a strategy that runs across engineering optimization rather than
+architecture alone [@PeherstorferWillcoxGunzburger2018Multifidelity]. Physical constraints
 require the same care. If an early model omits timing, congestion, thermal
 behavior, or data movement, the architect needs a better model before generating
 more candidates.
@@ -878,7 +857,7 @@ For the 3\ nm-class mobile XR subsystem comparison, a cheap energy proxy can sup
 screening, but finalists need a current power model before they can support a
 power or efficiency decision.
 
-The same reversal appears in shipped silicon, not only in energy models. A
+Choosing the wrong term to optimize is not only an energy-model failure. A
 design can lead on the figures a data sheet reports and still fall behind on the
 work a real program does.
 
@@ -942,13 +921,15 @@ iteration exactly once.
 
 ### The Verification Bottleneck
 
-The driver of verification cost creates a similar, exponential bottleneck. Adding a single state-holding element (like a flip-flop) to an integrated circuit doubles the size of the state space the design can encode, so a design with $n$ such elements has as many as $2^n$ states. The subset a design can actually reach is far smaller, fixed by its next-state logic and reset, and knowing which states those are is itself the work that reachability analysis exists to do. As designs scale into billions of transistors and hundreds of specialized IP blocks, the state space that must be verified grows exponentially, far faster than the design itself grows in size.
+Verification costs grow on a worse curve than any of these. Adding a single state-holding element (like a flip-flop) to an integrated circuit doubles the size of the state space the design can encode, so a design with $n$ such elements has as many as $2^n$ states. The subset a design can actually reach is far smaller, fixed by its next-state logic and reset, and knowing which states those are is itself the work that reachability analysis exists to do. As designs scale into billions of transistors and hundreds of specialized IP blocks, the state space that must be verified grows exponentially, far faster than the design itself grows in size.
 
 No project verifies a design in the exhaustive sense; the $2^n$ arithmetic forecloses that on the first page. Teams instead run verification as a statistical stopping problem. They define coverage goals, drive constrained-random stimulus at them, and watch the rate at which new bugs surface. Tapeout happens when that curve flattens, not when it reaches zero, and the flattening is a risk judgment rather than a proof. A flood of novel candidates asks the team to restart each design's bug curve from its steep end.
 
 This means automated optimizers must target more than just Power, Performance, and Area (PPA). They must also target verifiability. An architect might propose a highly aggressive, speculative cache coherence protocol that yields a 5% performance boost. However, if that protocol creates so many un-testable edge cases that the verification team will spend a year trying to prove it safe, it is ultimately a bad architecture.
 
-Formal verification and simulation currently struggle to cover this explosion, turning verification into the single largest bottleneck in modern hardware development. Functional verification now consumes a dominant share of the project schedule, compute budget, and headcount. The state space of a coherent, multi-chiplet SoC is massive, straining traditional constrained-random testing methodologies. If an automated generator proposes many novel architectural variants, the human verification team cannot absorb them due to the verification liability. A scalable loop must co-generate the verification collateral alongside the design, an approach early LLM-based testbench generators have begun to demonstrate [@QiuEtAl2024AutoBench]. This state-space explosion limits sequential model checking, including Bounded Model Checking (BMC); combinational equivalence checking sidesteps it by ignoring sequential state and runs routinely at full-chip scale, but sequential coverage still forces teams to rely heavily on constrained-random simulation [@Clarke2018ModelChecking]. This theoretical explosion has severe practical consequences on engineering teams, making the human cost of the design loop highly visible.
+Formal verification and simulation struggle to cover that explosion, which is why verification is so often the pressure a project finds binding once it looks. Whether it binds a particular project remains a measurement question rather than a given, and the diagnostic later in this chapter exists because the answer is not the same everywhere. What the state space does guarantee is a liability. A coherent, multi-chiplet SoC already strains constrained-random methods, and every novel architectural variant a generator proposes arrives owing verification work no one budgeted for it. A scalable loop must therefore co-generate the verification collateral alongside the design, an approach early LLM-based testbench generators have begun to demonstrate [@QiuEtAl2024AutoBench]. The same explosion limits sequential model checking, including Bounded Model Checking (BMC); combinational equivalence checking sidesteps it by ignoring sequential state and runs routinely at full-chip scale, but sequential coverage still forces teams to rely heavily on constrained-random simulation [@Clarke2018ModelChecking].
+
+The industry has been naming this bottleneck for a quarter century without closing it, which is why an architect should treat it as structural rather than as a tooling gap that the next release will absorb. The 2001 ITRS Design chapter already called verification "a bottleneck that has now reached crisis proportions" [@ITRS2001Design], and the Semiconductor Research Corporation's MAPT roadmap still lists a widening verification gap among the transitions the industry is heading into rather than among the ones it has left behind [@SemiconductorResearchCorporation2023MAPT]. Any proposal to generate architectural candidates faster has to account for a constraint that has outlasted three generations of design tools.
 
 If a search outputs dozens of novel RTL accelerators a week, but a verification engineer requires weeks to write the testbenches and covergroups for just one, the generation speed is wasted. This gap grounds the state-space explosion in the daily reality of an RTL team. Foster's summary of the 2022 Wilson Research Group functional-verification study reports that demand for IC/ASIC verification engineers grew nearly three times as much as demand for design engineers from 2007 to 2022, about 146 percent versus 50 percent (@fig-verification-demand-scissors). Mean peak staffing was roughly one verification engineer per design engineer across most market segments, processor projects reached ratios as high as five to one, and design engineers spent 49 percent of their time on verification in 2022 [@Foster2022WilsonVerificationStudy]. Every invalid candidate that reaches these stages consumes compute and scarce engineering time. Generated candidates are cheap only until they require tools, verification, and expert review.
 
@@ -1037,6 +1018,13 @@ from-scratch 2\ nm design (@fig-design-cost-composition). The work that dominate
 a leading-node budget is not drawing the artifact. It is writing the software
 that runs on it and establishing that the design is correct.
 
+The ranking is older than the node that produced these numbers. The 2001 ITRS
+Design chapter reported that software already accounted for 80 percent of
+embedded-systems development cost [@ITRS2001Design], measured on a different
+accounting boundary than the figure below and so not a point on the same trend.
+Two decades of tool investment moved the absolute number rather than which work
+dominates the budget.
+
 ```{python}
 #| label: fig-design-cost-composition
 #| fig-cap: |
@@ -1107,7 +1095,7 @@ is not useful if every survivor adds simulation, synthesis, physical-design,
 verification, and reviewer work to an already full queue. When results arrive faster than experts can reconcile
 them, review queues grow and the project cannot close the decision. Turning scattered tool results into evidence a decision can rest on is the work of @sec-feedback-verification-trust, and @sec-running-the-loop carries one such comparison end to end under a fixed budget.
 
-## Compounding Design Loop Pressure
+## Compounding Design Loop Pressure {#sec-compounding-design-loop-pressure}
 
 The chapter walked the design stack by layers, from microarchitecture through specialization, composition, software, and physics, but the diagnostic that follows is organized by failure mode rather than by layer. The translation is direct. Every layer contributes candidates to the same five ways a loop stalls: missing information, unhelpful or invalid choices, expensive evaluation, overloaded review, and an unclear decision. A physical-wall problem and a software-contract problem look different in the stack but identical in the diagnostic when both starve the loop of affordable evidence.
 
@@ -1137,19 +1125,14 @@ comparison while creating new evaluation and review work. The architect has to t
 those changes so that the final recommendation still answers the original
 design question.
 
-As a project considers more design choices, constraints, software paths,
-physical questions, and supporting evidence, the work awaiting evaluation and
-review can grow faster than the project can complete it.
-
 The work a project must settle and the work its tools and reviewers can examine
-diverge as two lines (@fig-scissors-gap). The upper line rises as the
-project adds choices, constraints, software paths, physical questions, and
-evidence. The lower line grows more slowly because tools and reviewers can
-examine only so much work. The widening region marks candidates, results, and
-questions that have not received enough evaluation and review to support a
-decision.
+diverge as two lines (@fig-scissors-gap). What decides an architectural claim is
+the region between them, because a candidate sitting inside it has been generated
+but not evaluated well enough to accept or reject. A project can grow that region
+without noticing. No tool report distinguishes a candidate that survived review
+from one that never reached a reviewer.
 
-![**Design work can outpace evaluation and review.** The upper line rises as a project adds choices, constraints, software paths, physical questions, and evidence. The lower line grows more slowly because tools and reviewers can examine only so much work. The widening region marks work that has not received enough evaluation and review to support a decision.](images/F2-scissors-gap){#fig-scissors-gap width="85%" fig-alt="Diverging-line diagram where the work created by design choices, constraints, software paths, physical questions, and evidence grows faster than tools and reviewers can examine it."}
+![**Design work can outpace the capacity to examine it.** The widening region holds candidates that have been generated but never evaluated well enough to accept or reject.](images/F2-scissors-gap){#fig-scissors-gap width="85%" fig-alt="Diverging-line diagram where the work created by design choices, constraints, software paths, physical questions, and evidence grows faster than tools and reviewers can examine it."}
 
 The curves are conceptual rather than a universal time series. The search-space
 examples show how quickly a project can produce candidates, while the
@@ -1164,9 +1147,14 @@ compounding at roughly 58 percent a year against designer productivity at 21
 percent and named the difference the design productivity gap [@ITRS1999Roadmap]. The industry never
 closed that gap by hiring; it closed it by raising abstraction, first RTL
 synthesis and then IP reuse, so that one engineer's decision governed more
-transistors. That history sets the bar for what follows in this book. An
-AI-assisted loop earns its place the way synthesis did, when its checks are as
-trustworthy as the manual work it replaced.
+transistors. Twenty-two years later the SRC and SIA restated the same shortfall
+in their Decadal Plan for Semiconductors, naming a design gap between what a
+technology permits and what can be designed in reasonable time and calling for a
+tenfold or greater step in design productivity, though they scoped that target to
+analog and mixed-signal work rather than to the loop as a whole
+[@SRCSIA2021DecadalPlan]. That history sets the bar for what follows in this
+book. An AI-assisted loop earns its place the way synthesis did, when its checks
+are as trustworthy as the manual work it replaced.
 
 A growing evaluation or review queue makes the problem visible. A project can
 still be in trouble even when no queue is visible. It may be missing
@@ -1239,29 +1227,13 @@ evaluation, review, and rejection. Matching the task, proposal count, and tool
 budget can make the comparison more informative, although model inference,
 human setup, prior knowledge, and total engineering work may still differ.
 
-Viewed together, the five problems in
-@tbl-loop-bottleneck-diagnostic show why there is no generic place to insert AI.
-A generator may broaden the available choices while overloading evaluation. A
-surrogate may reduce tool cost while preserving a blind spot in its inputs. A
-system that organizes evidence may save reviewer time without deciding what
-action the evidence supports. Architects should judge each method against the
-problem it is meant to address and the new work it creates elsewhere in the
-project.
-
-In the mobile XR subsystem comparison, an AI system might help collect workload and tool
-information, rule out illegal configurations, predict which candidates deserve
-expensive evaluation, compare tool outputs, or prepare evidence for a decision.
-Those are different jobs. Each should save something concrete, such as tool
-time, invalid runs, or reviewer effort, while leaving the decisive source
-evidence, tool check, or design decision open to independent review.
-
-For each of the five problems in @tbl-loop-bottleneck-diagnostic, AI takes on a
-defined job, reduces a named piece of engineering work, and still leaves a check
-the architect must own (@tbl-ai-contributions-by-bound). The second column gives AI a specific job, the
-third names the engineering work that job should reduce, and the final column
-states what must still be established from source material, engineering tools,
-or a decision by the responsible architect. AI helps only when it reduces the
-named work without weakening that final check.
+Because the five problems in @tbl-loop-bottleneck-diagnostic differ, there is no
+generic place to insert AI. A generator may broaden the available choices while
+overloading evaluation. A surrogate may reduce tool cost while preserving a
+blind spot in its inputs. A system that organizes evidence may save reviewer
+time without deciding what action the evidence supports. Each problem instead
+admits a defined job, a named piece of engineering work that job should reduce,
+and a check the architect still owns (@tbl-ai-contributions-by-bound).
 
 | **Problem** | **How AI might help** | **Engineering work it could reduce** | **What the architect must still establish** |
 | --- | --- | --- | --- |
@@ -1274,23 +1246,18 @@ named work without weakening that final check.
 : **Different problems call for different AI roles.** Each row identifies the engineering work AI could reduce and what the architect must still verify or decide without relying on the model. {#tbl-ai-contributions-by-bound tbl-colwidths="[20,29,23,28]"}
 
 The rows are not interchangeable. A cost predictor addresses expensive
-evaluation only if it reduces high-fidelity tool runs. It does not repair a
+evaluation only if it reduces high-fidelity tool runs; it does not repair a
 missing workload description or decide that a candidate is ready to implement.
 In the mobile XR subsystem comparison, an AI ranking based on a cheap power proxy helps only
 if stronger measurements test whether memory movement or physical limits
-reverse that ranking. A useful evaluation should show whether the method
-reduced the targeted engineering work while preserving the evidence needed for
-the architectural claim.
+reverse that ranking. A useful evaluation of any of these methods shows whether
+it reduced the targeted engineering work while preserving the evidence the
+architectural claim needs.
 
-No single method supplies all of these conditions. The architect needs a
-clear question and scope, inspectable artifacts and tool outputs, an
-architectural claim tied to evidence, and named responsibility for the decision.
-Making those elements visible allows the architect to choose where AI belongs
-and to judge whether it helped.
-
-The practical test is to identify the work limiting progress before choosing a
-method. AI is useful only when it reduces that specific burden without creating
-more verification, review, or decision work elsewhere.
+No single method supplies all of those conditions at once, which is why the
+architect still holds the question and its scope, the inspectable artifacts and
+tool outputs, the claim tied to its evidence, and named responsibility for the
+decision.
 
 \FloatBarrier
 
@@ -1322,13 +1289,9 @@ Accelerating candidate generation does not raise project velocity when the limit
 :::
 
 
-Architecture has always relied on feedback, but today's projects must coordinate much more information. Coupled choices, evolving software, and strict physical constraints create evidence requirements that can outpace a team's simulation capacity and review bandwidth, most acutely at the leading edge. Manual coordination is increasingly strained by the scale of validation required to close a design decision. That is why the useful unit of assistance is no longer a faster tool at one step. A point tool speeds the step it owns and leaves the queue at the binding one untouched, which is the whole content of this chapter's design principle, so what has to be assisted is the dependency between steps rather than any step alone. The test is not whether AI participates, but whether it reduces a specific burden without weakening the evidence behind the decision.
+Architecture has always relied on feedback, but today's projects must coordinate much more information. Coupled choices, evolving software, and strict physical constraints create evidence requirements that can outpace a team's simulation capacity and review bandwidth, most acutely at the leading edge. Manual coordination is increasingly strained by the scale of validation required to close a design decision. That is why the useful unit of assistance is no longer a faster tool at one step. A point tool speeds the step it owns and leaves the queue at the binding one untouched, so what has to be assisted is the dependency between steps rather than any step alone.
 
 None of the measurements that would name the binding mode exists yet, so a team acting on this chapter has to triage without the instrument. That is workable. Ask where work waits rather than where it is slow, because a queue is visible even when throughput is not. Ask which step a person would have to stop doing for the project to finish sooner. Then change one thing and watch whether the queue moves, which is a weaker test than a measurement and a much stronger one than a hunch. A team that does this keeps a record of what it tried, and that record is the beginning of the very data the field is missing.
-
-These pressures do not share a single remedy. @tbl-loop-bottleneck-diagnostic separates the five ways architecture work stalls, from missing information to an unclear decision, and @tbl-ai-contributions-by-bound pairs each one with the engineering work a method would have to reduce and the check that must stay independent of the model. The rule is to match AI to whichever bottleneck is limiting a given project.
-
-Producing more candidates does not help if the checks remain unaffordable or the next action stays unclear. Identify the limiting pressure first, then judge any method by whether it reduced that specific work without moving the burden to a less visible part of the project.
 
 ::: {.callout-carry-forward}
 - **Carry forward:** A project stalls in one of five ways, and the remedy
