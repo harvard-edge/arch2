@@ -17,23 +17,24 @@ format:
 :::
 
 ::: {.callout-crux}
-How do we measure the AI architect rather than the artifact it produced, so that a score reflects a search under real physical constraints, survives contamination, prices what the search cost, and converts into a defensible grant of autonomy?
+How do we measure the AI architect rather than the artifact it produced, when the score belongs to a whole system rather than a model, and the benchmark behind it can leak, wear out, or flatter a search that random guessing would have matched?
 :::
 
-@sec-loop-patterns-across-stack scaled the loop across the full hardware stack. But once that loop is running at any level, the architect must evaluate its efficiency. With two different agents optimizing the same low-power RISC-V XR subsystem, how do we decide which one to trust?
+@sec-loop-patterns-across-stack scaled the loop across the full hardware stack. Once that loop is running at any level, the architect has to measure the search and not only the design it returns. With two different agents optimizing the same low-power RISC-V XR subsystem, how do we decide which one to trust?
 
 In a traditional workflow, evaluation focuses on the artifact. Does the final compiled netlist meet the timing and power budget? When evaluating agents, judging the artifact alone is not enough. An agent might stumble onto a valid configuration through brute force, running tens of thousands of failed EDA simulations before getting lucky. The final artifact might pass, but the process that produced it is inefficient and economically unviable.
 
-Evaluating the agent rather than the artifact requires measuring the search trajectory itself, ensuring the resulting score can be trusted against benchmark contamination, and turning that score into an actionable decision. The three build on each other, because a metric is only as useful as the benchmark that produces it, and a benchmark is only useful if it dictates how much autonomy the architect grants the agent.
+Evaluating the agent rather than the artifact rests on three moves that build on each other. The first is to measure the search trajectory itself, including what it cost in EDA tool time. The second is to establish that the resulting score still means something, because a benchmark can be memorized before the first run, can decay until it no longer measures the capability it was built for, and can report a margin the apparatus produces by accident. The third is to pin the system and the environment that produced the score, since a number nobody can attribute is a number nobody can compare. A measurement that survives all three is what any later decision about how much of the search to leave unsupervised has to rest on.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Reject a reported design gain that does not name the RTL, process design kit, constraints, tool version, and signoff corner behind it.
-- Refuse to compare two agent scores until each names its model, its harness, and its budget, because a comparison across harnesses ranks engineering teams rather than models.
+- Score the search itself, what it cost in EDA tool time and how its trajectory moved toward a clean result, rather than reading the final artifact alone.
 - Demand a random-search null baseline at the same budget before crediting a trajectory score as reasoning, and require the margin to clear the apparatus's own noise floor rather than merely look convincing.
-- Separate a metric that is specified from one that is only named, and state the convention behind any score you report.
-- Aggregate across a suite with the geometric mean of normalized ratios, never the arithmetic mean, and match an agent's autonomy to the evidence level its results reached, reserving the waiver, the right to change the checks, and the commitment boundary for people.
+- Refuse to read an agent score until both identities behind it are pinned, the system of model, harness, and budget, and the environment of RTL, process design kit, constraints, tool version, and signoff corner, since a comparison across harnesses ranks engineering teams and a percentage does not port across process nodes.
+- Require a benchmark to publish its refresh and retirement policy, because a score erodes both from memorized training data and, with nothing leaked at all, from a community optimizing against a fixed target.
+- Separate a metric that is specified from one that is only named, state the convention behind any score you report, and aggregate across a suite with the geometric mean of normalized ratios rather than the arithmetic mean.
+- Match an agent's autonomy to the evidence level its results actually reached, reserving the waiver, the right to change the checks, and the commitment boundary for people.
 :::
 
 ## From Artifact Metrics to Trajectory Metrics
@@ -253,6 +254,8 @@ To formalize this tax, the harness measures the area under the curve (AUC) of th
 
 A trajectory AUC has no meaning until a null curve sits beside it. Random search over the same action space at the same simulator budget is embarrassingly hard to beat in high-dimensional design spaces, and the baseline search discipline that @sec-methods-generation-prediction-optimization develops is what an agent's curve must clear before the search counts as reasoning rather than spending. Clearing it means clearing it by more than the apparatus produces by accident, which is the A/A noise floor defined below, rather than by any gap that looks convincing on a plot.
 
+That comparison is also the instrument the stop condition of @sec-moonshot has been waiting for. The Lighthouse program is failing if, under matched baselines and budgets, AI carries no step of the work that conventional methods could not already do as well and more cheaply, and a null curve at equal budget sitting beside a trajectory scored on a pinned system is what would eventually settle that. Nothing in this chapter returns a verdict, because no published result yet reports that comparison over enough of the flow to attempt one.
+
 Because agents differ in both quality and cost, the comparison is a cost-quality plane. On that plane, the agents worth trusting are the non-dominated points on the frontier that clear the human-expert baseline within an affordable compute budget (@fig-agent-pareto).
 
 ![**The agents worth trusting are the non-dominated ones on the cost-quality frontier:** each agent is a point at its total evaluation compute and best quality reached, and those below the frontier are dominated, beaten on both axes by a cheaper or better agent.](images/F10-agent-pareto){#fig-agent-pareto width="80%" fig-alt="A scatter plot of agents on axes of total evaluation compute versus design quality, with a Pareto frontier of non-dominated agents."}
@@ -316,7 +319,7 @@ When a suite has twenty tasks, someone will average, and how they average can fl
 
 ### Calibrating Autonomy to Evidence
 
-The reporting standard's purpose is a decision, not a scorecard. The evaluation's output is an autonomy grant, a statement of what the agent may now do unsupervised, justified by the evidence level its results reached. A working calibration maps one to the other directly.
+The most consequential use of a measurement like this is an autonomy grant, a statement of what the agent may now do unsupervised, justified by the evidence level its results reached. A working calibration maps one to the other directly.
 
 ::: {.callout-lighthouse title="What the XR agent has earned the right to do next"}
 Suppose an agent has been resizing the L2 in the 3\ W XR subsystem, and its results reach calibrated proxy evidence: a measured rank correlation against the golden simulator on this workload, a random-search null curve at equal budget sitting below its trajectory, and a noise floor from repeated identical runs. That evidence supports a grant, and the grant is narrower than the score makes it feel. The agent may propose and screen cache configurations without a person reviewing each one, because a wrong screen costs simulator time and nothing else. It may not advance a configuration into RTL evaluation, because that spends synthesis hours nobody budgeted and the proxy has never been checked against a signoff corner. It may not alter the rejection checks that produced its own score. Written down action by action, the grant survives the moment the workload shifts and the calibration decays, which a single number never does.
@@ -336,16 +339,15 @@ The metrics above standardize how an episodic agent is scored today. What remain
 - Which reference set would make a Pareto-coverage score comparable across studies run by different groups?
 - What score captures monotonic progress over a vector objective without collapsing it into a single weighted sum?
 
-**Theme 2: Pricing the Hidden Costs.** Nominal PPA scoring rewards stripping the margin a signoff flow reserves for variation, and a design can pass a typical corner while failing across process, voltage, and temperature. The same shifted burden reappears later in the flow, where a design that is cheap to generate can be expensive to prove and expensive for a human to change. Proof effort is measurable in principle [@KangEtAl2024FVEval], and no benchmark yet scores a design by the work needed to prove it.
+**Theme 2: Pricing the Hidden Costs.** Nominal PPA scoring rewards stripping the margin a signoff flow reserves for variation, and a design can pass a typical corner while failing across process, voltage, and temperature. The same shifted burden reappears later in the flow, where a design that is cheap to generate can be expensive to prove. Proof effort is measurable in principle [@KangEtAl2024FVEval], and no benchmark yet scores a design by the work needed to prove it.
 
 - What score exposes a candidate that passes at the nominal corner by consuming the margin reserved for variation?
 - How can a benchmark price a generated design by the verification effort it pushes downstream?
-- Which definition of structural complexity on synthesized RTL predicts the engineering effort a later change order will cost?
 
-**Theme 3: Evaluation Beyond the Episodic Sandbox.** Real engineering is lifelong, and agents are scored inside episodic sandboxes that reset after every task. A reported percentage does not port across process nodes, and neither the capability behind it nor the autonomy grant it justified has an instrument that outlives the episode.
+**Theme 3: Evaluation Beyond the Episodic Sandbox.** Real engineering is lifelong, and agents are scored inside episodic sandboxes that reset after every task. A reported percentage does not port across process nodes, and neither the capability behind it nor the calibration that made it readable has an instrument that outlives the episode.
 
 - How much of an agent's capability on one process node transfers to the next?
-- What evidence should withdraw an autonomy grant once the environment that justified it has changed?
+- What signal shows that the calibration behind an autonomy grant has stopped holding after the environment changed?
 
 **Theme 4: System Identity and Benchmark Decay.** An agent score is a property of a model, a harness, and a budget together, and no published result yet separates the three. Benchmarks also decay with no leaked data at all, once a community optimizes against a fixed target, and the neutral corpus of physically realistic designs and public trajectories that would let outsiders check either problem still sits behind proprietary walls.
 
@@ -360,9 +362,9 @@ An AI-assisted method is successful only if it reduces the total wall-clock time
 
 Evaluating an AI architect is a different discipline than evaluating a compiled netlist. Hardware engineers must borrow the statistical rigor of machine learning evaluations, and ML researchers must constrain their agents with the uncompromising physical realities of the EDA toolchain.
 
-The chapter opened with a chain of three, and it closes on the same three. Measure the search trajectory rather than the artifact, because an agent that stumbles onto a passing configuration through brute force has not earned the result. Guard the resulting score against contamination and decay, because a benchmark the field has learned to optimize against stops measuring the capability it was built for. Then turn the score into a decision, which is the autonomy grant: how much this agent may do next, on what evidence, before a person is required. That last step is the chapter's output. A number that does not change what the agent is permitted to do has cost EDA hours and bought nothing.
+The chapter opened with a chain of three, and it closes on the same three. Measure the search trajectory and what it cost, rather than the artifact alone, because an agent that stumbles onto a passing configuration through brute force has not earned the result. Establish that the resulting score still means something, because a benchmark can arrive already memorized, decays once a community optimizes against it, and will report a margin its own apparatus produced by accident. Then pin the system and the environment behind the number, because a score nobody can attribute is a score nobody can compare. What the chapter builds is a measurement, not a permission. A measurement nobody can check has cost EDA hours and bought nothing.
 
-The reporting standard is where most of that becomes checkable. A trajectory score means nothing until the environment and the system that produced it are pinned and a random-search null baseline sits beside it at equal budget. Two agent scores are not comparable until each names its model, its harness, and its budget, and a reported design gain is not readable until it names the RTL, process design kit, constraints, and tool versions behind it. Aggregate across a suite with the geometric mean of normalized ratios, never the arithmetic mean.
+The reporting standard is where most of that becomes checkable. A trajectory score means nothing until the environment and the system that produced it are pinned and a random-search null baseline sits beside it at equal budget. Two agent scores are not comparable until each names its model, its harness, and its budget, and a reported design gain is not readable until it names the RTL, process design kit, constraints, and tool versions behind it. Aggregate across a suite with the geometric mean of normalized ratios, never the arithmetic mean, and say which convention any reported metric used, since naming a metric is not the same as specifying one.
 
 What this replaces is blind optimism, not uncertainty. Several of the measurements named here cannot yet be specified. Hardware design has no reference frontier to score multi-objective coverage against, no published result separates a score's model from its harness and its budget, and the cost of the margin an agent strips is easier to name than to price. The discipline is in reporting an agent's autonomy at the evidence level its results actually reached, and in saying which parts of that evidence the field cannot yet produce.
 

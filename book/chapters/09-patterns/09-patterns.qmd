@@ -17,19 +17,19 @@ format:
 :::
 
 ::: {.callout-crux}
-When the next decision is slower to evaluate, spans more interfaces, is harder to reverse, or carries greater consequences, what must change about what the AI is permitted to do, what evidence and which independent check can reject its result, and who may let that result advance?
+If what the artifact is called does not set how much an AI may do, what does, and what more must the architect show when several conditions apply to one decision?
 :::
 
 @sec-running-the-loop provided a bounded control case. Five systolic array shapes were evaluated against a 32 by 32 baseline under deterministic, replayable SCALE-Sim measurements, and none of the alternatives cleared the declared 1 percent margin, a threshold fixed before any candidate ran so that a small measured difference could not be talked into a design change. The candidates were cheap to discard, and the architect stopped the study before implementation because the evidence supported retaining the baseline. We now expand from one bounded study to the range of decisions an architect faces across the computing stack, where feedback latency, reversibility, and consequence vary far more than they did in that control case.
 
-If that same proposed array geometry were instead used to alter an RTL interface, the evidence burden and decision rights would change. The simulator returns quickly and candidates are reversible before implementation, but the next RTL transition raises consequence and required check independence.
+Nothing about an artifact has to change for its obligations to change. Take that same proposed array geometry and use it to alter an RTL interface. The simulator still returns quickly and the candidate is still reversible before implementation, but the change now spans a contract other teams depend on and sits closer to a commitment no rerun undoes. Those two properties, rather than the word RTL, are what raise the evidence burden and narrow who may approve the result, and they compound as more of them apply to the same decision.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Classify the next decision by operating conditions that overlap and accumulate, and set the method's action space, authority, and evidence from that classification rather than from the artifact's name.
+- Classify the next decision by the operating conditions that apply to it rather than by the artifact's name, and when more than one applies, carry the strictest requirement of each instead of choosing the closest single case.
 - Charge interface overhead, offload granularity, and the executable software path against a specialization win before it advances toward implementation.
-- Keep design-time evaluation, in-field evidence, and continuing enablement on separate clocks, then attribute a delayed observation on the record before admitting it, and admit it to one named destination under that destination's own test rather than into a fast tuning loop.
+- Keep design-time evaluation, in-field evidence, and continuing enablement on separate clocks, and attribute a delayed observation on the record before admitting it to one named destination under that destination's own test rather than into a fast tuning loop.
 - Buy back reversibility and check independence before a commitment point rather than after it, and recognize the checks that stop being able to see the failure that matters as a decision approaches the irreversible end.
 - Demand validated coverage rather than unit check cost when a review speedup is claimed, and refuse the claim when the settle rate behind it is unmeasured.
 
@@ -45,7 +45,7 @@ Start with the next architecture decision rather than the method. The artifact n
 
 One relation underlies every row of @tbl-loop-patterns. The expected cost of a wrong commitment is approximately the probability of a false accept times the cost of reversal, and each operating condition moves one of those two factors. That relation is what repeats across the stack; what changes is the value each factor takes and therefore what the loop must spend to hold the product down. The contrast is clearest at the endpoints. A local software change can often be executed and rolled back under close tests, while a silicon-facing change needs independent checks, a named waiver holder, and a decision owner before it advances.
 
-Four recurring combinations of operating conditions organize the cases considered here. These conditions overlap and accumulate. A kernel schedule may have fast feedback during tuning, cross an interface contract when deployed, and become difficult to reverse when hardware is frozen around it. A chiplet study can simultaneously be model-mediated, cross-interface, and high consequence. When several conditions apply, the stricter requirements of each accumulate.
+Four recurring combinations of operating conditions organize the cases considered here. These conditions overlap and accumulate. A kernel schedule may have fast feedback during tuning, cross an interface contract when deployed, and become difficult to reverse when hardware is frozen around it. A chiplet study can simultaneously be model-mediated, cross-interface, and high consequence. When several conditions apply, the stricter requirements of each accumulate. The fast-feedback case below works one such pair in full.
 
 The columns describe conditions, not fixed ranks (@tbl-loop-patterns). Fast feedback does not make the next decision low risk, and silicon-facing work does not forbid useful automation.
 
@@ -99,6 +99,14 @@ KernelBench [@OuyangEtAl2025KernelBench], alongside industry-standard evaluation
 For an AI-generated or tuned GPU kernel, a versioned compiler and test harness can reject compile failures and correctness errors, and the source can be rolled back. However, the architecture claim still fails if the input distribution is narrow, tail latency regresses, or the kernel requires a software path unavailable in the target system.
 
 An AI-generated kernel that wins on one input size may regress another. An AI-proposed runtime policy that improves average latency may worsen tail latency. Even with fast feedback, architects must record workload coverage, who may reject a candidate, and who owns the decision before the change enters a larger system.
+
+### Two Conditions on One Decision
+
+Fast feedback stops being the whole story the moment a fast result is used to settle something slow. Suppose a kernel search on the Lighthouse subsystem finds that the SLAM front end runs fastest when its pose-update matrices are tiled to fit entirely in the accelerator's local SRAM, and the architects then use that finding to size the SRAM and fix which tile shapes the datapath supports before RTL freeze. Nothing about the kernel work has changed. The compiler still returns in seconds, a bad schedule is still one commit away from being reverted, and correctness and speed checks still reject a poor candidate on the spot. What changed is that a number produced by that fast loop now stands behind a choice no rerun undoes.
+
+The obligations add rather than swap. Everything the fast regime already required stays in force, because the tile choice is only as good as the workload coverage behind it. The search still owes a recorded input distribution, a versioned compiler and harness, and a tail-latency check next to the mean, and the record still has to name who may reject a schedule. The high-consequence requirements then arrive on top. The SRAM size needs an area and leakage estimate checked against the subsystem's 3\ W budget, which is a check the kernel harness cannot run at all. The tile requirement needs a second reading from someone other than the generator that proposed the schedule. Freezing the shape needs a named owner who can approve it, and it needs a way back if the shape is wrong, whether that is datapath support for a second tile shape at some area cost or a bypass to the vector path.
+
+Neither condition relaxes the other. Fast feedback does not shorten the evidence the freeze requires, and the freeze does not excuse the schedule from its own regression tests. The failure this prevents is the ordinary one. A team reads the decision off the artifact in front of it, sees a kernel and a compiler, applies the checks that regime deserves, and freezes silicon on a benchmark whose input distribution nobody wrote down.
 
 ## Proxies and Simulators
 
@@ -457,7 +465,7 @@ AI heuristics that work well in software often break down against the physical r
 
 [^fn-differentiability-c09]: **Differentiability**: A signal is differentiable when small input changes produce smooth, computable gradients, which lets ML optimizers follow a slope toward better designs. Physical-design feedback offers no such gradient, so gradient-based methods give way to slower black-box search. Recent EDA research attempts to bridge this gap by recasting analytical placement itself as a differentiable optimization solved on GPUs with deep-learning toolkits [@LinEtAl2019DREAMPlace], so gradient-based methods drive the placer directly rather than a black-box search.
 
-Because you cannot `git revert` a tapeout, AI-assisted hardware changes require built-in escape hatches. While microcode patches and fuses can fix control-logic firmware bugs, an AI-generated datapath or routing structure requires physical escape hatches to survive undetected physical bugs. These include *bypass muxes* to dynamically fall back to a verified scalar core, *frequency/voltage guardbanding* (holding extra voltage and frequency margin at signoff and in the DVFS tables so an AI-generated path that misses setup at its critical corner can be run slower or at higher voltage, which covers max-delay failures only, since a hold violation is a race between two paths, is frequency-independent, and cannot be dialed around once the part is fabricated), and *partial disablement* to power-gate specific AI-generated lanes if they cause thermal hotspots or functional logic bugs. These reversibility mechanisms are purchased before tapeout, not discovered after a bug.
+A tapeout has no `git revert`, so AI-assisted hardware changes require built-in escape hatches. While microcode patches and fuses can fix control-logic firmware bugs, an AI-generated datapath or routing structure requires physical escape hatches to survive undetected physical bugs. These include *bypass muxes* to dynamically fall back to a verified scalar core, *frequency/voltage guardbanding* (holding extra voltage and frequency margin at signoff and in the DVFS tables so an AI-generated path that misses setup at its critical corner can be run slower or at higher voltage, which covers max-delay failures only, since a hold violation is a race between two paths, is frequency-independent, and cannot be dialed around once the part is fabricated), and *partial disablement* to power-gate specific AI-generated lanes if they cause thermal hotspots or functional logic bugs. These reversibility mechanisms are purchased before tapeout, not discovered after a bug.
 
 Teams sprinkle unconnected spare cells through the layout so a logic bug can be repaired by rewiring metal layers alone, which reuses the base masks and cuts both the mask bill and the respin turnaround by a large factor, and they give risky features *chicken bits*, fuse- or firmware-controlled disables that revert a new block to the previous generation's behavior. The governance consequence follows directly. An AI-generated block should not reach tapeout without its own chicken bit, a bypass path to verified logic, and its share of the spare-cell budget. The chicken bit and the bypass path can be exercised on parts already fabricated, while the spare cells only shorten and cheapen the metal-layer respin that a logic bug still requires, and @sec-what-architect-owns treats the containment lever as an explicit ownership question. The area they cost is the insurance premium on an unproven generator. What makes that premium necessary is that the early checks run on estimates. Functional simulation and synthesis-stage timing run long before signoff static timing analysis (STA), DRC, and the power and thermal analyses, all of which read the extracted parasitics of the routed design and can still reject the block.
 
@@ -772,23 +780,22 @@ The service-cost model bounds throughput, but the loop's iteration time is set b
 
 ## Open Research Questions
 
-Each theme below takes a step this chapter kept under human judgment and asks what it would take to trust that step to an automated loop instead.
+This chapter leaves several steps under human judgment. The themes below ask what would have to be measured before any of them could be checked, compared, or trusted to an automated loop.
 
-**Theme 1: Measuring Validated Coverage.** The service-cost bound says a review speedup turns on the share of cases a cheaper check settles correctly, not on what that check costs to run. Almost nobody reports that share, partly because measuring it means running the expensive reference on the very cases the cheap check was supposed to spare.
+**Theme 1: Reading the Conditions on a Decision.** The chapter asks an architect to classify the next decision by the conditions that apply to it, then to carry the strictest requirement of each. Nothing yet shows that two competent reviewers reading the same proposal reach the same classification, and nothing shows that stacking requirements covers what conditions do when they combine.
+
+- How consistently do independent reviewers classify the same proposed change by the conditions that govern it?
+- What failures arise only from the combination of two operating conditions rather than from either one alone?
+
+**Theme 2: Measuring Validated Coverage.** The service-cost bound says a review speedup turns on the share of cases a cheaper check settles correctly, not on what that check costs to run. Almost nobody reports that share, partly because measuring it means running the expensive reference on the very cases the cheap check was supposed to spare.
 
 - How can validated coverage be measured in a running review pipeline, when confirming it requires the high-fidelity check on cases the cheap check already cleared?
 - What admission policy holds reviewer utilization below the point where queueing delay dominates iteration time, given that generated proposals arrive in bursts?
-- Which reported productivity gains for generated hardware survive an end-to-end accounting that charges them for the verification load they induce?
 
-**Theme 2: Independence Between a Producer and Its Checks.** The operational rule is that the generator of an artifact and the generator of its checks must not share a model, a prompt lineage, or a training-time view of the same reference solution. No procedure yet confirms that two models satisfy it.
+**Theme 3: Checks That Stop Counting.** A check is worth only what its independence and its assumptions are still worth. Two models sharing a prompt lineage supply one reading of a specification in the shape of two, and a study's evidence supports its claim only under the workload, tool versions, and interfaces it assumed, all of which move without announcing themselves.
 
 - How can shared prompt lineage be detected between the model that produced an artifact and the model that checks it?
-- What decontamination evidence would let one model's reading of a specification count as an independent reading rather than a second copy of the first?
-
-**Theme 3: Evidence That Has Expired.** A study's evidence supports its claim only under the workload, tool versions, and interfaces it assumed, and those move without announcing themselves.
-
 - What signal would show that an earlier study's evidence has stopped supporting its claim once the workload, compiler, or interface it assumed has moved?
-- When a tool version, compiler, or interface moves, which of a study's prior conclusions have to be re-measured and which can be re-argued from its record, and what property of a result decides which side it falls on?
 
 **Theme 4: Recalibration from Deployed Silicon.** Telemetry from shipped parts can correct the surrogates that guided a design, and it can just as easily teach the next generation to expect only the traffic the last one happened to serve.
 
@@ -811,5 +818,7 @@ These conditions accumulate rather than replace one another. Work that crosses a
 Evidence arrives on three distinct clocks. Design-time evaluation estimates behavior within a represented study. In-field evidence tests the deployment context. Continuing software enablement changes realized performance on fixed hardware. None substitutes for the other, delayed evidence does not update knowledge by itself, and delayed field telemetry belongs in a slow review loop rather than a fast tuning one.
 
 Three costs are easy to leave uncounted. Interface overhead and the executable software path are charged against a specialization win before it advances, because a block that needs a compiler nobody has written has not yet won anything. Reversibility and check independence are bought before the commitment point rather than after, since both grow expensive at exactly the moment they are needed. And a claimed review speedup is settled by validated coverage rather than unit check cost, because the cases a cheap check cannot settle still pay the full price, and the settle rate that fixes that ceiling is not something anyone measures today.
+
+Two limits are worth stating plainly. The four combinations worked here are the ones that recur in reported practice rather than a proven complete set, and nothing in this chapter shows that two architects reading the same proposal would classify its conditions the same way. Measuring that agreement is what would turn the classification from a discipline a reader can apply into a result a reader can cite.
 
 All of this measures the design. Whether the agent doing the searching has earned the latitude it is being given is a separate question, and @sec-evaluating-agentic-architect takes it up, scoring the search rather than the artifact it produced and converting that score into the one output that changes what happens next: how much autonomy this agent has earned.
