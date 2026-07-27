@@ -4,7 +4,7 @@ format:
     output-file: index.html
 ---
 
-# Data Representations and World Models {#sec-data-representations-world-models}
+# Architecture Data, Knowledge, and Representation {#sec-data-representations-world-models}
 
 ::: {.epigraph}
 > *"The limits of my language mean the limits of my world."*
@@ -13,455 +13,707 @@ format:
 :::
 
 ::: {.column-margin}
-**Author's Note:** The philosopher Ludwig Wittgenstein argued that language constrains what we can conceive. The architectural version is narrower. A method can change only the design state exposed to it, and a reviewer can examine only evidence that remains connected to that state. If an architecture description has no way to express a coherence assumption, for example, a generator may mention it but a tool cannot check how the candidate handles it.
+**Author's Note:** Ludwig Wittgenstein argued that language constrains what we
+can conceive. The architecture claim is narrower. A method can change only the
+design state exposed to it. If a representation has no way to express a
+coherence assumption, software dependency, or physical limit, the method
+cannot preserve it deliberately.
 :::
 
 ::: {.callout-crux}
-What must an AI system represent about a design so that its proposals are legal and its predicted consequences checkable, and how much of that can a project afford to keep current?
+What must be known, kept current, and made changeable for a method to work on
+the real architecture problem?
 :::
 
-@sec-architecture-20-ontology defined the six-stage lifecycle and the design loop that runs it. This chapter supplies the first thing that loop must represent, the design state a method sees and changes, together with the data that state is learned from, the encodings that carry it, and the provenance that says what it is worth. When a generator proposes a candidate in the *Explore stage*, it relies on a *Representation*, a formal, explicit encoding of architectural knowledge and project state that tells the generator what it can see and change. When it evaluates that candidate in the *Evaluate stage*, it queries a cost model, a predictive proxy that estimates performance, power, and area without paying for the full tool flow. Whether a proxy of that kind amounts to a model of the system or only a scoring function for one search is a question the chapter can settle only at the end, once both objects are on the table.
+@sec-architecture-20-ontology ended with a bounded study, not with a method.
+The study asks which, if either, of the 3\ MB and 4\ MB L2 candidates should
+advance to RTL evaluation against the current 2\ MB baseline for the declared
+XR workload. It fixes the workload, software, cache policy, memory system, and
+physical limits.
+It permits only the L2 capacity to change. Before any method can help, those
+facts have to exist in a form that the method can inspect without silently
+changing their meaning.
 
-Proposing a change safely takes more than stored text or a learned vector. A representation has to encode structural constraints, Register Transfer Level (RTL) boundaries, configuration parameters, and fixed physical limits, because those are what let a tool check a candidate instead of merely reading it. An encoding that admits only structurally valid designs narrows the curse of the action space from @sec-architecture-20-ontology, since a design the encoding cannot express is one a generator can never propose. Structural validity is the easier of the two failures to catch, though. The harder one is a candidate that is perfectly well formed and still wrong for this project.
+That requirement is easy to underestimate. Model parameters may encode the
+RISC-V specification, common cache organizations, and the usual relationships
+among capacity, misses, area, latency, and power. None of that knowledge identifies
+the current design revision, the software image that will run on it, the
+workload snapshot used for comparison, or the conditions under which earlier
+results remain relevant. General knowledge can suggest plausible work. It
+cannot substitute for the state of this project.
 
-A model might speak fluently about computer architecture yet fail to act on a current design. Consider a model given our Lighthouse prompt to design a low-power, 64-bit RISC-V compute subsystem for an XR platform. The model may possess generalized knowledge of RISC-V instruction sets, branch prediction algorithms, and out-of-order execution pipelines. Without an explicit representation of the project state, however, it remains oblivious to the active constraints. It does not know that the architect recently updated the target eye-tracking workload trace, restricted the L2 cache capacity to meet the XR headset's thermal budget, or fixed the memory bandwidth to satisfy an area envelope. Demonstrating fluency in generating RISC-V concepts does not grant an AI the context to satisfy physical constraints.
+Representation is therefore an architecture decision, not a file-format
+choice. It decides which system relationships remain visible, which designs
+are reachable, which changes count as adjacent, and which effects can disappear
+between a high-level proposal and the artifact a tool evaluates. A method
+cannot protect a relationship that its input omits. It also cannot distinguish
+a current fact from a stale one unless the representation carries identity and
+freshness.
 
-General architectural knowledge is meaningless without the explicit bounds of the current design. To propose a viable change, an AI system, acting purely as an explorer, must fuse its learned statistical priors with the concrete, versioned constraints of the specific project. The system must represent the design problem, express a legal architectural action, and predict its consequences.
-
-Those bounds also move. A constraint tightens, a workload trace is replaced, a block is swapped by hand under schedule pressure, and a description that was accurate last week now names a design that no longer exists. Staying current is therefore part of what a representation has to supply, not housekeeping attached to it, because a proposal is legal only against the version actually under change and a prediction is checkable only against the state the tools were run on.
-
-Neither the knowledge nor its currency comes for free. Every sample that trains a cost model is a simulation, a synthesis run, or a fabricated part that someone paid for, and every record kept so a reviewer can retrace a claim costs engineering effort the project could have spent designing. The useful question is therefore not what an AI system must know in full, but which knowledge a project can afford to acquire and keep current for the weight of the claim it intends to make. That budget does not move the final judgment. The human architect still runs the evaluation harness of trusted EDA tools that validate a candidate against physical silicon constraints such as PPA, thermal budgets, and DRC rules.
+This chapter builds the problem that
+@sec-methods-generation-prediction-optimization will act on. The output is a
+current, inspectable account of the hardware, software, workload, dependencies,
+permitted changes, invariants, history, freshness, blind spots, and known
+unknowns. It does not choose a method, rank a candidate, or accept a
+measurement. Those decisions belong to later chapters.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Separate slow-moving architectural priors, the current project version's explicit constraints, and the live state a tool just returned, and route each to the ingestion path its volatility allows.
-- Recognize when an encoding breaks an optimizer's smoothness assumption, and re-encode a parametric field onto the quantity the physics is smooth in or the set the tools can build, so a candidate no memory compiler would accept never enters the search.
-- Treat a learned cost model as a scoped search heuristic rather than a world model, and name the observation that would falsify the difference.
-- Preserve a model's prediction, a tool's observation, and a rejected candidate as separate dated records carrying the conditions that produced them.
-- Test whether a represented design state still describes the artifact it claims to, and stop a run when it does not.
-- Size the record and the fidelity behind a result to the weight of the claim it will carry, and refuse a request at the tool interface when the claim on offer is not worth the evidence it would cost.
+- Distinguish general architecture knowledge, current project state, and
+  project history, identify the responsible source for each field, and stop
+  when responsible sources disagree.
+- Represent hardware, software, workload, physical constraints, and their
+  dependencies as one design problem rather than as unrelated files.
+- Declare permitted changes and invariants so that an illegal or bundled change
+  is visible before execution.
+- Explain how an encoding determines reachable designs and the neighborhood a
+  later method will see.
+- Test whether represented state still describes the artifact it names and
+  state what remains missing or unknown.
+- Hand a later method an inspectable architecture problem without prescribing
+  generation, prediction, or optimization.
 
 :::
 
-## Architectural Knowledge
+## From a Declared Study to a Represented Problem
 
-Architectural knowledge in this setting is the ability to do architectural research: constructing baselines, orchestrating the right tools, and interpreting the fidelity and limits of those tools. This knowledge grows harder to codify as design moves down the stack, from explicit software code to the tacit judgments of physical design. To design something new, a method must make those tacit constraints explicit enough for a tool to check. It draws on two classes of information: learned architectural knowledge and the current project state.
+A study contract states what the project intends to learn. A problem
+representation states what the project is actually prepared to let a method
+read and change. The two must agree, but they are not the same artifact. The
+contract may say that cache capacity is the only permitted change. The
+representation must identify the exact field that controls capacity, the legal
+values that the memory implementation can realize, and the dependent
+configuration and constraint files that must remain consistent with it.
 
-Recent literature highlights that AI models do not inherently "know" how to build a chip [@ThakurEtAl2023AutoChip; @PrakashEtAl2025QuArch]. Instead, their parameters encode recurring, general relationships among workloads, hardware mechanisms, tools, and design choices. These statistical priors explain why spatial dataflow dependencies, SRAM capacities, and MAC array dimensions interact the way they do. They enable the system to recognize that widening the multiply-accumulate (MAC) array in the Lighthouse subsystem's vector-capable accelerator block requires proportionally larger SRAM capacities to sustain utilization, or that a larger MAC grid increases the penalty of underutilized edge workloads.
+The Lighthouse cache study makes the distinction concrete
+(@tbl-represented-problem).
 
-Current project state serves a completely different purpose. It identifies the specific design version under active evaluation. It names the exact workload, software versions, mutable fields, fixed constraints, assumptions, prior observations, and unresolved conditions for a single study.
+| **Part of the Problem** | **Representation for the Lighthouse Cache Study** |
+| --- | --- |
+| Study identity and question | Illustrative study `XR-L2-CAP-A`, contract revision `CONTRACT-A`, and current design revision `XR-COMPUTE-A`. The decision is which, if either, of the 3\ MB and 4\ MB candidates should advance to RTL evaluation against the rerun 2\ MB baseline. These identifiers instantiate the study contract in @sec-architecture-20-ontology. |
+| Current hardware | Baseline artifact `L2-2M-A` is the checked-in 2\ MB design generated from revision `XR-COMPUTE-A`. The hardware owner is responsible for the configuration, generator revision, generated cache instance, and linked implementation collateral. |
+| Fixed hardware and software state | Cache policy `CACHE-POLICY-A`, NoC `NOC-A`, memory-system configuration `MEMSYS-A`, 2\ GHz microarchitecture, compiler `COMPILER-A`, runtime `RUNTIME-A`, and RISC-V software image `SW-BASE-A`. Their responsible hardware or software owner controls each identifier. |
+| Workload state | Workload snapshot `XR-TRACE-A`, including stable frame identifiers and boundaries, collection policy, and workload owner. |
+| Candidate set and mapping | The field `l2.capacity` admits exactly `2MB`, `3MB`, and `4MB`, which lower to candidate artifacts `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. The 2\ MB artifact is the rerun baseline. |
+| Permitted change | Only `l2.capacity` may change. Cache policy, associativity, NoC topology, compiler, runtime, memory system, and all other architecture choices remain fixed. |
+| Constraints and required checks | This study checks modeled subsystem dynamic plus leakage power at or below 3\ W, cache macro area at or below 1.5\ mm^2^, and modeled access time at or below 2.5\ ns. Thermal and IR-drop reviews remain independent later requirements. |
+| Relationships to preserve | Capacity may change miss behavior, which may change the frame-time distribution. It also changes macro organization and may change power, area, access time, and later physical integration. Workload, software, cache policy, and memory-system conditions must remain tied to every comparison. |
+| Source identity | Contract `CONTRACT-A`; design `XR-COMPUTE-A`; hardware, software, and workload identifiers above; cycle-level simulator `SIM-A`; cache model `CACHE-A`; power model `PM-A`; SRAM model `SRAM-A`; and process, voltage, and temperature assumptions `PVT-A`. The study record names the owner of each source. |
+| History | The initial live history is empty. A prior result enters comparable history only when the contract permits reuse and its design, candidate, hardware, software, workload, simulator, cache, power, SRAM, and PVT identities match. A nonmatching result may remain linked as advisory context but is not an observation for this study. The walkthrough in @sec-architecture-20-ontology is illustrative and is not entered as live history. |
+| Freshness checks | Recorded versions or hashes, named owners, timestamps where needed, and a successful regeneration or consistency check between represented state and the checked-in artifact. |
+| Blind spots | No detailed floorplan or congestion result, no completed thermal or IR-drop review, incomplete workload coverage beyond `XR-TRACE-A`, and any hardware effect not modeled by the declared tools. |
+| Known unknowns | Whether either larger cache improves 99th-percentile frame time enough to advance, and whether later physical review will uncover an effect absent from the current representation. |
+| Study boundary | Four cycle-level executions including infrastructure reruns, one SRAM evaluation per capacity, and a decision to recommend at most one candidate for later RTL study. No implementation or product commitment is authorized. |
+| Exclusions and useful scope | Cache-policy, prefetching, coherence, NoC, compiler, software-scheduling, floorplanning, thermal-signoff, IR-drop-signoff, security, reliability, and product-cost changes are excluded. The representation supports only the declared cache-capacity comparison, not a complete model of the XR subsystem or product. |
 
-A method needs both. General knowledge cannot reveal that the project lead just restricted the die area to meet a new thermal target. Conversely, a list of current project constraints is useless without the architectural knowledge required to propose a pipeline modification that respects them. A method must separate the general rules it has learned from the explicit facts of the design version it is currently attempting to change. Splitting knowledge into those two classes still omits a dimension, which is time. Neither class says what this project already tried and already ruled out.
+: **The represented problem makes the declared study inspectable.** It connects
+the current design, workload, legal changes, dependencies, history, freshness,
+and limits without selecting a method or claiming a result.
+{#tbl-represented-problem tbl-colwidths="[24,66]"}
 
-A human architect who watches a cache coherence protocol deadlock remembers it. The expensive case is the deadlock that was seen and then discarded, dismissed during simulation as a testbench artifact and paid for again after silicon with a microcode patch. The run that could have prevented it existed, but nothing in it carried a verdict. Retaining that history means keeping past simulation logs, failed RTL patches, and commit history retrievable, which is what this chapter later calls an execution history and what machine learning would call episodic memory. Without it, a project pays twice for the same simulator run.
+This table is not a demand for one monolithic database. The fields may live in
+a configuration schema, workload manifest, version-control record, candidate
+table, and run directory. What matters is shared identity. Every artifact must
+refer to the same study, design version, workload version, and candidate. A
+directory full of individually valid files is not a represented problem if no
+one can tell which files describe the same comparison.
 
-### Sources and Datasets
+The table also prevents scope from expanding unnoticed. Nothing in the
+declared study permits changes to issue width, reorder-buffer depth, MAC array
+dimensions, the compiler, or the NoC. A method that proposes any of them has
+not found a more creative cache design. It has left the study.
 
-Architectural knowledge comes from many sources. Papers, manuals, specifications, code, RTL, traces, workloads, tool outputs, failed candidates, review decisions, and field observations are not interchangeable examples. What an AI model can learn, or what an evaluation can establish, depends directly on the structure of the dataset.
+## What the Project Knows and Which Source Controls
 
-Architectural data differs from the text corpora that train most ML models, one reason hardware evaluation is harder than software (@sec-architecture-20-ontology). First, hardware design demands structural correctness. A single misplaced wire or incorrect parameter can break an entire chip, whereas software can often be unit-tested function by function. Second, execution is ground truth. An architecture representation remains a hypothesis until a simulator or physical synthesis verifies it, and that feedback arrives slowly next to instant software compilation.
+Architecture work draws on three kinds of knowledge. Each answers a different
+question.
 
-Finally, architectural parameters are tightly coupled. Changing a single buffer size cascades into power, timing, and area. The design space is not a smooth gradient; it is punctuated by hard cliffs, such as unroutable netlists. Textual generation alone fails here. A generator must be tied to the physical constraints, such as SRAM limits and routing dependencies, so it does not propose impossible chips.
+General architecture knowledge contains slow-moving relationships,
+specifications, common mechanisms, and lessons from prior designs. It can
+explain why cache capacity may affect misses or why a clock-domain crossing
+needs synchronization. Model parameters, papers, manuals, and design guidance
+can all carry this knowledge.
 
-Because architectural tasks range from semantic reasoning to precise tool execution, the capability a model develops is bounded by the geometry of its training data:
+Current project state names the design that exists now. It includes the
+active hardware and software versions, workload, mutable fields, constraints,
+assumptions, and unresolved conditions. This state changes with the project and
+must be explicit.
 
-| **Dataset Structure** | **Information Geometry** | **Capability Ceiling** |
-| :--- | :--- | :--- |
-| **Document Corpus** | Flat text, ungrounded | **Passive Reader:** Conceptual fluency without execution capability. |
-| **Q&A Pairs** | Targeted recall | **Isolated Reasoner:** Localized technical reasoning and formula calculation. |
-| **Tool-Use Trace** | Sequential commands | **Syntax Clerk:** Invoking API endpoints without understanding physical consequences. |
-| **State-Action-Consequence** | Full physical feedback loop | **Predictive Agent:** Understanding *why* mutations fail routing or thermal limits. |
+Project history records what this project tried, what the tools returned,
+what failed, what reviewers rejected, and why. It prevents a current design
+from being separated from the work that produced it.
 
-: **Data format sets the capability ceiling:** a flat corpus buys conceptual fluency, while state-action-consequence logs buy a predictive agent that understands why mutations fail. The structure of the data, not its volume, dictates whether an AI can act as an agent or merely as a textbook. {#tbl-dataset-capability tbl-colwidths="[25,30,45]"}
+A method often needs all three. They must remain distinct because they have
+different authority and rates of change. A paper can explain an architectural
+relationship but cannot override the checked-in design. A retrieved manual can
+clarify a tool option but cannot establish which option the current run used.
+An old run can reveal a risk but cannot automatically stand in for a current
+measurement.
 
-A flat document corpus like conference papers can instill general conceptual fluency, but it cannot teach a model how to act (@tbl-dataset-capability). For that, the model must consume tool-use traces that demonstrate exact API syntax and sequence execution. Moving beyond syntax to optimization requires full state-action-consequence simulation logs. These logs explicitly map a proposed architectural mutation to its downstream physical costs, allowing the model to learn not just *how* to invoke a tool, but *why* certain designs fail routing or violate thermal limits.
+### Sources Are Not Interchangeable
 
-The QuArch benchmark [@PrakashEtAl2025QuArch] begins bridging this gap by forcing models to calculate quantitative tradeoffs rather than just defining terms. However, AI acts only as a searcher; architectural exploration requires datasets that move beyond factual recall. To be useful to a hardware team, the training data must force the model to confront the architect's reality: PPA (Power, Performance, Area), STA (Static Timing Analysis), and DRC rules. If a model does not learn the physics of placement and congestion from its data, it cannot be steered by the architect, and its generated RTL will remain a theoretical exercise rather than a tape-out candidate that passes the evaluation harness.
+Papers, specifications, source code, RTL, traces, tool reports, failed
+candidates, review notes, and field observations preserve different
+relationships. The relevant distinction is not text versus numbers. It is
+which question a source can answer, which context it omits, and how a reader
+can connect it to the current design (@tbl-dataset-capability).
 
-Public benchmarks carry a subtler hazard. A model trained on public hardware description language (HDL) corpora has very likely already memorized the standard solutions to the benchmarks circulating in those corpora, and contamination studies find exactly this pattern for the common Verilog benchmarks [@WangEtAl2025VeriContaminated]. The concern generalizes across LLM evaluation, where leaked test data inflates reported scores in ways the benchmark was never meant to measure [@Balloccu2024Leakage]. A high score on a memorized benchmark says nothing about whether a model can navigate an unseen design. Held-out evaluation and execution histories matter more here than raw benchmark accuracy, because they test the model against states and consequences it could not have memorized.
-
-A question-and-answer format has a strict boundary. It tests the knowledge layer but cannot reconstruct a project execution history or executable tool state. To capture an architect's knowledge, ML models cannot just look at positive examples, such as the final winning design. They must see the failed synthesis runs, the unroutable netlists, and the rejected thermal profiles. Negative examples are critical for ML to learn the boundaries of the design space. Without negative data, a model might memorize what worked in one context without understanding why designs fail or how to correct them.
-
-The reason positives-only training fails is statistical, not merely a matter of coverage. A corpus of shipped designs is a survivor sample, and the failures it omits are not missing at random. They are censored.[^fn-censored-c04] A timing violation records only that slack went negative, not the frequency the design could have reached; a crashed synthesis run records no usable label at all. A surrogate fit to survivors is therefore systematically optimistic in exactly the infeasible direction, and an optimizer is a machine for finding and exploiting optimistic errors. This is Abraham Wald's wartime bomber-armor problem restated in silicon. The corpus shows where surviving designs took hits, never where the dying ones did.
-
-[^fn-censored-c04]: **Censored observation**: A measurement whose true value is known only to lie past a threshold rather than being recorded exactly, as when a failed run reports that slack went negative without revealing the frequency the design could actually have held. Fitting a model as though censored records were ordinary measurements biases it in a known direction, and the bias sits precisely at the feasibility boundary the model most needs to get right.
-
-What is missing is not the argument for keeping failures but the corpora themselves. No public, standardized collection holds source-linked tool-use examples, versioned state-action-consequence execution histories, or rejected candidates recorded with the conditions that rejected them. Ownership explains part of the gap, since the failed runs sit inside the companies that paid for them. Cost explains the rest. Every negative sample in such a corpus is a synthesis or simulation run that someone paid for and then chose to keep rather than delete.
-
-### Weighing Data Sample Costs
-
-In traditional machine learning, systems rely on large-scale web scraping, crowd-sourced labeling, or passive observation to generate datasets. A single data sample, such as an image or a sentence, is effectively free to acquire. In computer architecture, however, data acquisition is constrained by the cost of simulation. Generating a single, valid data sample requires executing a formal model of a machine.
-
-That model is not one thing, and neither is its price. The same design can be evaluated by a closed-form equation, a trace replay, a cycle-level simulator, an RTL run, an FPGA mapping, or a fabricated chip, and one sample costs anywhere from microseconds of arithmetic to a mask set. Which level the study runs at therefore fixes how many samples it can afford before it fixes how much each one reveals (@fig-data-fidelity-pyramid, @tbl-synthetic-data-costs). That same spectrum returns in @sec-architecture-environments-tool-interfaces, priced there as the slowdown an environment pays per observation rather than as the cost of building a corpus.
-
-Understanding the cost of a data sample matters because it dictates what a model can learn. A large asymmetry exists between the inference overhead of running a model, often measured in milliseconds and a few dollars per million tokens, and the cost of evaluating that model's proposal through an electronic design automation (EDA) tool or RTL simulation, which can consume thousands of compute hours and large licensing fees. If an agent needs millions of trials to learn a reinforcement learning policy,[^fn-rl-policy-c04] it cannot use RTL simulation. RTL simulation captures exact cycle-by-cycle behavior, but its power figures are estimates that depend on activity annotation and a power model, and the numbers architects trust arrive later, post-synthesis with extracted parasitics. It is also slow and computationally expensive. High-fidelity simulations validate ground truth, but they are too costly to serve as the sole source of training data for data-hungry ML algorithms.
-
-[^fn-rl-policy-c04]: **Policy (reinforcement learning)**: The learned mapping from an observed state to the agent's next action. Training one typically takes millions of trial interactions, which is why evaluation cost decides whether RL is feasible for a given architecture task.
-
-Conversely, low-fidelity generation, such as analytical models or high-level trace-driven simulations, can rapidly generate millions of synthetic data points at a fraction of the cost. However, this cheap data often lacks the nuance of complex microarchitectural interactions, such as deep pipeline stalls, coherence races, or thermal throttling effects. The challenge lies in balancing these extremes, using cheap, low-fidelity synthetic data to broadly map the design space, while reserving expensive, high-fidelity RTL or silicon data for fine-tuning models near optimal or boundary conditions. Mapping broadly with cheap approximations and spending the expensive oracle only near optimal or boundary conditions is the basis of active learning and multi-fidelity Bayesian optimization [@Settles2009ActiveLearning; @KandasamyEtAl2017MultiFidelityBO], and the tiered structure it produces is the standard multifidelity framing. Sampling theory adds a third cost lever alongside fidelity and volume, shrinking how much of a workload a high-fidelity run must cover rather than lowering the fidelity of the run; @sec-workload-phase-behavior develops it.
-
-This dynamic means the spectrum of simulation fidelity dictates the volume and variance of the available dataset. Much like a memory hierarchy pairs fast, expensive SRAM with slow, cheap disk storage, the architectural data fidelity pyramid pairs scarce ground-truth silicon data with abundant analytical approximations (@fig-data-fidelity-pyramid).
-
-![**The simulation fidelity pyramid mirrors a memory hierarchy:** ground-truth silicon data at the apex is expensive and scarce, while analytical estimates at the base are cheap and abundant. Each tier down trades fidelity for volume, and a training corpus draws from all six.](images/F4-data-pyramid){#fig-data-fidelity-pyramid fig-alt="Six-tier pyramid from analytical models at the base through trace-driven, cycle-level, and RTL and gate-level simulation and FPGA emulation to physical silicon at the apex, with a left axis showing increasing fidelity and cost." width="100%"}
-
-Read the pyramid from base to apex. The two lowest tiers hold cheap, high-volume data from analytical and trace-driven models, useful for mapping the design space broadly but coarse in detail. Each higher tier, cycle-level simulation, RTL and gate-level runs, FPGA emulation, and physical silicon, adds fidelity as the cost of a sample climbs and the volume available shrinks. Each tier has its canonical tooling. Analytical estimators like CACTI and McPAT [@MuralimanoharEtAl2009CACTI; @McPAT] price memory and power from closed-form equations, cycle-level simulators like gem5 track microarchitectural state, RTL simulators like Verilator [@Veripool2026Verilator] execute the logic itself, and FPGA-based platforms like FireSim map the design onto reconfigurable hardware. The apex holds the ground-truth silicon data an architect needs to confirm a design, but far too little of it to train on. The cost of generating one sample climbs by orders of magnitude from analytical models at the base to physical silicon at the apex (@tbl-synthetic-data-costs).
-
-The trace-driven tier hides a limit that is not about detail. A trace fixes the instruction stream before simulation begins, so anything the real machine would have done differently under different timing (wrong-path fetches, two threads interleaving as they race on a lock, a governor throttling frequency mid-frame) simply cannot appear in the output. For single-threaded, timing-insensitive code this is a fair trade of nuance for volume. For a multithreaded XR pipeline it is an error in kind rather than degree, and a surrogate trained on millions of trace-driven samples inherits the blindness at full confidence.
-
-| **Simulator or Model Type** | **Fidelity Level** | **Speed or Throughput** | **Cost of a Data Sample** | **ML Principle Equivalent** |
-| --- | --- | --- | --- | --- |
-| Analytical or Mathematical | Low (Equations, steady-state) | Millions of samples/sec | ~$0 (Compute-bound, trivial) | Simple synthetic priors, rule-based generation |
-| Trace-Driven | Medium (Instruction streams) | Thousands of samples/sec | Low | Heuristic-based procedural generation |
-| Cycle-Level Simulation | High (Microarchitecture state) | 10s - 100s of samples/sec | Medium (High CPU hours) | High-fidelity synthetic rendering |
-| RTL Simulation | Very High (Logic gates, precise) | Fractions of a sample/sec | Very High (Days of compute) | Human-annotated expert data |
-| Emulation (FPGA) | High (Functional; cycle-exact to a timing model, not the ASIC) | ~10–150\ MHz target clock | High (Hardware boards, compile time) | Real-world behavioral data |
-| Physical Silicon (ASIC) | Ground Truth (Physical, Timing, Power) | Native (real-time) | Astronomical ($10M+ NRE, Setup) | Real-world deployment data |
-
-: **Data generation cost rises sharply with fidelity.** Emulation and silicon evaluate a design far faster per run than RTL simulation, but bitstream compilation, board setup, and non-recurring engineering (NRE) make acquiring the first sample expensive. Note that FPGA power and thermal numbers do not transfer to the ASIC, so an emulation sample teaches functional and model-timing behavior but not physical dissipation. {#tbl-synthetic-data-costs tbl-colwidths="[20,20,20,20,20]"}
-
-### Knowledge Ingestion
-
-Cost decides which data a project can acquire. Where that data lands is a separate decision, because architectural knowledge ages at very different rates. Instruction set semantics hold for years, a tool's calling conventions for months, and the current L2 capacity only until the next commit. A system therefore ingests knowledge through several paths, each matched to a volatility (@tbl-ingestion-timescales).
-
-| **Ingestion Method** | **Timescale / Volatility** | **Compute Cost** | **Architectural Purpose** |
-| :--- | :--- | :--- | :--- |
-| **Pretraining** | Static / Slow | High | Embeds universal laws of physics, ISA semantics, and statistical priors. |
-| **Fine-Tuning** | Periodic / Versioned | Medium | Shapes interaction syntax, API formatting, and tool orchestration rules. |
-| **Retrieval (RAG)** | Dynamic / Query-time | Low | Fetches volatile technical context, manuals, and reference designs. |
-| **In-Context** | Transient / Immediate | Low | Holds immediate project constraints, failing paths, and current state. |
-| **Explicit Updates** | Persistent / Stepped | High | Revises the durable project state via costly, high-fidelity simulation. |
-
-: **An agent must separate slow-moving domain priors from fast-moving project constraints:** pretraining embeds static laws while in-context conditioning holds the live project state, and each ingestion path carries a different compute cost. {#tbl-ingestion-timescales tbl-colwidths="[20,25,15,40]"}
-
-For an architect, this separation of timescales is a safety property, not just a machine learning implementation detail. If a model attempted to learn daily project updates the same way it learns basic physics, the compute cost would be prohibitive. Instead, knowledge is stratified.
-
-At the slowest timescale, pretraining and domain adaptation embed the fundamental laws of hardware design and statistical priors into the model's weights. This parametric memory is broad but static; it encodes how a pipeline works in theory, but because updating these weights is computationally expensive, it cannot track the daily constraints of a live project.
-
-Instruction fine-tuning shapes how the model acts instead of what it knows. It teaches the model to interact with EDA tools, format API calls, and orchestrate workflows. It does not teach the model the current state of the chip under design; it teaches it how to hold the tools.
-
-To bridge the gap between static weights and live projects, the system uses dynamic retrieval[^fn-rag-c04] to fetch versioned manuals, ISA definitions, and reference designs at query time. These retrieved facts are then combined with in-context conditioning, the transient working memory that holds the immediate area constraints, failing timing paths, and workload settings of the current inference step.
-
-[^fn-rag-c04]: **Retrieval-Augmented Generation (RAG)**: The practice of fetching relevant documents from an external index at query time and inserting them into the model's context, so answers can draw on material the model was never trained on rather than on parametric memory alone.
-
-Finally, as the agent proposes architectural changes and receives tool feedback, it makes explicit updates to the persistent project state, leaving a durable execution history.
-
-## Representations and Encodings
-
-Each ingestion path writes into a different object, and the objects are not interchangeable. The same fact about an L2 cache can sit in a weight, in a vector, in a retrieved manual page, or in a line of a configuration file, which is why collapsing all four into the single term *representation* hides what matters. These objects differ in what they preserve, what they lose, and what authority they carry in an architecture study (@tbl-knowledge-objects).
-
-| **Object** | **How Produced or Updated** | **What It Preserves** | **What It Loses** | **Authority in Design** |
-| --- | --- | --- | --- | --- |
-| **Model parameters** | Pretraining, fine-tuning. | Learned statistical regularities, general architectural concepts. | Source links, exact provenance, dynamic project state. | General capability and reasoning; not an authoritative project record. |
-| **Embeddings** | Derived from source items via an embedding model. | Semantic similarity for clustering and retrieval. | Exact text or structured relationships if unmapped. | Supports search; not an authoritative record. |
-| **Retrieved context** | Selected from an index at query time. | Source-linked technical context or examples relevant to the query. | Broad context outside the retrieved chunk. | Transiently informs the model; authority belongs to the underlying source. |
-| **In-context working set** | Assembled dynamically for one inference. | Instructions, state, retrieved context, and examples needed right now. | Discarded after the inference; no persistence. | The immediate payload; not a durable record. |
-| **Explicit design state** | Authorized edits to the project configuration. | The persistent current version, mutable fields, constraints, and workloads. | The history of how the state was reached (unless linked). | The authoritative, ground-truth project version available for action. |
-| **Execution history** | Appended after evaluations and decisions. | The linked history of states, actions, predictions, observations, and failures. | Context not explicitly recorded in the log. | Authoritative record of the search and evaluation process. |
-| **Cost model or surrogate** | Fast predictive mapping over state and action. | Estimates of an architectural consequence such as cycles, power, or area. | Exact high-fidelity truth (it is an estimate). | Predicts consequences; does not replace the tool observation. |
-
-: **Representations preserve different things.** Parameters, embeddings, transient context, explicit state, execution histories, and predictive models have different provenance, freshness, and authority. {#tbl-knowledge-objects tbl-colwidths="[18,20,20,20,22]"}
-
-Calling one object authoritative only helps if someone is accountable for it. The explicit design state needs a named owner who authorizes edits, a synchronization path that keeps it current with the repository and the RTL it claims to describe, and a rule for what happens when a retrieved document, an embedding, and the state disagree, which is that the state wins and the disagreement is logged rather than silently resolved. None of that is free, and a project that cannot say who holds it does not have an authoritative state, it has a file.
-
-Consider evaluating a new execution pipeline for our RISC-V XR subsystem across these objects. Domain relationships explaining instruction-level parallelism and power efficiency live in the *model parameters*. The RISC-V Instruction Set Manual detailing pipeline behaviors can be converted to *embeddings* and supplied as *retrieved context*.
-
-The current fetch width, eye-tracking workload trace, and queue sizes live in the *explicit design state*. Earlier candidate runs and their simulator scores live in the *execution history*. A *cost model* uses the current state and a proposed pipeline change to predict instructions per cycle (IPC) and thermal impact. Finally, the *in-context working set* assembles the instructions, the explicit state, the execution history, and the retrieved manual to generate the next action.
-
-### Output Representations
-
-That next action has to be written in something a toolchain will accept, which rules out the two obvious choices. Abstract pseudo-code does not execute. Raw SystemVerilog, the common choice, is brittle; it demands exact, rigid syntax and admits hallucinated wires and logic flaws that break synthesis.
-
-To bridge this gap, a growing body of work targets typed Intermediate Representations (IRs) such as FIRRTL and the hardware dialects of CIRCT, an MLIR-based compiler infrastructure that hosts several hardware IRs [@CIRCT]. The entrenched industry standards remain Verilog/SystemVerilog and VHDL with their companion collateral, but these emerging IRs shift the verification burden from slow, late-stage simulation to fast, upfront compilation. The value is not that the tools fail faster. It is that they do not fail at all on these: SystemVerilog accepts a width mismatch silently, truncating or zero-extending, and an undriven net propagates X rather than raising an error, so both surface much later as a failing regression or as wrong hardware. A typed, composable IR rejects the malformed mutation at construction instead. Constraining the generator to emit structurally valid IR rather than raw text bounds its action space, so expensive compute cycles go to meaningful semantic tradeoffs rather than debugging trivial syntax hallucinations.
-
-That bound has a price worth stating, because a type system that rejects illegal mutations also rejects legal ones it cannot express. The designs most likely to trip it are the unusual ones, such as a deliberate clock-domain crossing, a hand-tuned asynchronous interface, or a custom macro the IR carries no type for. Safety here is always relative to the properties the representation encodes, so no IR is safe in general and a reader choosing one is choosing which designs remain reachable. When a legal move is rejected, the repair is to extend the representation or route that move through a reviewed exception, not to relax the type system until it stops refusing. An action space bounded by an IR nobody has audited for expressiveness quietly removes candidates the architect never learns were available.
-
-Beyond static IRs, architects explore design spaces through parameterized generators such as Chisel, Python frameworks, or SystemVerilog parameters. A useful representation must encode those generator boundaries and configuration schemas, so the agent tunes parameters rather than rewriting static graphs from scratch.
-
-Real systems architecture is dominated by data movement, not isolated compute blocks. The representation must structurally encode system-level topologies like Network-on-Chip (NoC), memory hierarchies, and bandwidth constraints. However, an interconnect is fundamentally different from single-block dataflow; it involves distributed state, flow control, and dynamic protocol abstractions that require complex state-machine encodings to avoid deadlock. For example, connecting the Lighthouse's RISC-V compute tile to its vision accelerators over a TileLink or AXI fabric requires the representation to carry traffic classes, because the camera stream's sustained bandwidth and the eye-tracking path's latency deadline cannot share one undifferentiated channel. Separating them is what breaks head-of-line blocking; a priority or weighted arbitration policy is what actually keeps the camera stream from starving eye tracking. Furthermore, the encoding must capture the "meta-graph" of Clock Domain Crossing (CDC)[^fn-cdc-c04] and reset trees. A generator that mutates a pipeline without explicitly representing asynchronous boundaries will confidently generate untraceable metastability failures. Finally, generating RTL without a testbench is useless. The representation must also carry verification intent and coverage models (such as Universal Verification Methodology, or UVM). @sec-feedback-verification-trust deeply covers the mechanics of verification and testbench representations.
-
-[^fn-cdc-c04]: **Clock Domain Crossing (CDC)**: When signals pass between logic blocks operating on different clock frequencies. Without proper synchronization logic (like FIFOs or double-flops), the destination registers can become metastable, settling on unpredictable voltage levels and corrupting data.
-
-The representation problem extends beyond logic to physical realization. Power and timing bounds are codified in companion constraint files like UPF (Unified Power Format) and SDC (Synopsys Design Constraints), collateral that travels alongside the RTL. These constraints govern power domains and timing boundaries. In the Lighthouse SoC, for example, the need to cross clock domains between a high-frequency rendering pipeline and a low-frequency, always-on sensor hub requires strict synchronization logic governed by UPF and SDC. For a model, they are uniquely hostile because of *topological coupling*. SDC and UPF rely on exact hierarchical paths and pin names (specific string references to internal RTL signals). Any structural mutation by the generator, such as flattening a hierarchy or renaming a buffer to improve performance, requires a synchronized co-mutation of the constraint files, otherwise the EDA tool will instantly fail with "path not found" errors. An agent must co-generate these formats to operate within a realistic physical envelope, transforming an abstract concept into a manufacturable netlist (@tbl-representation-formats).
-
-| **Format** | **Generative Brittleness** | **Verification Burden** |
+| **Source Structure** | **What It Can Preserve** | **What It Cannot Establish Alone** |
 | --- | --- | --- |
-| SystemVerilog | High (susceptible to syntax/wiring hallucinations) | High (requires full linting and simulation) |
-| FIRRTL / CIRCT | Low (typed, safe-by-construction IR) | Medium (structural correctness enforced by compiler) |
-| UPF / SDC | Very High (Topological coupling; exact hierarchical path dependencies) | High (requires EDA tool validation and dynamic checking) |
+| Paper, manual, or specification | Concepts, requirements, interfaces, prior findings, and source-linked rationale. | The current project version or whether a local implementation satisfies the requirement. |
+| Question and answer or design note | Focused reasoning, calculations, and review rationale. | Executable state, complete dependencies, or conditions not written into the note. |
+| Code, RTL, configuration, or typed intermediate representation | Concrete structure, parameter values, interfaces, and buildable state within the properties the format expresses. | Workload coverage, design intent, or physical effects that require later tools. |
+| Workload trace or profile | Observed software behavior under a stated capture or sampling policy. | Behavior outside the captured population or effects the collection method cannot observe. |
+| Tool run and report | An observation under a particular design, tool, configuration, seed, model, and workload. | A general rule beyond those conditions. |
+| Rejected candidate or review decision | A boundary that mattered, the conditions that exposed it, and the reason work stopped. | Whether the same rejection still applies after the design or conditions change. |
 
-: **Brittleness and verification burden rise from typed IR to topologically coupled constraints:** a typed IR like FIRRTL or CIRCT catches illegal mutations at compile time, while raw SystemVerilog and path-coupled UPF or SDC push the failure to slow, late-stage EDA validation. {#tbl-representation-formats tbl-colwidths="[20,40,40]"}
+: **Source structure determines what can be carried into later work.** More
+data does not repair a missing relationship, version, or condition.
+{#tbl-dataset-capability tbl-colwidths="[24,36,30]"}
 
-### Hardware Encoding
+This is one reason architecture data differs from a conventional image
+classification dataset. A label such as *cat* can be useful without a build
+manifest. A cycle count, power estimate, or timing failure is uninterpretable
+without the design, workload, tool path, and assumptions that produced it.
+Hardware also has hard structural boundaries. One wrong connection can make a
+design unusable, and tightly coupled changes can move performance, power,
+timing, area, and software behavior together. A large corpus of disconnected
+artifacts does not recover those relationships.
 
-Choosing what a method writes out still leaves open how the design gets in. Hardware is inherently concurrent, whereas sequence models rely on 1D positional encodings that force sequential ordering. Furthermore, general-purpose large language models (LLMs) rely on 1D sequence tokenizers (like Byte-Pair Encoding[^fn-bpe-c04]) optimized for natural language. When applied naively to hardware description languages like Verilog, these tokenizers chop signal names and structural code into meaningless fragments, destroying the implicit connectivity of the design.
+Public benchmarks add another risk. Models trained on public HDL corpora may
+have seen the standard benchmark solutions, and contamination studies have
+found this pattern in common Verilog benchmarks [@WangEtAl2025VeriContaminated].
+The same concern appears in broader language-model evaluation
+[@Balloccu2024Leakage]. A benchmark score cannot establish general design
+ability when the evaluated artifacts may have appeared in training. Held-out
+designs, source identity, and executable checks matter more than the volume of
+examples.
 
-[^fn-bpe-c04]: **Byte-Pair Encoding (BPE)**: A tokenization scheme that builds a subword vocabulary by repeatedly merging the most frequent character pairs in a corpus. It compresses natural language well, but it splits hardware identifiers and structural syntax at statistically convenient rather than semantically meaningful boundaries.
+Successful designs can also present a biased view of the space. When a project
+retains the winning configuration while deleting failed synthesis runs,
+unroutable netlists, and rejected alternatives, the remaining data is not an
+unbiased sample. The missing records are concentrated near the boundaries that
+later work most needs to understand. A timing failure may report only that
+slack became negative, and a crashed run may return no metric at all. Treating
+the surviving results as though they were an unbiased sample makes the feasible
+region look larger than it is.[^fn-censored-c04]
+
+[^fn-censored-c04]: **Censored observation.** The result says that a value lies
+beyond a threshold without measuring the value itself. A timing violation, for
+example, may establish that a frequency target was not met without identifying
+the highest frequency the design could sustain.
+
+### Different Sources Carry Different Costs and Limits
+
+The same design may be examined with an analytical model, trace replay,
+cycle-level simulator, RTL simulation, FPGA platform, or fabricated silicon.
+These sources differ in cost, speed, abstraction, and observability
+(@fig-data-fidelity-pyramid, @tbl-synthetic-data-costs). They do not form one
+fidelity ranking for every property. Gate-level analysis may preserve target
+timing detail that an FPGA mapping does not, while an FPGA platform may execute
+far more workload than that analysis can cover. Silicon can reveal behavior of
+the fabricated design but cannot recover a counterfactual configuration that
+was never built.
+
+![**Architecture observations come from sources with different costs and
+property coverage.** The arrangement shows a common path from abstract
+estimation to a fabricated instance, not a total fidelity order. No source
+answers every architecture question.](images/F4-data-pyramid){#fig-data-fidelity-pyramid
+fig-alt="Six observation sources arranged from analytical models through
+trace-driven, cycle-level, RTL and gate-level analysis, FPGA or emulation, and
+physical silicon. The diagram states that the sources have different
+properties and costs rather than one universal fidelity order." width="100%"}
+
+| **Source** | **Useful For** | **Important Limit to Represent** |
+| --- | --- | --- |
+| Analytical model | Fast sensitivity studies and early bounds. | Simplifying equations, calibration range, and omitted interactions. |
+| Trace-driven model | Repeatable study of behavior contained in a captured instruction or event stream. | No behavior that depends on timing feedback absent from the trace. |
+| Cycle-level simulator | Detailed modeled microarchitectural behavior. | Simulator abstractions, unsupported states, calibration, and execution cost. |
+| RTL or gate-level flow | Logic behavior and implementation-facing checks within the executed flow. | Test coverage, process assumptions, constraint quality, and physical effects outside the flow. |
+| FPGA or emulation platform | High-throughput functional or timing-model execution after mapping. | Mapping differences, compile cost, debug visibility, and non-transferable ASIC power or timing. |
+| Fabricated silicon | Behavior of a physical implementation under measured conditions. | Limited design variants, observability, stepping, test conditions, and inability to answer every counterfactual question. |
+
+: **Every observation source has a useful scope and a blind spot.** The
+representation records both so that later chapters can choose and evaluate a
+tool path for the actual question.
+{#tbl-synthetic-data-costs tbl-colwidths="[20,34,36]"}
+
+Planned method cost belongs to
+@sec-methods-generation-prediction-optimization. Realized tool cost and
+movement among observation sources belong to
+@sec-architecture-environments-tool-interfaces, while measurement
+interpretation belongs to @sec-feedback-verification-trust. This chapter needs
+only the representation consequence. A stored observation must name enough of
+its source conditions for a later architect to decide whether it applies.
+
+### Knowledge Objects Need Field-Specific Authority
+
+Knowledge also differs by where it lives (@tbl-knowledge-objects). Collapsing
+all of these objects into the word *memory* or *context* hides their different
+roles.
+
+| **Object** | **What It Preserves** | **Authority and Freshness Rule** |
+| --- | --- | --- |
+| Model parameters | Learned statistical regularities and general concepts. | Useful as prior knowledge, never the authoritative record of current project state. |
+| Retrieval index and retrieved material | Source-linked manuals, papers, examples, and project documents selected for the current task. | Authority belongs to the underlying source. Version and date must match the use. |
+| In-context working set | Instructions, selected sources, current state, and examples needed for one operation. | Transient assembly only. It does not become project state unless an authorized update records it. |
+| Study contract | Question, comparator, scope, permitted changes, constraints, measurements, budget, and stopping conditions. | Controls the declared comparison until an authorized revision changes the contract. |
+| Explicit design and software state | Current configuration, generated artifacts, software image, manifests, and linked constraints. | Current only when the designated sources agree and consistency checks pass. |
+| Workload state | Trace, profile, population, phase definitions, sampling policy, and version. | Controls the workload condition only within its recorded coverage. |
+| Project history | Prior candidates, tool runs, failures, decisions, and rationale linked to their conditions. | Authoritative for what was recorded then, not automatically applicable to the current version. |
+
+: **Knowledge objects preserve different facts.** Authority belongs to the
+source responsible for a field, not to whichever object was supplied most
+recently.
+{#tbl-knowledge-objects tbl-colwidths="[23,38,29]"}
+
+There is no safe global rule that one file always wins. The study contract
+controls the permitted comparison. The checked-in configuration and generated
+artifact control implemented hardware state when they agree. The workload
+manifest controls which trace is current. The specification controls an
+interface requirement. A review decision controls whether a candidate
+advanced. When responsible sources disagree, the conflict is not silently
+resolved in favor of the most convenient one. The study blocks until the owner
+reconciles the mismatch or records an authorized change.
+
+Knowledge enters these objects on different schedules. General relationships
+may be learned during model training. Manuals and prior reports may be
+retrieved when needed. Current constraints belong in explicit project state,
+not in model weights. Tool results append to project history only after their
+identity and conditions are known. The durable update-path rule is simple
+(@tbl-ingestion-timescales). Fast-changing facts need an explicit, versioned
+path. Slow-changing knowledge can inform work but cannot override those facts.
+
+| **Knowledge Path** | **Appropriate Content** | **Required Check Before Use** |
+| --- | --- | --- |
+| Model training or adaptation | General architecture concepts, recurring relationships, and interaction conventions. | Treat as prior knowledge and verify against responsible project sources. |
+| Retrieval from a source collection | Manuals, specifications, prior studies, and versioned internal documents. | Confirm source identity, revision, and applicability. |
+| Current working context | The subset of contract, state, history, and sources needed for the immediate task. | Confirm that it was assembled from current responsible sources. |
+| Authorized project update | A new contract revision, design state, workload, constraint, decision, or accepted record. | Record owner, version, dependencies, and consistency checks. |
+
+: **The update path should match how quickly a fact changes.** Current project
+facts require explicit versioned updates. General knowledge remains advisory.
+{#tbl-ingestion-timescales tbl-colwidths="[24,38,28]"}
+
+## Representation Determines Reachable Designs
+
+A project can have the right facts and still represent them badly. The encoding
+decides which designs can be expressed, which dependencies remain connected,
+and which changes a later method will regard as nearby. These are architecture
+consequences.
+
+### Structure, Text, and Tool-Facing Forms
+
+Raw text is useful for explanation but weak as the sole representation of a
+design. It can describe an L2 change without identifying the configuration
+field, affected interfaces, or companion constraints. Tool-facing
+representations add structure. Parameter schemas enumerate legal values.
+Abstract syntax trees and data-flow graphs preserve relationships that a token
+sequence makes difficult to inspect. Typed intermediate representations can
+reject malformed constructions before expensive execution. Parameterized
+generators can expose a bounded set of changes while retaining the lowering
+path to RTL.
+
+Typed representations are not safe in general. They reject only violations
+covered by their types and checks. SystemVerilog, FIRRTL, typed dialects in the
+CIRCT compiler infrastructure, and companion formats such as SDC and UPF
+preserve different properties [@CIRCT] (@tbl-representation-formats).
+
+| **Representation** | **What It Makes Explicit** | **What Still Requires Attention** |
+| --- | --- | --- |
+| SystemVerilog or VHDL | Logic, hierarchy, interfaces, and behavior in the HDL. | Width conventions, connectivity, unknown values, verification intent, and all properties not established by compilation. |
+| Typed hardware IR such as FIRRTL or a CIRCT dialect | Operations, types, connectivity, and transformations supported by the IR. | Legal designs the IR cannot express, semantic correctness, lowering, verification, and physical realization. |
+| Parameter schema and generator | Named mutable fields, legal values, and a reproducible path to generated artifacts. | Whether the generator and checked-in artifacts agree and whether dependent collateral changes with the design. |
+| SDC, UPF, and other constraint collateral | Timing, power intent, domains, path references, and implementation assumptions. | Hierarchical-name coupling, stale paths, waived checks, and consistency with the RTL. |
+| Graph or spatial representation | Connectivity, topology, adjacency, or physical location. | Features omitted from nodes and edges, write-back to tool inputs, and physical rules not encoded in the graph. |
+
+: **A representation makes some properties explicit and leaves others for
+later checks.** Choosing one also chooses which legal designs are easy,
+difficult, or impossible to express.
+{#tbl-representation-formats tbl-colwidths="[24,34,32]"}
 
 ::: {.callout-field-note title="The missing level shifter"}
-A text-based LLM hallucinated a wire connection spanning two different voltage domains without a level shifter. It passed syntax checks but would have driven destructive current across the domain boundary, illustrating why 1D sequence tokens fail and why structural or graph encodings are required to capture the physical invariants of the design. This case is a composite of a failure mode practitioners report from LLM-generated RTL, not one documented incident.
+A text-based proposal connects logic across two voltage domains without a level
+shifter. The code passes syntax checks, but the represented design omitted the
+power-domain relationship that made the connection illegal. This composite
+example captures the real lesson. Better prose would not fix the problem. The
+design state must carry the domains and the required crossing rule in a form
+the tool path can check.
 :::
 
-To reason about hardware natively, a model must move beyond text sequences to structural embeddings. First, a specialized encoder parses a raw text snippet (like SystemVerilog) and lowers it into an Abstract Syntax Tree (AST), a Data Flow Graph (DFG), or an And-Inverter Graph (AIG). Once lowered into a graph, Graph Neural Networks (GNNs) can ingest it [@ShiEtAl2023DeepGate2]. Because GNNs offer permutation invariance and explicit edge-based message passing, they capture structural locality and fan-out directly, and can be given combinational depth as a node feature. What they do not carry is physical locality, which does not exist until placement assigns coordinates. Those are properties that a 1D sequence model struggles to infer through attention mechanisms alone.
+Hardware is concurrent and relational. A netlist is a graph, a memory hierarchy
+is a topology, and a floorplan adds spatial coordinates. Graph encodings can
+preserve fan-in, fan-out, connectivity, and structural locality more directly
+than a one-dimensional token stream. DeepGate2, for example, learns over
+and-inverter graphs rather than treating a circuit only as text
+[@ShiEtAl2023DeepGate2]. A graph still omits any property not attached to its
+nodes, edges, or surrounding state. Logical adjacency is not physical
+proximity, and a graph without placement cannot establish wire delay.
 
-However, writing back to EDA tools presents a massive impedance mismatch. While a static GNN embedding is excellent for *reading* state, physical constraints (like UPF/SDC) are typically driven by procedural TCL scripts full of loops, variable matching, and conditional logic. Translating a static ML graph back into valid procedural TCL remains a major open research problem.
+The macro-placement work associated with AlphaChip provides a useful
+representation example. The chip was represented with graph structure for
+connectivity and a grid-like canvas for legal placement. Those choices exposed
+relationships and spatial actions that flat RTL text did not
+[@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement]. The result
+does not establish that one placement method is generally best. It shows that a
+method can search only after the architecture problem has been translated into
+a form that preserves the relationships relevant to the task. The policy and
+reward loop belong with optimization in
+@sec-methods-generation-prediction-optimization rather than in this chapter.
 
-Beyond graphs, bridging the semantic gap requires multi-modal representations. Visual Language Models (VLMs) and spatial encodings move past text tokens, letting agents reason directly over 2D floorplans and physical layouts. When projecting discrete hardware graphs into continuous latent spaces (embeddings), a central ML-Sys challenge is maintaining structural validity, preserving graph invariants so that decoded candidates remain physically realizable. This shift from 1D sequence tokenization to structurally valid graph embeddings is the core data representation problem in AI-assisted architecture.
+### Workload Is Part of Design State {#sec-workload-phase-behavior}
 
-What an encoding can express and whether it can be written back are two of its three properties. The third is the geometry it imposes on any search that runs over it, which decides whether an optimizer's assumptions about the space hold at all. That property only becomes visible once the loop starts mutating state, which is where the next section takes it up.
+Static hardware does not identify what it will run. A workload representation
+must carry the software image, inputs, trace or profile, phase definitions,
+sampling policy, and coverage limits relevant to the study. Those fields are
+not background metadata. They determine which hardware behavior becomes
+visible.
 
-## Design State, Not Text
+The Lighthouse XR workload is bursty and phase dependent. A trace can expose
+frame boundaries, memory behavior, and periods of activity. It may still omit
+timing feedback that would have changed the instruction stream, thread
+interleaving, or system behavior. A trace captured under one software image
+cannot silently stand in for another. The representation must connect
+`XR-TRACE-A` to `SW-BASE-A`, its frame identifiers, its collection policy, and
+the hardware conditions under which it is used.
 
-Token stream or graph embedding, the encoding decides what a method can express, not what it is allowed to do. A method that works on a design does not emit text about it. It mutates a constrained state machine.
+Representative sampling can reduce detailed simulation cost without changing
+the simulator itself. SimPoint clusters recurring execution phases and
+simulates representative intervals, while SMARTS uses statistical sampling and
+reports confidence for the estimate
+[@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. The durable
+representation point is not which sampling scheme to choose. It is that the
+selected intervals, weights, and coverage become part of workload state. A
+sampled result without those fields cannot be interpreted or reproduced.
 
-An architecture representation provides three related views of this design problem:
+### Permitted Changes and Invariants
 
-- **Current-state view:** The authoritative explicit design state. It identifies the exact design version, the workload, the mutable fields available for change, and the fixed constraints. It also has to track the hardware/software contract, because a hardware mutation the software stack cannot absorb is not a legal change however well formed it is.
-- **Execution history view:** The linked history of proposed actions, anticipated effects, model predictions, tool observations, failed runs, rejected alternatives, and decisions that produced the current version.
-- **Context view:** The assumptions, uncertainty, cost, fidelity, provenance, tool versions, and other conditions needed to interpret the state and execution history.
+A representation must separate what may change from what must remain fixed. In
+the Lighthouse study, L2 capacity is the only mutable architecture field. The
+2\ MB, 3\ MB, and 4\ MB choices must map to realizable cache configurations.
+Cache policy, NoC topology, compiler, runtime, software image, workload, and the
+rest of the memory system remain fixed. The 3\ W power envelope, 1.5\ mm^2^
+macro-area limit, 2.5\ ns access-time allocation, and independent thermal and
+IR-drop review remain required.
 
-The three views connect over time through a versioned trajectory (@fig-execution-history). Begin at design state V1. The design trace identifies a proposed action and the consequence the architect or method anticipates.
+::: {.callout-lighthouse title="One permitted change, with its dependencies"}
+**The declared move.** Select one realizable L2 capacity from 2\ MB, 3\ MB, and
+4\ MB.
 
-Evaluation produces an observation with its cost, fidelity, and provenance. If the decision owner accepts the change, the decision advances the design to V2. A rejected action remains attached to V1 with the observation and decision that stopped it. The rejected branch does not disappear just because it did not produce the next version.
+**What moves with it.** The capacity field, generated cache instance, and any
+derived configuration needed to keep the artifact consistent.
 
-![**A versioned execution history records accepted and rejected work.** Each iteration links the prior design state, proposed action, anticipated effect, tool observation, cost, fidelity, provenance, and decision. A rejected candidate remains associated with the state and action that produced it, so later work can account for the failure.](images/F5a-trajectory-record){#fig-execution-history width="85%" fig-alt="Two-iteration simulation log diagram. From design state version one, a proposed action and anticipated effect lead to a tool observation tagged with cost, fidelity, and provenance and then to a decision that either produces design state version two or retains the rejected candidate with its failure record."}
+**What does not move.** Cache policy, NoC topology, compiler, runtime, workload,
+software image, memory system, and the declared limits and reviews.
 
-The representation connects information that final artifacts often separate. It does not need to be one monolithic file. It may span a configuration schema, workload manifest, candidate table, run log, and version-control history, provided those artifacts refer to the same design versions and proposed changes.
-
-### Workload Representations and Phase Behavior {#sec-workload-phase-behavior}
-
-One of those artifacts carries the half of the design state that static RTL cannot express, which is what the hardware will actually run. Traces, phase classifications, and bottleneck graphs are the data representations of the software target. A Lighthouse SLAM (Simultaneous Localization and Mapping) trace, for instance, exposes the bursty, phase-based execution that analytical cost models average away. Capturing the trace is the easy part. Turning it into the cycle-accurate switching activity that power and thermal analysis consume requires pipeline semantics a text model does not have. A method must read workload state as fluently as design state, matching hardware mechanisms to the target application's phase behavior without losing the switching activity underneath.
-
-Phase behavior is also what makes cheap high-fidelity data possible, on an axis the fidelity pyramid does not capture. The pyramid trades fidelity for volume, but sampling theory offers a third way to pay. Programs execute in a small number of recurring phases, and SimPoint, a phase-classification method for sampled simulation, showed that clustering those phases and simulating one representative interval per phase recovers whole-program behavior within a few percent of cycles per instruction while cutting detailed simulation by orders of magnitude [@SherwoodEtAl2002SimPoint]. SMARTS reached similar economics through systematic statistical sampling, and attached the confidence interval that says when the sample is too thin to trust [@WunderlichEtAl2003SMARTS]. For a data-hungry surrogate this is the difference between a corpus of cheap approximations and a corpus of cheap ground truth, and the sampling policy itself becomes part of the sample's provenance.
-
-### State Mutation and Tradeoffs
-
-An explicit design state must distinguish the fields that a method may mutate from the invariants and constraints that remain fixed to preserve system intent. Crucially, "Project State" in physical design is not a single environment, but a Multi-Corner Multi-Mode (MCMM)[^fn-mcmm-c04] matrix. A proposed structural mutation must be evaluated against dozens of concurrent physical scenarios. Improving setup timing in a typical corner might instantly violate hold timing in a fast-corner/cold-temperature mode. This severely multiplies the cost of the tool observation loop.
-
-[^fn-mcmm-c04]: **Multi-Corner Multi-Mode (MCMM)**: The practice of verifying a physical design across a matrix of different operating modes (e.g., test, sleep, active) and physical corners (variations in manufacturing process, voltage, and temperature).
-
-::: {.callout-lighthouse title="Mutable fields and fixed constraints, declared before the search"}
-**Context.** The boundary binds the search only when it is written into the represented state, not when it is assumed by the architect who set the study up.
-
-**In the XR subsystem comparison.** The representation declares that SRAM capacity and MAC array dimensions are mutable, while the peak power limit and the target workload mix are fixed constraints. If these boundaries are not explicit, the optimizer might propose a candidate that achieves high performance by silently violating a power constraint or altering the workload mix, invalidating the comparison.
+**Why the boundary matters.** A proposal that changes capacity and compiler
+behavior may be an interesting new study. It is not a valid candidate in this
+comparison.
 :::
 
-Within these boundaries, we must explicitly distinguish two types of legal moves. The first is *parametric tuning*, such as resizing a buffer, changing queue depths, or adjusting cache associativity. This represents a continuous or bounded discrete search where the pipeline topology remains unchanged, and it requires only a simple scalar or JSON schema to govern the action space. In this context, Bayesian Optimization (BO) is highly effective for low-dimensional, high-cost parameter searches where sample efficiency is paramount, often outperforming reinforcement learning (RL) methods like PPO[^fn-ppo-c04] that require massive interaction data.
+The distinction also separates parametric and structural changes. A parametric
+change selects a value within an existing structure, such as a legal cache
+capacity or queue depth. A structural change alters the set of components or
+relationships, such as adding a pipeline stage, replacing a mesh with a ring,
+or inserting an accelerator. Structural changes require a different schema,
+different dependent artifacts, and often a different study. Calling both
+changes simply *edits* hides the difference.
 
-[^fn-ppo-c04]: **Proximal Policy Optimization (PPO)**: A standard reinforcement-learning algorithm that updates a policy in small clipped steps, so no single batch of experience can collapse what the agent has already learned. That stability is bought with sample efficiency, since it needs many thousands of environment interactions, which is exactly what an expensive architectural simulator cannot supply.
+System and software contracts matter even when they live outside the local
+configuration. A new vector instruction affects the ISA, compiler, runtime,
+and verification plan, and it may also require control and status register
+changes. A memory organization that
+improves average latency but violates the memory consistency model is not a
+legal system design. Backward compatibility, interface standards, and
+software assumptions must appear as dependencies or invariants rather than
+remaining with the one experienced engineer who remembers them.
 
-The choice of encoding is what makes that search tractable or hopeless, and it reconciles two facts the chapter has stated in tension. The design space is punctuated by hard cliffs, yet Bayesian optimization works only because it assumes nearby candidates have similar costs. The representation decides whether that assumption holds. Encode cache capacity on a linear axis and a step from 512 KB to 1\ MB looks the same size as a step from 4\ MB to 4.5\ MB, even though miss rate falls with the logarithm of capacity and the first step changes far more; encode a netlist so that a one-bit change flips routability, and a cliff sits between adjacent points where no smoothness prior can bridge it. Choosing the representation is choosing the geometry the optimizer believes in, which is why the regression models of classical design-space exploration spent their effort on variable transformations before spending any on model capacity [@LeeBrooks2006RegressionModeling].
+Physical collateral is coupled in the same way. Timing and power-intent files
+often refer to exact hierarchical paths. Renaming or moving a block without
+updating SDC or UPF can leave a constraint pointing to nothing. A legal change
+therefore includes its required companion changes. The representation should
+make that group visible so a later method cannot improve one file while
+silently invalidating another.
 
-Two moves follow, and both are cheap. The recognition test is an adjacent-pair check on the encoded axis: take one step at each end of the range and compare how far the metric moves. If a step from 512 KB to 1\ MB shifts miss rate several times more than a step from 4\ MB to 4.5\ MB does, the axis is lying about distance, and every smoothness prior built on it is wrong. The repair for a parametric field is to re-encode it on the quantity the physics is smooth in, or on the set the tools can actually build. Miss rate falls with the logarithm of capacity, so a log axis restores comparable steps. Better still, an L2 is assembled from SRAM macros of fixed geometry, so 4.5\ MB is not a point in the space at all; an index over the realizable macro configurations makes every step a real step and deletes candidates the memory compiler would have refused anyway.
+Fixed conditions may also be a set rather than one point. Multi-corner,
+multi-mode analysis represents a physical design across operating modes and
+process, voltage, and temperature corners. A candidate must retain the same
+identity across the declared condition matrix, and each observation must name
+the condition it covers. A typical-corner result cannot silently stand in for a
+fast-corner hold check or a low-power operating mode.
 
-*Structural mutation*, the second type, changes the space rather than moving within it. Adding a pipeline stage, swapping a mesh interconnect for a ring, or inserting a bespoke accelerator block does not reparameterize a fixed set of fields; it replaces the field set, so there is no axis left to transform and no smoothness to restore. Governing this action space is far harder. Structural mutation requires a graph-based representation grounded in actual EDA intermediate representations (e.g., structural Verilog or And-Inverter Graphs [AIGs]). Translating between an ML agent's abstract graph and an EDA tool's netlist often introduces semantic gaps where verification fails, making it critical to enforce physical connectivity, validate interface protocols, and maintain coherence rules during the transformation.
+### Encoding Changes the Geometry
 
-How large the resulting space gets was already counted in @sec-evaluation-capacity-bounds-search, where a deliberately narrow comparison reached thousands of candidate-evaluation pairs before a single invalid design was rejected. What the representation controls is reach rather than size. Declaring the mutable fields and their legal values is what keeps an optimizer out of the regions that are combinatorially available and physically useless.
+Even a correct list of legal values imposes a geometry on later search. Suppose
+cache capacity is encoded on a linear numerical axis. A move from 512\ KB to
+1\ MB then appears to be the same distance as a move from 4\ MB to 4.5\ MB.
+The architectural effects are unlikely to be comparable, and 4.5\ MB may not
+be realizable with the available SRAM macros. The encoding has created a
+misleading neighborhood and an impossible point.
 
-Because search spaces are vast and evaluations are expensive, the representation must also record the tradeoffs and failures discovered along the way. Just as models need negative examples in training data, active projects must retain rejected candidates in their execution history. The same censoring that biases a training corpus toward survivors operates inside a single project. Discard the failed candidates and the optimizer's picture of the feasible region stays optimistic in exactly the infeasible direction it is searching toward. Discarding this negative evidence also forces a method or reviewer to rediscover which assumptions, tools, workloads, or regions of the design space were already ruled out.
+Two checks expose the problem. First, compare adjacent steps at different parts
+of the encoded range. If equal encoded steps produce very different changes in
+the architectural quantity of interest, the distance is misleading. Second,
+ask whether every encoded point lowers to a configuration the tools can build.
+An index over realizable macro organizations may be better than a continuous
+capacity value. A logarithmic capacity axis may better reflect some cache
+relationships than a linear one. These are design inferences for this example,
+not prescriptions from one modeling paper. More broadly, classical
+architecture design-space models use transformations and nonlinear terms when
+parameter effects and interactions are not well represented on the original
+axes [@LeeBrooks2006RegressionModeling].
 
-Consider compiler regression tests. When a compiler bug is discovered, it is codified into a regression test. Architecture projects should preserve rejected candidates for the same reason. If a proposed pipeline configuration is rejected because it introduces unacceptable area overhead, that failure should leave a design trace identifying the candidate, the area condition it violated, and the context (tool version, physical constraints).
+The lesson does not prescribe an optimizer. It precedes method selection.
+Generation, prediction, and optimization all inherit the reachable set and
+neighborhood created here. A poor encoding can make any of them waste effort
+on impossible candidates or miss useful ones that were never expressible.
 
-Negative knowledge takes many forms, from synthesis and timing violations to manual waivers for physical constraints like Static Timing Analysis (STA)[^fn-sta-c04], each recording a different boundary of the design space (@tbl-negative-traces).
+## Keeping State Current and Exposing Its Limits
 
-[^fn-sta-c04]: **Static Timing Analysis (STA)**: A method of computing the expected timing of a digital circuit without requiring simulation, ensuring that data arrives at registers within the required setup and hold windows.
+A represented problem changes over time. The configuration moves, a workload
+is recaptured, a model is recalibrated, or a constraint changes. Project
+history and freshness checks keep those changes from turning into silent
+contradictions.
 
-| **Failed Run or Rejected Alternative** | **What It Records** | **How It Changes Later Work** |
+### History Includes Rejected Work
+
+An execution history connects each candidate to the prior state, proposed
+change, conditions, tool return, run status, candidate disposition, and design
+decision (@fig-execution-history). A completed run may be followed by adoption,
+rejection, or an unresolved comparison. An infrastructure failure supports
+none of those candidate dispositions and instead calls for repair or rerun.
+Only an explicit decision to adopt a change creates a new design version.
+
+![**A versioned execution history separates run status, candidate disposition,
+and design change.** A completed execution may be followed by adoption,
+rejection, or an unresolved comparison. An infrastructure failure leads to
+repair rather than a candidate verdict, and only explicit adoption creates a new design
+state.](images/F5a-trajectory-record){#fig-execution-history width="85%"
+fig-alt="Project history showing a valid result followed by an explicit
+adoption and new state, a valid result that remains rejected or unresolved, and
+an infrastructure failure that leads to repair while the design state remains
+unchanged."}
+
+The cache walkthrough in @sec-architecture-20-ontology illustrated a
+stale-state failure, a rejected 4\ MB candidate, and an unresolved 3\ MB
+comparison. This chapter does not import those illustrative outcomes as live
+history. The initial live history is empty. A prior result becomes a comparable
+observation only when its contract status and recorded design, candidate,
+hardware, software, workload, simulator, cache, power, SRAM, and PVT
+identifiers satisfy the matching rule in @tbl-represented-problem. Other
+records can remain visible as advisory context without becoming observations
+for this study.
+
+Projects need negative records because successful designs are survivor
+samples. Removing failed work makes both a dataset and an active study
+optimistic near the feasibility boundary. The record should preserve why a run
+failed without turning one local result into a universal prohibition
+(@tbl-negative-traces).
+
+| **Failed Run or Rejected Alternative** | **What to Keep** | **How Later Work Should Use It** |
 | --- | --- | --- |
-| Synthesis or timing violation | Constraints, process, parameters, failing setup/hold paths. | Exclude this macro or parameter combination. |
-| Unroutable or PDN failing netlist | Placement, density, pin layout, congestion map, IR drop. | Add congestion-aware spacing or reshape the action space. |
-| Proxy win that fails fidelity | A cheap metric improves, but a higher-fidelity check overturns the apparent improvement. | Calibrate proxies and require sensitivity checks. |
-| Tool failure or crash | Simulator, synthesis, compiler, or harness cannot complete. | Separate design failure from environment failure. |
-| Coverage gap | Workload, input, scenario, or architecture class was not represented. | Mark the evidence boundary before committing. |
-| Rejected design rationale | An architect or reviewer rejects a candidate for risk, maintainability, schedule, or integration. | Preserve the reason for later work and review. |
-| EDA waivers and TCL scripts | Bypasses known false-positives in DRC or STA, often hiding tacit human judgment about what physical limits are safely ignorable. | Prevent the agent from endlessly optimizing away a DRC violation the human team already waived. |
+| Synthesis or timing violation | Candidate, constraints, process assumptions, and failing paths. | Reconsider the candidate only after checking whether the relevant conditions still apply. |
+| Unroutable or power-delivery failure | Netlist, placement conditions, density, congestion, or IR-drop result. | Identify the affected region and avoid treating the failure as a property of all similar designs. |
+| Proxy improvement overturned later | Cheap estimate, later observation, and the conditions under which they diverged. | Reassess the proxy's useful scope before reuse. |
+| Tool failure or crash | Command, inputs, environment identity, logs, and failure classification. | Repair the environment without recording the candidate as architecturally rejected. |
+| Coverage gap | Missing workload, input, scenario, or architecture class. | Mark the boundary of the result rather than filling it with an assumption. |
+| Reviewer rejection | Candidate, stated reason, risk, schedule, integration concern, and decision owner. | Preserve the rationale and revisit it only when the relevant conditions change. |
+| Waiver or exception | Violated rule, justification, scope, owner, and expiration or review condition. | Prevent repeated work while keeping the exception visible. |
 
-: **Rejected work remains useful when its conditions are recorded.** Failed builds, invalid candidates, missed constraints, and rejected alternatives can prevent repeated mistakes without turning one local failure into a universal rule. {#tbl-negative-traces tbl-colwidths="[26,32,32]"}
+: **Rejected work remains useful when its conditions are recorded.** A later
+architect can determine whether the same boundary still applies.
+{#tbl-negative-traces tbl-colwidths="[27,34,29]"}
 
-An old failure does not automatically rule out a new candidate. The workload, tool version, or surrounding design may have changed. The method can surface the earlier record, and the architect determines whether the conditions that caused the failure still apply.
+### Freshness Is a Property of the Representation
 
-### Legacy Compatibility as a Fixed Constraint
+General knowledge and project state age at different rates. A current
+retrieval index can point to an old manual. A current design can be paired with
+a trace captured from an earlier software image. A run directory can contain a
+new report and an old configuration. Each file may look plausible on its own
+while the combination describes no design that ever existed
+(@fig-split-brain-causality).
 
-Not every fixed constraint is written into the study's own configuration. The most consequential ones live outside it, in the software that already runs on the platform, and a search that sees only the declared mutable fields drifts toward structures that are most efficient in isolation. A mathematically optimal design is useless if it breaks the software ecosystem it has to run inside, so the representation has to carry backward compatibility as an explicit constraint rather than as tribal knowledge held by whoever has been on the program longest.
+![**A stale source can make a current design appear internally
+consistent.** When a method reads an earlier specification or project state, it
+can propose a change that violates the version now under
+design.](images/F4b-split-brain-causality){#fig-split-brain-causality
+width="100%" fig-alt="A stale reference state and a current project state lead
+to an incompatible proposal. Version and freshness checks expose the mismatch
+before the proposal reaches a costly tool flow."}
 
-Design does not happen in a vacuum. It sits beneath billions of lines of existing code, and the dependency runs both ways. A new vector instruction is not only datapath work; it forces instruction set, compiler, and control-and-status-register changes that the software stack has to absorb, so a representation that cannot express that coupling will report the mutation as legal. In the other direction, a generative model might propose a memory interleaving scheme that improves average-case latency by 15%, yet if the scheme quietly violates the memory consistency models that legacy software assumes, it breaks every multithreaded operating-system kernel running on it. A non-standard interrupt controller might save area while violating platform architecture specifications (e.g., ARM SBSA) or OS Hardware Abstraction Layer (HAL) assumptions, forcing rewrites across millions of lines of legacy OS drivers. The engineering bill for that rewrite can exceed the die area the optimization saved, which is why the saving and the software work it creates belong in the same comparison rather than on separate teams' budgets.
+The represented state can also drift from the artifact it claims to describe.
+A parameter is renamed in the generator, a constraint is tightened directly in
+an SDC file, or a block is replaced by hand. The state still says it is current,
+but regenerating the design produces something different from the checked-in
+artifact.
 
-These boundaries are hard architectural constraints, not suggestions. A search cannot optimize for IPC (Instructions Per Cycle) or PPA (Power, Performance, Area) alone. It has to stay bounded by the backward-compatibility contracts, ISA semantics, and memory consistency models that define the environment the chip will inhabit. Strip those constraints out of the represented state and the generator will propose optimized but unbootable silicon.
+The direct check is to regenerate the artifact from the represented state and
+compare the result with the repository. If the state cannot reproduce the
+design it names, work that depends on it should not start. This check has a
+clear limit. It works only where the state owns generation. A hand edit below
+that level must be detected by another consistency check or made an explicit
+part of state.
 
-## Consequence Prediction
+Source identity needs enough detail to support these checks. Depending on the
+artifact, that may mean a version-control revision, content hash, tool and model
+version, workload manifest, seed, process corner, timestamp, or named owner.
+The representation should keep only what the study needs, but it cannot omit
+the identity required to decide whether two records describe the same
+conditions.
 
-Once a representation properly bounds the method to legal, bootable changes, the system still must select which valid mutation to pursue. To choose the next change, an optimizer needs an estimate of what that change may do. Predictive design-space exploration has long used analytical models, learned surrogates, and regression modeling to predict configuration performance without running full simulations [@LeeBrooks2006RegressionModeling]. More recent learned cost models predict throughput or performance directly from a structural representation of the program, as in AutoTVM's learned tensor-program cost model and the Halide learned autoscheduler [@ChenEtAl2018AutoTVM; @AdamsEtAl2019Halide]. What these predictors consume is a learned graph or structural representation of the design, the same move that later lets the AlphaChip placement agent operate on a chip graph.
+### Cross-Layer Relationships Need Provenance
 
-### Cost Models vs. World Models
+Freshness also runs vertically through the stack. A high-level decision such as
+adding a prefetcher may be lowered through generators, RTL, synthesis,
+placement, and timing analysis. If a later timing failure cannot be connected
+back to the architecture construct that produced it, the design state
+fragments when the team most needs an explanation.
 
-That predictor needs a precise name, because two different objects travel under one word and what a loop may claim on the strength of a prediction depends on which one produced it. Current AI-assisted architecture relies on *cost models*, or surrogates. A cost model takes a proposed design state and predicts its physical consequence, such as an expanded cache drawing 3\ W.
+Cross-layer provenance records those relationships. It connects architecture
+intent to the implementation objects and constraints that realize it. It does
+not prove that every transformation preserved meaning. It makes the chain
+inspectable and can localize a missing link or failed consistency check.
+Detecting semantic loss still requires a check for the property that should
+have survived.
 
-A *world model* is a different object. In artificial intelligence, a world model predicts the *next state* of an environment [@HaSchmidhuber2018WorldModels], allowing an agent to plan several steps ahead without querying a simulator. Determinism is not what makes them unnecessary here; learned world models have done their most visible work in fully deterministic settings, where systems like MuZero plan through games with a learned transition model [@SchrittwieserEtAl2020MuZero]. The difference in architecture is that the state transition is already known. Applying a mutation to a netlist or a configuration is bookkeeping. The expensive step is the observation, evaluating what the mutated design is worth. Architecture research therefore concentrates its learning capacity in highly accurate, multi-fidelity cost models rather than transition models. Current agents do not hallucinate entire physical worlds; they search structural representations guided by learned cost proxies, with physical synthesis (PPA) serving as the ultimate arbiter for these predictive models.
+Common architecture artifacts become reusable only when their hidden context is
+made visible (@tbl-representation-debt).
 
-That premise needs one qualification, because the mutation is mechanical in only one of its two senses. Editing the state is bookkeeping. Turning the edited state into a legal, implementable design is not, and this chapter has already said as much. The write-back path from an abstract graph to procedural tool scripts remains an open problem, a structural change has to co-mutate its power-intent and timing-constraint collateral, and connectivity, protocol, and coherence rules still have to be enforced across the semantic gap between a graph and a netlist. So the cheap transition is the state edit, while the mapping from an edited state to something the tools will accept is expensive and is exactly what no learned transition model currently supplies. Architecture assigns that mapping to the harness rather than to a model, which is why the learning capacity goes into cost models instead.
-
-The answer is worth stating as a claim that could fail, and three developments would overturn it. The first is a learned lowering. A model that could turn an edited state into a legal, implementable design, collateral and all, would be a transition model, and it would be worth building precisely because that mapping is the step no one has automated. The second is depth. Scoring one mutation at a time is sufficient when each mutation can be judged on its own, and it breaks down when the valuable move is a sequence whose first step reads as a regression, as widening a datapath does before the buffer feeding it is resized. A transition model that could plan through that valley would beat a greedy search that cannot enter it. The third is observability. The claim that the transition is already known holds because the loop applies a declared mutation to a state it can inspect, and it weakens wherever the state cannot be inspected, as with a third-party IP block or an encrypted netlist whose response has to be predicted rather than read. None of the three is settled, which is the honest status of the chapter's answer.
-
-### The Role of the Predictor
-
-Whether the predictor is a fast analytical proxy or a deep learned surrogate, what matters next is what it has actually learned. A common flaw in many early predictive surrogates is that they fall into the correlative trap. A black-box surrogate might learn a correlation (for example, that higher chip area often equals higher power) through curve-fitting on its training data, without encoding the underlying physics. This is the causality gap machine learning has named in general terms. A model fit on co-occurrence carries no account of what would happen under an intervention [@Pearl2018BookOfWhy], and an architectural mutation is exactly an intervention.
-
-Overcoming this requires a mechanistic or causal cost model (or causal surrogate). Such a model explicitly encodes structural causality. Adding a cache level forces an increase in access latency because of wire physics and multiplexing, not because the two variables co-occurred in a dataset.
-
-These causal models are not aspirational, and the oldest of them have names. The roofline model does not fit a curve to observed throughput. It encodes a physical ceiling from peak bandwidth and peak compute, so a kernel below the ridge point is memory-bound no matter what the training data said [@Williams2009Roofline]. Interval analysis builds a cycles-per-instruction stack the same way, composing a superscalar core's cycle count from discrete miss and branch events rather than from co-occurrence statistics. A learned surrogate anchored to a mechanistic skeleton inherits that discipline. Its predictions can be wrong, but they cannot climb above the roof, which is exactly the failure a pure curve fit commits when the optimizer drags it out of distribution.
-
-Causal structure is what lets a model generalize more credibly to novel, unsimulated architectures. Correlative models tend to collapse outside their training distribution when the optimizer pushes them into Out-of-Distribution (OOD) spaces, generating confident but physically impossible predictions.
-
-Correlative or mechanistic, the predictor returns the same kind of object, and its standing in the loop matters more than its internals. Given the constrained design state and a proposed mutation, it emits a predicted consequence such as a cycle count or a power figure, cheaply enough to run before the simulator is committed. That prediction is *not* a tool observation. It is an estimate that carries epistemic and aleatoric uncertainty.[^fn-uncertainty-types-c04]
-
-[^fn-uncertainty-types-c04]: **Epistemic and aleatoric uncertainty**: Epistemic uncertainty comes from a lack of training data near the candidate and shrinks as more observations arrive. Aleatoric uncertainty is inherent noise in the system itself, such as run-to-run variation from tool seeds, and no amount of additional data removes it.
-
-What that estimate must get right is narrower than it first appears, and it is not absolute accuracy. A cost model that overpredicts every candidate's power by 30 percent but preserves their ordering is more useful to the loop than one with 5 percent average error that swaps the top two candidates. Search consumes rankings, not absolute numbers. The property a proxy owes the loop is *rank fidelity*, the preservation of ordering among the candidates it will actually arbitrate, and so the right acceptance test for a surrogate is rank correlation measured near the decision boundary where selections happen, not average error over the whole space. This is why AutoTVM trains its tensor-program cost model with a rank loss rather than a regression loss. Absolute accuracy starts to matter only when a number leaves the loop and becomes a claim, which is the tool observation's job, not the proxy's.
-
-A later simulator execution tests the prediction and returns a high-fidelity observation. Detecting when a candidate has left the calibrated region is the job of uncertainty quantification,[^fn-uncertainty-quantification-c04] through deep ensembles [@LakshminarayananEtAl2017DeepEnsembles], Gaussian-process predictive variance, or conformal prediction [@AngelopoulosBates2021Conformal]. The same confidence signal also drives the acquisition function that decides when a ground-truth simulation is worth its cost. @sec-methods-generation-prediction-optimization develops that prediction machinery in full. The execution history must keep the cost model's prediction and the simulator's observation distinct to catch these failures. Predicting one consequence reliably is already hard. Predicting a next design state faithfully enough to plan several moves ahead remains largely out of reach, so this chapter treats it as a target rather than a tool.
-
-[^fn-uncertainty-quantification-c04]: **Uncertainty quantification (UQ)**: The ML practice of attaching a confidence estimate to a model's prediction, through ensembles of independently trained models, the predictive variance of a Gaussian process, or conformal prediction's calibrated intervals. A prediction without a UQ signal gives no warning when the model leaves the region it was calibrated on.
-
-::: {.callout-war-story title="When the proxy stopped tracking what it stood for"}
-**The claim.** Google Flu Trends estimated influenza prevalence from the volume of flu-related search queries, a fast proxy for the slower ground truth the CDC assembled from clinical reports. For several seasons the proxy tracked the CDC figures closely enough to look like a real-time replacement for them [@LazerEtAl2014GoogleFlu].
-
-**The gap.** The proxy held only while the behavior it measured stayed the same. It drifted persistently high, and by the 2013 season it estimated more than double the proportion of influenza-like illness the CDC actually reported. Two forces opened the gap. The search signal was trusted as a substitute for measurement rather than a complement to it, and Google's own changes to search, which suggested related queries to users, drove up flu-related searches and shifted the very input distribution the model relied on.
-
-**The lesson.** A surrogate is trustworthy only in the region and under the conditions it was calibrated on, and a system that keeps acting on it can move those conditions itself. A learned cost model carries the same exposure. Its predicted consequence is an estimate, and an optimizer searching for the best-scoring candidate pushes it toward the untested corners where that estimate is least reliable. The safeguard is to keep the prediction distinct from the tool observation that later tests it, and to detect when a candidate has left the calibrated region before an automated loop commits to it.
-:::
-
-The model prediction and the tool observation follow separate paths from the same state and action (@fig-architecture-cost-model). The proposal records an anticipated effect. The represented state and action feed a performance model or simulator that returns a prediction; the same state and action feed a declared tool path that returns an observation with its cost, fidelity, and provenance.
-
-![**Prediction and observation follow different paths.** The represented state and proposed action feed a performance model or simulator that returns a prediction; the same state and action feed a declared tool path that returns an observation. The execution history keeps the state, action, prediction, observation, failures, and decision connected.](images/F5-architecture-world-model){#fig-architecture-cost-model width="85%" fig-alt="Diagram showing represented state and a proposed action feeding a performance model and a separate declared tool path. The model returns a prediction, the tool path returns an observation, and both enter a simulation log that retains provenance, failures, and the decision."}
-
-For example, a cost model fit to earlier cycle-accurate results maps a represented workload trace and a proposed pipeline configuration to a predicted performance metric far faster than rerunning the simulator. Such a predictor consumes a frozen state and a proposed action and returns a scoped performance estimate, leaving whole classes of consequence out of scope (@tbl-executed-study-cost-model).
-
-| **Cost-Model Field** | **Illustrative Prediction** |
-| --- | --- |
-| **Represented state** | Frozen eye-tracking workload trace, defined L2 cache capacity bounds, base integer instruction set, and fixed memory bandwidth. |
-| **Action under evaluation** | Propose issue width and reorder buffer size within a declared area budget. |
-| **Anticipated effect** | The proposed nonbaseline pipeline configuration aims to lower the execution cycle count relative to the baseline while remaining under the XR platform's thermal limit. |
-| **Predicted consequence** | The cost model predicts total cycles, power consumption, and average pipeline utilization for that workload-pipeline pair. |
-| **Scope and limits** | One simulator version, static memory configuration, and specific workload slice. |
-| **Unsupported consequence** | Full-chip energy, timing paths, compiler effects, RTL feasibility, physical design, and performance outside the frozen trace. |
-
-: **An illustrative cost model predicts the effect of a proposed action.** It maps the represented workload and proposed pipeline configuration to performance predictions, while the record states which consequences remain outside its scope. {#tbl-executed-study-cost-model tbl-colwidths="[24,66]"}
-
-Where the generation cost of a training sample rose sharply with fidelity (@tbl-synthetic-data-costs), the other side of that trade is what a single observation from each feedback source reveals and what a later method or reviewer must record to reuse it (@tbl-sample-cost-regimes). Read each row from the time and resources an observation takes, through what it can reveal, to the record needed for reuse.
-
-| **Feedback Source** | **Latency or Cost Intuition** | **What It Reveals** | **Record for Reuse** |
+| **Artifact** | **What It Preserves** | **What It Often Hides** | **Resulting Blind Spot** |
 | --- | --- | --- | --- |
-| Analytical model or mapper | Milliseconds to seconds; low direct cost; results depend heavily on model assumptions. | Supports pruning and sensitivity checks within the model's scope. | Model assumptions, workload slice, constraints, and proxy-validity notes. |
-| Trace, profile, or replay | Seconds to hours depending on capture and replay setup. | Reveals workload behavior under a stated capture or replay policy. | Trace version, sampling policy, software stack, and filtering choices. |
-| Cycle-level simulation | Minutes to days depending on model detail and target workload. | Returns a simulated observation scoped by abstraction, calibration, and unsupported states. | Simulator version, configuration, seeds, workload revision, and calibration notes. |
-| RTL, gate-level, or EDA feedback | Hours to days for synthesis and timing closure; weeks or months for full-chip gate-level simulation. | Supplies scarce, multiobjective implementation observations. | Tool versions, constraints, process assumptions, waived warnings, and rejected candidates. |
-| FPGA, emulation, or prototype | High setup and shared-resource cost; high throughput once mapped. | Higher speed changes observability and debugging semantics as well as wall-clock time. | Mapping constraints, observability limits, debug hooks, and queue/resource state. |
-| Post-silicon bring-up or validation | Weeks to months and high acquisition cost. | Real hardware reveals integration, timing, power, reliability, and validation failures that earlier evidence missed. | Hardware stepping, firmware or microcode version, test context, failure mode, waiver, and owner. |
-| Field or fleet telemetry | Months to years; deployment changes can complicate interpretation. | Real deployment shows workload drift, cohort effects, incidents, rollback triggers, and user-visible regressions. | Population, deployment version, sampling policy, privacy filter, incident context, and decision owner. |
+| Paper or plot | Reported claim, result, and comparison. | Tool flags, failed candidates, and tuning history. | The endpoint is visible but the path cannot be reconstructed. |
+| Workload trace | Captured input behavior and measurements. | Population, coverage, version, sampling, and privacy filters. | The design may be optimized for an unrepresentative slice. |
+| Simulator configuration | Model settings and selected options. | Defaults, unsupported states, calibration limits, and dependent software. | A number may be trusted outside the simulator's useful scope. |
+| RTL or EDA report | Implementation-facing structure or feedback. | Process assumptions, constraints, waived warnings, and intent. | A locally valid artifact may not satisfy the system decision. |
+| Cross-layer mapping | Links from architecture choices to lower-level objects. | Intermediate transformations not recorded in the mapping. | A physical failure may not be traceable to the choice that caused it. |
+| Review note | Judgment, rationale, risk, and decision. | Unstated assumptions or alternatives never entered into the record. | Later work remembers the verdict but not its conditions. |
+| Rejected candidate | A boundary and a negative result. | Failure reason, tool path, workload, or design version. | The team either repeats the failure or excludes too much. |
 
-: **Cost, fidelity, and scope change across evaluation paths.** The representation records the resources, assumptions, and context needed for a reviewer to judge what each observation can support. {#tbl-sample-cost-regimes tbl-colwidths="[20,24,24,22]"}
+: **Architecture artifacts are reusable only within their recorded context.**
+Provenance, assumptions, constraints, and coverage expose what each artifact
+does and does not support.
+{#tbl-representation-debt tbl-colwidths="[20,28,27,25]"}
 
-Regardless of the fidelity of the prediction or the cost model used, the division of labor stays fixed. The cost model's predicted consequence is a search heuristic for pruning the design space. Before any architectural claim is accepted, the candidate must be validated against physical constraints such as routing congestion, PPA, and STA, and the human architect judges what that evidence supports.
+### Blind Spots and Known Unknowns Stay Visible
 
-## Knowledge Drift and Provenance
+An adequate representation is not one that contains everything. It states what
+it contains, what it omits, and the scope within which it remains useful.
+Building a complete digital description of a modern system would cost more than
+most studies could justify and would still miss something.
 
-After the human architect and evaluation harness validate a candidate, the resulting tool observation has several possible destinations. It may append an execution history, support a new design state, enter a retrieval index, refit a surrogate, or motivate foundation-model fine-tuning. These updates are different engineering decisions. A result does not automatically become evidence, training data, or an architecture decision.
+Blind spots are omitted or unobserved relationships that could matter. The
+Lighthouse cache representation has no detailed floorplan or congestion result,
+no completed thermal or IR-drop review, and no guarantee that
+`XR-TRACE-A` covers every deployed workload condition. Known unknowns are
+questions already recognized but not yet resolved, such as whether a larger
+cache improves tail frame time enough to advance.
 
-Because these updates happen on different schedules, architecture knowledge ages out of alignment. A current retrieval index may point to an old corpus. A current design may use a new workload while its execution history holds results from an earlier compiler version. A method that reads a stale manual and writes to a current design proposes changes that satisfy the constraints of a version that no longer exists (@fig-split-brain-causality).
+The distinction matters. A known unknown can be planned for. A blind spot may
+surface only after a later tool, reviewer, or field observation exposes it.
+Both should remain visible so that a later method does not convert missing
+information into an assumed favorable value.
 
-![**Stale knowledge and a moving project drift into contradiction:** when the AI retrieves V1 manuals while the project advances to V2, it proposes fixes that violate the current constraints.](images/F4b-split-brain-causality){#fig-split-brain-causality width="100%" fig-alt="State Inconsistency: When the AI retrieves stale manuals or training data while the project state advances, it hallucinates fixes that violate current constraints."}
+For this bounded study, @tbl-represented-problem is the minimum handoff. It
+contains enough identity and context to reconstruct the comparison, expose
+legal changes, and recognize when the representation is no longer useful. A
+longer-lived or more consequential use needs more retained history and source
+identity. The rules for claims that leave the project belong to the ownership
+and accountability discussion later in the book.
 
-To prevent this split-brain problem, the environment must track tool versions, workload revisions, and document timestamps so that retrieved context and the current project state align before anyone commits to a costly synthesis run.
+## The Handoff to Method Choice
 
-A second misalignment is quieter, because it sits between the represented state and the design itself. The state is a claim about the RTL, and nothing in a schema forces that claim to be true. A parameter gets renamed in the generator, a constraint gets tightened directly in an SDC file, a block gets swapped by hand under schedule pressure, and the represented state still reads as current while describing a design that no longer exists. Everything downstream inherits the error. A surrogate trains on labels attributed to the wrong configuration, the execution history records rejections against conditions that were never in force, and a reviewer tracing provenance finds a complete and internally consistent record of the wrong design.
+@sec-methods-generation-prediction-optimization needs an inspectable problem,
+not a prescribed technique. The Lighthouse handoff therefore contains the
+following items.
 
-The check that catches this is cheap and belongs wherever the build lives. Regenerate the artifact from the represented state and compare it against what the repository holds. If the state cannot reproduce the design it claims to describe, the state is stale, and no run that depends on it should start. The comparison also marks its own limit, because it holds where the design is generated from the state, and a hand edit made below the generator is the case it reports rather than the case it misses. A project that never runs it cannot say which of its records describe the current design.
+1. The current design, software, workload, and study identity.
+2. The exact legal candidate set and the fields that implement each change.
+3. The invariants, constraints, and dependent artifacts that must remain
+   consistent.
+4. The relationships the study intends to observe.
+5. Compatible project history, including rejected work and infrastructure
+   failures.
+6. Source identity, freshness checks, and conflict-resolution rules.
+7. Blind spots, known unknowns, and the useful scope of the representation.
 
-A third misalignment runs vertically rather than through time, because the representation must also stay consistent across layers. When a high-level microarchitectural intent such as "add a stride prefetcher" is lowered to RTL, semantic preservation becomes difficult. If a timing failure then appears in the physical layout, nothing connects the congested routing wire back to the architectural construct that produced it. The representation must map high-level constructs down to their low-level implementations, or the state fragments at exactly the moment a failure needs explaining. Versions and cross-layer provenance expose these relationships, even if they do not automatically resolve them.
+It intentionally contains no proposed next candidate, predicted consequence,
+surrogate, optimizer, acceptance threshold for a model, or execution result.
+Those additions would answer questions this chapter has not yet asked.
+@sec-methods-generation-prediction-optimization can now decide whether the
+limiting work calls for conventional analysis, no AI component, generation,
+prediction, optimization, or a minimal combination.
+@sec-architecture-environments-tool-interfaces can decide how the chosen work
+is connected to tools. @sec-feedback-verification-trust can decide what
+feedback means. The order protects the study from being reshaped around the
+first available method.
 
-Architecture projects also suffer from widespread missing state. Papers, open-source tools, and benchmarks usually preserve endpoints (a winning design) but rarely preserve the path to that endpoint (simulator settings, excluded workloads, rejected candidates).
-
-Standard artifacts each enable one kind of reuse while routinely hiding the context a reviewer would need (@tbl-representation-debt).
-
-| **Artifact** | **What It Enables** | **What It Often Hides** | **Failure Mode** |
-| --- | --- | --- | --- |
-| Paper or plot | Claim, result, and comparison. | Tool flags, failed candidates, tuning history. | Reproduce only the reported result, not the design process. |
-| Workload trace | Concrete input behavior and measurements. | Coverage, versioning, sampling policy, privacy filters. | Optimize for an unrepresentative slice. |
-| Simulator config | Model settings. | Defaults, unsupported states, calibration limits. | Trust a number outside its valid scope. |
-| RTL or EDA report | Implementation-facing feedback. | Process assumptions, constraints, waived warnings. | Accept an artifact that cannot close. |
-| Cross-Layer Mapping | Vertical traceability from architecture to layout. | The intermediate transformations and optimizations applied by compilers. | Cannot trace a physical timing failure back to its microarchitectural cause. |
-| Review notes | Architect and reviewer judgment and rationale. | Unstated assumptions and discarded alternatives. | Lose why a decision was made. |
-| Rejected candidate | Search boundary and negative evidence. | Why it failed and at what fidelity. | Rediscover known dead ends. |
-
-: **Architecture artifacts become reusable when their context is recorded.** Each artifact should include enough provenance, assumptions, constraints, and validity information for a method to use it and for a reviewer to trace the result. {#tbl-representation-debt tbl-colwidths="[22,27,25,18]"}
-
-Private context creates an access boundary. Reinforcement learning has been reported to place production macros at expert quality, though the replication and competitiveness of those results remain disputed [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement]. Even on the strongest claims, the results depend on proprietary production designs and pretraining context that outside researchers cannot access (@fig-alphachip-placement). That dependence is a provenance problem, not just a courtesy. Hardware companies cannot send proprietary RTL or design constraints to public LLM APIs, so the evidence behind the strongest results stays inside the organization that produced it. The pressure pushes toward localized, on-premise small language models (SLMs) that interact with internal EDA tools without exposing a company's proprietary designs, an approach that open RTL datasets and lightweight open models have begun to make practical [@LiuEtAl2024RTLCoder]. Whether that route stays available is a policy question rather than a technical one. A 2026 industry letter opposing restrictions on published model weights drew signatures from firms that release weights and firms that sell the compute self-hosting consumes, while several vendors of access to closed models did not sign [@OpenWeightsLetter2026], which marks it as a position taken by interested parties rather than a finding. The underlying condition binds either way. A result that only a gated model can reproduce is one an outside reviewer cannot check, so the reproducibility of an architecture claim can rest on a commercial decision no architect controls.
-
-![**Reinforcement learning places macros one at a time.** A learned placement policy chooses each macro's location on the floorplan, and density, congestion, and wirelength feedback shape the next choice; the loop repeats until every macro is placed. Schematic of the reinforcement-learning macro-placement loop that methods such as AlphaChip instantiate.](images/F5c-macro-placement){#fig-alphachip-placement width="85%" fig-alt="A loop diagram in which a placement policy places one macro at a time onto a chip floorplan grid; an evaluation of density, congestion, and total wirelength returns to the policy as reward, and the loop repeats until the floorplan is complete."}
-
-Private data was not the only requirement. The results also depended on how the placement problem was presented to the agent. The project represented the chip as a graph, with macros and standard cells as nodes and the connecting wires as edges, and combined that graph with a grid-based canvas so the agent operated within physical adjacency rules. Without this translation from RTL to a structural graph, the agent would have had no legal action space to explore.
-
-The lesson generalizes beyond placement. A representation that exposes structure, not just text, is what gives a method a legal space to search. What that representation was built from decides something separate, which is how far a claim resting on it can travel.
-
-Internal and public claims rest on different inspectable knowledge boundaries. Private evidence can support an internal decision, but a public claim must stop where outside inspection stops. The organization making the decision should retain the complete record under appropriate access controls and state what outside readers can verify.
-
-Even when reinforcement learning models successfully navigate proprietary IP and complex layout graphs, they remain bounded search heuristics. An agent like AlphaChip proposes a floorplan guided by a sparse terminal reward, a proxy for wirelength, congestion, and density computed only after the last macro is placed, but it cannot override the signoff tools. The human architect must still execute the final evaluation harness to verify that the generated layout meets all DRC, STA, and thermal constraints, retaining final authority over the physical design.
-
-## Semantic Handoffs
-
-Representation and cost model come together at the moment a proposal leaves the agent and enters the tools. To move from knowledge to execution, an AI system must construct a minimum semantic package. This *handoff triad* consists of:
-
-1. **Current represented state:** The exact design, workload, constraints, and mutable fields.
-2. **Proposed semantic action:** The candidate change and anticipated effect.
-3. **Bounded predicted consequence:** The cost model's prediction, its validity scope, and its uncertainty.
-
-The package is deliberately minimal. Anything less leaves the tool environment guessing at state it cannot see, and anything more buries the one action and prediction a reviewer must evaluate. Every knowledge object this chapter has examined, from statistical priors to negative traces, matters only insofar as it sharpens what this triad carries into the next tool call.
-
-Filled for the XR subsystem, one turn of it reads like this. The represented state is the current L2 capacity, the XRBench trace the study is judged on, the 3\ W envelope covering dynamic plus leakage, and an explicit list of what may move, which here is SRAM capacity and MAC count and nothing else. The proposed semantic action is a single capacity step, named as a step rather than as a new design. The bounded predicted consequence is the cost model's estimate for that step, the region of the space the model was calibrated on, and the spread it carries there.
-
-The value of writing it down is what it refuses. A proposal that changes the workload mix along with the capacity is not one action, so the package cannot be formed and the candidate goes back before any tool runs. A prediction offered without a validity scope is refused for the same reason, because a number with no stated region of support cannot tell a reviewer whether it applies to the candidate at hand. Both refusals happen at the interface, on structure alone, before the environment spends anything. That is cheaper than any check downstream, and it is available only because the triad names the three things it does.
-
-None of the surrounding apparatus is free. A versioned state with a named owner, an execution history that keeps predictions and observations apart, rejected candidates recorded with their conditions, cross-layer provenance, and constraint collateral that co-mutates with the RTL all cost engineering time that no schedule allocated, and a project that builds every piece before it needs any of them spends its first month on bookkeeping. A two-week sensitivity study does not need the full set.
-
-What scales the record is the weight of the claim it will have to carry. A result that dies inside the team when the sweep ends needs the state and the parameters, or no one can rerun it next week. A result quoted in a design review needs the fidelity, the tool versions, and the rejected candidates, because a reviewer will ask what else was tried and at what confidence. A number that leaves the organization needs every condition an outside reader would otherwise have to accept on trust. The cost rises with what the claim is asked to support, which is the right place for it to rise, and it is why the apparatus is built one claim at a time rather than as a prerequisite.
+The handoff is inadequate if it cannot reproduce or identify the current
+design, if it hides a controlling hardware-software or physical relationship,
+if its legal actions bundle undeclared changes, if its sources disagree without
+a resolution, or if no one can state where the representation is useful.
 
 ## Open Research Questions
 
-Data is where a design loop's assumptions are hardest to see. A corpus of surviving designs is skewed in a known direction, an encoding fixes the geometry a search runs over before any search runs, a represented state can quietly stop describing the design it names, and the predictive models architecture actually builds estimate cost rather than the next state of the design.
+**How can AI-assisted methods learn from failed and censored design data without
+treating every local failure as a universal boundary?** Failed runs contain
+valuable information near feasibility limits, but their meaning depends on the
+exact design, tools, workload, and constraints that produced them.
 
-**Theme 1: Learning from a Censored Corpus.** A failed run leaves a record that is truncated rather than merely absent, so a surrogate fit as though those records were ordinary measurements is optimistic exactly where feasibility is decided. Measuring the effect requires a corpus that kept its failures, which is the material most projects delete first.
+**Which representation lets a method preserve the neighborhood that matters
+for a given architecture decision?** A scalar schema, graph, spatial model, or
+typed IR makes different relationships visible and creates different notions
+of adjacency.
 
-- How much optimism does a surrogate inherit from a training corpus that contains only the designs that survived?
-- How should a surrogate be fit when a violated constraint bounds a value without measuring it and a crashed run returns no label at all?
+**How can an automated method detect that represented state no longer describes
+the artifact it names?** Regeneration catches divergence where state owns the
+build, but hand edits, generated collateral, and external tool transformations
+create additional paths for drift.
 
-**Theme 2: Encoding Geometry and Write-Back.** An encoding decides which candidates count as neighbors before a search evaluates anything, and the evidence that an axis misstates distance usually arrives after the sample budget is gone. Whatever a model learns then has to lower back into the procedural scripts the tools consume, where a renamed buffer breaks an exact hierarchical path.
+**How should a method represent hardware and software dependencies when no
+single artifact owns the interface between them?** ISA, compiler, runtime,
+firmware, and microarchitecture changes often cross repositories and
+organizational boundaries.
 
-- Which encodings of an architectural design space make the local smoothness that sample-efficient optimizers assume approximately true?
-- How can an edit made to a learned structural representation be lowered into procedural constraint scripts that depend on exact hierarchical path names, so a mutation and its constraints change together?
+**What is the smallest useful record for an AI-assisted bounded study?** Too
+little state makes a result uninterpretable, while indiscriminate capture
+creates cost, privacy, and maintenance burdens that can outlive the study.
 
-**Theme 3: State That Drifts from the Design It Names.** A represented state is a claim about an artifact, and nothing in a schema keeps that claim true. Regenerating the artifact from the state catches the divergence wherever the design is generated from the state, and says nothing about an edit made below that level or about a retrieved document that describes an earlier version of the same platform.
-
-- What detects that a represented design state has stopped describing the artifact it names, when the change was made below the level the state generates?
-- How should a loop notice that retrieved knowledge contradicts the design version currently under change, rather than leaving the conflict to whichever component reads it first?
-
-**Theme 4: Cost Models and the Missing Transition Model.** Architecture concentrates its learning capacity in cost models because editing a design state is bookkeeping while observing what the edit is worth is expensive. That reasoning holds where the state is inspectable and the harness owns the lowering back to a legal design, and the transition model stays unbuilt and untested in the cases where it does not.
-
-- What would a learned transition model have to predict for multi-step planning to outperform single-step search guided by a cost model?
-- How should a search reason across a design region it cannot inspect, such as an encrypted third-party IP block?
+**How can a method expose a blind spot that no current source has named?**
+Declared omissions can be recorded directly, but unrecognized missing
+relationships may appear only after a later tool, reviewer, or workload exposes
+them.
 
 ## Conclusion
 
-::: {.callout-design-principle title="Architecture is not safely edited as text"}
-Every proposed change must mutate a constrained state representation that jointly links structural boundaries, behavioral traces, and physical limits. A constraint that a representation cannot express is one that an agent will silently violate.
+::: {.callout-design-principle title="Representation is an architecture decision"}
+A method can preserve only the state, relationships, legal changes, and limits
+that its representation makes visible.
 :::
 
+A generic model and a folder of design files may help frame an early question,
+but they cannot support a project-specific architecture decision without
+current state. The work needs that state to connect hardware, software,
+workload, constraints, and history to one declared study. General knowledge can
+inform the state but cannot replace it. Prior results can warn or guide only
+when their conditions remain applicable.
 
-An AI system cannot propose a design it cannot represent, and what it has to represent is never just the artifact. It is the workload the design serves, the constraints the project has already fixed, the moves that remain legal under them, and the results the tools have returned so far. Recall is the easy part of that. The harder requirement is that only legal configurations reach a cost model and only predicted-viable ones reach execution, because a method that proposes freely and validates late spends its budget discovering that its candidates were never buildable.
+The encoding then determines which designs are reachable and which changes
+appear related. Typed IRs, parameter schemas, graphs, spatial forms, workload
+records, and physical collateral each preserve some properties and omit
+others. The architect's task is not to select the richest possible format. It
+is to preserve the relationships that control the current question and expose
+the ones that remain missing.
 
-The path forward requires explicit management of how knowledge enters and updates the system. Architectural knowledge comes from heterogeneous sources, and the structure of the dataset, especially the inclusion of negative examples and failed synthesis runs, dictates what a model can learn about the boundaries of the design space. Pretraining, fine-tuning, and retrieval change different objects on different timescales. Because parameters, embeddings, retrieved context, explicit design state, and execution histories each have distinct authority, provenance, and freshness, we must maintain strict boundaries between them.
+Freshness is part of the same decision. A state that cannot reproduce or
+identify the artifact it names is not current. A history without conditions is
+not reusable. A result with no workload or tool identity is not an architecture
+observation that another study can safely apply.
 
-A learned cost model maps the represented state and a semantic action to a bounded predicted consequence. That prediction is an estimate, distinct from the high-fidelity tool observation that later tests it. Keeping observations, design failures, and decisions as separate, dated records is what lets the next change start from current state rather than a stale one, and lets a reviewer tell a prediction from ground truth. None of it helps if the state has drifted from the design it names, so the record is worth only as much as the comparison that confirms the state still reproduces the artifact, and a run whose state no longer reproduces its artifact is stopped rather than reported. How much of that apparatus a project builds follows from what its result will be asked to support rather than from any standard of completeness, which is why a sweep that dies inside the team and a number that leaves the organization do not earn the same record. The tool interface that serves a request can also decline one, and a request whose claim would not justify the evidence it consumes belongs in that second category.
-
-Two conclusions carry past this chapter. The encoding is a design decision rather than a serialization detail, because it fixes the geometry an optimizer searches and therefore which designs are reachable at all. And the chapter's title question has an answer. What the loop learns is a cost model scoped to one search rather than a world model, so a predictor that ranks candidates inside one design space is not a model of the system that space came from. That distinction is refutable rather than definitional, and what would overturn it is a predictor that holds its ranking accuracy on a design space nobody trained it on.
-
-A represented state is inert until a method acts on it. The roles that do that acting, from generation and prediction through critique, repair, and verification, arrive in @sec-methods-generation-prediction-optimization, along with the rule that decides among them: name the work limiting the study before naming any method.
+The chapter's output is the represented problem in
+@tbl-represented-problem. It contains the current state, legal changes,
+dependencies, history, freshness, blind spots, and known unknowns for the
+Lighthouse cache study. It does not determine how to explore that problem.
+@sec-methods-generation-prediction-optimization takes the next step by deciding
+whether the work needs conventional analysis, no AI component, generation,
+prediction, optimization, or a minimal combination.

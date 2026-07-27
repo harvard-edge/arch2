@@ -1,21 +1,19 @@
-# Chapter 4 Figure Plan
+# Chapter 4 Figure Inventory
 
-Current figures:
+Image-backed figures currently used by the chapter:
 
-- `F5-architecture-world-model`: architecture world-model components.
-- `F5a-trajectory-record`: two-turn trajectory record with the rejected branch kept linked.
-- `F5b-quarch-boundary-test`: QuArch paper-knowledge vs study-trajectory boundary.
+- `F4-data-pyramid`: observation sources with different cost and fidelity
+  characteristics.
+- `F4b-split-brain-causality`: stale reference state diverging from current
+  project state.
+- `F5a-trajectory-record`: accepted and rejected work linked to the state and
+  conditions that produced it.
 
-Executable Quarto figures in the chapter:
+Moved to Chapter 5 with their owning method material:
 
-- `fig-token-scale-contrast`: Matplotlib token-scale comparison.
-- `fig-affordable-sample-collapse`: affordable samples per feedback regime under a fixed budget (illustrative, in-cell values).
+- `../../05-methods/images/F5-architecture-world-model`: separate paths for
+  prediction and tool observation.
+- `../../05-methods/images/F5c-macro-placement`: policy and reward loop for macro
+  placement.
 
-Needed next:
-
-- Keep quantitative plots as executable Quarto/Python chunks when the data is
-  small enough to live beside the prose.
-- Keep token-scale claims transparent: source, caveat, and uncertainty should
-  travel with the plot.
-- Add future data-scale or representation-coverage plots only when backed by a
-  checked-in CSV/JSON source record.
+The chapter contains no executable figures.

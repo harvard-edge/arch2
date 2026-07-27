@@ -373,6 +373,18 @@ Unlike generative brainstorming, prediction requires models that can be calibrat
 
 However, applying these models requires bridging a massive abstraction gap through *cross-stack prediction*. Design Space Exploration (DSE) operates on high-level microarchitectural parameters (e.g., L2 cache sizing, core counts), while physical tools operate on low-level netlists and spatial coordinates. A fundamental role of the surrogate is to take these high-level architectural configurations as inputs while using the low-level EDA constraints (e.g., physical placement density, IR drop) as its calibration targets. This cross-stack learning allows the surrogate to predict physical consequences early in the design cycle before the RTL is even written.
 
+The prediction remains separate from the later tool observation
+(@fig-architecture-cost-model).
+
+![**Prediction and observation follow different paths.** The represented state
+and proposed action feed a scoped consequence model that returns a prediction.
+The same state and action feed a declared tool path that returns an observation.
+The project history keeps both connected without treating the prediction as the
+observation.](images/F5-architecture-world-model){#fig-architecture-cost-model
+width="85%" fig-alt="A represented state and proposed action feed a scoped
+consequence model and a separate tool path. The prediction and tool observation
+remain distinct and both enter a versioned project history."}
+
 How that surrogate should be judged follows from what the screening task asks of it. @sec-data-representations-world-models argued that a representation is worth only the decisions it supports, and a screening surrogate's decision is an ordering, namely which candidates deserve a scarce high-fidelity run. It therefore earns its keep through ranking, not point accuracy. A model that is 30 percent off everywhere but preserves the order near the frontier spends the budget perfectly, while a model with excellent average error that inverts the top ten wastes every run it directs. Validate a screening surrogate on rank correlation and top-k recall[^fn-ml-top-k-recall-c05] against the oracle in the region where decisions get made, and report those numbers rather than a global root-mean-square error (RMSE) the selection task never consults.
 
 [^fn-ml-top-k-recall-c05]: **Top-k recall**: The fraction of the oracle's true best k candidates that also appear in the surrogate's predicted best k. It asks whether a screen would have kept the designs worth simulating, which is a different question from whether its predicted numbers were close.
@@ -741,7 +753,20 @@ The structure of the space picks the method, not the method's popularity. Where 
 
 Where the space is discrete and an early choice forecloses later options, Monte Carlo tree search buys lookahead. It treats the design space as a game tree and simulates rollouts of candidate configurations before committing to an expensive evaluation, which lets it pursue promising branches and abandon dead ends that a one-step acquisition rule would keep sampling.
 
-Where the task is combinatorial and genuinely sequential, as macro floorplanning is, reinforcement learning fits and the reward function becomes the real design decision. It has to tie to the placement-stage proxies the agent can actually see, such as cell density, macro overlap, and routing congestion. Design rule check violations surface only at post-route signoff that a floorplanning agent never reaches, so they shape the reward indirectly, through the congestion and overlap proxies built to anticipate them. None of these methods invents the design. Each one chooses where the next simulation run goes.
+Where the task is combinatorial and genuinely sequential, as macro floorplanning is, reinforcement learning fits and the reward function becomes the real design decision. It has to tie to the placement-stage proxies the agent can actually see, such as cell density, macro overlap, and routing congestion. Some routability and manufacturing effects appear only after later placement, routing, or signoff stages that the floorplanning method does not execute. They therefore shape the reward indirectly through proxies built to anticipate them. These methods choose actions or candidates within the represented space. They do not define that space themselves.
+
+@fig-alphachip-placement shows the sequential action and terminal proxy feedback
+used in the AlphaChip placement formulation and examined in later independent
+work [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement].
+
+![**Reinforcement learning places macros one at a time.** A placement policy
+chooses each macro's location on the floorplan. The partial floorplan becomes
+the next state, and a weighted proxy based on density, congestion, and
+wirelength supplies the episode reward after the final
+placement.](images/F5c-macro-placement){#fig-alphachip-placement width="85%"
+fig-alt="A loop in which a placement policy chooses one macro location at a
+time and receives a terminal weighted density, congestion, and wirelength
+reward after all macros have been placed."}
 
 The useful outcome may be a Pareto region,[^fn-math-pareto-region-c05] a constraint boundary, a sensitivity, a ruled-out class of candidates, or a decision about which expensive experiment to run next. Hardware design spaces are often discrete, non-differentiable, and highly constrained, so an optimizer must work with sparse feedback and reject illegal actions rather than assume a smooth search space.[^fn-ml-differentiable-search-c05]
 
