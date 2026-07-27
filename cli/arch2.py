@@ -4192,8 +4192,9 @@ BY_GERUND_EXEMPT = frozenset({"spring", "morning", "evening"})
 def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Flag mechanical prose-style regressions that a manual sweep cannot hold.
 
-    Four classes, all settled by ``.claude/rules/prose-style.md`` and all prone
-    to silent reintroduction whenever a passage is rewritten.
+    Five classes, settled by ``.claude/rules/prose-style.md`` and
+    ``.claude/rules/emphasis.md``, all prone to silent reintroduction whenever a
+    passage is rewritten.
 
     Stripped vocabulary. An earlier sweep replaced a set of process metaphors
     with plainer terms, but nothing enforced the result, so survivors persisted
@@ -4219,6 +4220,16 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     correct. Image definitions and ``fig-alt`` text are skipped too, since alt text
     is read aloud rather than typeset.
 
+    Inline term bold. Bold marks a structural slot, never a term. ``emphasis.md``
+    carried the opposite carve-out until 2026-07-27, letting a load-bearing term
+    take one bold at its canonical definition; a sweep found 39 such spans against
+    808 structural ones and retired the rule. Only mid-line bold is flagged. Table
+    rows, list and numbered-list labels, footnote term heads, caption leads,
+    blockquote labels, and callout fences are skipped, and so is a line-initial
+    bold, because whether that opener is a legal callout label or the
+    dressed-up-list anti-pattern depends on the enclosing block rather than the
+    line.
+
     ``gate`` and ``cadence`` are deliberately absent. Both carry heavy literal
     architecture senses (gate delay, clock gating, gate-level netlist), so a
     pattern broad enough to catch the process metaphor would bury real findings
@@ -4241,6 +4252,20 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
         r"(?<![\\\w])(\d+(?:\.\d+)?) "
         r"(W|nm|mm|GHz|MHz|Hz|kB|MB|GB|TB|ms|ns|ps|pJ|nJ|mW|mV|V|\u00b0C)\b"
     )
+    # Every line shape that owns a legal bold, plus the line-initial label the
+    # regex cannot adjudicate. Anything left is running prose.
+    structural_bold = re.compile(
+        r"^(?:\|"  # table row or header
+        r"|:\s+\*\*"  # table caption lead
+        r"|!\[\*\*"  # figure caption lead
+        r"|\[\^[\w-]+\]:\s*\*\*"  # footnote term head
+        r"|[-*+]\s+\*\*"  # list label
+        r"|\d+\.\s+\*\*"  # numbered-list label
+        r"|>"  # blockquote label
+        r"|:::"  # callout fence and its title attribute
+        r"|\*\*)"  # line-initial label
+    )
+    inline_bold = re.compile(r"\*\*(.+?)\*\*")
     findings: list[Finding] = []
     for path in targets:
         in_fence = False
@@ -4295,6 +4320,21 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                             f'"{match.group(0)}" splits a number from its unit; '
                             f"write {match.group(1)}\\ {match.group(2)} so the "
                             "PDF cannot break the line between them",
+                        )
+                    )
+            body = prose.strip()
+            if not structural_bold.match(body):
+                for match in inline_bold.finditer(body):
+                    if match.start() == 0:
+                        continue
+                    findings.append(
+                        Finding(
+                            "error",
+                            "inline-term-bold",
+                            f"{_relative(path)}:{lineno}",
+                            f'"{match.group(1)}" is bolded mid-sentence; bold '
+                            "marks a structural label, so italicize a coinage "
+                            "and leave ordinary vocabulary plain",
                         )
                     )
     return findings
