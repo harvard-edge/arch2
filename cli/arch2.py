@@ -4192,7 +4192,7 @@ BY_GERUND_EXEMPT = frozenset({"spring", "morning", "evening"})
 def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Flag mechanical prose-style regressions that a manual sweep cannot hold.
 
-    Three classes, all settled by ``.claude/rules/prose-style.md`` and all prone
+    Four classes, all settled by ``.claude/rules/prose-style.md`` and all prone
     to silent reintroduction whenever a passage is rewritten.
 
     Stripped vocabulary. An earlier sweep replaced a set of process metaphors
@@ -4209,6 +4209,15 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     buries the actor in a participial phrase and reads as machine-generated, which
     is the same defect the active-voice rule exists to catch. Only the gerund form
     is matched, so "By contrast" and "By 2030" stay legal.
+
+    Non-breaking SI units. A number and its unit must not be split across a line,
+    which in this Quarto source means ``3\\ W`` rather than ``3 W``. A 2026-07-27
+    sweep found the manuscript almost evenly divided, 26 compliant against 85 not,
+    because nothing checked it and the defect is invisible until the PDF breaks a
+    line in the wrong place. Fenced blocks are already skipped, which is what keeps
+    the check off matplotlib labels and Python f-strings where a plain space is
+    correct. Image definitions and ``fig-alt`` text are skipped too, since alt text
+    is read aloud rather than typeset.
 
     ``gate`` and ``cadence`` are deliberately absent. Both carry heavy literal
     architecture senses (gate delay, clock gating, gate-level netlist), so a
@@ -4228,6 +4237,10 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     # callout labels that can sit in front of the first word of a sentence.
     by_gerund = re.compile(r"(?:^|[.!?]\s+|\*\*\s+)By\s+(\w+ing)\b")
     line_opener = re.compile(r"^(?:[-*+>]\s+|\d+\.\s+|\*\*)+")
+    bare_si_unit = re.compile(
+        r"(?<![\\\w])(\d+(?:\.\d+)?) "
+        r"(W|nm|mm|GHz|MHz|Hz|kB|MB|GB|TB|ms|ns|ps|pJ|nJ|mW|mV|V|\u00b0C)\b"
+    )
     findings: list[Finding] = []
     for path in targets:
         in_fence = False
@@ -4272,6 +4285,18 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                         "and give it a verb instead of a participial phrase",
                     )
                 )
+            if not stripped.startswith("![") and "fig-alt" not in line:
+                for match in bare_si_unit.finditer(prose):
+                    findings.append(
+                        Finding(
+                            "error",
+                            "si-unit-spacing",
+                            f"{_relative(path)}:{lineno}",
+                            f'"{match.group(0)}" splits a number from its unit; '
+                            f"write {match.group(1)}\\ {match.group(2)} so the "
+                            "PDF cannot break the line between them",
+                        )
+                    )
     return findings
 
 
