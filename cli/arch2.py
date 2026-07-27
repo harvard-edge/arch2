@@ -5317,9 +5317,10 @@ def preview(
 
     path = Path(chapter)
     if not path.exists():
-        candidate = ROOT / "book" / "chapters" / chapter / "index.qmd"
-        if candidate.exists():
-            path = candidate
+        chapter_dir = ROOT / "book" / "chapters" / chapter
+        chapter_qmds = sorted(chapter_dir.glob("*.qmd")) if chapter_dir.is_dir() else []
+        if chapter_qmds:
+            path = chapter_qmds[0]
         else:
             candidate = ROOT / "book" / "chapters" / chapter
             if candidate.exists() and candidate.is_file():
@@ -5343,7 +5344,10 @@ def preview(
         console.print("[red]Could not find _quarto.yml[/red]")
         raise typer.Exit(1)
 
-    target_match = path.parent.name if path.name == "index.qmd" else path.name
+    try:
+        target_rel = path.resolve().relative_to(BOOK_DIR.resolve()).as_posix()
+    except ValueError:
+        target_rel = f"chapters/{path.parent.name}/{path.name}"
 
     try:
         import shutil
@@ -5356,9 +5360,7 @@ def preview(
 
         # Replace chapters section
         # Finds '  chapters:\n' up to '\n  appendices:'
-        chapters_replacement = (
-            f"\n  chapters:\n    - index.qmd\n    - chapters/{target_match}/index.qmd"
-        )
+        chapters_replacement = f"\n  chapters:\n    - index.qmd\n    - {target_rel}"
         content = re.sub(
             r"\n\s*chapters:\n(?:.*?)(?=\n\s*appendices:)",
             chapters_replacement,

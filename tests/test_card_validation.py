@@ -160,7 +160,7 @@ def test_chapter_3_filled_card_figure_names_all_canonical_fields() -> None:
         ROOT
         / "book"
         / "chapters"
-        / "03-architecture-20-lifecycle"
+        / "03-lifecycle"
         / "images"
         / "F4b-design-loop-card-example.svg"
     )
@@ -190,9 +190,9 @@ def test_chapter_3_filled_card_figure_names_all_canonical_fields() -> None:
 
 
 def test_design_loop_figure_separates_evidence_stage_from_governance() -> None:
-    chapter_root = ROOT / "book" / "chapters" / "03-architecture-20-lifecycle"
+    chapter_root = ROOT / "book" / "chapters" / "03-lifecycle"
     svg = (chapter_root / "images" / "F3-design-loop.svg").read_text(encoding="utf-8")
-    chapter = (chapter_root / "index.qmd").read_text(encoding="utf-8")
+    chapter = (chapter_root / "03-lifecycle.qmd").read_text(encoding="utf-8")
     assert "evidence stages may raise fidelity and cost" in svg
     assert "decision rights and next authorized action" in svg
     assert (

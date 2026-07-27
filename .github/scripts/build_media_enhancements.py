@@ -20,7 +20,7 @@ MANUSCRIPT_UNITS = {
     "front": ROOT / "book" / "index.qmd",
     **{
         f"ch{number:02d}": next(
-            (ROOT / "book" / "chapters").glob(f"{number:02d}-*/index.qmd")
+            (ROOT / "book" / "chapters").glob(f"{number:02d}-*/*.qmd")
         )
         for number in range(1, 12)
     },
@@ -30,7 +30,7 @@ MANUSCRIPT_UNITS = {
     # manifest test permanently red. Globbing keeps it correct across renames.
     **{
         f"app{path.parent.name.split('-')[1].upper()}": path
-        for path in sorted((ROOT / "book" / "appendices").glob("appendix-*/index.qmd"))
+        for path in sorted((ROOT / "book" / "appendices").glob("apdx-*/*.qmd"))
     },
 }
 

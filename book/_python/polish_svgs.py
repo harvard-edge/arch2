@@ -5,10 +5,10 @@ files_to_process = [
     "chapters/01-moonshot/images/ch1_ai_roles.svg",
     "chapters/01-moonshot/images/ch1_tao_vs_taos.svg",
     "chapters/03-architecture-20-framework/images/ch3_decision_authority.svg",
-    "chapters/04-data-representations-world-models/images/ch4_knowledge_fusion.svg",
-    "chapters/07-feedback-verification-trust/images/ch7_independent_checks.svg",
+    "chapters/04-representations/images/ch4_knowledge_fusion.svg",
+    "chapters/07-feedback/images/ch7_independent_checks.svg",
     "chapters/08-running-the-loop/images/ch8_design_loop_workflow.svg",
-    "chapters/10-what-architect-owns/images/ch10_ownership_handoff.svg",
+    "chapters/11-ownership/images/ch10_ownership_handoff.svg",
 ]
 
 canonical_defs = """  <defs>

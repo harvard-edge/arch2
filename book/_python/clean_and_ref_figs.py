@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-files = list(Path("chapters").rglob("index.qmd"))
+files = list(Path("chapters").rglob("*.qmd"))
 for f in files:
     content = f.read_text()
 
