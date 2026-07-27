@@ -133,41 +133,85 @@ def audit_svg_text_fit(svg: Path) -> None:
     return
 
 
-def prepare_local_images() -> None:
-    missing: list[str] = []
+def chapter_sources() -> dict[Path, list[Path]]:
+    """Map each chapter and appendix directory to the QMD files it owns.
+
+    Matched on any ``*.qmd`` rather than on ``index.qmd``, because chapter files
+    are named after their directory. A directory's ``images/`` is private to it,
+    so refs are unioned across the directory before anything is pruned.
+    """
+    groups: dict[Path, list[Path]] = {}
     for qmd in sorted(
         [
-            *BOOK_DIR.glob("chapters/*/index.qmd"),
-            *BOOK_DIR.glob("appendices/*/index.qmd"),
+            *BOOK_DIR.glob("chapters/*/*.qmd"),
+            *BOOK_DIR.glob("appendices/*/*.qmd"),
         ]
     ):
-        chapter_dir = qmd.parent
+        groups.setdefault(qmd.parent, []).append(qmd)
+    return groups
+
+
+def convert_refs(refs: list[str], image_dir: Path, source: Path) -> list[str]:
+    """Render each referenced SVG to PDF, returning refs that have no source."""
+    missing: list[str] = []
+    for ref in refs:
+        svg = image_dir / f"{ref}.svg"
+        pdf = image_dir / f"{ref}.pdf"
+        png = image_dir / f"{ref}.png"
+
+        if png.exists():
+            continue
+
+        if not svg.exists():
+            missing.append(
+                f"{source.relative_to(BOOK_DIR)} -> {image_dir.name}/{ref}.svg"
+            )
+            continue
+
+        if not pdf.exists() or is_stale(svg, pdf):
+            audit_svg_text_fit(svg)
+            subprocess.run(
+                ["rsvg-convert", "-f", "pdf", "-o", str(pdf), str(svg)],
+                check=True,
+            )
+    return missing
+
+
+def prepare_local_images() -> None:
+    groups = chapter_sources()
+    if not groups:
+        print(
+            "No chapter or appendix QMD files found under "
+            f"{BOOK_DIR}/chapters and {BOOK_DIR}/appendices. Figure preparation "
+            "would silently do nothing and the PDF would build against stale "
+            "art, so this is treated as a build failure.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    missing: list[str] = []
+    for chapter_dir, qmds in groups.items():
         image_dir = chapter_dir / "images"
         image_dir.mkdir(parents=True, exist_ok=True)
-        refs = image_ref_stems(qmd.read_text(encoding="utf-8"))
+        refs = sorted(
+            {
+                ref
+                for qmd in qmds
+                for ref in image_ref_stems(qmd.read_text(encoding="utf-8"))
+            }
+        )
         referenced = {f"{ref}{suffix}" for ref in refs for suffix in (".pdf", ".svg")}
         for existing in [*image_dir.glob("*.pdf"), *image_dir.glob("*.svg")]:
             if existing.name not in referenced:
                 existing.unlink()
+        missing += convert_refs(refs, image_dir, qmds[0])
 
-        for ref in refs:
-            svg = image_dir / f"{ref}.svg"
-            pdf = image_dir / f"{ref}.pdf"
-            png = image_dir / f"{ref}.png"
-
-            if png.exists():
-                continue
-
-            if not svg.exists():
-                missing.append(f"{qmd.relative_to(BOOK_DIR)} -> images/{ref}.svg")
-                continue
-
-            if not pdf.exists() or is_stale(svg, pdf):
-                audit_svg_text_fit(svg)
-                subprocess.run(
-                    ["rsvg-convert", "-f", "pdf", "-o", str(pdf), str(svg)],
-                    check=True,
-                )
+    # Front matter draws on book/images/, which also holds site art such as the
+    # cover and favicons that no QMD references. Convert it, never prune it.
+    front_matter = BOOK_DIR / "index.qmd"
+    if front_matter.exists():
+        refs = image_ref_stems(front_matter.read_text(encoding="utf-8"))
+        missing += convert_refs(refs, BOOK_DIR / "images", front_matter)
 
     if missing:
         print("Missing local figure SVGs:", file=sys.stderr)
