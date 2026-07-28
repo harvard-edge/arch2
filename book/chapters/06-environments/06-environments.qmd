@@ -172,6 +172,7 @@ The Lighthouse contract makes every execution choice visible
 | **Budget and stop** | Three SRAM evaluations and no more than four cycle-level attempts, including infrastructure reruns. Stop on budget exhaustion, missing required inputs or tools, no eligible alternative, or completion of all authorized work. |
 | **Failure and retry behavior** | Refuse invalid requests before invocation. Record timeouts, cancellations, license failures, host failures, stale-state failures, missing outputs, and parser failures separately. A retry creates a new attempt linked to its parent and consumes budget according to the study contract. |
 | **Reset, checkpoint, and cache behavior** | Build each SRAM input from the represented candidate. Start every clean `SIM-A` attempt in a new work directory generated from `XR-COMPUTE-A` and the fixed condition set. A retry regenerates that state rather than resuming the stale directory. The initial live history is empty, so no cached evaluation return may be reused. A generated build artifact may be reused only when the complete declared build action matches, including inputs, transformation and tool versions, flags, conditions, and relevant environment state. |
+| **Permissions and containment** | Allow only the declared executables, filesystem paths, network access, credentials, and resource limits. Treat generated scripts and RTL as untrusted inputs until their permitted actions are checked. Define interruption, revocation, quarantine, clean-state restoration, and which partial artifacts survive containment. |
 | **Artifact retention** | Retain translated inputs, commands, standard output and error, reports, matched frame records, parsed fields, unclassified warnings, output hashes, and parent-child lineage. |
 | **What the environment may not decide** | Whether a return is a valid measurement, whether two returns form a valid comparison, whether a physical limit establishes rejection, or whether a candidate should advance. |
 
@@ -184,8 +185,18 @@ Read the upper rows as the identities and fixed state that translation must
 preserve. The middle rows bind those identities to the tool order, expected
 returns, budget, and stopping conditions. The execution-order row is the hinge.
 Its SRAM predicate may suppress a later simulator call, but it does not reject
-the candidate. The lower rows then define failure, retry, reset, retention, and
-the decisions the environment cannot make.
+the candidate. The lower rows then define failure, retry, reset, permissions,
+containment, retention, and the decisions the environment cannot make.
+
+Permissions and containment are part of execution meaning rather than a
+separate security survey. A generated build script that can read credentials,
+send files over the network, or modify a shared worktree is not equivalent to
+the same script confined to declared inputs and an isolated directory. The
+contract must also state what happens after interruption. Restoring a clean
+state while discarding the command, partial log, or affected-artifact identity
+makes the next run safer but leaves the failure unexplained. These controls
+determine what the environment was allowed to do and what record survives.
+They do not establish that the resulting design is architecturally valid.
 
 Write this contract before the first tool call. Filled afterward, it merely
 describes what happened and cannot refuse an invalid translation or require a
@@ -425,13 +436,6 @@ state which intermediate state is reusable and what changes invalidate it. A
 checkpoint with unknown parent state is not a shortcut. It is an unidentified
 input.
 
-Tool isolation protects both the study and shared infrastructure. Each attempt
-needs its own filesystem view, process boundary, resource limits, and timeout.
-A malformed RTL candidate can otherwise corrupt a shared worktree, fill a
-disk, exhaust host memory, or wedge a license process. The harness traps the
-failure, retains partial artifacts, and returns control without treating the
-candidate as measured.
-
 The 1996 Ariane 5 inquiry documented what happens when a reused component
 carries an operating assumption into a changed system [@LionsAriane1996].
 
@@ -452,6 +456,13 @@ recheck those assumptions for the current request.
 
 The lesson is narrower than the accident. Reuse is safe only when the
 conditions that made the prior execution meaningful still hold.
+
+Tool isolation protects both the study and shared infrastructure. Each attempt
+needs its own filesystem view, process boundary, resource limits, and timeout.
+A malformed RTL candidate can otherwise corrupt a shared worktree, fill a
+disk, exhaust host memory, or wedge a license process. The harness traps the
+failure, retains partial artifacts, and returns control without treating the
+candidate as measured.
 
 ## Execution Outcomes Remain Distinct
 
