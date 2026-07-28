@@ -277,6 +277,137 @@ the approach and states what later work it will require.
 \FloatBarrier
 ```
 
+## Result Economics and Feedback Budgets {#sec-sample-efficiency-under-expensive-feedback}
+
+Every approach consumes more than compute. Its cost includes setup,
+calibration, candidate construction, inference or search, tool execution,
+licenses where relevant, failed runs, checking, and expert review. The useful
+quantity is the expected cost of obtaining a result that can change the study
+decision.
+
+> **Feedback budget.** The number, latency, cost, and fidelity of tool
+> evaluations, failed attempts, checks, and reviews that the study can afford.
+
+That total separates small studies from large searches. Three legal cache
+capacities can be enumerated. Reported or computed accelerator and
+tensor-program scale anchors can reach hundreds of millions to more than
+$10^{18}$ possibilities
+[@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM;
+@ParasharEtAl2019Timeloop]. In the larger spaces, analytical pruning,
+deterministic legality checks, heuristics, prediction, or optimization may save
+expensive evaluations. In the smaller space, the same machinery can cost more
+than it saves. The independent scale anchors and actual Lighthouse counts make
+that difference visible (@fig-evidence-gap).
+
+```{python}
+#| label: fig-evidence-gap
+#| fig-cap: |
+#|   **Candidate scale changes the case for direct enumeration:** The upper rows are reported or computed scale anchors for MAESTRO [@KwonEtAl2019MAESTRO], AutoTVM [@ChenEtAl2018AutoTVM], and Timeloop [@ParasharEtAl2019Timeloop]. AutoTVM is an order-of-magnitude statement, and the Timeloop lower bound is computed from the paper's combinatorial expression. The lower rows are the declared candidate and evaluation counts for the illustrative `XR-L2-CAP-A` study. The rows are independent scale anchors, not measurements of one common system; structure, cost, support, and review capacity still determine the method.
+#| out-width: "100%"
+#| fig-alt: "Log-scale display of three reported or computed large design-space scale anchors above a divider and the Lighthouse study's three cache candidates, three SRAM evaluations, and four cycle-level executions below it."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, add_note_box, apply_style, draw_range_rows, top_log_axis
+
+rows = [
+    {"display_label": "MAESTRO accelerator DSE", "display_note": "reported candidate search scale", "count_low": 480_000_000, "count_high": 480_000_000, "right_label": "480M", "color": COLORS["orange"]},
+    {"display_label": "AutoTVM operator tuning", "display_note": "reported order-of-billions space", "count_low": 1_000_000_000, "count_high": 1_000_000_000, "right_label": "~1B", "color": COLORS["orange"]},
+    {"display_label": "Timeloop mapspace core", "display_note": "computed lower bound before factor choices", "count_low": 2_600_000_000_000_000_000, "count_high": 2_600_000_000_000_000_000, "right_label": ">2e18", "color": COLORS["orange"]},
+    {"display_label": "Lighthouse legal candidates", "display_note": "declared study count", "count_low": 3, "count_high": 3, "right_label": "3", "color": COLORS["blue"]},
+    {"display_label": "Lighthouse SRAM evaluations", "display_note": "one per capacity", "count_low": 3, "count_high": 3, "right_label": "3", "color": COLORS["blue"]},
+    {"display_label": "Lighthouse cycle-level budget", "display_note": "including infrastructure reruns", "count_low": 4, "count_high": 4, "right_label": "4", "color": COLORS["blue"]},
+]
+
+apply_style()
+fig, ax = plt.subplots(figsize=(5.35, 2.95))
+fig.subplots_adjust(left=0.38, right=0.85, top=0.82, bottom=0.27)
+
+y_positions = [0.35, 1.35, 2.35, 4.80, 5.80, 6.80]
+ax.set_ylim(-1.05, y_positions[-1] + 0.65)
+ax.invert_yaxis()
+ax.set_yticks([])
+top_log_axis(
+    ax,
+    xlim=(0.8, 1e19),
+    xticks=[1, 1e2, 1e4, 1e6, 1e9, 1e12, 1e15, 1e18],
+    xticklabels=["1", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^9$", r"$10^{12}$", r"$10^{15}$", r"$10^{18}$"],
+    xlabel="count scale: candidates or affordable evaluations",
+    tick_fontsize=6.0,
+)
+
+ax.axhline(3.55, color=COLORS["muted"], linewidth=0.65, linestyle="--", zorder=0)
+ax.text(-0.74, -0.55, "design-space anchors", transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.8, fontweight="bold", color=COLORS["methods_ink"], clip_on=False)
+ax.text(-0.74, 4.10, "represented Lighthouse study", transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.8, fontweight="bold", color=COLORS["note_text"], clip_on=False)
+
+draw_range_rows(ax, rows, low_key="count_low", high_key="count_high", label_x=-0.68, right_x=1.04, label_fontsize=6.15, right_fontsize=5.85, y_positions=y_positions, show_notes=False)
+add_note_box(fig, "Large spaces may justify learned screening or search.\nThree declared choices justify direct enumeration.", xywh=(0.12, 0.035, 0.76, 0.10), fontsize=5.4)
+
+plt.show()
+plt.close(fig)
+```
+
+Read the logarithmic axis from unit counts at the left to more than
+$10^{18}$ at the right. The upper rows place the three external design-space
+anchors between hundreds of millions and more than $10^{18}$ possibilities.
+The lower rows place the Lighthouse candidate and evaluation counts at three
+or four. Because the rows are not paired, the comparison does not say how many
+evaluations any one design space requires. It shows why the represented size
+of the problem changes the choice. Large spaces can exceed any direct
+evaluation budget. The Lighthouse cache study does not.
+
+Recorded evaluation costs can guide that choice. A simulator result, warning,
+failed run, synthesis report,
+measurement, or expert review can reduce uncertainty relevant to the decision.
+One synthesis run that distinguishes the two leading candidates may be worth
+more than another hundred proxy scores that preserve their ranking. The
+architect should ask which uncertainty the next evaluation can resolve, whether
+that result could change the candidate ranking or claim, and what the
+evaluation will cost. Raw run count is not the objective.
+
+Treating generation as free hides checking and review. Treating prediction as
+free hides calibration. Treating optimization as free hides the evaluations it
+spends.
+
+Four common cost regimes organize the planning choice without imposing a fixed
+hierarchy of tool quality (@tbl-sample-efficiency-regimes).
+
+| **Result-cost regime** | **Typical setting** | **Likely approach** | **Question before adding complexity** |
+| --- | --- | --- | --- |
+| Direct checks are cheap relative to the candidate set | A few legal configurations and short deterministic runs. | Enumeration or direct tool use. | Would another method save more work than it adds? |
+| Cheap screens exist, but final checks are costly | Analytical models, compiler estimates, SRAM models, or rough simulators. | Conventional screening before stronger evaluation. | Does the screen preserve the candidates that matter near the decision boundary? |
+| Compatible observations support reuse | Repeated studies over a stable workload and design region. | Prediction, possibly followed by selective direct checks. | Is calibration cheaper than evaluating the current candidates directly? |
+| The legal space exceeds the evaluation budget | Large mapping, scheduling, placement, or parameter spaces. | Optimization with a transparent baseline and explicit stop. | Is the objective meaningful, and does the search procedure fit the space? |
+
+: **Result economics shape approach choice.** Setup, calibration, evaluation, and
+review determine whether a more complex method pays for itself.
+{#tbl-sample-efficiency-regimes tbl-colwidths="[21,24,25,30]"}
+
+Read each row from the cost relationship, through a typical setting and likely
+approach, to the question that could still disqualify that choice. The first
+two rows favor direct or conventional screening when candidates and checks are
+manageable. The later rows justify prediction or optimization only when
+compatible observations or a space larger than the evaluation budget creates
+the need. Moving down the table is not progress toward a better method. It
+reflects a different problem and cost structure.
+
+The value of each evaluation also depends on what the environment records.
+Workload identity, candidate state, tool warnings, failure reasons, and
+evaluation conditions make a result reusable.
+@sec-architecture-environments-tool-interfaces defines how the environment
+captures those returns. At this stage, the approach decision needs only to budget
+for them.
+
+Result economics narrows the method choice before any family is selected.
+Generation is warranted when a needed candidate or artifact is missing and can
+be checked economically. Prediction is warranted when a relevant consequence
+is costly to observe and compatible observations support an estimate.
+Optimization is warranted when the legal space exceeds the evaluation budget
+and the study must choose which candidates to measure. The next three sections
+develop those questions in that order. The order is explanatory rather than a
+pipeline. A study can begin with any one of them, combine distinct jobs, or use
+none.
+
+
 ## Generation When Candidates or Artifacts Are Missing
 
 Generation helps when an architect needs more alternatives or a faster first
@@ -398,6 +529,32 @@ limits, and the rejection rule for fast but incorrect code. When proposals alrea
 than they can be rejected, generating more only lengthens the backlog unless
 checking capacity also improves.
 
+A fair method comparison asks how the missing artifact is constructed, not
+only whether the final artifact beats an execution baseline. PyTorch Eager
+provides a useful performance reference for a generated kernel, but it does not
+by itself represent the strongest practical conventional construction path. A
+compiler, optimized library, parameterized template, or autotuning system may
+already produce the needed kernel without learned generation.
+
+The learned and conventional paths should therefore receive the same operator,
+target, semantics, numerical tolerance, permitted transformations, starting
+information, tool access, and budget. Both paths must pass the same compilation
+and correctness checks before performance counts. Their costs include failed
+attempts, target executions, setup, and expert review. The comparison can then
+ask whether learned generation produces a correct and faster kernel, reaches a
+comparable result with less total work, or supplies an artifact that the
+conventional path cannot produce within the budget. KernelBench demonstrates
+the output checks and candidate funnel, but it does not by itself settle this
+complete construction comparison.
+
+The same test transfers to RTL. A learned RTL generator should be compared with
+a serious parameterized generator, template, high-level synthesis path, or
+solver-backed construction method under the same interface contract, allowed
+changes, testbench, implementation tools, and engineering budget. The result
+may favor the conventional path. Generation earns a role only when it supplies
+needed work more effectively without weakening the checks that make the
+artifact usable.
+
 Chip-Chat, an interactive hardware design study, brings the same role separation into RTL design [@BlockloveEtAl2023ChipChat]. In that study, a language model drafts Verilog, open-source simulation and synthesis tools return errors for revision, and a small processor design produces GDSII for tapeout. The generator supplied
 drafts. A parser, simulator, and synthesis flow could reject them, while a human
 designer decided when a candidate was ready to advance. The example shows why
@@ -494,13 +651,6 @@ help determine how many candidates must survive the screen to retain the
 designs worth measuring. Weak recall requires a larger survivor set or
 abandonment of the screen. The check runs count against the same evaluation
 budget the predictor is intended to save.
-
-A predictor should stop when compatible calibration cannot be established,
-when the candidate leaves its stated support, when its error is too large for
-the decision, or when direct evaluation becomes cheaper than maintaining the
-model. The planned later check must remain visible because the predictor
-estimates a result rather than replacing the tool or measurement that the
-study requested.
 
 ### Support Limits
 
@@ -657,130 +807,12 @@ justify than direct comparison. If a later study expands the cache space and
 declares compatible results, prediction may become useful. That future
 condition does not make it useful now.
 
-## Result Economics and Feedback Budgets {#sec-sample-efficiency-under-expensive-feedback}
-
-Every approach consumes more than compute. Its cost includes setup,
-calibration, candidate construction, inference or search, tool execution,
-licenses where relevant, failed runs, checking, and expert review. The useful
-quantity is the expected cost of obtaining a result that can change the study
-decision.
-
-> **Feedback budget.** The number, latency, cost, and fidelity of tool
-> evaluations, failed attempts, checks, and reviews that the study can afford.
-
-That total separates small studies from large searches. Three legal cache
-capacities can be enumerated. Reported or computed accelerator and
-tensor-program scale anchors can reach hundreds of millions to more than
-$10^{18}$ possibilities
-[@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM;
-@ParasharEtAl2019Timeloop]. In the larger spaces, analytical pruning,
-deterministic legality checks, heuristics, prediction, or optimization may save
-expensive evaluations. In the smaller space, the same machinery can cost more
-than it saves. The independent scale anchors and actual Lighthouse counts make
-that difference visible (@fig-evidence-gap).
-
-```{python}
-#| label: fig-evidence-gap
-#| fig-cap: |
-#|   **Candidate scale changes the case for direct enumeration:** The upper rows are reported or computed scale anchors for MAESTRO [@KwonEtAl2019MAESTRO], AutoTVM [@ChenEtAl2018AutoTVM], and Timeloop [@ParasharEtAl2019Timeloop]. AutoTVM is an order-of-magnitude statement, and the Timeloop lower bound is computed from the paper's combinatorial expression. The lower rows are the declared candidate and evaluation counts for the illustrative `XR-L2-CAP-A` study. The rows are independent scale anchors, not measurements of one common system; structure, cost, support, and review capacity still determine the method.
-#| out-width: "100%"
-#| fig-alt: "Log-scale display of three reported or computed large design-space scale anchors above a divider and the Lighthouse study's three cache candidates, three SRAM evaluations, and four cycle-level executions below it."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, add_note_box, apply_style, draw_range_rows, top_log_axis
-
-rows = [
-    {"display_label": "MAESTRO accelerator DSE", "display_note": "reported candidate search scale", "count_low": 480_000_000, "count_high": 480_000_000, "right_label": "480M", "color": COLORS["orange"]},
-    {"display_label": "AutoTVM operator tuning", "display_note": "reported order-of-billions space", "count_low": 1_000_000_000, "count_high": 1_000_000_000, "right_label": "~1B", "color": COLORS["orange"]},
-    {"display_label": "Timeloop mapspace core", "display_note": "computed lower bound before factor choices", "count_low": 2_600_000_000_000_000_000, "count_high": 2_600_000_000_000_000_000, "right_label": ">2e18", "color": COLORS["orange"]},
-    {"display_label": "Lighthouse legal candidates", "display_note": "declared study count", "count_low": 3, "count_high": 3, "right_label": "3", "color": COLORS["blue"]},
-    {"display_label": "Lighthouse SRAM evaluations", "display_note": "one per capacity", "count_low": 3, "count_high": 3, "right_label": "3", "color": COLORS["blue"]},
-    {"display_label": "Lighthouse cycle-level budget", "display_note": "including infrastructure reruns", "count_low": 4, "count_high": 4, "right_label": "4", "color": COLORS["blue"]},
-]
-
-apply_style()
-fig, ax = plt.subplots(figsize=(5.35, 2.95))
-fig.subplots_adjust(left=0.38, right=0.85, top=0.82, bottom=0.27)
-
-y_positions = [0.35, 1.35, 2.35, 4.80, 5.80, 6.80]
-ax.set_ylim(-1.05, y_positions[-1] + 0.65)
-ax.invert_yaxis()
-ax.set_yticks([])
-top_log_axis(
-    ax,
-    xlim=(0.8, 1e19),
-    xticks=[1, 1e2, 1e4, 1e6, 1e9, 1e12, 1e15, 1e18],
-    xticklabels=["1", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^9$", r"$10^{12}$", r"$10^{15}$", r"$10^{18}$"],
-    xlabel="count scale: candidates or affordable evaluations",
-    tick_fontsize=6.0,
-)
-
-ax.axhline(3.55, color=COLORS["muted"], linewidth=0.65, linestyle="--", zorder=0)
-ax.text(-0.74, -0.55, "design-space anchors", transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.8, fontweight="bold", color=COLORS["methods_ink"], clip_on=False)
-ax.text(-0.74, 4.10, "represented Lighthouse study", transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.8, fontweight="bold", color=COLORS["note_text"], clip_on=False)
-
-draw_range_rows(ax, rows, low_key="count_low", high_key="count_high", label_x=-0.68, right_x=1.04, label_fontsize=6.15, right_fontsize=5.85, y_positions=y_positions, show_notes=False)
-add_note_box(fig, "Large spaces may justify learned screening or search.\nThree declared choices justify direct enumeration.", xywh=(0.12, 0.035, 0.76, 0.10), fontsize=5.4)
-
-plt.show()
-plt.close(fig)
-```
-
-Read the logarithmic axis from unit counts at the left to more than
-$10^{18}$ at the right. The upper rows place the three external design-space
-anchors between hundreds of millions and more than $10^{18}$ possibilities.
-The lower rows place the Lighthouse candidate and evaluation counts at three
-or four. Because the rows are not paired, the comparison does not say how many
-evaluations any one design space requires. It shows why the represented size
-of the problem changes the choice. Large spaces can exceed any direct
-evaluation budget. The Lighthouse cache study does not.
-
-Recorded evaluation costs can guide that choice. A simulator result, warning,
-failed run, synthesis report,
-measurement, or expert review can reduce uncertainty relevant to the decision.
-One synthesis run that distinguishes the two leading candidates may be worth
-more than another hundred proxy scores that preserve their ranking. The
-architect should ask which uncertainty the next evaluation can resolve, whether
-that result could change the candidate ranking or claim, and what the
-evaluation will cost. Raw run count is not the objective.
-
-Treating generation as free hides checking and review. Treating prediction as
-free hides calibration. Treating optimization as free hides the evaluations it
-spends.
-
-Four common cost regimes organize the planning choice without imposing a fixed
-hierarchy of tool quality (@tbl-sample-efficiency-regimes).
-
-| **Result-cost regime** | **Typical setting** | **Likely approach** | **Question before adding complexity** |
-| --- | --- | --- | --- |
-| Direct checks are cheap relative to the candidate set | A few legal configurations and short deterministic runs. | Enumeration or direct tool use. | Would another method save more work than it adds? |
-| Cheap screens exist, but final checks are costly | Analytical models, compiler estimates, SRAM models, or rough simulators. | Conventional screening before stronger evaluation. | Does the screen preserve the candidates that matter near the decision boundary? |
-| Compatible observations support reuse | Repeated studies over a stable workload and design region. | Prediction, possibly followed by selective direct checks. | Is calibration cheaper than evaluating the current candidates directly? |
-| The legal space exceeds the evaluation budget | Large mapping, scheduling, placement, or parameter spaces. | Optimization with a transparent baseline and explicit stop. | Is the objective meaningful, and does the search procedure fit the space? |
-
-: **Result economics shape approach choice.** Setup, calibration, evaluation, and
-review determine whether a more complex method pays for itself.
-{#tbl-sample-efficiency-regimes tbl-colwidths="[21,24,25,30]"}
-
-Read each row from the cost relationship, through a typical setting and likely
-approach, to the question that could still disqualify that choice. The first
-two rows favor direct or conventional screening when candidates and checks are
-manageable. The later rows justify prediction or optimization only when
-compatible observations or a space larger than the evaluation budget creates
-the need. Moving down the table is not progress toward a better method. It
-reflects a different problem and cost structure.
-
-The value of each evaluation also depends on what the environment records.
-Workload identity, candidate state, tool warnings, failure reasons, and
-evaluation conditions make a result reusable.
-@sec-architecture-environments-tool-interfaces defines how the environment
-captures those returns. At this stage, the approach decision needs only to budget
-for them.
-
-Knowing what a run costs still leaves open which run to buy next. When the study
-needs selective search, an optimizer makes that choice under an explicit rule.
-Selecting a predicted winner also introduces a bias that ordinary predictor
-calibration performed before selection does not remove.
+A predictor should stop when compatible calibration cannot be established,
+when the candidate leaves its stated support, when its error is too large for
+the decision, or when direct evaluation becomes cheaper than maintaining the
+model. The planned later check must remain visible because the predictor
+estimates a result rather than replacing the tool or measurement that the
+study requested.
 
 ## Optimization When Evaluations Must Be Chosen
 
