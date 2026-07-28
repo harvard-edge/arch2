@@ -126,13 +126,22 @@ identity, version, permitted use, and dependent state carried into each
 invocation. Otherwise a repeated request can appear identical while running
 against a different design or model.
 
+One legacy SRAM macro, for example, may appear as a behavioral model in
+simulation, a Liberty timing and power view during synthesis and timing
+analysis, and a LEF physical view during placement and routing. Updating the
+behavioral model while retaining an older Liberty or LEF view lets different
+tool stages evaluate different versions of what the study treats as one macro.
+The environment must bind compatible views to one identity or refuse the run.
+
 Translation must be exact or refused. If the study asks for `l2.capacity=3MB`,
 the wrapper may serialize that value into an SRAM configuration file and a
 simulator parameter. It may not silently round the value to the nearest
 supported capacity, change associativity to make the configuration legal, or
 substitute another simulator because it is idle. Each of those choices changes
-the request. A repaired or alternative request needs a new identity and another
-method decision.
+the meaning of the request. A syntax-preserving repair may create a new request
+artifact or execution attempt while retaining the candidate identity. A repair
+that changes architecture meaning creates a new candidate and returns to method
+selection.
 
 ::: {.callout-lighthouse title="One cache request, several exact translations"}
 The `3MB` candidate becomes one `SRAM-A` input under `PVT-A` and, if the
@@ -211,17 +220,17 @@ steps decides whether the return forms a valid measurement or supports a design
 decision. That interpretation belongs to @sec-feedback-verification-trust.
 
 The contract also limits scheduling freedom. A harness may choose a host,
-reserve a declared license, or resume an authorized attempt. It may not replace
-`SIM-A` with an analytical model, serve a stale cached result, or skip the
-shared baseline simply because another path is cheaper. Those are approach
-changes, not execution choices.
+reserve a declared license, or allow the scheduler to pause and resume the same
+submitted job. It may not replace `SIM-A` with an analytical model, serve a
+stale cached result, or skip the shared baseline simply because another path is
+cheaper. Those are approach changes, not execution choices.
 
 ## Identity Survives Translation and Reuse
 
 Architecture tools rarely consume the representation in which the study was
 formulated. An SRAM model reads an organization and technology configuration.
 A cycle-level simulator reads a platform description, workload image, and
-model parameters. A power model may consume activity and event counts produced
+microarchitecture and platform parameters. A power model may consume activity and event counts produced
 by another tool. The environment must lower one represented candidate into
 these forms while retaining the parent relationship.
 
@@ -440,6 +449,13 @@ does not prove that the architecture is physically infeasible. A deterministic
 wrapper bug, corrupt checkpoint, fixed host limit, or tool defect can fail the
 same way.
 
+Pause and resume do not always create a retry. A scheduler pause followed by
+continuation of the same submitted job retains the attempt identity. Starting a
+new job from an authorized checkpoint creates a new attempt linked to both the
+earlier attempt and that checkpoint. A clean retry also creates a new attempt,
+but regenerates the declared starting state instead of resuming intermediate
+state.
+
 Clean restart is not always free. Early simulation can branch from a pristine
 snapshot. A long implementation flow may need a declared post-placement
 checkpoint because rebuilding from source would waste days. The contract must
@@ -486,7 +502,7 @@ it hands forward, so they describe execution rather than architecture judgment
 
 | **Execution Outcome** | **Example** | **What the Harness Records** | **Next Execution Action** |
 | --- | --- | --- | --- |
-| Invalid request | `l2.capacity=6MB`, missing required workload identity, or a translation that changes associativity. | Refusal reason, request identity, validation rule, and no tool invocation. | Repair or replace the request under a new identity. |
+| Invalid request | `l2.capacity=6MB`, missing required workload identity, or a translation that changes associativity. | Refusal reason, request identity, validation rule, and no tool invocation. | Repair syntax under a new request artifact only when meaning is preserved; otherwise create a new candidate and return to method selection. |
 | Infrastructure failure | License checkout fails, cluster node dies, shared storage disappears, or a declared host resource is unavailable. | Attempt, failure class, partial artifacts, realized cost, and retry eligibility. | Retry only under the declared policy. The candidate remains unevaluated. |
 | Execution-state or setup failure | A stale constraint file, wrong top level, missing clock, corrupt checkpoint, or mismatched generated input reaches the tool path. | Setup identity, expected-state check, returned diagnostics, partial artifacts, and realized cost. | Regenerate the declared state or repair the setup. The candidate remains unevaluated. |
 | Repeated tool failure for the same input | The same input repeatedly exhausts a declared tool resource or triggers a tool error under controlled retries. | Reproducible tool behavior and all conditions, without labeling the design physically infeasible. | Hand the typed failure forward for diagnosis without choosing the next check. |
@@ -630,10 +646,11 @@ project environments need additional state. Jobs wait in queues, hold licenses,
 resume checkpoints, and return at different times. A common interface should
 make those differences visible rather than hide them behind one `step()` call.
 
-Chipyard provides a concrete multi-tool example. One configuration can produce
-RTL for simulation, VLSI implementation flows, and FPGA emulation [@chipyard].
-The fan-out is useful because every branch retains the configuration that
-created it (@fig-chipyard-framework).
+Chipyard provides a concrete multi-tool example. Its Chisel generators and
+FIRRTL compiler, built around a hardware intermediate representation, can turn
+one configuration into RTL for simulation, VLSI implementation flows, and FPGA emulation
+[@chipyard]. The fan-out is useful because every branch retains the
+configuration that created it (@fig-chipyard-framework).
 
 ![**One configuration can feed several authorized tool paths.** Chipyard
 generates related artifacts for RTL simulation, VLSI work, and FPGA emulation
@@ -665,7 +682,7 @@ order. The study contract determines the prerequisites for each branch, and
 For `XR-L2-CAP-A`, the graph stays small. Three independent `SRAM-A` calls
 precede the cycle-level branch. The shared 2\ MB baseline and each eligible
 alternative use the same `SIM-A`, `CACHE-A`, `PM-A`, workload, software, and
-condition identities. A failed attempt creates a retry edge. It does not
+condition identities. An authorized retry creates a retry edge. It does not
 create another candidate.
 
 ## The Lighthouse Execution Record
@@ -673,11 +690,9 @@ create another candidate.
 To make the execution contract concrete, this chapter introduces a constructed
 trace for the prospective cache study. It is an author-created teaching
 example, not live project history or measurements from tools run for this book.
-It reuses the hypothetical `2.94\ W` value posed conditionally in
-@sec-architecture-20-ontology for continuity and adds illustrative SRAM
-returns, a `2.90\ W` baseline, a `12%` miss reduction, a `2\ mW`
-cache-leakage increase, one stale-state failure, and a four-attempt cycle-level
-chronology. These values exercise the record. They are not predictions about
+It contains illustrative SRAM, power, and miss returns, one stale-state failure,
+and a four-attempt cycle-level chronology. The table carries the exact values
+and their record status. They exercise the record and are not predictions about
 the Lighthouse design.
 
 @tbl-lighthouse-execution-record preserves only the fields declared by that
@@ -748,22 +763,12 @@ measurement qualification and comparison.
 The open problems concern preserving intent and identity while real tools run
 under changing state and limited resources.
 
+### Preserving Meaning Through Translation and Reuse
+
 **How can a wrapper prove that a tool-specific input preserves the requested
 architecture change?** Syntax and schema checks catch malformed inputs, but
 semantic drift can occur through defaults, rounding, generated collateral, or
 unsupported combinations.
-
-**What reset is sufficient for a stateful architecture tool?** Working
-directories, databases, caches, random seeds, license state, and host state can
-survive different kinds of restart.
-
-**How can late and out-of-order returns remain attached to the correct
-candidate?** Long jobs may complete after the study has issued newer requests,
-changed a checkpoint, or exhausted its budget.
-
-**When is a repeated tool failure caused by the candidate rather than the
-infrastructure?** Controlled retries can expose correlation, but deterministic
-wrapper defects and fixed host limits can produce the same pattern.
 
 **When may an architecture result be reused from a cache?** Useful reuse must
 account for candidate, software, workload, tool, model, condition, freshness,
@@ -773,9 +778,25 @@ and every hidden dependency that can change the return.
 fields reduce reading cost, while tool upgrades and new failure modes keep
 creating output outside the known schema.
 
+### Operating Stateful, Shared Tools
+
+**What reset is sufficient for a stateful architecture tool?** Working
+directories, databases, caches, random seeds, license state, and host state can
+survive different kinds of restart.
+
+**How can late and out-of-order returns remain attached to the correct
+candidate?** Long jobs may complete after the study has issued newer requests,
+changed a checkpoint, or exhausted its budget.
+
 **How should automated studies share queues and licenses with human design
 work?** The scheduler must preserve study budgets without starving urgent
 debug, signoff, and tapeout activity.
+
+### Separating Candidate and Execution Failures
+
+**When is a repeated tool failure caused by the candidate rather than the
+infrastructure?** Controlled retries can expose correlation, but deterministic
+wrapper defects and fixed host limits can produce the same pattern.
 
 ## Conclusion
 
