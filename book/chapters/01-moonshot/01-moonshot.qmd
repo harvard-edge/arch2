@@ -377,24 +377,14 @@ This book asks a different, complementary question. It evaluates the complete AI
 
 Recent generative systems are now tackling specific parts of that workflow, such as proposing architecture configurations, invoking tools, and revising searches based on returned results [@WangEtAl2026AgentDSE; @HeEtAl2024ChatEDA]. Domain-adapted language models like ChipNeMo, tuned on internal design data for chip-design assistant tasks, are a concrete instance of this trend [@LiuEtAl2023ChipNeMo]. While these systems can generate text and scripts, those artifacts represent only a fraction of the effort required to connect an architecture question to a final decision. This book's scope includes both learned components embedded within a design and AI systems used to conduct the broader engineering work. In either context, the central question is how the method changes the evidence supporting an architectural conclusion.
 
-Architecture work has always moved through repeated cycles of analysis and
-revision. Architects frame problems, choose abstractions, construct models,
-select workloads, explore alternatives, evaluate results, and revise
-assumptions. Learned methods may now perform more of those jobs or choose later
-actions from tool feedback. That expansion makes the complete design system,
-rather than the fluency of one component, the relevant object of assessment.
-
-The historical boundary needed here is simple. Earlier learning usually
-operated inside an artifact or performed a tactical job in a human-directed
-workflow. Architecture 2.0 asks whether AI can improve a larger share of the
-work without weakening the tools, checks, costs, and architectural judgment on
-which the result depends.
-
-Architecture practice already combines human judgment with simulators, compilers, EDA optimization, scripts, generators, and extensive automation. Learned methods may change the balance of work when they can propose or screen more alternatives, interpret less structured information, or coordinate work across tools. The architect then spends more time specifying the problem, deciding what work to delegate, checking whether an objective omits a constraint, and interpreting the resulting tradeoffs.
+Architecture practice already combines human judgment with simulators,
+compilers, EDA optimization, scripts, generators, and extensive automation.
+Learned methods may change the balance of work when they can propose or screen
+more alternatives, interpret less structured information, or coordinate work
+across tools. That expansion makes the complete design system, rather than the
+fluency of one component, the relevant object of assessment.
 
 Omitted constraints can have architectural consequences. An optimizer told to minimize power may share hardware resources that were isolated for a reason. If the objective does not price security, the result can reintroduce contention channels such as shared-cache timing leaks or simultaneous multithreading (SMT) port contention. The degree of AI participation can vary, but assigning a method more work never transfers responsibility for the final architectural conclusion.
-
-While embedded ML optimizes run-time behavior by living inside the artifact, the chapters ahead focus on AI methods used in design work itself. AI-assisted architecture extends a long history of design automation, but it begins from a broader statement of intent than earlier tools. It is not defined by automating more steps.
 
 Five developments illustrate how design automation can accept different levels
 of intent and produce different artifacts. The dates are approximate, the
@@ -769,9 +759,9 @@ Progress toward the moonshot will require more than isolated demonstrations. Sof
 ```{python}
 #| label: fig-swebench-progress
 #| fig-cap: |
-#|   **Standardized task-level checks support rapid iteration on SWE-bench Verified.** Best reported SWE-bench Verified score [@JimenezEtAl2024SWEBench], one point per released model, tracked through Epoch AI's benchmarking hub [@EpochAI2025AIModels]; the line traces the best result to date. Scores climbed from roughly a third of this human-filtered 500-task subset to over four-fifths in about seventeen months. Repository tests provide a quick, repeatable signal for the defined task, while a complete architecture claim must combine functional and physical evidence from several tools.
+#|   **Standardized task-level checks support rapid iteration on SWE-bench Verified.** Best reported SWE-bench Verified score [@JimenezEtAl2024SWEBench] for each model name in a dated snapshot of Epoch AI's benchmarking hub [@EpochAI2025AIModels]; the line traces the best result to date. Reported configurations and test harnesses can differ, so the plot shows the pace of benchmark progress rather than a controlled comparison among models. Scores climbed from roughly a third of this human-filtered 500-task subset to over four-fifths in about seventeen months. Repository tests provide a quick, repeatable signal for the defined task, while a complete architecture claim must combine functional and physical evidence from several tools.
 #| out-width: "88%"
-#| fig-alt: "Scatter of SWE-bench Verified resolved percentage versus model release date from late 2024 to 2026. Points climb from about 31 percent to about 84 percent, with a line tracing the best-to-date frontier through GPT-4o, Claude 3.7 Sonnet, Claude Opus 4, GPT-5, and Claude Opus 4.7."
+#| fig-alt: "Scatter of the best reported SWE-bench Verified resolved percentage for each model name versus model release date from late 2024 to 2026. Points climb from about 31 percent to about 84 percent, with a line tracing the best-to-date frontier through GPT-4o, Claude 3.7 Sonnet, Claude Opus 4, GPT-5, and Claude Opus 4.7."
 
 import csv
 import datetime
@@ -785,8 +775,8 @@ from _python.labels import place_labels
 apply_style()
 
 # Data: SWE-bench Verified results [@JimenezEtAl2024SWEBench] tracked in Epoch
-# AI's benchmarking hub [@EpochAI2025AIModels]; best score per released model.
-# Values dataset-transcribed. Accessed 2026-07-19.
+# AI's benchmarking hub [@EpochAI2025AIModels]; best score per model name in
+# the dated snapshot. Values dataset-transcribed. Accessed 2026-07-19.
 # Receipt: data/source-receipts/chapter1-swebench-verified.csv
 _root = Path(_ap.__file__).resolve().parents[2]
 
@@ -810,6 +800,16 @@ with open(_root / "data" / "source-receipts" / "chapter1-swebench-verified.csv",
         if x is None:
             continue
         pts.append({"model": row["model"], "score": score * 100 if score <= 1 else score, "x": x})
+
+# The snapshot can contain several configurations under the same model name.
+# Retain only the best reported score for each name rather than presenting
+# those configurations as distinct model releases.
+best_by_name = {}
+for p in pts:
+    name = (p["model"] or "").strip()
+    if name not in best_by_name or p["score"] > best_by_name[name]["score"]:
+        best_by_name[name] = p
+pts = list(best_by_name.values())
 pts.sort(key=lambda p: p["x"])
 best = -1.0
 frontier = []
@@ -820,7 +820,7 @@ for p in pts:
 
 fig, ax = plt.subplots(figsize=(5.4, 3.2))
 ax.scatter([p["x"] for p in pts], [p["score"] for p in pts], s=16, marker="o",
-           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.7, zorder=2, label="Model releases")
+           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.7, zorder=2, label="Named models")
 ax.plot([p["x"] for p in frontier], [p["score"] for p in frontier], color=COLORS["evidence"], lw=1.6, zorder=3)
 ax.scatter([p["x"] for p in frontier], [p["score"] for p in frontier], s=22, marker="o",
            facecolor=COLORS["evidence"], edgecolor=COLORS["evidence_ink"], linewidth=0.5, zorder=4, label="Best to date")
@@ -847,17 +847,19 @@ fig.subplots_adjust(left=0.10, right=0.97, top=0.98, bottom=0.12)
 ```
 
 The horizontal axis covers roughly seventeen months of model releases, while
-the vertical axis reports the share of SWE-bench Verified issues resolved. The
-hollow points are individual releases, and the solid line retains only results
-that set a new reported best. That rising frontier shows what a standardized,
-automated task-level check can help enable alongside improvements in models and
-engineering. Best reported scores rose from roughly a third of the benchmark
-issues to over four-fifths. Architecture also uses fast analytical, structural,
-and functional checks, but no single one closes a complete system-and-chip
-claim. Timing closure, design rules, power targets, and thermal limits require
-later and more expensive evidence. Fast static analysis and calibrated proxies
-can reduce that cost by screening candidates, but they do not replace the
-implementation checks on which a physical claim depends.
+the vertical axis reports the share of SWE-bench Verified issues resolved. Each
+hollow point is the best result associated with one model name in the dated
+snapshot, and the solid line retains only results that set a new reported best.
+Because the submitted configurations and test harnesses can differ, the points do
+not isolate model quality. The rising frontier instead shows the pace at which
+a standardized, automated task-level check can support iteration across models
+and engineering systems. Best reported scores rose from roughly a third of the
+benchmark issues to over four-fifths. Architecture also uses fast analytical,
+structural, and functional checks, but no single one closes a complete
+system-and-chip claim. Timing closure, design rules, power targets, and thermal
+limits require later and more expensive evidence. Fast static analysis and
+calibrated proxies can reduce that cost by screening candidates, but they do
+not replace the implementation checks on which a physical claim depends.
 
 SPEC-style benchmarks made performance claims more comparable by specifying workloads, run rules, and reporting standards, and a benchmark that becomes standard also steers which improvements a community goes after [@Patterson2012Benchmarks]. Shared simulators such as gem5 made architecture experiments easier to inspect across labs. FPGA-accelerated simulation platforms such as FireSim, community benchmark suites such as MLPerf, artifact-evaluation practices, and open tool flows succeeded because they let researchers understand, rerun, challenge, and safely build on reported results [@SPEC2017CPU; @BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim; @MattsonEtAl2020MLPerf]. AI-assisted results will need the same shared tasks, tool interfaces, and evidence standards to matter beyond a single study.
 
