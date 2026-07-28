@@ -82,7 +82,7 @@ immediate response, precise localization, and decision-relevant coverage.
 | --- | --- | --- | --- |
 | **Human reviewer** | Critique, rationale, missing constraint, or priority judgment. | Intermittent and often context-rich; locality depends on the review. | Does the reviewer have the relevant context, expertise, and authority, and is the rationale recorded? |
 | **Architecture tool or experiment** | Scalar, trace, report, counterexample, diagnostic, or proof status. | Immediate to multi-day; may identify one path or only a terminal outcome. | Which property did the tool observe, under which conditions, with what coverage and error? |
-| **Learned model or method** | Prediction, ranking, score, critique, or explanation. | Usually fast and dense; often tied to the supplied representation. | Is the signal calibrated in the region being used, and which assumptions does it share with the producer? |
+| **Learned model or method** | Prediction, ranking, score, critique, or explanation. | Usually fast and dense; often tied to the supplied representation. | Does the predicted score agree with stronger checks in the region being used, and which assumptions does it share with the producer? |
 | **Deployed system or silicon** | Telemetry, characterization result, incident, or user-visible symptom. | Delayed and sparse; often system-level rather than component-local. | Which population, version, workload, and unobserved causes limit the inference? |
 
 : **Feedback sources differ in what they return and how quickly they arrive.**
@@ -299,7 +299,10 @@ the same tool.
 
 Repeated measurements estimate run-to-run variability when the flow or
 workload is variable. Paired resampling can preserve the relationship between
-matched baseline and candidate frames. Numerical tolerances, finite sampling,
+matched baseline and candidate frames.^[In paired block resampling, matched
+baseline and candidate observations are resampled together in contiguous
+blocks. Pairing preserves the comparison, while blocks preserve short-range
+dependence among nearby observations.] Numerical tolerances, finite sampling,
 heuristic variation, and model error may require different treatments. One
 generic error bar cannot represent all of them.
 
@@ -308,8 +311,8 @@ The constructed trace handed forward by
 latency minus candidate latency, so a positive value means the candidate is
 faster. Under that convention, the illustrative reduction is 0.3\ ms and its
 illustrative 95 percent interval runs from -0.1\ ms to 0.7\ ms, using paired
-block resampling over matched frame sequences. Because the interval includes no
-improvement, the comparison does not resolve the declared tail-latency
+block resampling over matched frame sequences. Because the interval includes
+zero, the comparison does not resolve the declared tail-latency
 question. The point estimate is favorable, but its uncertainty spans both a
 small regression and a larger improvement. The interval cannot be recomputed
 from the constructed record because the matched frame sequences and their
@@ -335,6 +338,11 @@ luck that made it win. Repeating the same search data does not remove that
 bias. The chosen candidate should be measured again on fresh seeds, workloads,
 or cases that did not select it. The fresh evaluation asks whether the margin
 survives after the search has stopped choosing the winner.
+
+Even a carefully matched comparison supports nothing beyond the properties
+its checks can observe. The next question is therefore not only whether the
+candidate and comparator were treated alike, but whether the selected checks
+bear on the claim being made.
 
 ## What a Check Can and Cannot Establish {#sec-independent-checks-and-correlated-errors}
 
@@ -524,6 +532,12 @@ mutants need careful handling. For AI-authored assertions and testbenches, the
 useful fault set should resemble errors the generator actually makes rather
 than only traditional hand-written mistakes.
 
+A check can be valid for the property it observes and still be only a proxy
+for the architecture objective. Functional simulation may establish agreement
+for tested inputs without settling performance, while a cycle estimate may
+rank candidates without establishing timing closure. The remaining question
+is how far the cheaper observation can carry the stronger claim.
+
 ## Proxies Need a Validated Range {#sec-proxy-mismatch-metric-gaming-and-calibration}
 
 An architecture proxy is useful because it is cheaper or earlier than the
@@ -602,10 +616,11 @@ not a verdict on one placement method. It is that a proxy comparison cannot
 silently inherit authority from a stronger result obtained under unmatched
 conditions.
 
-A simulator can also be the exploited reference. In the architecture-agent
-example introduced earlier, a required correctness assertion was absent from
-the optimized configuration, so the cycle-level result did not observe the
-property credited to it [@GuptaEtAl2026ArchAgent]. Calibration to that run
+A simulator can also be the exploited reference. In Gupta et al.'s
+architecture-agent study, introduced in @sec-architecture-20-ontology, a
+required correctness assertion was absent from the optimized configuration, so
+the cycle-level result did not observe the property credited to it
+[@GuptaEtAl2026ArchAgent]. Calibration to that run
 would reproduce the blind spot. The reference check must itself retain the
 property, configuration, and coverage used to justify it.
 
@@ -718,13 +733,11 @@ result without predetermining the next revision.
 The open problems begin where current tools stop supplying the interpretation
 fields automatically.
 
+### Qualifying Returned Feedback and Checks
+
 **How can a returned field be qualified without hiding unfamiliar failure
 modes?** Typed schemas make common quantities easy to compare, while tool and
 model changes keep creating warnings and artifacts outside the known schema.
-
-**How can a proxy's validated region be estimated under active search?** The
-candidate distribution changes as the optimizer learns where the proxy is most
-favorable, which is exactly where previous calibration data may be thinnest.
 
 **How should shared failure sources be measured across checks?** Separate
 tools, models, teams, and modalities can still share specifications, workloads,
@@ -734,10 +747,18 @@ training data, libraries, or assumptions that create correlated error.
 fault models may not resemble the semantic omissions, weak assertions, or
 misinterpreted interfaces that generated tests and properties introduce.
 
+### Allocating Costly Measurements and Validating Proxies
+
+**How can a proxy's validated region be estimated under active search?** The
+candidate distribution changes as the optimizer learns where the proxy is most
+favorable, which is exactly where previous calibration data may be thinnest.
+
 **How should scarce high-cost measurements be allocated?** The useful next
 check is the one whose possible outcomes can resolve the comparison, narrow
 its scope, or distinguish competing mechanisms, not simply the next tool in a
 fixed sequence.
+
+### Learning From Unresolved or Conflicting Results
 
 **How can credit be assigned without inventing a mechanism?** Long architecture
 flows return sparse outcomes after many interacting changes, while localized
