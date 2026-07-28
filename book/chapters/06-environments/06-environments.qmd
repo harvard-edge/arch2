@@ -225,6 +225,12 @@ hardware artifacts derived from one proposal retain their transformation
 history, and a changed input creates a new evaluation
 identity.](images/F5-artifact-lineage){#fig-artifact-lineage fig-alt="A lineage diagram in which one Lighthouse intent produces software and hardware artifacts, followed by a compiled binary and elaborated RTL. Each artifact has an identifier and content hash, and one evaluation instance binds the selected binary and RTL."}
 
+One component may prepare all of these artifacts, or specialized hardware,
+software, and verification roles may divide the work. The execution rule is
+the same. Every tool request retains the study identity, candidate parent,
+fixed system state, and architecture objective. Coordination among several
+roles does not replace a shared execution contract.
+
 Conditions need the same discipline. A return retains the conditions that
 apply to its tool and marks nonapplicable fields explicitly. `SRAM-A` carries
 `PVT-A`, circuit and technology assumptions, and model version. An
@@ -270,8 +276,10 @@ distinctions.
 
 ```{.text #lst-environment-interface lst-cap="**One request remains identifiable through every attempt:** Scheduling state, terminal cause, artifacts, parsing, retry, reset, cost, and lineage remain separate rather than collapsing into one exit code."}
 envelope = create_attempt(
-    request_id, candidate_id, condition_id,
-    translated_input_hashes, reset_parent
+    attempt_id, request_id, candidate_id, condition_id,
+    tool_type, tool_stage, fidelity,
+    configuration_id, seed, translated_input_hashes,
+    retry_parent, reset_parent
 )
 
 if translation changes request meaning:
@@ -302,14 +310,16 @@ if termination cannot be confirmed:
         terminal_cause=TERMINATION_UNCONFIRMED,
         retry_eligibility=NO
     )
-record final scheduler state and realized cost
+record final scheduler state
+record queue_time, run_time, cpu_time, gpu_time,
+       peak_memory, storage_written, license_occupancy
 
 if terminal state is CANCELLED or TIMED_OUT:
     terminal_cause = CANCELLED or TIMED_OUT
 elif setup check fails before or during execution:
     terminal_cause = SETUP_FAILURE
 elif process exits:
-    record process_outcome, exit_status, run_time, and resource_use
+    record process_outcome, exit_status, run_time, and resource_record
     terminal_cause = COMPLETED or INFRA_FAILURE or TOOL_FAILURE
 
 artifact_status = inspect_expected_artifacts(
@@ -325,7 +335,7 @@ else:
 return envelope(
     scheduling_state, setup_status, process_outcome, terminal_cause,
     artifact_status, parse_status, retry_eligibility,
-    realized_cost, reset_parent, lineage
+    resource_record, retry_parent, reset_parent, lineage
 )
 ```
 
@@ -334,6 +344,32 @@ ordering prevents a late return from being attached to whichever candidate is
 current when the job finishes. Polling reports queue and run state without
 creating duplicate attempts. Cancellation and timeout produce terminal records
 rather than disappearing from the study.
+
+The resource record is a typed vector rather than one opaque cost field
+(@tbl-attempt-resource-record). Fields that the environment cannot observe
+remain explicitly unreported. Human work is linked to the attempt or group of
+attempts it supported because setup, diagnosis, and repair can span more than
+one invocation.
+
+| **Record group** | **Fields to preserve for each attempt** |
+| --- | --- |
+| **Tool and work identity** | Tool type, stage, fidelity, version, candidate, conditions, unique configuration, and seed. |
+| **Attempt accounting** | Attempt identifier, terminal disposition, retry parent, reset parent, and whether the required artifacts and typed fields returned. |
+| **Time** | Submission, queue, start, and completion times; queue duration, run duration, and elapsed time. |
+| **Compute and storage** | CPU and accelerator time, peak memory where available, intermediate and retained storage, and host or cluster identity when it affects comparability. |
+| **Scarce tool resources** | License or token occupancy, reserved capacity, and any admission-control wait. |
+| **Linked human work** | Setup, intervention, diagnosis, review, and repair time, with the responsible activity or role when recorded. |
+
+: **An attempt record preserves resource use and execution status:** Unique
+configurations remain separate from invocation attempts, and retries remain
+linked rather than increasing apparent sample coverage.
+{#tbl-attempt-resource-record tbl-colwidths="[24,76]"}
+
+@sec-data-representations-world-models requires these acquisition conditions to
+travel with an architecture observation. This environment supplies them.
+@sec-evaluating-agentic-architect later compares the resulting resource vectors
+across complete systems rather than treating a cycle simulation, a
+physical-design run, and a model call as equivalent samples.
 
 Retries also need identity. A retry is a new attempt linked to the failed
 attempt, not a continuation that erases what happened. The record states which
@@ -478,6 +514,23 @@ tool's model, inputs, conditions, stage, latency, and artifacts instead of
 collapsing several returns into one generic score.
 {#tbl-multi-fidelity-spectrum tbl-colwidths="[19,22,29,30]"}
 
+Throughput changes how many candidates and conditions a study can afford to
+examine. In one published configuration, ZSim ran a detailed Westmere-class
+out-of-order model at 20 million simulated instructions per second, about
+$200\times$ slower than the modeled core. The same study reported conventional
+detailed simulators at roughly 100 to 200 thousand simulated instructions per
+second [@ZSim]. FireSim reports a different regime. Individual
+FPGA-accelerated target nodes can run at tens to hundreds of megahertz, while
+one 1,024-node configuration ran at 3.4\ MHz for 3.2\ GHz targets, a slowdown
+of less than $1{,}000\times$ [@KarandikarEtAl2018FireSim].
+
+Those rates are examples, not constants for a tool class. The modeled system,
+host or FPGA allocation, workload, instrumentation, accuracy, and simulation
+scale all change the rate. The environment should therefore record the
+observed throughput and its conditions, and a method should budget evaluations
+from that scoped rate rather than from a generic label such as *cycle-level* or
+*FPGA-accelerated*.
+
 Sampling and checkpoint policy are part of that identity. SimPoint selects
 representative program regions, while SMARTS supplies a statistical basis for
 sampled simulation [@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. The
@@ -517,64 +570,69 @@ create another candidate.
 
 ## The Lighthouse Execution Record
 
-The earlier lifecycle walkthrough supplied illustrative returns for the cache
-study. They are not live project history and are not measurements from tools
-run for this book. They can still show what an execution record must preserve,
-provided the record does not invent missing values or interpret the result.
+To make the execution contract concrete, this chapter introduces a constructed
+trace for the prospective cache study. It is an author-created teaching
+example, not live project history or measurements from tools run for this book.
+It reuses the hypothetical `2.94\ W` value posed conditionally in
+@sec-architecture-20-ontology for continuity and adds illustrative SRAM
+returns, a `2.90\ W` baseline, a `12%` miss reduction, a `2\ mW`
+cache-leakage increase, one stale-state failure, and a four-attempt cycle-level
+chronology. These values exercise the record. They are not predictions about
+the Lighthouse design.
 
-The constructed record in @tbl-lighthouse-execution-record contains only the
-execution facts stated in that walkthrough. The attempt identifiers are added
-here to make the chronology inspectable. They are not identifiers retained by
-the original illustration. A reported execution and a complete surviving
-record are different claims, so the status column keeps them separate.
+@tbl-lighthouse-execution-record preserves only the fields declared by that
+construction and marks the rest unreported. The attempt identifiers are also
+part of the teaching trace rather than identifiers retained from a real run. A
+constructed execution and a complete execution record are different claims, so
+the status column keeps them separate.
 
-| **Constructed Attempt** | **Candidate and Reported State** | **Reported Outcome and Record Status** | **Return Preserved by the Illustration** | **Known Cost and Lineage** |
+| **Constructed Attempt** | **Candidate and Constructed State** | **Constructed Outcome and Record Status** | **Return Included in the Teaching Trace** | **Known Cost and Lineage** |
 | --- | --- | --- | --- | --- |
-| `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Execution reported; surviving record incomplete. | Area `1.2\ mm^2^` and access time `2.1\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
-| `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Execution reported; surviving record incomplete. | Area `1.4\ mm^2^` and access time `2.4\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
-| `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Execution reported; surviving record incomplete. | Area `1.7\ mm^2^` and access time `2.8\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The walkthrough reports no `SIM-A` request and prints area and access values above the dispatch thresholds. The surviving record cannot verify parser status or the exact dispatch event. This is reported scheduling, not a design verdict. |
-| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Clean execution reported; surviving record incomplete. | Matched baseline frame data and subsystem dynamic plus leakage power `2.90\ W` are reported. Attempt-level artifact and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
-| `SIM-3-A1` | `L2-3M-A` with stale constraint state. | The walkthrough calls this an infrastructure failure. This chapter refines it to an execution-state or setup failure because the stated cause is stale constraints. The surviving record is incomplete. | No candidate return. Diagnostic and partial-artifact identities are unreported. | Cycle attempt 2 of 4. A later clean attempt is reported, but retry parent, reset mechanism, and reset-state identity are unreported. |
-| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions reported as matched to baseline. | Clean execution reported; attempt-level completeness unverified. | The walkthrough reports aggregate frame, cache, and power results across both clean 3\ MB attempts, not the values from this attempt. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
-| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions reported as matched to baseline. | Clean execution reported; attempt-level completeness unverified. | The walkthrough reports aggregate frame, cache, and power results across both clean 3\ MB attempts, not the values from this attempt. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
+| `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Execution included; record intentionally incomplete. | Area `1.2\ mm^2^` and access time `2.1\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Execution included; record intentionally incomplete. | Area `1.4\ mm^2^` and access time `2.4\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Execution included; record intentionally incomplete. | Area `1.7\ mm^2^` and access time `2.8\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The trace includes no `SIM-A` request and places area and access time above the dispatch limits. Parser status and the exact dispatch event remain unreported. This is a constructed scheduling outcome, not a design verdict. |
+| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Clean execution included; record intentionally incomplete. | Matched baseline frame data and subsystem dynamic plus leakage power `2.90\ W` are included. Attempt-level artifact and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
+| `SIM-3-A1` | `L2-3M-A` with stale constraint state. | The trace includes a stale-state setup failure. | No candidate return. Diagnostic and partial-artifact identities are unreported. | Cycle attempt 2 of 4. A later clean attempt is included, but retry parent, reset mechanism, and reset-state identity are unreported. |
+| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Clean execution included; attempt-level completeness unverified. | Aggregate frame, cache, and power results span both clean 3\ MB attempts rather than this attempt alone. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Clean execution included; attempt-level completeness unverified. | Aggregate frame, cache, and power results span both clean 3\ MB attempts rather than this attempt alone. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
 
 : **An execution record preserves missing information as carefully as returned
-values.** The reconstructed cache chronology retains reported candidate state,
-failure, successor attempts, and call counts without claiming unsupported
-attempt-level provenance or completeness.
+values.** The constructed cache chronology retains candidate state, failure,
+successor attempts, and call counts without claiming real measurements,
+attempt-level provenance, or completeness.
 {#tbl-lighthouse-execution-record tbl-colwidths="[12,19,19,25,25]"}
 
-The walkthrough reports three aggregate values across the clean 3\ MB
-returns. Capacity misses fall `12%` relative to baseline, cache leakage rises
-`2\ mW`, and modeled subsystem dynamic plus leakage power rises from
-`2.90\ W` to `2.94\ W`. It also reports matched frame sequences. It does not
-say which clean attempt produced each value or which tool produced the
-cache-leakage difference. The constructed record therefore binds those values
-to the two-attempt clean-return set rather than to `SIM-3-A2`, `SIM-3-A3`, or
-`SRAM-3-A1` individually.
+The trace includes three aggregate values across the clean 3\ MB returns.
+Capacity misses fall `12%` relative to baseline, cache leakage rises `2\ mW`,
+and modeled subsystem dynamic plus leakage power rises from `2.90\ W` to
+`2.94\ W`. The teaching scenario also declares that matched frame sequences
+were used to produce an illustrative `0.3\ ms` tail-latency reduction with a
+95 percent interval from `-0.1\ ms` to `0.7\ ms`. The record does not retain
+those sequences or their identifiers. It also does not assign the aggregate
+values to one clean attempt or identify which tool supplied the cache-leakage
+difference. The constructed record therefore binds them to the two-attempt
+clean-return set rather than to `SIM-3-A2`, `SIM-3-A3`, or `SRAM-3-A1`
+individually.
 
 The missing fields extend beyond cost. Exact translated-input hashes, tool and
 model versions, host or container identity, seeds, job identifiers and
 timestamps, parser status, expected-artifact checks, raw artifact identifiers
 and hashes, frame identifiers, checkpoint identity, and the reset action are
 all unreported. Wall-clock, queue, license, storage, and other resource costs
-are also unreported. These absences make the reconstructed record incomplete
+are also unreported. These absences make the constructed record incomplete
 under @tbl-environment-contract.
 
-That incompleteness is the correct Implement-stage finding. The earlier
-walkthrough establishes three SRAM calls, four cycle-level attempts, one
-failure it labels infrastructure-related but attributes to stale state, two
-later clean 3\ MB attempts, and total call-budget consumption. The more precise
-execution taxonomy here classifies the stale-state case as a setup failure. The
-walkthrough does not supply the complete execution record promised in
-@sec-architecture-20-ontology. A production harness would capture the missing
-fields at submission and completion rather than ask an architect to reconstruct
-them later.
+That incompleteness is the intended Implement-stage finding. The trace supplies
+three SRAM calls, four cycle-level attempts, one stale-state setup failure, two
+later clean 3\ MB attempts, and total call-budget consumption. It does not
+supply the complete execution record defined in @sec-architecture-20-ontology.
+A production harness would capture the missing fields at submission and
+completion rather than ask an architect to reconstruct them later.
 
-The record does not calculate the paired bootstrap interval, label the 4\ MB
-candidate invalid, call the 3\ MB result unresolved, or recommend an
-architecture action. Those statements require measurement qualification and
-comparison.
+The record includes but cannot recompute the illustrative paired-bootstrap
+interval. It does not label the 4\ MB candidate invalid, call the 3\ MB result
+unresolved, or recommend an architecture action. Those statements require
+measurement qualification and comparison.
 
 ## Open Research Questions
 
@@ -632,16 +690,16 @@ limit violation, but the return alone does not determine the architecture
 consequence. Preserving those differences keeps repair directed at the request,
 tool path, parser, or later interpretation that actually failed.
 
-The Lighthouse reconstruction carries the reported cache candidates and
+The Lighthouse teaching trace carries the constructed cache candidates and
 conditions through the named `SRAM-A`, `SIM-A`, `CACHE-A`, and `PM-A` path. It
-retains the stale-state setup failure, later clean attempts, returned values,
-and consumed call budget. It also identifies as missing the reset mechanism,
-exact artifacts, tool conditions, and realized resource costs that the
-illustration did not supply. Nothing is filled in simply because a
-complete-looking record would be easier to read.
+includes the stale-state setup failure, later clean attempts, illustrative
+returns, and consumed call budget. It also identifies the reset mechanism,
+exact artifacts, tool conditions, and realized resource costs as missing.
+Nothing is filled in simply because a complete-looking record would be easier
+to read.
 
-@sec-feedback-verification-trust now receives the reported return values, call
-counts, setup failure, aggregate clean-return group, and explicit missing
-execution fields. It must decide which returns can qualify as measurements,
-which comparisons are valid, what the checks can see, and what the result can
-support.
+@sec-feedback-verification-trust now receives the illustrative return values,
+call counts, setup failure, aggregate clean-return group, and explicit missing
+execution fields. It must decide which fields could qualify as measurements in
+a real study, which comparisons are logically valid, what the checks can see,
+and what such a result could support.
