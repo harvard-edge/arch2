@@ -4,7 +4,7 @@ format:
     output-file: index.html
 ---
 
-# Loop Patterns Across the Stack {#sec-loop-patterns-across-stack}
+# What Generalizes Across Design Problems {#sec-loop-patterns-across-stack}
 
 ::: {.epigraph}
 > *"There is no single development, in either technology or management technique, which by itself promises even one order of magnitude improvement in productivity, in reliability, in simplicity."*
@@ -13,232 +13,218 @@ format:
 :::
 
 ::: {.column-margin}
-**Author's Note:** Fred Brooks, Turing Award winner and author of *The Mythical Man-Month* [@Brooks1975MythicalManMonth], famously warned against hoping for a "silver bullet" in software engineering. His warning applies directly to AI-assisted architecture. Architecture work proceeds with different feedback budgets, rejection checks, and decision rights, from reversible compiler tuning to silicon-facing RTL and SoC work. No single method fits all those conditions.
+**Author's Note:** Fred Brooks, Turing Award winner and author of *The
+Mythical Man-Month* [@Brooks1975MythicalManMonth], warned against expecting one
+technique to remove the essential difficulty of engineering. The same warning
+applies when an architecture result moves to another problem. The study
+structure may transfer. Its evidence does not transfer until the changed
+conditions have been examined.
 :::
 
 ::: {.callout-crux}
-If what the artifact is called does not set how much an AI may do, what does, and what more must the architect show when several conditions apply to one decision?
+What can be reused when the architecture decision changes, and what must be
+established again?
 :::
 
-@sec-running-the-loop provided a bounded control case. Five systolic array shapes were evaluated against a 32 by 32 baseline under deterministic, replayable SCALE-Sim measurements, and none of the alternatives cleared the declared 1 percent margin, a threshold fixed before any candidate ran so that a small measured difference could not be talked into a design change. The candidates were cheap to discard, and the architect stopped the study before implementation because the evidence supported retaining the baseline. We now expand from one bounded study to the range of decisions an architect faces across the computing stack, where feedback latency, reversibility, and consequence vary far more than they did in that control case.
+@sec-running-the-loop closed one local technical study. Five unique systolic
+array shapes were evaluated under a synthetic three-layer workload and a
+frozen SCALE-Sim configuration. No evaluated nonbaseline shape cleared the
+declared 1 percent margin. The model and weak fixed heuristic tied, the
+model's directional explanation failed, and the recorded recommendation to
+retain 32 by 32 remained `awaiting_author_confirmation`.
 
-Nothing about an artifact has to change for its obligations to change. Take that same proposed array geometry and use it to alter an RTL interface. The simulator still returns quickly and the candidate is still reversible before implementation, but the change now spans a contract other teams depend on and sits closer to a commitment no rerun undoes. Those two properties, rather than the word RTL, are what raise the evidence burden and narrow who may approve the result, and they compound as more of them apply to the same decision.
+That record is complete enough to inspect and replay. It is not enough to
+freeze a 32 by 32 array and its software-facing interface for the Lighthouse
+system. The target decision changes the workload, the interfaces, the
+quantities that must be observed, the cost of a result, and the consequence of
+being wrong. The local recommendation therefore becomes the source of a new
+study rather than the conclusion of the new decision.
+
+This chapter develops one reusable move. Start with a closed source record,
+name a materially different target decision, compare the conditions that
+changed, and turn every change into a test obligation. Only then decide what
+may be reused, rerun, refreshed, recalibrated, independently checked, narrowed,
+or rejected. The result is a bounded adaptation decision, not a claim that one
+pattern works everywhere.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Classify the next decision by the operating conditions that apply to it rather than by the artifact's name, and when more than one applies, carry the strictest requirement of each instead of choosing the closest single case.
-- Charge interface overhead, offload granularity, and the executable software path against a specialization win before it advances toward implementation.
-- Keep design-time evaluation, in-field evidence, and continuing enablement on separate clocks, and attribute a delayed observation on the record before admitting it to one named destination under that destination's own test rather than into a fast tuning loop.
-- Buy back reversibility and check independence before a commitment point rather than after it, and recognize the checks that stop being able to see the failure that matters as a decision approaches the irreversible end.
-- Demand validated coverage rather than unit check cost when a review speedup is claimed, and refuse the claim when the settle rate behind it is unmeasured.
+- Compare a closed source study with a new target decision across result cost
+  and delay, reversibility, coupling, observability, consequence, workload,
+  and software turnover.
+- Convert every changed condition into a concrete test or an explicit untested
+  boundary.
+- Charge interface overhead, offload granularity, and the executable software
+  path against a local accelerator result before it advances toward
+  implementation.
+- State a bounded adaptation decision that distinguishes what may be reused,
+  rerun, refreshed, recalibrated, independently checked, narrowed, or
+  rejected.
+- Derive how validated coverage and expensive review limit the useful
+  throughput of an adapted study.
 
 :::
 
-## Classifying Operating Conditions
+## From a Closed Study to a New Decision
 
-Start with the next architecture decision rather than the method. The artifact name does not determine risk or authority. Instead, the decision must be classified by its operating conditions.
+The source decision asked whether any of five evaluated array shapes cleared a
+local score margin under one workload and simulator. The target decision asks
+whether the 32 by 32 reference should determine an RTL-facing array, compiler
+mapping, and memory interface for a Lighthouse-like spatial-tracking
+accelerator. The target is not the next stage of the same claim. It is a new
+claim about a more coupled artifact under a more demanding system objective.
+The source fields and their carried status are summarized in
+@tbl-ch9-source-record.
 
-> **Operating condition:** An operating condition describes one property of the next decision, such as feedback latency, reversibility, interface span, consequence, or check independence. The architect uses the conditions that apply together to decide what a method may do, which evidence and checks are needed, how the method's internal representation must be updated, and whether the result can advance. An operating condition is not a stack layer, a maturity score, or a property of an AI model.
+| **Source record from the completed study** | **Status carried forward** |
+| --- | --- |
+| Five unique shapes evaluated under a synthetic three-layer GEMM slice | Complete for that local workload and configuration; not representative of a spatial-tracking workload distribution. |
+| 32 by 32 and 16 by 64 tie on the frozen local score | No-change result for the five evaluated shapes; not an implementation ranking. |
+| Model and weak fixed heuristic tie at equal simulator-call budgets | No study-local AI advantage; no result about another proposer or repeated runs. |
+| Directional mechanism prediction fails its contrast | Failed recorded explanation; no replacement mechanism established. |
+| SCALE-Sim reports cycles, utilization, and modeled word traffic | Analytical simulator outputs; no measured energy, RTL, timing, congestion, or thermal result. |
+| Retain 32 by 32 and stop the bounded search | Technical recommendation remains pending and cannot settle the target decision. |
 
-### Operating Conditions That Overlap and Accumulate
+: **The complete source record remains local.** Its artifacts and limitations
+carry forward together. {#tbl-ch9-source-record tbl-colwidths="[47,43]"}
 
-One relation underlies every row of @tbl-loop-patterns. The expected cost of a wrong commitment is approximately the probability of a false accept times the cost of reversal, and each operating condition moves one of those two factors. That relation is what repeats across the stack; what changes is the value each factor takes and therefore what the loop must spend to hold the product down. The contrast is clearest at the endpoints. A local software change can often be executed and rolled back under close tests, while a silicon-facing change needs independent checks, a named waiver holder, and a decision owner before it advances.
+The target question is deliberately specific.
 
-Four recurring combinations of operating conditions organize the cases considered here. These conditions overlap and accumulate. A kernel schedule may have fast feedback during tuning, cross an interface contract when deployed, and become difficult to reverse when hardware is frozen around it. A chiplet study can simultaneously be model-mediated, cross-interface, and high consequence. When several conditions apply, the stricter requirements of each accumulate. The fast-feedback case below works one such pair in full.
+> Should the 32 by 32 reference, together with its compiler-visible tiling and
+> memory-interface contract, be frozen for RTL implementation in the
+> Lighthouse subsystem?
 
-The columns describe conditions, not fixed ranks (@tbl-loop-patterns). Fast feedback does not make the next decision low risk, and silicon-facing work does not forbid useful automation.
+The answer cannot be read directly from the source record. A frozen interface
+affects the compiler, SRAM organization, interconnect traffic, host behavior,
+power, and future software. A simulated shape can be discarded cheaply. An
+RTL and software contract can trigger downstream rework even before tapeout.
+The obligations add rather than replace one another. Every source result keeps
+its local meaning, while each source check must be reassessed before it is used
+for the target. Every changed condition adds another question the target study
+must answer.
 
-| **Operating condition** | **Feedback and reversibility** | **Interface span and check independence** | **Evidence requirements and representation updates** |
+## Comparing What Changed
+
+The comparison is causal when each changed condition produces a concrete
+obligation rather than a vague demand for more rigor
+(@tbl-ch9-source-target).
+
+| **Condition** | **Completed source study** | **Implementation-facing target** | **Obligation created by the change** |
 | --- | --- | --- | --- |
-| Fast and reversible | Tests, traces, profiles, or benchmarks return quickly; a failed local change can usually be discarded or rolled back. | Usually one artifact or software boundary; automatic checks may be close to the producer. | Automate bounded generation and tuning. Fast feedback directly updates the AI's short-term cost models and in-context working sets. |
-| Model-mediated architecture | Proxies, simulators, and staged tools are slower or scarcer; candidates are cheap to discard before implementation. | Several architecture assumptions may interact, and model and reference checks can share blind spots. | Require stronger evidence before implementation. Delayed simulation telemetry updates surrogate uncertainty bounds and model parameters. |
-| Cross-interface and deployment | Feedback spans layers, organizational boundaries, or live cohorts; rollback is guarded and can still impose user or operational cost. | Multiple owners and interfaces; telemetry may be noisy, confounded, private, or only partly independent. | Record cross-layer tradeoffs. Noisy field telemetry updates execution histories and retrieval corpora, not fast-tuning loops. |
-| High consequence | Tool feedback is slow and expensive; rollback becomes difficult toward signoff, tapeout, or irreversible deployment. | Independent flows, experts, and formal or physical checks become central; every waiver requires a recorded decision. | Use AI to narrow search or repair bounded artifacts. Severe failures (e.g., routing DRCs) append negative constraints to explicit design states. |
+| Result cost and delay | Fast analytical simulation and replay | Compiler experiments, RTL, synthesis, floorplanning, and routed checks | Use the simulator for screening; budget slower checks and the review needed to interpret them. |
+| Reversibility | A simulated shape can be discarded | An array and interface freeze creates downstream software and hardware rework | Keep 32 by 32 provisional and preserve a fallback until target checks settle. |
+| Coupling and interface span | Array dimensions varied while mapping and interfaces stayed fixed | Compiler mapping, SRAM, interconnect, host, and accelerator contracts interact | Measure the executable software path and end-to-end offload cost. |
+| Observability | Cycles, utilization, and modeled word traffic | Correctness, latency, bandwidth, area, timing, congestion, power, and thermal behavior | Add memory-system, RTL, implementation, and thermal checks. |
+| Consequence | A local no-change recommendation | A 3\ W subsystem commitment affecting later implementation | Replace the local score with target criteria and state what remains untested. |
+| Workload | Synthetic three-layer XR-like GEMM slice | Trace-backed spatial-tracking distribution, including tails and drift | Rebuild workload coverage; do not treat the source slice as representative. |
+| Software turnover | One frozen mapping and tool configuration | Compiler and runtime versions will continue to change | Version hardware and software together and rerun affected claims after material changes. |
 
-: **Operating conditions, not the artifact's name, set the required evidence and AI authority:** feedback latency, reversibility, consequence, interface span, and check independence determine what a method may do and how its internal representation is updated. The rows overlap and are not a maturity ranking. {#tbl-loop-patterns tbl-colwidths="[18,25,27,22]"}
+: **Changed conditions accumulate test obligations.** The target study keeps
+the source record but cannot inherit the source conclusion. {#tbl-ch9-source-target tbl-colwidths="[15,23,25,37]"}
 
-[^fn-surrogate-c09]: **Surrogate model**: A fast, learned approximation of a slow, high-fidelity simulator (like RTL or SPICE) used to rapidly evaluate candidates during an AI-driven search.
+This comparison supplies a general procedure. Name the source and target
+decisions, compare the seven conditions, and retain every obligation created
+by a material difference. A category such as software, RTL, or physical design
+does not settle the comparison on its own. The same artifact can require
+different evidence when its workload, interface, or consequence changes.
 
-```{=latex}
-\Needspace{11\baselineskip}
-```
+## Re-establishing Workload, Mapping, and Proxy Support
 
-### Three Questions for Classification
+The source workload is useful because its dimensions are explicit, not because
+it represents a real spatial-tracking pipeline. The target therefore needs a
+trace-backed workload distribution, coverage of common and tail shapes, and a
+versioned account of the compiler and runtime that produce those shapes. The
+MICA workload-characterization method established why benchmark suites must
+separate inherent workload properties from artifacts of one machine
+[@HosteEeckhout2007MICA]. The same discipline applies here. A target claim
+must say which workload properties are covered and which remain outside the
+study.
 
-The cases that follow should be read through three questions:
+The mapping semantics must also be explicit. The completed source study
+disclosed that the surviving prompt copy had not pinned how GEMM dimensions
+map to array dimensions, and the exact recorded prompt could not be verified.
+The new study must bind those dimensions in both the compiler path and
+simulator configuration before it compares shapes. AutoTVM and Ansor show how measured
+compiler searches join schedules, cost models, and executable targets
+[@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor]. Their relevance here is not that
+one of those systems should be selected. It is that the target decision
+depends on the schedule and hardware together.
 
-- **Physical constraints and rollback costs:** Which constraints apply, what does rollback cost, and what else can be affected if the change fails?
-- **Allowed actions and returned feedback:** What may the method change, and what tool, trace, log, or measurement does it receive in return?
-- **Rejection checks and decision rights:** What can reject the result, where does required review occur, and what are the declared automation limits?
+SCALE-Sim can remain a cheap screen for the exact configurations exercised in
+the source record. Use elsewhere in the target region requires calibration.
+The simulator cannot establish physical energy, timing, congestion, or
+end-to-end software cost. A sampled set of target candidates therefore needs a
+higher-fidelity reference path that can reveal where the cheap ordering stops
+holding. ArchGym and Apollo demonstrate why architecture searches use common
+interfaces and transferred evaluations to reduce expensive simulation
+[@KrishnanEtAl2023ArchGym; @yazdanbakhsh2021apollo]. Transfer saves work only
+after the target checks show which source relationships still hold.
 
-A check can reject only the failures it can observe. Therefore, the checks for any decision must state which failure classes they can observe and which require a different tool or operating context.
+[^fn-surrogate-c09]: **Surrogate model**: A fast, learned approximation of a
+slow, high-fidelity simulator, such as RTL simulation or a physical-design
+flow, used to screen candidates before paying for the slower check.
 
-Classifying the decision determines what a method may execute, what it may only recommend, and which checks can independently reject the result under each condition. The method's role may transfer, but its permission to execute or advance may not.
+## Charging the Interface and Software Path
 
-## Fast Feedback and Reversal
+The source study varied the compute array while holding the simulator
+dataflow, configuration, and interface parameters fixed. It did not execute a
+compiler or complete software path. The target cannot leave that path
+implicit. A specialization result is useful only if a stable workload reaches
+the block through executable software and each offload performs enough work to
+repay the interface cost. These are target obligations created by coupling,
+workload turnover, and the 3\ W system constraint.
 
-This condition covers work whose state can be inspected quickly and whose failed local changes can usually be discarded.
+### Check the Domain and End-to-End Path
 
-Fast feedback allows aggressive bounded iteration, but speed does not prove workload coverage, correctness, representativeness, or causality. Permission to automate is conditional on workload coverage, correctness oracles, versioned environments, regression scope, and the point at which the artifact enters a wider contract.
+A specialization case should answer six questions together
+(@fig-domain-specificity-shapes). How stable is the kernel family? Which data
+types and precision changes must the datapath tolerate? How predictable is
+memory behavior? How durable is the program interface? Which deployment and
+quality-of-service targets apply? How much workload drift and verification
+cost can the design absorb? A weak answer raises cost or requires
+programmability and fallback. It does not prove that specialization is
+impossible.
 
-### Establishing Benchmark Coverage
+![**Six questions test whether a specialization case is durable.** Kernel stability, data and precision, memory behavior, program interface, deployment targets, and drift and verification each create an obligation. Flexibility can mitigate a weak condition, but its cost belongs in the target comparison.](images/F9a-domain-specificity-shapes){#fig-domain-specificity-shapes width="100%" fig-alt="Central question about what is stable enough to specialize, surrounded by kernel family, data and precision, memory behavior, program interface, deployment and quality-of-service, and drift and verification."}
 
-Fast feedback is useful only when executable checks cover the behavior in the claim. The workload specification defines what behavior matters, which software stack is assumed, and which design choices can be justified. The MICA framework, a workload characterization methodology, established the importance of measured workload characterization to compare benchmark suites and separate inherent workload properties from specific machine artifacts [@HosteEeckhout2007MICA].
-
-An XR accelerator claim needs a constrained formulation to be credible. The Lighthouse prompt introduced in @sec-moonshot is a concrete example. While a suite like the XRBench AR/VR evaluation framework supplies an architecture anchor, the architect must still define the thermal constraints (3\ W TDP), the exact spatial tracking (SLAM) matrices, and the rejection bounds. Sending a vague prompt to an agent allows it to optimize one fast slice while missing the distribution the real XR subsystem serves. Grounding the theory in a physical constraint forces the generator to respect the system boundary.
-
-Likewise, shared benchmarks need maintained versions and submission practices because workloads drift. The benchmark version, source, coverage claims, known gaps, leakage risks, and conditions where results do not generalize must be recorded.
-
-### Software Tuning
-
-Close feedback lets an optimizer search more aggressively. Systems like the AutoTVM [@ChenEtAl2018AutoTVM] and Ansor [@ZhengEtAl2020Ansor] tensor compilers combine search spaces, cost models, measurements, and scheduling to improve software performance across targets. This search is useful when generation is limited to artifacts with executable checks and cheap rollback. Because feedback cycles complete in seconds, the telemetry can directly update the AI's short-term cost model and in-context working set without the overhead of maintaining complex multi-fidelity state.
-
-KernelBench [@OuyangEtAl2025KernelBench], alongside industry-standard evaluation suites like MLPerf [@ReddiEtAl2020MLPerfInference], scores generated GPU kernels for correctness and speed against a reference baseline. Its bounded task keeps the generated artifact, versioned environment, tests, compiler, and measurements close enough to support repeated rejection and local rollback. This immediate feedback ensures the AI's generative priors remain tightly coupled to measured hardware execution time.
-
-For an AI-generated or tuned GPU kernel, a versioned compiler and test harness can reject compile failures and correctness errors, and the source can be rolled back. However, the architecture claim still fails if the input distribution is narrow, tail latency regresses, or the kernel requires a software path unavailable in the target system.
-
-An AI-generated kernel that wins on one input size may regress another. An AI-proposed runtime policy that improves average latency may worsen tail latency. Even with fast feedback, architects must record workload coverage, who may reject a candidate, and who owns the decision before the change enters a larger system.
-
-### Two Conditions on One Decision
-
-Fast feedback stops being the whole story the moment a fast result is used to settle something slow. Suppose a kernel search on the Lighthouse subsystem finds that the SLAM front end runs fastest when its pose-update matrices are tiled to fit entirely in the accelerator's local SRAM, and the architects then use that finding to size the SRAM and fix which tile shapes the datapath supports before RTL freeze. Nothing about the kernel work has changed. The compiler still returns in seconds, a bad schedule is still one commit away from being reverted, and correctness and speed checks still reject a poor candidate on the spot. What changed is that a number produced by that fast loop now stands behind a choice no rerun undoes.
-
-The obligations add rather than swap. Everything the fast regime already required stays in force, because the tile choice is only as good as the workload coverage behind it. The search still owes a recorded input distribution, a versioned compiler and harness, and a tail-latency check next to the mean, and the record still has to name who may reject a schedule. The high-consequence requirements then arrive on top. The SRAM size needs an area and leakage estimate checked against the subsystem's 3\ W budget, which is a check the kernel harness cannot run at all. The tile requirement needs a second reading from someone other than the generator that proposed the schedule. Freezing the shape needs a named owner who can approve it, and it needs a way back if the shape is wrong, whether that is datapath support for a second tile shape at some area cost or a bypass to the vector path.
-
-Neither condition relaxes the other. Fast feedback does not shorten the evidence the freeze requires, and the freeze does not excuse the schedule from its own regression tests. The failure this prevents is the ordinary one. A team reads the decision off the artifact in front of it, sees a kernel and a compiler, applies the checks that regime deserves, and freezes silicon on a benchmark whose input distribution nobody wrote down.
-
-## Proxies and Simulators
-
-As the evaluation moves from fast executable software checks to hardware abstractions, the feedback loop relies on proxies and simulators. When a simulator returns a delayed thermal trace or IPC penalty, the agent does not just see a float. Following the mechanics described in @sec-data-representations-world-models, this telemetry is translated into a 1D tokenized sequence or a structured JSON response. If the trace is truncated to fit the context window, the agent loses the temporal data needed to optimize thermal throttling. The proxy's fidelity is therefore bounded by the agent's encoding capacity. A failure mode absent from the textual serialization is one the agent cannot observe.
-
-A flawed proxy fails in a second way. An optimizer searching a simulator's action space will exploit whatever defect it finds there, and a search that reports impossible results, infinite instructions per cycle at zero power, has usually located a bug in the model's memory system rather than an architecture. That pattern is routine wherever a search optimizes against an imperfect proxy, which makes calibrating the proxy a precondition for reading anything the search returns.
-
-Even a bug-free proxy misleads a large search, because selecting the best of many thousands of candidates preferentially surfaces the ones whose estimation noise broke upward, so the winner's true value sits below its proxy score. @sec-methods-generation-prediction-optimization treats this optimizer's curse and why fidelity escalation, not a debugged simulator, is what removes the selection bias the search itself created.
-
-Architecture exploration often evaluates candidate parameters that are cheap to propose, but feedback comes from simulators and staged tools. Feedback here is slow and unreliable in kind. An optimizer mediating architecture encounters 3-day RTL simulation times, toolchain crashes, out-of-memory errors, and silent simulation corruptions. Actions can violate physical constraints, and a proxy can fail outside its calibrated region, invalidating the optimizer's assumptions.
-
-Model-mediated exploration requires an explicit representation of architecture state, legal actions, and tool observations. Methods may generate candidates, predict behavior, allocate evaluations, or critique assumptions. ArchGym [@KrishnanEtAl2023ArchGym], an open-source environment for architecture, provides an interface for exploration, predictive DSE uses data-driven models to proxy evaluations, and Apollo applies transfer learning[^fn-transfer-learning-c09] to make architecture exploration across accelerator design spaces sample-efficient, reusing evaluations from related spaces to spend fewer expensive simulations [@yazdanbakhsh2021apollo]. Chiplet exploration adds package-interface contracts like the Universal Chiplet Interconnect Express (UCIe).
-
-[^fn-transfer-learning-c09]: **Transfer learning**: The ML practice of reusing what a model learned on one task to start a related task, rather than training from scratch, much as an architect seeds a new design-space search with the tuned parameters of the previous generation.
-
-AlphaChip is a concrete instance of model-mediated exploration [@MirhoseiniEtAl2021GraphPlacement], with reported results that remain publicly contested [@ChengEtAl2023MacroPlacement]. Its reinforcement-learning agent was guided by fast wirelength and congestion estimators rather than full routing, because RTL-to-GDS placement is too slow to supply the millions of feedback cycles a learned policy[^fn-rl-policy-c09] needs. The proxy helps only while it tracks the final routed design. Once it diverges, the agent optimizes a target that does not exist, which is why the architect, not the optimizer, must own proxy calibration.
-
-[^fn-rl-policy-c09]: **Policy (reinforcement learning)**: The learned mapping from an observed state to the next action, trained by trial and error against a reward signal. In placement, the policy maps the current partial layout to the next macro position.
-
-In @sec-running-the-loop's array study, SCALE-Sim was used to compare array geometries under a frozen workload and software path. A simulator can support a no-change decision for the represented metrics. Moving a candidate toward implementation requires compiler mapping semantics, a memory-system model, end-to-end offload granularity, RTL legality, and later physical checks. Fidelity escalation is the rejection check for this regime. A candidate advances only when a higher-fidelity check confirms the lower-fidelity signal that first surfaced it, so a proxy win authorizes the next, slower evaluation rather than implementation itself.
-
-### Specialization Paths
-
-Historically, architecture gains came from technology scaling, architecture innovation, and optimization. As technology scaling has slowed, specialization has become the main remaining source of large efficiency gains (@fig-hardware-efficiency). A specialization claim still needs an executable software path and an end-to-end interface-cost argument before a proxy win can cross toward implementation.
-
-```{python}
-#| label: fig-hardware-efficiency
-#| fig-cap: |
-#|   **Precision-normalized hardware efficiency rises about 1.5-fold per year, steadier than headline FLOP/s.** Peak energy efficiency of AI accelerators over time, in bit-operations per second per watt; the teal frontier traces the best part to date and the dashed line is a fitted trend. Because this metric normalizes for numerical precision, it grows more slowly than raw peak throughput, much of whose recent gain came from lower-precision arithmetic rather than efficiency alone.
-#| out-width: "92%"
-#| fig-alt: "Log-scale scatter of AI accelerator energy efficiency in bit-operations per second per watt versus release date from 2015 to 2026. A frontier line climbs in steps to the B200, with a fitted trend of about 1.5-fold per year; labeled points A100 and TPU v4 sit below the frontier, and the full cloud of accelerators sits below it as well."
-
-import csv
-import datetime
-import math
-from pathlib import Path
-
-import numpy as np
-import matplotlib.pyplot as plt
-import _python.plots as _ap
-from _python.plots import COLORS, apply_style
-from _python.labels import place_labels
-
-apply_style()
-
-# Data: Epoch AI ML hardware database, accelerators with a
-# stated release date and precision-normalized energy efficiency (bit-OP/s per
-# watt). Values dataset-transcribed; the growth factor is a least-squares fit to
-# the efficiency frontier. Accessed 2026-07-19.
-# Receipt: data/source-receipts/chapter10-hardware-efficiency.csv
-_root = Path(_ap.__file__).resolve().parents[2]
-
-def _yfrac(text):
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-        try:
-            d = datetime.datetime.strptime(text.strip(), fmt)
-            return d.year + (d.timetuple().tm_yday - 1) / 365.25
-        except ValueError:
-            continue
-    return None
-
-pts = []
-with open(_root / "data" / "source-receipts" / "chapter10-hardware-efficiency.csv", encoding="utf-8") as fh:
-    for row in csv.DictReader(fh):
-        y = _yfrac(row["release_date"])
-        try:
-            eff = float(row["energy_efficiency_bitops_per_w"])
-        except ValueError:
-            continue
-        if y and eff > 0 and 2015 <= y <= 2026.7:
-            pts.append({"y": y, "eff": eff, "name": row["hardware_name"]})
-pts.sort(key=lambda p: p["y"])
-best = -1.0
-frontier = []
-for p in pts:
-    if p["eff"] > best:
-        best = p["eff"]
-        frontier.append(p)
-yy = np.array([p["y"] for p in frontier])
-ll = np.array([math.log10(p["eff"]) for p in frontier])
-slope, intercept = np.polyfit(yy, ll, 1)
-growth = 10 ** slope
-
-fig, ax = plt.subplots(figsize=(5.4, 3.3))
-ax.scatter([p["y"] for p in pts], [p["eff"] for p in pts], s=10, marker="o",
-           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.6, zorder=2, label="AI accelerators")
-ax.plot([p["y"] for p in frontier], [p["eff"] for p in frontier], color=COLORS["workload"], lw=1.5, zorder=3)
-ax.scatter([p["y"] for p in frontier], [p["eff"] for p in frontier], s=20, marker="o",
-           facecolor=COLORS["workload"], edgecolor=COLORS["workload_ink"], linewidth=0.4, zorder=4, label="Efficiency frontier")
-xline = np.array([2015.5, 2026.5])
-ax.plot(xline, 10 ** (intercept + slope * xline), color=COLORS["constraints"], lw=1.2, ls=(0, (5, 3)), zorder=2)
-ax.text(2017.6, 10 ** (intercept + slope * 2019.4) * 1.5, f"~{growth:.1f}× / year", fontsize=6.6,
-        fontweight="bold", color=COLORS["constraints_ink"], rotation=17, rotation_mode="anchor")
-ax.set_yscale("log")
-ax.set_xlim(2015.4, 2026.6)
-ax.set_ylim(2e10, 3e13)
-ax.set_xlabel("Release date", fontsize=7.2)
-ax.set_ylabel("Energy efficiency (bit-OP/s per watt, log)", fontsize=7.2)
-ax.set_xticks([2016, 2018, 2020, 2022, 2024, 2026])
-ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
-for _sp in ("top", "right"):
-    ax.spines[_sp].set_visible(False)
-ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
-ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
-short = {"NVIDIA A100 SXM4 40 GB": "A100", "NVIDIA H100 SXM5": "H100", "NVIDIA B200": "B200", "Google TPU v4": "TPU v4"}
-by_name = {p["name"]: p for p in pts}
-items = [(by_name[k]["y"], by_name[k]["eff"], v) for k, v in short.items() if k in by_name]
-place_labels(ax, fig, items, fontsize=5.0, color=COLORS["ink"])
-fig.subplots_adjust(left=0.12, right=0.97, top=0.98, bottom=0.115)
-```
-
-Measured in a precision-normalized way, the best parts gain only about 1.5-fold a year, well below the headline throughput numbers whose growth leans heavily on dropping to lower-precision arithmetic. A specialization win therefore has to survive an end-to-end accounting rather than a proxy peak.
-
-### Domain Verification
-
-A specialization claim is credible only when a domain holds six properties together (@fig-domain-specificity-shapes), because a domain that satisfies only some of them cannot amortize the design and interface cost that dedicated hardware imposes. These properties (such as stable workloads and granular offload bounds) are critical because without them, interface and software overheads will rapidly erase the accelerator's theoretical speedup.
-
-![**A domain is worth specializing for only when six properties hold together:** a stable kernel family, fixed data and precision, predictable memory behavior, a durable program interface, bounded deployment and quality-of-service targets, and manageable drift and verification. Miss any one and interface and software overhead erase the accelerator's theoretical gain.](images/F9a-domain-specificity-shapes){#fig-domain-specificity-shapes width="100%" fig-alt="Central hub asking what shape is stable enough to specialize, ringed by six labeled shapes: kernel family, data and precision, memory behavior, program interface, deployment and quality-of-service, and drift and verification."}
-
-Formalizing this limitation, Amdahl's law [@Amdahl1967ValiditySingleProcessor] and the LogCA model [@AltafWood2017LogCA] require an end-to-end perspective. Extending Amdahl's law with explicit architectural cost terms follows Hill and Marty's multicore analysis [@HillMarty2008Amdahl], which recast the bound around the resource cost of each core. A compact Amdahl-style form that folds interface and software cost into the fraction-based bound is
+An author-derived Amdahl-style expression makes the end-to-end obligation
+explicit [@Amdahl1967ValiditySingleProcessor]. Normalize all terms to the
+baseline execution time and assume that the listed compute, interface, and
+software costs add without overlap:
 $$
 S_{\mathrm{system}} \le
 \frac{1}{(1-\phi) + \phi/s + \epsilon_{\mathrm{interface}} + \epsilon_{\mathrm{software}}}.
 $$
-Here, $\phi$ is the improvable fraction of baseline time, $s$ is local speedup, and the $\epsilon$ terms are interface and software overheads normalized to the same baseline. The compact form expresses $\epsilon$ as static fractions, which hides where the nonlinearity actually lives. The overhead term is linear in the invocation count $N$ and the data volume; what bends is the end-to-end speedup as a function of offload granularity. The $\epsilon_{\mathrm{interface}}$ term is functionally $(N \times L_{\mathrm{startup}} + \frac{\text{Data Volume}}{\text{Bandwidth}}) / T_{\mathrm{baseline}}$. This teaches the fundamental architectural lesson that an accelerator can fail the Amdahl bound either because it is invoked too many times ($N$ dominates) or because it starves for data (Bandwidth dominates). For the XR Lighthouse subsystem, consider a dedicated accelerator for spatial tracking (SLAM) matrices. If this SLAM accelerator is placed too far from the local SRAM, the cost of feeding it is dominated by interconnect latency and the energy of moving data, not by the computation itself. Transporting those matrices across the interconnect on every invocation can exceed the 3\ W thermal budget, erasing the accelerator's theoretical efficiency. The specialization helps only when each invocation amortizes those overheads and data remains localized.
+Here, $\phi$ is the improvable fraction of baseline time, $s$ is local
+speedup, and the $\epsilon$ terms are interface and software overheads under
+that normalization. A useful decomposition is
+$\epsilon_{\mathrm{interface}} = (N L_{\mathrm{startup}} +
+\text{Data Volume}/\text{Bandwidth})/T_{\mathrm{baseline}}$. Too many
+invocations or too much data movement can erase the local compute gain. For
+the Lighthouse target, the implementation-readiness study must measure whether
+trace-backed spatial-tracking work reaches the array at a granularity and
+locality compatible with the 3\ W budget.
 
-That equation summarizes the tax as a single fraction. A simplified LogCA-style calculation in @fig-logca-breakeven resolves the same tax by offload granularity, a complementary view of the same interface cost rather than the same formula.
+A simplified LogCA-style calculation resolves the same tax by offload
+granularity [@AltafWood2017LogCA]. Let normalized host time be
+$T_{\mathrm{host}} = g$ for work amount $g$. Let accelerator time be
+$T_{\mathrm{acc}} = o + g/A + bg$, where $o$ is fixed startup time, $A$ is
+local compute acceleration, and $b$ is transfer time per work unit. The
+plotted speedup is therefore
+
+$$
+S(g) = \frac{g}{o + g/A + bg}.
+$$
+
+The three parameter sets in @fig-logca-breakeven are illustrative. They show
+how startup and transfer terms change break-even behavior, not measured
+properties of three attachment classes.
 
 ```{python}
 #| label: fig-logca-breakeven
 #| fig-cap: |
-#|   **Offload overhead determines the break-even granularity.** In a simplified LogCA-style model [@AltafWood2017LogCA], end-to-end speedup appears only after each offload performs enough work to amortize latency and overhead. A more distant accelerator needs more work per offload to break even.
+#|   **Offload conditions determine the break-even granularity.** In this illustrative LogCA-style model [@AltafWood2017LogCA], end-to-end speedup appears only after each offload performs enough work to amortize startup and transfer cost.
 #| out-width: "100%"
 #| fig-alt: "Line plot showing offload speedup curves that rise only after enough work is amortized to overcome interface latency and overhead."
 
@@ -301,7 +287,7 @@ for text in legend.get_texts():
 
 add_note_box(
     fig,
-    "Simplified LogCA-style view: the farther the accelerator sits from the host, the larger the granularity needed before offload breaks even.",
+    "Illustrative parameter sets: larger startup and transfer terms require more work per offload before acceleration breaks even.",
     xywh=(0.10, 0.03, 0.80, 0.11),
     fontsize=5.5,
 )
@@ -310,7 +296,14 @@ plt.show()
 plt.close(fig)
 ```
 
-The three curves place the same accelerator at increasing distance from the host. A tightly coupled accelerator breaks even after only a little work per offload, a shared-memory SoC block needs more, and an off-chip discrete module needs far more before its curve crosses the break-even line. Distance also lowers the ceiling rather than only moving the crossing point. Once per-invocation data movement scales with the work itself, the curve saturates well below peak acceleration, at roughly 17x for the off-chip module against the 100x the dashed line marks. The break-even granularity scales with the interface overhead, so a proxy win measured at a coarse granularity can vanish once the real per-invocation offload cost is charged.
+The three curves apply progressively larger illustrative startup and transfer
+terms to the same local compute acceleration. The first breaks even after
+little work per offload, the second needs more, and the third needs far more.
+The transfer term also lowers the ceiling. In the third parameter set, the
+curve saturates at roughly 17x against the 100x local compute acceleration.
+The causal variables are the modeled interface terms rather than physical
+distance alone. A local result can vanish once the target charges the real
+per-invocation path.
 
 However, large granularity only overcomes interface overhead if the offload possesses high *Arithmetic Intensity* (the Roofline Model bounds attainable performance by the lesser of peak compute and arithmetic intensity times memory bandwidth) [@Williams2009Roofline]. An AI-generated kernel whose arithmetic intensity sits below the machine's balance point,[^fn-machine-balance-c09] moving roughly a byte for every operation on a bandwidth-limited link, stays bandwidth-bound however much work each offload amortizes. The Roofline constraint must be satisfied alongside the LogCA latency constraint. That per-invocation tax and data movement is what the software path must carry before a specialization claim can cross toward implementation.
 
@@ -320,381 +313,207 @@ The software path connects domain intent to hardware. Programming models, compil
 
 ![**The software path to specialized hardware.** Domain-specific architectural claims require executable software paths and evidence about correctness, performance, portability, and maintenance.](images/F9b-codegen-narrow-waist){#fig-codegen-narrow-waist width="92%" fig-alt="Narrow-waist diagram showing programming models, compiler representations, libraries, runtimes, and generated code connecting specialized hardware to evidence checks."}
 
-A local kernel result cannot bypass this software path. The hardware/lowering path must be retained so a failure on either side invalidates the paired claim. The study record should name which kernel and schedule actions automation may execute or only recommend, which hardware interface changes require stronger evidence, and who is authorized to approve them.
+A local kernel result cannot bypass this software path. The hardware and
+lowering path must be retained so a failure on either side invalidates the
+paired claim. The target study must record the kernel, schedule, compiler,
+runtime, interface, and hardware version that produced each result.
 
 That hardware-interface boundary matters because a candidate can look strong in isolation and still collapse once the compiler, data movement, and end-to-end path are accounted for.
 
 An AI-generated block posts a large kernel speedup, but the compiler cannot keep it busy, data movement dominates, and only hand-written code reaches the headline result. Include the interface and software path, then require a compiler-generated end-to-end measurement before promoting the candidate.
 
-## Managing Deployment Decisions
+## Keeping Hardware and Software Paired
 
-When a decision spans hardware, software, runtime, operations, or organizational boundaries, it widens the causal chain. Hardware and software snapshots must be versioned together, local objectives must be checked against system objectives, and deployment requires guarded exposure, rollback triggers, telemetry limits, and named owners.
+The target widens the causal chain from one array parameter to the compiler,
+runtime, memory system, and host. Hardware and software snapshots must
+therefore be versioned together, and local objectives must be checked against
+the Lighthouse system objective.
 
-### Cross-Layer Co-Design
+A single-layer optimization can be locally correct and still make the complete
+system worse. Modern cross-layer co-design includes sizing memory alongside
+algorithmic tiling, mapping interconnect topology against distributed
+execution, and pairing numerical formats with mixed-precision compute
+[@DaoEtAl2022FlashAttention; @RouhaniEtAl2023Microscaling]. In the Lighthouse
+system, compute capability and camera-interface bandwidth must both support
+the frame target. Holding either hardware or software fixed defines a
+restricted feasible set and can hide tradeoffs that joint design would expose
+[@Pareto1896Cours]. A throughput improvement that violates latency or bandwidth
+constraints remains unacceptable.
 
-A single-layer optimization can be locally correct and still make the complete system worse. When an optimizer tunes architectural parameters for ML workloads, it must co-optimize across domains. Modern cross-layer co-design involves dynamic interplay: sizing SRAM/HBM hierarchies alongside algorithmic tiling (e.g., FlashAttention [@DaoEtAl2022FlashAttention]), mapping network interconnect topologies (NVLink/PCIe) against distributed training strategies (Pipeline/Tensor Parallelism), or pairing micro-scaling formats (MX formats [@RouhaniEtAl2023Microscaling]) with mixed-precision compute. In the XR Lighthouse platform, the optimizer must balance the RISC-V core's vector extensions (compute) against the bandwidth of the camera sensor interface (interconnect) to prevent frame drops in AR; starving the vector units because the interconnect cannot deliver pixel data fast enough is a system failure. Treating either the hardware or software as a fixed baseline artificially truncates the Pareto frontier, the set of optimal tradeoffs where no metric can improve without degrading another [@Pareto1896Cours]. A throughput improvement that violates a latency target or a bandwidth constraint is unacceptable.
+Software feedback supports the target claim only when the run record ties each
+code path to the hardware snapshot it targeted. Software tuning can return
+quickly while implementation checks take hours or days. The two paths must stay
+joined by one study record so the fast path cannot replace the slower checks
+(@fig-hardware-software-coevolution).
 
-::: {.callout-architect-checkpoint title="Cross-layer ownership"}
-Before an optimizer acts, record which layer it may change, which other layer supplies independent feedback, what automation may execute or recommend, and who may approve the cross-layer tradeoff.
+![**Recording hardware and software state.** Hardware target state and software path state evolve together through a shared study record, ensuring fast software tuning does not replace slower hardware checks.](images/F9c-hardware-software-coevolution){#fig-hardware-software-coevolution width="100%" fig-alt="Two-lane diagram of hardware target state and software path state evolving together through a shared study record and target review."}
+
+## Escalating the Target Checks
+
+The source study never entered RTL or physical design. The target would, so
+its observability and reversal costs change. Compiler execution and
+architecture simulation remain useful early checks, but they cannot observe
+whether an RTL block is synthesizable, whether its interface is correct, or
+whether the routed design meets timing, power, and thermal constraints.
+
+The target study therefore needs a staged implementation path. Functional
+simulation and independently derived properties must exercise the intended
+behavior. A lint policy should reject inferred latches where the specification
+prohibits storage. Synthesis should check legality, map the netlist, report
+inferred elements and resources, and expose structural faults such as
+combinational loops. Formal properties or equivalence checks should cover the
+blocks and invariants where proof remains tractable. Physical implementation
+must then check setup and hold timing across relevant corners, congestion,
+design rules, signal integrity, and power-delivery limits as the target
+requires. None of these checks alone establishes implementation readiness.
+
+Wire effects make the escalation substantive. Synthesis and physical
+synthesis can include wire estimates, but those estimates do not replace
+extracted routed behavior. On-chip communication has become a dominant delay
+and energy concern at advanced nodes [@HoMaiHorowitz2001FutureOfWires], so the
+target must test whether the source ordering survives placement, routing, and
+the memory path rather than assume every earlier proxy is optimistic in the
+same direction.
+
+::: {.callout-lighthouse title="Timing closure does not settle the thermal question"}
+A Lighthouse datapath could meet the conventional timing corners used by one
+flow and still fail a coupled power-density or electrothermal check because
+the headset has little cooling capacity. A timing result supports only the
+corners and thermal assumptions it actually modeled. The target study must add
+the missing analysis instead of reading it into a clean timing report.
 :::
 
-Software feedback supports an architectural claim only when the run record ties each code path to the hardware snapshot it targeted. Because software tuning is rapid and reversible while silicon tapeouts are slow and fixed, the two optimization loops run on different timescales. If a fast software-tuning loop is accidentally granted the authority to alter a hardware interface without independent checks, it can silently introduce fatal hardware flaws.
+Lower reversibility also creates a design obligation. A bypass, feature
+disable, voltage or frequency guardband, or spare-cell allowance can reduce
+specific failure costs, but no one mechanism repairs every datapath,
+interface, timing, or routing defect. The target must identify the credible
+failure classes first and then test the containment mechanism intended for
+each one. The 6-series chipset recall, where a silicon defect could not be
+reached by firmware, shows why the reachable failure class matters
+[@Intel2011CougarPoint].
 
-This mismatch in timescales also dictates the choice of method. Fast, reversible software loops use low-latency search methods, like heuristics or rapid surrogate[^fn-surrogate-c09] models, to evaluate thousands of candidates quickly. In contrast, slow, high-consequence hardware decisions justify the latency and cost of thorough formal checks and capable reasoning models. The architect's methodology must align the AI's allowed authority with the physical cost of the decision.
+Independent checking should reduce shared assumptions rather than merely
+repeat the generation path. The target should derive functional properties and
+reference behavior separately from the generated RTL where possible, document
+model and prompt lineage, and measure correlated failures when complete
+independence is unavailable. A separate specification reading, synthesis
+flow, formal property set, or implementation check can expose a different
+failure class without being treated as ground truth.
 
-The two timescales must stay joined by one shared study record without bypassing the hardware layer's slower, more rigorous checks (@fig-hardware-software-coevolution).
+Learning methods can still narrow search, generate tests, or propose bounded
+repairs inside these stages. Peer-reviewed learned synthesis and placement
+work [@RoyEtAl2021PrefixRL; @MirhoseiniEtAl2021GraphPlacement], along with
+vendor-reported physical-design search [@Synopsys2023DSOai], shows that useful
+subflows exist. The adaptation question is narrower. Each proposal must reach
+the target check that can observe its relevant failure class, and the study
+record must retain tool versions, failed candidates, check results, and
+untested boundaries.
 
-![**Recording hardware and software state.** Hardware target state and software path state evolve together through a shared study record, ensuring fast software tuning does not bypass slower hardware checks.](images/F9c-hardware-software-coevolution){#fig-hardware-software-coevolution width="100%" fig-alt="Two-lane diagram: a hardware target-state lane and a software path-state lane evolving together, joined by a shared study record and a decision-holder review that keeps fast software tuning from bypassing the slower hardware checks."}
+## Reaching a Bounded Adaptation Decision
 
-### Monitoring Deployment Feedback
+The source-to-target comparison now supports a complete disposition
+(@tbl-ch9-adaptation-disposition). It keeps the source record intact while
+refusing to make it carry a different claim.
 
-Deployment-facing work evaluates real systems but produces noisy, confounded feedback. The pattern that makes it survivable is guarded progressive exposure with an automatic halt. Release the change to a small cohort, watch a few bounded metrics against a service-level objective, and let a breach trip an automatic rollback before the change reaches the rest of the fleet. A canary[^fn-canary-release-c09] bounds the blast radius; it does not prove that the change caused what the metrics show.
-
-[^fn-canary-release-c09]: **Canary release**: The deployment practice of exposing a change to a small live cohort before the full fleet, named for the coal-mine canary, so a fault surfaces while its blast radius is still small.
-
-Google's warehouse-scale migration from x86 to Arm illustrates these cross-interface deployment conditions in practice [@ChristopherEtAl2025ISAMigration]. The migration involved more than 38,000 commits. A fine-tuned language model classified the commits, revealing that repository activity concentrated in build, deployment, infrastructure, monitoring, and rollback rather than low-level code translation (@fig-isa-migration-effort). Those categories are owned by different teams, so the dominant cost was coordination across team and interface boundaries, not the code translation itself.
-
-That classification deserves this chapter's own scrutiny. The category labels were produced by a fine-tuned model, and nothing stated here establishes how they were validated, so the measurement carrying the coordination conclusion is itself an AI judgment without a declared rejection check. The conclusion may well hold, and it matches how migrations of this kind are understood to fail. What is not established is how much weight it can take. A reader relying on it should ask for the labeling's agreement against a human-coded sample, and for the confusion between the build and monitoring categories that carry most of the argument. The standard this chapter applies to a generated design applies to a generated measurement, so until some independent check observes the property, a classification is feedback rather than evidence.
-
-```{python}
-#| label: fig-isa-migration-effort
-#| fig-cap: |
-#|   **Recorded repository activity in an ISA migration.** Build, deployment, infrastructure, and supporting tools dominate commit and changed-line counts, overturning the expectation that code translation would dominate. These shares measure commits and changed lines under the paper's model-assisted classification, not effort or difficulty [@ChristopherEtAl2025ISAMigration].
-#| out-width: "100%"
-#| fig-alt: "Bar chart of repository activity in Google's x86-to-Arm migration showing build and infrastructure dominating over code adaptation."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, add_note_box, apply_style
-
-apply_style()
-
-groups = [
-    ("Code adaptation\n& correction", 456, 26032),
-    ("Testing", 1121, 50221),
-    ("Build, deployment &\ninfra configuration", 33342, 198351),
-    ("Supporting processes\n& tools", 2840, 458715),
-    ("Uncategorized", 17, 1328),
-]
-TOTAL_COMMITS = 38156
-TOTAL_LOC = 734621
-
-pct_commits = [100.0 * g[1] / TOTAL_COMMITS for g in groups]
-pct_loc = [100.0 * g[2] / TOTAL_LOC for g in groups]
-
-def bar_label(pct):
-    return f"{pct:.1f}%" if pct >= 0.1 else "<0.1%"
-
-fig, ax = plt.subplots(figsize=(5.25, 2.95))
-fig.subplots_adjust(left=0.235, right=0.965, top=0.87, bottom=0.30)
-
-ypos = list(range(len(groups)))
-height = 0.34
-ax.barh([y - 0.19 for y in ypos], pct_commits, height=height,
-        color=COLORS["blue"], zorder=2, label="share of commits")
-ax.barh([y + 0.19 for y in ypos], pct_loc, height=height,
-        color=COLORS["orange"], zorder=2, label="share of changed lines")
-
-for y, pc, pl in zip(ypos, pct_commits, pct_loc):
-    ax.annotate(bar_label(pc), (pc, y - 0.19), textcoords="offset points",
-                xytext=(3, 0), va="center", fontsize=5.8, color=COLORS["ink"])
-    ax.annotate(bar_label(pl), (pl, y + 0.19), textcoords="offset points",
-                xytext=(3, 0), va="center", fontsize=5.8, color=COLORS["ink"])
-
-ax.set_yticks(ypos)
-ax.set_yticklabels([g[0] for g in groups], fontsize=6.2)
-ax.invert_yaxis()
-ax.set_xlim(0, 100)
-ax.set_xticks([0, 20, 40, 60, 80, 100])
-ax.set_xlabel("share of recorded migration activity (%)", fontsize=7)
-ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.4)
-ax.grid(axis="x", color=COLORS["grid"], linewidth=0.55, zorder=0)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-legend = fig.legend(loc="upper center", ncol=2, fontsize=6.0, frameon=False,
-                    bbox_to_anchor=(0.5, 1.0), handlelength=1.0, columnspacing=1.4)
-for text in legend.get_texts():
-    text.set_color(COLORS["ink"])
-
-add_note_box(
-    fig,
-    "38,156 commits, ~700K changed lines. The source states the expectation that code translation would dominate only qualitatively, so the chart shows the recorded distribution alone.",
-    xywh=(0.10, 0.03, 0.80, 0.11),
-    fontsize=5.5,
-)
-
-plt.show()
-plt.close(fig)
-```
-
-The study also evaluated an AI-assisted repair tool on a selected historical benchmark of 245 commits with identifiable build and test targets, demonstrating a passing repair for 30 percent of cases [@ChristopherEtAl2025ISAMigration]. This is a directional result on a selected set with identifiable targets, not a fleet automation rate or a comparison against a matched conventional baseline. @tbl-isa-migration-loop-card records how the loop divides that labor.
-
-| **Card field** | **Migration reading** |
+| **Disposition** | **What happens in the target study** |
 | --- | --- |
-| **Task** | Move production services across an ISA boundary while preserving build, test, and rollout behavior. |
-| **Representation** | Migration commits, build targets, tests, sanitizer findings, service ownership, and evicted production cases. |
-| **Environment** | Build-and-test repair loop plus production monitoring on the new target. |
-| **Method role** | Propose bounded software repairs and route failed cases toward owners. |
-| **Rejection checks and authority** | Build failures, test failures, sanitizer failures, crash loops, slow jobs, and monitor-triggered evictions. |
-| **Accountable decision** | Automated repair can clear only the cases its declared checks settle; application owners receive the exceptions. |
+| **Reuse** | Keep the record schema, provenance structure, raw simulator outputs, four judgments, and candidate identities as historical anchors. |
+| **Refresh** | Replace the synthetic slice with a trace-backed workload distribution; pin compiler, runtime, mapping, interface, and target objective versions. |
+| **Rerun** | Define the legal target space and evaluation budget, then evaluate the reference and target alternatives under the new workload, mapping, memory path, offload costs, and decision rule. |
+| **Recalibrate** | Compare SCALE-Sim ordering with a sampled higher-fidelity reference in the target region, then state where the cheap screen remains usable. |
+| **Independently check** | Derive functional references and properties separately where practical, then check RTL, synthesis, timing, congestion, power, and thermal behavior. |
+| **Narrow** | Treat 32 by 32 only as the retained reference candidate for the new comparison. |
+| **Reject** | Do not transfer the source 1 percent score, AI-contribution result, failed mechanism explanation, or pending recommendation into the RTL decision. |
 
-: **The method proposes bounded repairs while independent checks keep rejection authority:** every change must clear build, test, sanitizer, and monitor checks, and application owners own the cases automated repair cannot settle. {#tbl-isa-migration-loop-card tbl-colwidths="[24,66]"}
+: **The adaptation keeps the record and reopens the claim.** Reuse of an
+artifact does not imply reuse of its conclusion. {#tbl-ch9-adaptation-disposition tbl-colwidths="[20,70]"}
 
-Deployment is where a change finally meets the live system. When a method can push cross-interface changes at machine speed, guarded exposure, rollback triggers, a kill switch, and named owners are what separate a routine change from an unrecoverable one.
-
-::: {.callout-war-story title="A deployment that could not be reversed in time"}
-**The claim.** On August 1, 2012, deploying new order-router (SMARS) code to Knight Capital's production servers looked like a routine change. Seven of the firm's eight servers took the update without incident [@SEC2013KnightCapital].
-
-**The gap.** The eighth server never received the new code, and a repurposed configuration flag reactivated dormant "Power Peg" logic there. With no staged exposure to catch the divergence and no cumulative risk limit to stop it, that one server sent millions of unintended orders into the market, and no fast kill switch existed to halt them.
-
-**The lesson.** The firm lost about \$440 million net in roughly 45 minutes. Guarded progressive exposure would have surfaced the divergent server before it reached full volume, and a kill switch would have stopped the accrual once it began. At machine speed, the halt has to be built in before a change ships, not improvised after it fails.
+::: {.callout-design-principle title="Reuse the record, not the conclusion"}
+Do not freeze the 32 by 32 array or its interface from the result in
+@sec-running-the-loop.
+Use it as the reference candidate in a newly frozen implementation-readiness
+study. The source study remains closed, and the target decision remains open
+until the new obligations are tested.
 :::
 
-Deployment feedback includes operational state, SLOs, resource contention, and rollback triggers, and those triggers are what arm the automatic halt. In ML systems, these checks must extend beyond traditional operational metrics such as crashes or latency limits. An AI-generated artifact can execute quickly without crashing, yet introduce silent *semantic* degradation (e.g., numerical divergence or a downstream perplexity spike). Explicit semantic validation via shadow deployments is a necessary trigger for automatic rollbacks alongside operational metrics. While software deployments rely on rollback to mitigate risk, hardware commitment eliminates that safety net entirely.
-
-## RTL and Physical Design
-
-As the design loop descends into RTL and physical design, it enters the domain of high-consequence work, including timing closure, power analysis, and formal signoff. Feedback is delayed, and because a committed silicon tapeout is a large capital expense on a multi-year horizon, reversal is slow and prohibitively expensive.
-
-### The Cost of Silicon Commitment
-
-AI heuristics that work well in software often break down against the physical realities of multi-day placement and routing runs, Design Rule Check (DRC) violations, and non-linear timing-closure loops where physical-design feedback is noisy and non-differentiable.[^fn-differentiability-c09]
-
-[^fn-differentiability-c09]: **Differentiability**: A signal is differentiable when small input changes produce smooth, computable gradients, which lets ML optimizers follow a slope toward better designs. Physical-design feedback offers no such gradient, so gradient-based methods give way to slower black-box search. Recent EDA research attempts to bridge this gap by recasting analytical placement itself as a differentiable optimization solved on GPUs with deep-learning toolkits [@LinEtAl2019DREAMPlace], so gradient-based methods drive the placer directly rather than a black-box search.
-
-A tapeout has no `git revert`, so AI-assisted hardware changes require built-in escape hatches. While microcode patches and fuses can fix control-logic firmware bugs, an AI-generated datapath or routing structure requires physical escape hatches to survive undetected physical bugs. These include *bypass muxes* to dynamically fall back to a verified scalar core, *frequency/voltage guardbanding* (holding extra voltage and frequency margin at signoff and in the DVFS tables so an AI-generated path that misses setup at its critical corner can be run slower or at higher voltage, which covers max-delay failures only, since a hold violation is a race between two paths, is frequency-independent, and cannot be dialed around once the part is fabricated), and *partial disablement* to power-gate specific AI-generated lanes if they cause thermal hotspots or functional logic bugs. These reversibility mechanisms are purchased before tapeout, not discovered after a bug.
-
-Teams sprinkle unconnected spare cells through the layout so a logic bug can be repaired by rewiring metal layers alone, which reuses the base masks and cuts both the mask bill and the respin turnaround by a large factor, and they give risky features *chicken bits*, fuse- or firmware-controlled disables that revert a new block to the previous generation's behavior. The governance consequence follows directly. An AI-generated block should not reach tapeout without its own chicken bit, a bypass path to verified logic, and its share of the spare-cell budget. The chicken bit and the bypass path can be exercised on parts already fabricated, while the spare cells only shorten and cheapen the metal-layer respin that a logic bug still requires, and @sec-what-architect-owns treats the containment lever as an explicit ownership question. The area they cost is the insurance premium on an unproven generator. What makes that premium necessary is that the early checks run on estimates. Functional simulation and synthesis-stage timing run long before signoff static timing analysis (STA), DRC, and the power and thermal analyses, all of which read the extracted parasitics of the routed design and can still reject the block.
-
-::: {.callout-lighthouse title="The datapath that passes timing and fails thermal"}
-An AI-generated datapath for the XR Lighthouse subsystem might close timing at every signoff corner and still fail power-density and thermal analysis in layout, because the dense clustering of toggling cells creates a localized hotspot that cannot be cooled in a headset with no active cooling. Timing signoff is evaluated at a fixed set of assumed corners, so it never sees the thermal gradient that the layout's own switching activity creates.
-:::
-
-A passing early check in a proxy or simulator can never authorize a difficult-to-reverse physical transition. The cost of getting this wrong is not hypothetical. In 2011 Intel shipped its 6-series "Cougar Point" chipset with a design fault in the SATA ports that would degrade over time, a defect no firmware update could reach; the company halted shipments, recalled parts, and absorbed about \$700 million in repair and replacement costs for parts already in the field [@Intel2011CougarPoint]. Where Knight Capital lost its \$440 million to software in forty-five minutes, a silicon escape is undone only by months and a new mask set, which is why the escape hatches and independent signoff above have to be in place before commitment rather than after.
-
-AI assistance can narrow search, critique, organize evidence, repair bounded artifacts, or generate tests. However, independent checks and named roles must retain rejection, waiver, recommendation, and authorization rights.
-
-### Action Space Adaptation
-
-This progression down the stack requires *action space adaptation*. For example, moving the @sec-running-the-loop candidate toward implementation shifts the required checks from logical simulation to physical constraints. During microarchitecture exploration, search evaluates parameter spaces like buffer sizes or array geometries while holding logic fixed. During logic generation, synthesis targets a discrete domain of Boolean functions and state transitions guided by functional simulation. Physical design is a massively combinatorial, discrete problem (cells snap to site rows, wires snap to specific metal routing tracks) that is only approximated with continuous analytical math before being legalized.[^fn-legalization-c09] This discrete, non-convex cliff nature is what causes small changes to ripple unpredictably, frustrating standard gradient-based optimizers. The required evidence shifts from RTL syntax to STA reports and routing congestion that drive floorplanning, cell placement, and wire routing.
-
-[^fn-legalization-c09]: **Legalization**: The placement stage that takes the overlapping, fractional cell positions produced by continuous analytical optimization and snaps every cell onto a legal site row without overlap. It is where a mathematically optimal layout is forced back onto the manufacturable grid, so the quality a continuous optimizer reports before legalization is an upper bound rather than a result.
-
-There is a device-physics reason this stage, not RTL, is where the truth lives. Gate delay improved with every process generation, but wire delay per unit length did not [@HoMaiHorowitz2001FutureOfWires], and at advanced nodes on-chip communication rather than computation became the dominant cost. Every proxy upstream of placement is therefore structurally optimistic, because the synthesis netlist contains the gates but not the wires, and the wires are where the delay and energy now reside. AlphaChip's reward was built on wirelength precisely because wirelength is the earliest available shadow of the quantity that matters. A logical-stage win crossing into layout is not being re-measured for rigor's sake; it is being measured for the first time.
-
-Consequently, each layer's checks must enforce its physical reality. The most notorious trap for LLM generation is the *synthesizability gap*. Passing a functional simulator does not mean the logic exists in the boolean-algebra domain; a generator frequently emits structurally valid Verilog that simulates cleanly but infers unintentional latches, or combinational loops that synthesis cannot resolve at all. The latch is the quieter of the two, because every standard-cell library ships latch cells, so synthesis builds it and only warns while the fault escapes into the netlist rather than being rejected there. RTL simulation reproduces that retention behavior rather than the designer's intent, so the two tools agree with each other and nothing flags the divergence; a functional test catches it only when stimulus exercises the path where retention and intent differ. The real damage surfaces later, in scan insertion and in timing closure, where a latch borrows time instead of closing a flop-to-flop path. Functional simulation alone is therefore never sufficient authorization for RTL, and an AI-generated design must pass strict lint and synthesis checks before STA or DRCs can run.
-
-When delayed physical checks do return a failure, that telemetry must translate into negative constraints within the explicit design state. However, because synthesis tools aggressively flatten and retime RTL, mapping a post-route DRC hotspot back to a specific RTL construct requires traceability tools like complex naming maps and structural tracing, not just topological graphs. Because of this semantic gap, the most realistic high-consequence entry point for AI in physical design is the Engineering Change Order (ECO) loop. Rather than restarting a multi-day placement run, an AI agent can execute surgically bounded gate sizing or local routing detours on a frozen database using fast incremental STA checks.
-
-Functional verification is itself a feedback loop, and its central check is a proxy. Coverage metrics record different things, and none of them records correctness. Functional coverage records which intent-derived scenarios the stimulus reached, code coverage records structural exercise of the RTL as written and is therefore blind to behavior nobody implemented, and formal coverage records which design logic a proof depended on, with no stimulus involved at all. A passing coverage target cannot bound the failure classes that were never stimulated, so a clean run never means the space is covered, only that the observed cases held. This is the earlier limit again, that a check can reject only the failures it can observe. AI can generate constrained random tests, read formal counter-examples, close coverage holes, and triage failing runs, but whether signoff coverage is sufficient is a judgment that stays with the named roles that own it.
-
-Coverage alone is not what makes a verification result trustworthy. Verification teams are staffed separately from design teams for an epistemic reason, not an organizational one. Two independent readings of the specification must be able to disagree for a shared misreading to surface, which is why a designer's own testbench has never counted as signoff evidence. An LLM that generates the RTL and the testbench from the same prompt collapses those two readings into one, so every specification misunderstanding is faithfully implemented on both sides, every test passes, and no coverage metric can detect the correlation. The operational rule is that the generator of an artifact and the generator of its checks must not share a model, a prompt lineage, or a training-time view of the same reference solution.
-
-Formal methods partly escape this limit. Equivalence checking and model checking reject entire classes of behavior rather than the sampled stimuli a simulation happens to exercise, so an unbounded proof rules out a whole failure class instead of a set of observed cases, while a bounded model check rules that class out only to its proof depth. That reach is bounded by state-space explosion, and equally by what the property set states and what its constraints assume, since an over-constrained or vacuously passing property proves nothing about the design. This is why the RTL regime pairs simulation coverage with formal checks on the blocks and properties where the proof still scales.
-
-Public reports indicate learning methods can contribute to physical-implementation search, such as in peer-reviewed synthesis for parallel-prefix circuits and learning-assisted placement (whose evidence review was discussed in @sec-feedback-verification-trust). A vendor-reported DSO.ai system, a commercial machine-learning EDA tool, has also searched the physical-implementation flow for commercial tapeouts [@Synopsys2023DSOai]. These are bounded learned subflows, not automated tapeout authority. The record must include tool versions, failed candidates, signoff checks, waivers, escalation points, and the named decision owner.
-
-Post-silicon bring-up and validation represent a controlled implementation return after fabrication and before deployment. Those controlled lab measurements inform the architect before fleet deployment introduces new confounding variables.
-
-## The Three Feedback Clocks
-
-The operating conditions classified the next decision before it was made, setting what a method may do to it. The feedback clocks classify something different, what a result can be claimed after evidence arrives. The two connect through timing.
-
-### Clocks Versus Operating Conditions
-
-The clock that can confirm a decision often runs far slower than the clock on which the decision was committed, so the stricter operating conditions, high consequence and model-mediated, are the ones whose confirming evidence arrives latest.
-
-Design-time evaluation, in-field evidence, and continuing enablement each answer a different question about the system (@fig-feedback-clocks).
-
-```{python}
-#| label: fig-feedback-clocks
-#| fig-cap: |
-#|   **Three feedback clocks run at different speeds.** In-field evidence, continuing software enablement, and design-time evaluation each observe the system on a different timescale, so their signals must be read separately rather than averaged into a single number.
-#| out-width: "92%"
-#| fig-alt: "Horizontal range chart on a logarithmic time axis from one millisecond to ten years. In-field evidence spans milliseconds to days, continuing enablement spans months to years, and design-time spans years, drawn as three separate labeled rows with square endpoints."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style, top_log_axis, row_axis, draw_range_rows
-
-# Representative timescales for the three feedback paths, in seconds (log axis).
-# Conceptual figure. As-of: 2026-07-19.
-apply_style()
-
-DAY = 8.64e4
-MONTH = 2.63e6
-YEAR = 3.156e7
-
-rows = [
-    {"lo": 1e-3, "hi": DAY, "color": COLORS["evidence"],
-     "display_label": "In-field evidence", "display_note": "Fleet telemetry, dynamic adaptation",
-     "right_label": "ms to days"},
-    {"lo": MONTH, "hi": 2 * YEAR, "color": COLORS["methods"],
-     "display_label": "Continuing enablement", "display_note": "Firmware and software tuning",
-     "right_label": "months to years"},
-    {"lo": YEAR, "hi": 10 * YEAR, "color": COLORS["workload"],
-     "display_label": "Design-time", "display_note": "Next-gen architecture program",
-     "right_label": "years"},
-]
-
-fig, ax = plt.subplots(figsize=(5.25, 2.2))
-top_log_axis(
-    ax,
-    xlim=(3e-4, 6e8),
-    xticks=[1e-3, 1, 60, 3600, DAY, MONTH, YEAR, 10 * YEAR],
-    xticklabels=["1 ms", "1 s", "1 min", "1 hr", "1 day", "1 mo", "1 yr", "10 yr"],
-    xlabel="Timescale (seconds, log)",
-)
-row_axis(ax, len(rows))
-draw_range_rows(
-    ax, rows, low_key="lo", high_key="hi",
-    label_x=-0.52, right_x=1.02,
-    label_fontsize=6.6, note_fontsize=5.4, right_fontsize=6.0,
-)
-fig.subplots_adjust(left=0.34, right=0.80, top=0.78, bottom=0.06)
-```
-
-These observations describe different system states and bear on different decisions. They must never be averaged into one performance number or narrated as one clean causal chain (@tbl-feedback-clocks).
-
-| **Feedback path** | **Question it can answer** | **State that must be paired** | **Limit on the claim** |
-| --- | --- | --- | --- |
-| Design-time evaluation | What may this candidate do under the study's represented workload and assumptions? | Architecture candidate, workload or model, simulator or benchmark, tool configuration, and software path. | A simulator, benchmark, or evaluation supports only the represented mechanisms and measured scope. |
-| In-field evidence | What happens for this hardware and software pair under a stated deployment context? | Hardware revision, compiler, runtime, libraries, kernels, model, workload cohort, deployment policy, and observation window. | Telemetry is operationally relevant but often confounded; it can reject an assumption without identifying one clean cause. |
-| Continuing software enablement | How does realized behavior change as the software ecosystem learns to use fixed hardware? | The same hardware contract paired with each software, model, workload, and submission version. | A later result cannot be attributed to hardware alone, and one platform's trajectory does not predict another's. |
-
-: **Each feedback path pairs different state and bounds a different claim, so their signals must not be averaged:** A result quoted without its paired state cannot be attributed to the hardware, the software, or the workload. {#tbl-feedback-clocks tbl-colwidths="[18,25,30,20]"}
-
-### Three Modes of Observation
-
-- **Design-time evaluation:** Estimates behavior. The SCALE-Sim observations from @sec-running-the-loop evaluated candidates tied to frozen workload and software assumptions.
-
-- **In-field evidence:** Tests the deployment context. Google and Meta discovered "mercurial" cores that silently returned wrong results after passing manufacturing tests [@HochschildEtAl2021Cores; @DixitEtAl2021SDC]. This observation rejected the sufficiency of earlier test regimes under fleet-scale operation. It showed that deployment can expose failure classes missed by prior checks. In-field evidence also reveals the algorithm evolution treadmill. When a specialized accelerator is fabricated and deployed, the neural network architectures it was originally optimized for have often been superseded by new models.
-
-- **Continuing enablement:** Observes later software workloads using a fixed hardware contract. For example, NVIDIA reported single-node training performance improvements of up to 17 percent on the same H100 hardware between MLPerf Training v2.1 preview and v3.0 by identifying software optimizations. BERT improved 17 percent, ResNet-50 by 8.4 percent, 3D U-Net by 8.2 percent, and Mask R-CNN by 6.1 percent [@EassaEryilmaz2023H100MLPerfSoftware]. This is a vendor-reported, workload-specific public continuing-enablement comparison, not a dependable first-year improvement rate.
-
-## Delayed Feedback
-
-Because in-field evidence arrives on these slower clocks, it requires different handling. Feeding delayed, noisy field telemetry directly into a high-frequency optimizer makes it overcorrect and thrash, because the telemetry arrives too late to guide rapid tuning.
-
-### Nested Control Loops
-
-The fix is to run the two at different speeds, nesting a fast tuning loop inside a slow review loop (@fig-cascade-control).
-
-![**Handling delayed telemetry.** Nested feedback loops ensure that delayed field telemetry is reviewed rather than fed directly into fast, automated tuning loops, preventing the optimizer from thrashing.](images/F9-cascade-control){#fig-cascade-control fig-alt="Nested control diagram: a slow outer loop reviews delayed field telemetry and updates plans and test targets, wrapping a fast inner loop that tunes against immediate proxies on the physical system, with a review step between them."}
-
-Fast inner loops handle local software tuning and immediate stabilization using close tests and proxies. Slow outer loops review the delayed field telemetry, updating the architectural assumptions and test targets. The fast tuning loop must only tune against immediate proxies. It should never act directly on delayed telemetry.
-
-### Telemetry That Compounds Across Generations
-
-When telemetry is captured and isolated into calibration datasets, post-silicon results from one generation can recalibrate the surrogate models used to design the next (@fig-hw-flywheel). Furthermore, this compounding is not just inter-generational. In modern ML systems, *intra-generational* compounding loops form "data engines" that actively use dynamic JIT tuning and fleet telemetry to update compiler cost models, and using that telemetry to trigger targeted simulation of boundary cases rather than passively ingesting logs.
-
-![**Telemetry compounds across silicon generations.** Post-silicon telemetry from Generation N recalibrates the AI surrogates used to design Generation N+1, so each surrogate reflects the bottlenecks the previous generation actually encountered.](images/F9-hw-flywheel){#fig-hw-flywheel width="100%" fig-alt="Six-stage cycle showing post-silicon telemetry from one hardware generation recalibrating the AI surrogate models used to design the next generation."}
-
-In traditional design, telemetry is often used only for debugging or triggering warranty returns. Here, post-silicon hardware performance counters (e.g., PMU traces and thermal sensor logs) from Generation $N$ are fed back into the surrogate models as ground-truth calibration data. Because the retrained surrogate for Generation $N+1$ reflects the thermal, routing, and workload bottlenecks that limited Generation $N$, it estimates those quantities more accurately within the regions the telemetry covers. The durable advantage is the proprietary fleet data itself.
-
-An organization with more GPU compute but no comparable deployment telemetry cannot recalibrate its surrogates the same way. A first tapeout or a new team starts without any prior-generation telemetry at all, so the advantage accrues over generations rather than being a precondition for the first design. Before the fleet exists, surrogates are calibrated from foundry process design kit data and published baselines, and conservative escape hatches such as fuses and microcode patches absorb the residual uncertainty.
-
-Run naively, that compounding can also lock in the past. Because telemetry records only the workloads Generation $N$ actually served, a surrogate recalibrated on it sharpens on yesterday's traffic and goes blind to workloads that have not yet appeared, reinforcing the design distribution it was trained on and steering Generation $N+1$ toward the previous generation's bottlenecks [@SculleyEtAl2015Hidden]. This is the algorithm evolution treadmill seen from the design side, and that advantage lasts only while the fleet keeps sampling the workloads the next generation will run. Continually fine-tuning on a narrow, delayed stream of field telemetry risks catastrophic forgetting [@McCloskeyCohen1989Catastrophic], where the surrogate overrides the broader design-space physics it learned during pre-silicon training.
-
-::: {.callout-field-note title="The algorithm treadmill"}
-**The expectation.** Early dedicated Neural Processing Units (NPUs) were hardened by human design intent for the Convolutional Neural Networks (CNNs) of the day, such as ResNet. Their datapaths were built around spatial convolution and 3x3 windowed data reuse, the dominant bottlenecks of that workload.
-
-**In practice.** When the software ecosystem pivoted to Transformer models, those CNN-optimized NPUs suffered poor utilization, because datapaths hardwired for small spatial convolutions and windowed reuse had no efficient mapping for large dense GEMMs, attention, and the normalization and softmax operators the new workload depended on. The silicon forgot nothing; the workload moved out from under it.
-
-**The lesson.** This is the hardware lottery [@Hooker2021HardwareLottery], the treadmill's underlying dynamic, and it illustrates the danger of over-fitting fixed hardware to the workload distribution of the moment.
-:::
-
-### Guarding the Model Update
-
-A common failure mode in AI-assisted architecture is treating surrogate models such as power or timing predictors as static artifacts that are trained once and deployed forever. Models decay as the underlying software compiler is updated or usage patterns shift. (Note that a process node shrink from 5nm to 3nm is not gradual drift but a massive domain shift, requiring full retraining or transfer learning rather than standard MLOps maintenance.) Borrowing the practice from MLOps,[^fn-mlops-c09] the architecture loop must move beyond manual, schedule-based recalibration. Modern flows require automated drift tracking (e.g., tracking Population Stability Index or prediction variance bounds to measure drift magnitude) and continual, active learning pipelines to automatically maintain the fidelity of these fast-path surrogates. Every time a candidate reaches true RTL or silicon, that ground-truth data returns to retrain the faster surrogate models used earlier in the funnel.
-
-[^fn-mlops-c09]: **Machine Learning Operations (MLOps)**: The software discipline of versioning, monitoring, and retraining deployed ML models as their input data drifts, the ML counterpart of keeping a fielded chip's firmware and characterization data current.
-
-Before a recalibrated surrogate is trusted to steer a multi-million-dollar chip design, it can run silently alongside the human-led EDA flow, predicting outcomes without controlling the project. Architects measure its calibration against the ground-truth tools over thousands of commits, and only then authorize it to steer the search.
-
-None of this recalibration is automatic. Delayed evidence does not update knowledge by itself. Attribution is a review step, and every possible update surface requires a separate decision and its own admission test. Automatic LLM fine-tuning is never the default.
-
-Before any update, retain an attribution record spanning these fields:
-
-| **Attribution Field** | **Purpose and Rationale** |
-| --- | --- |
-| **Observation context** | Record time, window, and specific hardware product/revision to anchor the telemetry to a physical reality. |
-| **Software environment** | Track compiler, runtime, libraries, firmware, model, and policy versions to prevent crediting silicon for a software win. |
-| **Workload properties** | Document the cohort, traffic mix, and benchmark rules to ensure the observation applies to the intended domain. |
-| **Measurement details** | Log telemetry source, evaluation tool, uncertainty, and missing data to qualify the precision of the feedback. |
-| **Provenance and claim** | Link the candidate to its generating run and the earlier architectural claim being revisited. |
-| **Confounding variables** | Identify variables known to have changed and plausible competing causes to guard against misattribution. |
-| **Baseline and control** | Specify the matched baseline, counterfactual, or explicit absence of one to ground the relative comparison. |
-| **Failure classification** | Note the observed failure class and why earlier checks missed it, improving the upstream evaluation harness. |
-| **Reviewer disposition** | Record the decision owner, nonclaims, and chosen update destination before mutating any project knowledge. |
-
-Only after competing explanations are recorded can a separate decision admit the observation to a destination.
-
-| **Possible destination** | **Admission question** | **Legitimate update** | **Required check** |
-| --- | --- | --- | --- |
-| Project trajectory or run history | Is the observation provenance-relevant even if cause is unresolved? | Append the versioned observation, failure, or later outcome to the relevant candidate or system history. | Never overwrite the earlier state or rewrite an unresolved cause as fact. |
-| Retrieval corpus | Is the source stable, attributable, licensed, current, and useful for later architecture questions? | Add or revise a source document and its metadata. | Preserve source version, date, access, supersession, retraction, and scope. |
-| Embeddings or search index | Has an admitted corpus item changed? | Regenerate the derivative representation or index entry. | Never treat a vector update as an independent evidence decision; retain the source link and embedding version. |
-| Calibration set | Does the example share the target, measurement semantics, and support region of the calibrated tool or surrogate? | Add a reviewed input-output pair for calibration or uncertainty assessment. | Keep final evaluation and holdout data separate; do not leak deployment outcomes into the test used to claim accuracy. |
-| Surrogate dataset or model | Is there a valid state-action-consequence pair at the fidelity the surrogate claims to predict? | Add a reviewed labeled example and retrain or recalibrate under a separate protocol. | Tool-path failures and missing observations are not negative performance labels; revalidate on held-out regions and tool versions. |
-| Training dataset for a general or specialized model | Is the example curated, licensed, representative, decontaminated, and tied to an explicit training objective? | Admit it to a versioned training set after governance review. | Prevent duplicated, private, unsafe, low-quality, or evaluation-contaminating data from entering the set. |
-| Model parameters | Does a separately approved training or adaptation study show benefit without unacceptable regression? | Fine-tune, update, or replace parameters under a versioned training and evaluation plan. | Never update an LLM automatically from field telemetry; require held-out evaluation, rollback, provenance, and authorization. |
-| No durable update | Is the observation too confounded, private, unsupported, or out of scope? | Preserve it only in the audit or incident record, or discard it under policy. | "No update" is a valid reviewed result. |
-
-A silent-core event can update the project's fault taxonomy and future test plan, but it does not automatically become a performance-surrogate label. A paired same-hardware H100 benchmark result can update an enablement trajectory and motivate a new software hypothesis, but it does not rewrite the hardware's design-time performance model or trigger automatic fine-tuning. Each new operating condition demands its own checks.
-
-## Evidence Revalidation
-
-When moving a method or candidate across these decision boundaries, study structure can transfer, but evidence validity, check coverage, rollback, and permissions do not. The architect must retest the claim's support, the cheaper check's settlement behavior, the AI role and authorization, and the capacity of the trusted review path.
-
-### Transfer Tests
-
-Before reusing a method or artifact at another decision boundary, ask three questions:
-
-1. **Does the evidence still support the claim?**
-
-   Recheck workload coverage, tool and software versions, interfaces, objective definitions, and known rejected regions.
-
-2. **Can the cheaper check be trusted here?**
-
-   Audit samples of both accepts and rejects against the new reference path. That audit is
-   what produces a number rather than an impression. The share of cases the cheap check
-   settles correctly is the validated coverage $f$ that bounds review throughput later in
-   this chapter, so a team that never runs the audit cannot report the one quantity a
-   review-speedup claim turns on.
-
-3. **Did the AI role or decision rights change?**
-
-   A move across an interface may turn an action AI could execute into one it may only recommend. For instance, moving from behavioral simulation to logic synthesis requires the AI's internal representation to shift from throughput cost models to delay and slack surrogates.
-
-A passing test cannot be treated as authorization when the change alters a hardware interface, enters RTL, or supports a signoff decision.
-
-Crossing from a fast proxy into a high-consequence domain replaces automated checks with slower, expensive human review, causing the settlement rate to drop and creating a persistent bottleneck.
-
-This bottleneck is not a prediction; it is the industry's standing condition. Long-running functional-verification surveys report that verification, not design, consumes the majority of ASIC project effort, and that verification headcount has grown to roughly parity with design headcount [@Foster2022WilsonVerificationStudy]. A generator that multiplies the rate of RTL generation multiplies load on the cost center that was already the largest. Any productivity claim for generative RTL must therefore be an end-to-end claim that includes the verification it induces, not a generation-hours claim.
-
-![**The review bottleneck.** An AI generator can propose candidates faster than human verification can settle them, so the settlement rate, not the proposal rate, sets the pace of useful progress.](images/F9-review-bottleneck){#fig-review-bottleneck fig-alt="Diagram contrasting a high proposal arrival rate from an AI generator with the lower settlement rate of human verification."}
-
-If proposals arrive faster than reliable evaluation can settle them, more generation grows a queue rather than useful progress. A measurable bottleneck occurs when proposal arrival rate $\lambda_{\mathrm{propose}}$ exceeds trusted settlement rate $\mu_{\mathrm{review}}$ (@fig-review-bottleneck). Just as Amdahl's law bounds parallel scaling by the serial fraction, the human verification step that cannot be automated bounds the end-to-end speedup of AI-assisted design. Proposal supply is not the limit here; trusted evaluation and human review set the pace. Improving throughput requires validating cheaper checks, reducing review cost, and cutting avoidable routing and escalation overhead. For quantitative limits on service-cost speedups, see the service-cost model below (@fig-rejection-bound-ceiling).
+The target study now has explicit tests and boundaries
+(@tbl-ch9-target-tests).
+
+| **Target obligation** | **Minimum test** | **Boundary if absent** |
+| --- | --- | --- |
+| Workload coverage | Trace-backed common and tail cases, versioned with stated exclusions. | No representativeness claim. |
+| Candidate comparison | Preregister the legal target space, search and evaluation budgets, credible comparator, decision rule, and a sensitivity or resolving-power check. | No claim outside evaluated candidates and no comparative AI-contribution claim when the study cannot distinguish its arms. |
+| Mapping and software path | Compiler-generated end-to-end execution using pinned mapping, compiler, runtime, and interface versions. | No claim that the array is usable by the target stack. |
+| Interface and memory cost | Offload granularity, bandwidth, traffic, latency, and a calibrated or validated energy-and-power model with execution rate, duty cycle, leakage and idle power, and the complete subsystem boundary. | No 3\ W or system-speedup claim. |
+| Cheap-screen validity | Representative random or stratified target samples checked against a separate higher-fidelity path, with class-specific error limits, uncertainty, abstention behavior, and a later drift audit. | SCALE-Sim remains a source-study tool, not a target decision filter. |
+| RTL behavior | Independently derived reference tests and properties where practical, plus lint, functional simulation, synthesis, and formal checks within their stated reach. | No implementation-readiness claim. |
+| Physical behavior | Area and floorplan feasibility, relevant setup and hold corners, congestion and design rules, routed dynamic and leakage power, power delivery, and electrothermal checks. | No signoff, tapeout, or physical-feasibility claim. |
+| Containment | Exercise each proposed bypass, disable, guardband, or fallback against the failure class it is intended to contain. | No claim that the implementation can recover from that failure. |
+| Program comparison | Repeat the target study against a credible alternative and record human, machine, tool, and review cost. | No claim that the complete AI-assisted system improves the design program. |
+
+: **Each obligation changes what the next evaluation must measure.** Untested
+boundaries remain visible rather than being absorbed into a general claim.
+{#tbl-ch9-target-tests tbl-colwidths="[22,46,32]"}
+
+This technical packet does not change decision rights. Bounded automated
+components may propose or screen candidates inside the declared study.
+Rejection, waivers, the architecture freeze, signoff, and tapeout remain with
+the named roles defined in @sec-what-architect-owns.
+@sec-evaluating-agentic-architect must preserve that boundary while assessing
+the complete system.
+
+The adaptation decision is therefore complete even though the target
+architecture decision is not. The study structure and reference candidate can
+move forward. The source conclusion cannot. This is the chapter's reusable
+move for another design problem.
 
 ### Review-Capacity Bounds
 
-An Amdahl-like service-cost model describes a fixed stream of comparable candidates [@Amdahl1967ValiditySingleProcessor; @AltafWood2017LogCA]. Let $c_{\mathrm{hi}}$ be the mean service cost when every item goes to high-fidelity reference, and $c_{\mathrm{cheap}} < c_{\mathrm{hi}}$ be the mean cost of a cheaper check. Let $f$ be the fraction correctly settled without high-fidelity escalation, and $a$ be the fraction incurring the cheap check. The service-cost speedup is:
+The target plan sends some candidates through cheap screening and others
+through expensive reference checks. A generator that increases proposal
+volume without increasing trusted settlement grows a queue rather than useful
+progress. Long-running functional-verification surveys report that
+verification already consumes a large share of ASIC project effort
+[@Foster2022WilsonVerificationStudy]. Any claimed productivity gain must
+therefore include the checks and review induced by the additional candidates.
+
+An Amdahl-like expected service-work model describes a fixed stream of
+comparable candidates [@Amdahl1967ValiditySingleProcessor;
+@AltafWood2017LogCA]. Let $c_{\mathrm{hi}}$ be the mean service cost when every
+item goes to a high-fidelity reference, and let $c_{\mathrm{cheap}} <
+c_{\mathrm{hi}}$ be the mean cost of a cheaper check. Let $f$ be the fraction
+of target-domain items routed to a region where the cheaper check settles the
+case within predeclared class-specific false-accept and false-reject limits.
+Let $a$ be the fraction that incurs the cheap check. The service-work speedup
+is
 
 $$
 S_{\mathrm{review}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
 $$
 
-The overhead $\epsilon \ge 0$ covers routing, queueing, audit, and rework.
+The dimensionless overhead $\epsilon \ge 0$ is mean per-item routing, audit,
+and rework cost normalized by $c_{\mathrm{hi}}$. Queueing delay is excluded
+because it is a latency effect rather than service work.
 
-The inequality holds because $f \le a$. A candidate cannot be settled by a check that never ran on it, so the fraction the cheap check settles correctly is at most the fraction that incurred it, and substituting $f$ for $a$ can only shrink the denominator. The bound is therefore what a team achieves when every cheap check it pays for also settles the case, with nothing spent on candidates that escalate anyway. Two consequences follow. As $c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ the ceiling approaches $1/(1-f)$, so validated coverage alone fixes the maximum, and no reduction in the cheap check's unit cost can lift it. And because the gap between $a$ and $f$ is pure waste, a cheap check that runs broadly while settling narrowly is worse than one that runs only where it is trusted.
+The inequality holds because $f \le a$. A candidate cannot be settled by a
+check that never ran on it, so substituting $f$ for $a$ can only shrink the
+denominator. The bound is attained only when every paid cheap check settles
+the case within the declared error limits and no cheap-check work is spent on
+items that later escalate. Incorrectly accepted items cannot disappear from
+the accounting. They must count as failures against those error limits or the
+comparison with the all-reference baseline is invalid.
+
+As $c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ and $\epsilon = 0$, the
+free-check ceiling approaches $1/(1-f)$. No reduction in unit check cost can
+lift that ceiling without increasing validated coverage. The model bounds
+expected service work. It becomes a throughput bound only when the modeled
+work consumes the bottleneck resource under stated capacity and concurrency
+assumptions.
 
 ```{python}
 #| label: fig-rejection-bound-ceiling
 #| fig-cap: |
-#|   **Validated coverage sets the upper bound.** In this service-cost model, a check that correctly settles more cases raises the ceiling.
+#|   **Validated coverage sets the upper bound.** In this zero-overhead service-work model, a check that settles more target cases within declared error limits raises the ceiling.
 #| out-width: "100%"
 #| fig-alt: "Line plot of review service-cost speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
 
@@ -735,7 +554,7 @@ ax.set_yscale("log")
 ax.set_xlim(0, 0.95)
 ax.set_ylim(0.7, 30)
 ax.set_xlabel("validated coverage f  (share of cases settled without escalation)", fontsize=7)
-ax.set_ylabel("review service-cost speedup", fontsize=7)
+ax.set_ylabel("review service-work speedup", fontsize=7)
 ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
 ax.set_yticks([1, 2, 5, 10, 20])
 ax.set_yticklabels(["1x", "2x", "5x", "10x", "20x"], fontsize=6.4)
@@ -774,51 +593,82 @@ plt.show()
 plt.close(fig)
 ```
 
-@fig-rejection-bound-ceiling reads the bound directly. The x-axis is validated coverage, the fraction of candidates a cheaper check settles correctly without escalating to the high-fidelity reference, and the y-axis is the resulting service-cost speedup. The dashed black line is the ceiling, $1/(1-f)$, and no scheme can beat it, because every case the cheap check cannot settle still pays the full high-fidelity cost. The colored curves show that a cheaper per-check cost buys little once coverage is low. At $f = 0.6$, even a near-free check caps the speedup at about 2.5x, because the remaining 40 percent of cases still route to the expensive reference. What raises the ceiling is not a cheaper check but a check that settles more cases correctly, so validated coverage, not unit cost, is what a review-speedup claim must report.
+@fig-rejection-bound-ceiling reads the zero-overhead bound directly. The
+x-axis is validated coverage, the fraction of target cases the cheaper check
+settles within declared error limits without escalation, and the y-axis is
+expected service-work speedup. The dashed black line is the free-check
+ceiling, $1/(1-f)$. Every case outside validated coverage still pays the
+high-fidelity cost. At $f = 0.6$, a free check cannot exceed 2.5x in this
+model. A reported review-speedup claim therefore needs coverage, class-specific
+error bounds, the sampling and confidence calculation behind them, and the
+cost ratio.
 
-The service-cost model bounds throughput, but the loop's iteration time is set by queueing delay, which degrades long before the queue diverges. Basic queueing theory says waiting time grows roughly as $\rho/(1-\rho)$ with reviewer utilization $\rho$, and grows further with variability in arrival and review times. A signoff team loaded to 90 percent of capacity therefore imposes about ten times the queue delay of one loaded to 50 percent, and bursty AI proposal streams are high-variability arrivals by construction. Sizing review capacity to average demand is exactly the mistake the formula forbids; the loop needs headroom, admission control on proposals, or both.
+Iteration time also includes queueing delay, which grows before a queue
+diverges. Under the simple M/M/1 waiting-time normalization
+$\rho/(1-\rho)$, 90 percent utilization produces nine times the queue wait at
+50 percent utilization. Variability can make it worse, and generated proposal
+streams can be bursty. The target study therefore needs review-capacity
+headroom or admission control in addition to a service-work estimate.
 
 ## Open Research Questions
 
-This chapter leaves several steps under human judgment. The themes below ask what would have to be measured before any of them could be checked, compared, or trusted to an automated loop.
+**When has a target changed enough to require a new study?** The seven
+conditions provide a comparison, but no calibrated threshold yet distinguishes
+a harmless version change from a change that invalidates the source evidence.
 
-**Theme 1: Reading the Conditions on a Decision.** The chapter asks an architect to classify the next decision by the conditions that apply to it, then to carry the strictest requirement of each. Nothing yet shows that two competent reviewers reading the same proposal reach the same classification, and nothing shows that stacking requirements covers what conditions do when they combine.
+**How can validated coverage be estimated without sending every case through
+the expensive reference?** A useful answer needs sampling, uncertainty, and
+class-specific error limits that remain trustworthy when the target workload
+drifts.
 
-- How consistently do independent reviewers classify the same proposed change by the conditions that govern it?
-- What failures arise only from the combination of two operating conditions rather than from either one alone?
+**How should correlated failures between generation and checking be
+measured?** Model identity and prompt lineage are useful disclosures, but the
+engineering quantity is the failure class that both paths miss together.
 
-**Theme 2: Measuring Validated Coverage.** The service-cost bound says a review speedup turns on the share of cases a cheaper check settles correctly, not on what that check costs to run. Almost nobody reports that share, partly because measuring it means running the expensive reference on the very cases the cheap check was supposed to spare.
-
-- How can validated coverage be measured in a running review pipeline, when confirming it requires the high-fidelity check on cases the cheap check already cleared?
-- What admission policy holds reviewer utilization below the point where queueing delay dominates iteration time, given that generated proposals arrive in bursts?
-
-**Theme 3: Checks That Stop Counting.** A check is worth only what its independence and its assumptions are still worth. Two models sharing a prompt lineage supply one reading of a specification in the shape of two, and a study's evidence supports its claim only under the workload, tool versions, and interfaces it assumed, all of which move without announcing themselves.
-
-- How can shared prompt lineage be detected between the model that produced an artifact and the model that checks it?
-- What signal would show that an earlier study's evidence has stopped supporting its claim once the workload, compiler, or interface it assumed has moved?
-
-**Theme 4: Recalibration from Deployed Silicon.** Telemetry from shipped parts can correct the surrogates that guided a design, and it can just as easily teach the next generation to expect only the traffic the last one happened to serve.
-
-- How can causal inference[^fn-causal-inference-c09] methods isolate hardware-specific failure signals from noisy, application-level fleet telemetry to recalibrate pre-silicon surrogate models?
-- How can a surrogate recalibrated on one generation's fleet data be kept from narrowing onto that generation's workload mix and going blind to traffic that has not appeared yet?
-
-[^fn-causal-inference-c09]: **Causal inference**: Statistical methods for estimating cause-and-effect from observational data when a controlled experiment is impossible, distinguishing a true hardware fault signal from a correlated software or workload change.
+**How should workload and software turnover reopen an implementation-facing
+claim?** The target record needs a change detector that names which tests must
+rerun without silently replacing the earlier workload, objective, or result.
 
 ## Conclusion
 
-::: {.callout-design-principle title="A proxy is only as valid as its last calibration"}
-Calibration expires, and nothing in the loop announces when it did. When an optimizer tunes against a fast local proxy, the test harness must periodically reject candidates that violate downstream physical constraints (like routing congestion) and use those failures to recalibrate the surrogate's uncertainty bounds.
+::: {.callout-design-principle title="A changed decision reopens its evidence"}
+Reuse the source record, but compare source and target conditions before
+reusing its conclusion. Every material change creates a test obligation or an
+explicit untested boundary.
 :::
 
+The completed local record from @sec-running-the-loop did not disappear when
+the target changed.
+Its candidate identities, raw simulator outputs, failed explanation, four
+judgments, and provenance limits all remain useful. What did not survive was
+the right to read a synthetic, simulator-local no-change result as an RTL and
+interface decision.
 
-What the next decision looks like, rather than what the artifact is called, sets how an AI-assisted study should run. Where feedback comes back quickly and a bad choice can be undone locally, a method can execute on its own under bounded tests, because the price of being wrong is one rerun. Where the result is mediated by a model instead of measured, that latitude narrows to matched baselines, a calibrated proxy, and fresh evidence before anything reaches implementation.
+Comparing the source and target exposed why. Result cost and delay increased,
+reversal became harder, more interfaces became coupled, the required
+observations expanded, the consequence reached a 3\ W system constraint, the
+workload needed representative coverage, and the software path would continue
+to change. Those differences created tests for the workload, mapping,
+interface, memory system, RTL, physical implementation, containment, and
+complete program comparison.
 
-These conditions accumulate rather than replace one another. Work that crosses an interface carries every earlier obligation and adds versioned interfaces, a system-level objective in place of a local one, and a guarded rollout. A decision that is hard to reverse carries all of those and pushes the AI out of execution entirely, into narrowing the search, critiquing candidates, and organizing evidence for someone else to judge under independent checks. The same accumulation runs down the stack, where an action space of logical edits at microarchitecture has become one of massively discrete, tightly coupled physical constraints by the time it reaches physical design. None of it transfers by analogy. Moving a working pattern to a new boundary reopens its evidence, its check, its permission, and the question of whether review capacity exists to settle what it produces.
+The bounded adaptation decision is therefore to keep 32 by 32 as a reference
+candidate and open a new implementation-readiness study. The local score,
+AI-contribution comparison, failed mechanism explanation, and pending
+recommendation do not transfer. This negative result is the chapter's durable
+lesson. Generalization is not similarity between artifacts. It is a defended
+decision about which parts of a closed record still support the new claim.
 
-Evidence arrives on three distinct clocks. Design-time evaluation estimates behavior within a represented study. In-field evidence tests the deployment context. Continuing software enablement changes realized performance on fixed hardware. None substitutes for the other, delayed evidence does not update knowledge by itself, and delayed field telemetry belongs in a slow review loop rather than a fast tuning one.
+Review capacity is part of that decision. Cheap checks improve expected
+service work only over the target region where their false-accept and
+false-reject behavior has been measured. Cases outside that validated coverage
+still pay for the higher-fidelity path, and bursty proposals still need
+capacity headroom.
 
-Three costs are easy to leave uncounted. Interface overhead and the executable software path are charged against a specialization win before it advances, because a block that needs a compiler nobody has written has not yet won anything. Reversibility and check independence are bought before the commitment point rather than after, since both grow expensive at exactly the moment they are needed. And a claimed review speedup is settled by validated coverage rather than unit check cost, because the cases a cheap check cannot settle still pay the full price, and the settle rate that fixes that ceiling is not something anyone measures today.
-
-Two limits are worth stating plainly. The four combinations worked here are the ones that recur in reported practice rather than a proven complete set, and nothing in this chapter shows that two architects reading the same proposal would classify its conditions the same way. Measuring that agreement is what would turn the classification from a discipline a reader can apply into a result a reader can cite.
-
-All of this measures the design. Whether the agent doing the searching has earned the latitude it is being given is a separate question, and @sec-evaluating-agentic-architect takes it up, scoring the search rather than the artifact it produced and converting that score into the one output that changes what happens next: how much autonomy this agent has earned.
+@sec-evaluating-agentic-architect receives a concrete evaluation packet rather
+than a stack taxonomy. It must vary the workload, compiler and runtime,
+mapping, interface, memory and energy model, and implementation checks; compare
+the complete AI-assisted system with a credible alternative; record human,
+machine, tool, and review cost; and preserve signoff and tapeout as untested
+boundaries unless the evaluation actually reaches them. Architecture
+commitment remains outside that assessment regardless of test depth.
