@@ -313,10 +313,10 @@ field. An infrastructure failure may be retryable, while a cancelled job may
 not be. Neither status says anything about the candidate until the later review
 qualifies the return.
 
-The execution interface in @lst-environment-interface preserves these
-distinctions.
+The execution interface uses two linked records. @lst-environment-interface
+keeps the request identifiable from validation through termination.
 
-```{.text #lst-environment-interface lst-cap="**One request remains identifiable through every attempt:** Scheduling state, terminal cause, artifacts, parsing, retry, reset, cost, and lineage remain separate rather than collapsing into one exit code."}
+```{.text #lst-environment-interface lst-cap="**One request remains identifiable through execution:** Request identity, scheduling state, termination, retry, reset, and resource use remain connected."}
 envelope = create_attempt(
     attempt_id, request_id, candidate_id, condition_id,
     tool_type, tool_stage, fidelity,
@@ -355,7 +355,12 @@ if termination cannot be confirmed:
 record final scheduler state
 record queue_time, run_time, cpu_time, gpu_time,
        peak_memory, storage_written, license_occupancy
+```
 
+After the process stops, @lst-environment-return records what happened to the
+process, expected artifacts, and parser as separate outcomes.
+
+```{.text #lst-environment-return lst-cap="**The return preserves distinct failure sources:** Process outcome, artifact status, parsing, retry eligibility, cost, and lineage do not collapse into one exit code."}
 if terminal state is CANCELLED or TIMED_OUT:
     terminal_cause = CANCELLED or TIMED_OUT
 elif setup check fails before or during execution:
@@ -386,6 +391,12 @@ ordering prevents a late return from being attached to whichever candidate is
 current when the job finishes. Polling reports queue and run state without
 creating duplicate attempts. Cancellation and timeout produce terminal records
 rather than disappearing from the study.
+
+The return then separates process completion from artifact and parse status. A
+completed process with a missing report differs from a failed process, and a
+retained report that the parser could not classify differs from both. Later
+review can therefore identify which work failed without treating an
+infrastructure outcome as an architecture result.
 
 The resource record is a typed vector rather than one opaque cost field
 (@tbl-attempt-resource-record). Fields that the environment cannot observe
