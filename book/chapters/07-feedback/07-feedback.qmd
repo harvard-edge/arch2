@@ -4,7 +4,7 @@ format:
     output-file: index.html
 ---
 
-# Feedback, Verification, and Trust {#sec-feedback-verification-trust}
+# Feedback, Verification, and Learning {#sec-feedback-verification-trust}
 
 ::: {.epigraph}
 > *"Program testing can be used to show the presence of bugs, but never to show their absence!"*
@@ -13,475 +13,585 @@ format:
 :::
 
 ::: {.column-margin}
-**Author's Note:** Edsger W. Dijkstra, the Dutch computer scientist who championed structured programming and program correctness, issued this warning about what testing can and cannot establish. It marks the distinction this chapter needs. Passing tests supports only the conditions that were tested. A failed test can still decisively reject a bounded claim.
+**Author's note.** Dijkstra's warning separates a check from the stronger claim
+someone might attach to it. Passing tests supports only the conditions and
+behaviors the tests exercised. A failed test can still decisively contradict a
+bounded claim.
 :::
 
 ::: {.callout-crux}
-When does a number a tool hands back count as evidence for a bounded architecture claim, and what makes the check behind it trustworthy enough to reject what an AI proposed?
+When does a return from an architecture tool become a usable measurement, what
+comparison can it support, and what should the result change?
 :::
 
-The previous chapters gave the loop a represented state, methods that propose changes, and an environment that executes them. When a method acts, the environment returns a raw result. This chapter is about what has to happen to that result before it can reject a candidate, justify a change, or authorize a tapeout, which is the work the Evaluate stage does. A reader arriving from reinforcement learning would call the returned number a reward signal. The chapter's central argument is that the analogy must be resisted, because feedback treated as a reward to maximize invites exactly the proxy gaming the loop exists to prevent.
+The tool-connected environment handed forward an intentionally incomplete
+record for the Lighthouse cache study. It contains reported SRAM area and
+access-time values for 2, 3, and 4\ MB candidates. It contains a clean 2\ MB
+cycle-level baseline, one stale-state attempt for 3\ MB, and two clean 3\ MB
+attempts. Across the clean 3\ MB returns, the earlier walkthrough reports 12
+percent fewer capacity misses, 2\ mW more cache leakage, and modeled subsystem
+power rising from 2.90\ W to 2.94\ W. The four allowed cycle-level attempts are
+spent.
 
-An agent and an architect ask two different things of the same tool return. The agent needs a fast, continuous, and often probabilistic *reward* to guide its search gradients. The architect needs a slow, sparse, physically grounded *verification oracle*[^fn-independent-oracles-c07] to establish ground truth. A decision requires evidence, not merely a reward signal. The bottleneck is proxy mismatch, where fast surrogate rewards diverge from physical reality, and AI sharpens it by producing plausible but invalid candidates faster than the slow checks can confirm any of them. Whether a given check confirms anything turns on three reportable properties: which failures its coverage lets it observe, which direction it is engineered to err, and whether it is independent of whatever produced the candidate. Two checks that share a blind spot agree without supplying any of the three.
+The record also says what is missing. It does not retain exact translated
+inputs, tool and model versions, parser status, raw artifact identities, frame
+identifiers, reset state, or attempt-level attribution for the aggregate 3\ MB
+values. The values came from a constructed teaching example rather than a live
+project run. A complete-looking table could hide those limitations, but it
+could not repair them.
 
-[^fn-independent-oracles-c07]: **Test oracle**: In software testing, the trusted mechanism that decides whether an output is correct. In hardware flows the role falls to physics-grounded EDA tools, for example proving safety properties mathematically or confirming the synthesized netlist matches the RTL.
-
-Consider a synthesis report indicating that an AI-proposed 3\ W RISC-V XR subsystem misses the declared clock target or exceeds its allocated memory bandwidth on the shared interconnect. The synthesis run returns feedback, while the versioned report recording negative slack[^fn-negative-slack-c07] serves as a tool observation. This observation contradicts the bounded claim that the implementation meets the clock target, yet it says nothing about functional correctness or security. A reviewer records the timing claim as unsupported. From this review result, the team separately determines whether the failed candidate belongs in the project trajectory or a timing-surrogate calibration set, rather than automatically fine-tuning a model on a binary pass/fail signal. Concurrently, the assigned architect decides whether to stop, revise the RISC-V XR subsystem, change the target, spend a more expensive check, or seek a bounded waiver.
-
-[^fn-negative-slack-c07]: **Negative slack**: The amount by which a timing path misses its required arrival time. Zero or positive slack means the path closes at the stated clock, while negative slack means the design does not run at that frequency and something has to change.
+This is the right place to begin. A returned number is not automatically a
+measurement. A measurement is not automatically a valid comparison. A valid
+comparison supports only the property, candidate, conditions, and check scope
+that produced it. AI makes these distinctions more important because it can
+produce and score candidates faster, search directly against imperfect
+proxies, and generate explanations that sound more certain than the
+measurements allow. It does not change what an architecture result must
+contain.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Trace a tool return through observation, evidence, and review, bind a favorable result to one candidate, property, and validity region, and state which of the three evidence levels it reached before it authorizes any change.
-- Judge a check by which failures its coverage lets it observe, which direction it is engineered to err, and whether it is independent of whatever produced the candidate, and record agreement among correlated checks as corroboration rather than validation.
-- Anticipate how an optimizer exploits the proxy it is scored on, and set the calibration boundary outside which its ranking stops meaning anything.
-- Scope a proof to a boundary a tool can close, record the remainder as an explicit nonclaim, and cap a public claim at what an outside reviewer can inspect.
-- Size the next check to the reversibility of the transition it authorizes, and bound an accepted failure as a waiver carrying a compensating check, an expiration, and a named reopening trigger.
+- Distinguish execution status from measurement status and identify the fields
+  a returned value needs before it can enter a comparison.
+- Build a matched comparison with a named candidate, comparator, quantity,
+  unit, conditions, uncertainty, and decision margin.
+- State what a formal check, simulation, implementation tool, or physical
+  measurement can and cannot establish.
+- Diagnose proxy mismatch, confounding, variability, and selection bias before
+  treating a reported difference as an architecture result.
+- Separate an observed outcome from its proposed mechanism, record nonclaims,
+  and route a needed revision to the part of the study that owns it.
 
 :::
 
-## The Epistemic Trust Boundary {#sec-epistemic-trust-boundary}
+## From Tool Return to Measurement {#sec-from-feedback-to-decision}
 
-At the core of AI-assisted architecture is a strict epistemic boundary between *probabilistic generation* and *deterministic validation*. Large Language Models and Reinforcement Learning agents operate in continuous, probabilistic latent spaces;[^fn-latent-space-c07] they optimize likelihoods and expected returns rather than absolute physical truths. A language model does not compute that a pipeline stage is correct in the Boolean sense. It predicts that the token sequence is probable.
+Execution and interpretation answer different questions. The environment
+records whether a request was valid, what ran, what failed, which artifacts
+returned, and what state and cost accompanied the attempt. Interpretation asks
+whether a returned field measures the requested quantity and whether it can be
+compared with another field.
 
-Bridging this gap is fundamentally difficult due to the non-differentiable landscape of hardware design. The design space is a jagged, discontinuous landscape where a single-bit flip can break compilation, creating a step function in the reward landscape. Because standard machine learning relies on smooth gradients, and EDA tools (like SAT solvers and logic synthesis) block backpropagation, learned methods cannot flow gradients directly from physical constraints. They must instead work through derivative-free search or, more often, through a differentiable surrogate fitted to the tool's own output. Surrogate-based methods such as Bayesian optimization are the standard answer under expensive feedback precisely because they are sample-efficient, and reinforcement learning and evolutionary strategies are the least sample-efficient members of that menu rather than the whole of it.
+A failed setup is therefore not a poor measurement of a candidate. It is no
+candidate measurement at all. A clean process exit may still return a partial
+report, omit a required field, use the wrong unit, or parse an unfamiliar
+warning as success. A complete return can contain a genuine limit violation.
+Execution status must survive intact so interpretation can distinguish these
+cases.
 
-[^fn-latent-space-c07]: **Latent space**: The continuous internal vector space in which a neural network represents its inputs and predictions. Distances there encode statistical similarity, not logical truth, so proximity to a correct design is not correctness.
+The useful sequence is shown in @fig-evidence-flow. Each completed step adds
+something the preceding step did not establish. An incomplete measurement can
+return directly to execution, and an invalid comparison can return directly to
+study formulation.
 
-### Formalizing Intent vs. Implementation
+![**A tool return gains meaning in stages.** The execution record first
+supplies a return with status and lineage. Measurement qualification binds a
+quantity to a candidate and conditions. A matched comparison adds a
+comparator, difference, and uncertainty. A scoped interpretation states what
+the result supports and does not support. Qualification failures return to the
+environment, comparison failures return to study formulation, and a completed
+interpretation records learning and any needed revision.](images/F8-evidence-flow){#fig-evidence-flow
+width="88%" fig-alt="A five-step flow from tool return through measurement
+qualification and matched comparison to scoped interpretation and
+a recorded next step. Side paths send incomplete measurements to the
+environment and invalid comparisons to study formulation."}
 
-Consequently, architects must structurally separate the AI's *intent* (the rationale or ungrounded objective function) from its *implementation* (the emitted RTL). Epistemic trust requires passing the generated artifact across the boundary into deterministic, physics-bound solvers. We enforce this through mathematical property checking and equivalence checking.
+### Qualifying a Returned Value
 
-**Mathematical Property Checking:** To check an AI's implementation, we translate high-level constraints into cycle-accurate assertions, then use mathematical solvers to prove them. *Bounded* Model Checking (BMC) exhaustively checks every behavior up to a depth of *k* cycles, and that exhaustiveness is what lets a passing bound carry authority within its horizon rather than reading as smart sampling. To guarantee the absence of deadlocks or safety violations beyond any fixed bound, *Unbounded* Model Checking (UMC, such as IC3 or k-induction)[^fn-ic3-c07] is required. These proofs do not remove trust; they relocate it. A proof that the RTL satisfies its properties is exhaustive on one side and silent on the other, because no tool can check the properties against the architect's intent. That is the classical split between verification, building the thing right, and validation, building the right thing. Translating abstract intent into cycle-accurate SystemVerilog Assertions (SVA) is itself highly error-prone [@FangEtAl2025AssertLLM], and when an AI writes both the RTL and the assertions, both sides of the proof move inside the same untrusted producer. The assertions can then faithfully describe a broken implementation, so the proof passes while the design is wrong, and human review of the specification becomes the last independent check left.
+A measurement record needs enough information to answer six questions
+(@tbl-measurement-record).
 
-[^fn-ic3-c07]: **IC3 and k-induction**: Algorithms that establish a property for every reachable state by building an inductive invariant rather than searching behaviors out to a fixed depth. The distinction matters because an unbounded result forecloses the failure entirely, while a bounded one carries authority only as far as the horizon it searched.
+| **Field** | **Question the record must answer** |
+| --- | --- |
+| **Candidate identity** | Which design revision, configuration, software state, and workload produced the value? |
+| **Quantity and unit** | What property was measured or computed, how was it aggregated, and in what unit? |
+| **Conditions** | Which tool, model, configuration, corner, seed where relevant, and operating conditions apply? |
+| **Extraction status** | Did the expected artifact exist, parse under the declared schema, and retain unfamiliar warnings? |
+| **Variation and error** | What repetitions, sampling method, numerical tolerance, model error, or known bound limits the value? |
+| **Source record** | Which returned artifact and execution attempt support the field, and can the value be recovered from them? |
 
-**Equivalence Checking:** To mathematically prove that two structurally different circuits compute the same Boolean function across transformations (completely bypassing dynamic stimuli), EDA tools reduce them to compact logic representations such as And-Inverter Graphs (AIGs) or Binary Decision Diagrams (BDDs). Reduced ordered BDDs are canonical for a fixed variable ordering, so equivalent functions built under that order collapse to the same graph, though the order itself decides whether the graph stays tractable and some functions, integer multipliers most famously, blow up exponentially under every order. AIGs are only partially canonicalized by structural hashing[^fn-structural-hashing-c07] and hand the residual gap to a solver, which is why the AIG-and-solver pairing carries most of the equivalence-checking load in practice. Standard Logic Equivalence Checking (LEC) easily matches state elements (flops) from RTL to a synthesized netlist. However, if an AI proposes a structural microarchitectural change (such as retiming logic or altering pipeline stages), standard LEC breaks immediately. Proving equivalence across such AI-driven mutants requires Sequential Equivalence Checking (SEC), which remains a massive scalability bottleneck in modern EDA.
+: **A measurement is a returned value with identity, meaning, conditions, and
+limits.** These fields test whether the execution record is sufficient for the
+comparison being attempted.
+{#tbl-measurement-record tbl-colwidths="[24,76]"}
 
-[^fn-structural-hashing-c07]: **Structural hashing**: A cheap normalization pass that merges And-Inverter Graph nodes computing the same function from the same inputs. It collapses duplicated structure but not every logically equivalent form, so two equivalent graphs can still look different and the remaining proof falls to a solver.
+The environment chapter owns returned artifacts, extraction status, recorded
+conditions, and lineage. This chapter does not reconstruct missing versions or
+rerun a parser. It owns whether the quantity, aggregation, error, comparator,
+and check scope make the returned field usable as a measurement. Missing
+execution fields return to the environment. Inadequate observations or an
+invalid comparison return to study formulation.
 
-### Dynamic Simulation and Coverage
+The Lighthouse record demonstrates four distinct cases
+(@tbl-lighthouse-return-status).
 
-While formal methods prove specific assertions, full-system validation requires dynamic simulation. Because the state space of sequential logic ($2^N$ for $N$ flip-flops) is astronomically vast, exhaustive dynamic simulation is a mathematical impossibility. This forces the necessity of statistical sampling through constrained-random stimuli.
-
-To measure the completeness of this statistical sampling, architects rely on *coverage models* (statement, branch, toggle, condition, FSM, and functional coverage). A coverage model quantifies what parts of the vast state space the testbench actually reached.
-
-A coverage model is authored the same way the design is, by someone deciding in advance which questions matter. Reaching 100% functional coverage means the testbench asked every question the verification plan wrote down, not that the design is correct. That makes the coverage percentage an optimization target like any other proxy in this chapter. A generator told to close coverage will close bins, and the bins it closes most cheaply are exactly the ones too weak to catch its own bugs.
-
-Simulation semantics add a failure mode of their own. AI-generated RTL is highly susceptible to X-propagation bugs (where uninitialized states simulate favorably as deterministic values but synthesize to unpredictable hardware), making explicit X-optimism and X-pessimism[^fn-x-optimism-c07] EDA checks mandatory.
-
-[^fn-x-optimism-c07]: **X-optimism and X-pessimism**: The two opposite ways a simulator can mishandle an unknown value (X). An optimistic simulator resolves the unknown into a convenient defined value and can hide a bug that silicon will expose, while a pessimistic one propagates X so aggressively that it reports failures the hardware would never show.
-
-::: {.callout-war-story title="The Pentium FDIV bug and the limits of statistical sampling"}
-**The claim.** In 1994, Intel's new Pentium processor passed extensive statistical testing, leading the design team to believe its floating-point unit was functionally correct for all practical workloads.
-
-**The gap.** Five entries were omitted from the quotient-digit lookup table, held in a programmable logic array (PLA), that the processor's radix-4 SRT division algorithm consults [@Edelman1997PentiumDivision]. The processor therefore returned incorrect results for specific floating-point divisions. Because the flaw surfaced only on rare operand pairs, the directed and random tests Intel ran missed it. It was found post-silicon by a mathematician, Thomas Nicely, who noticed inconsistencies in twin prime calculations.
-
-**The lesson.** Statistical sampling and dynamic simulation cannot guarantee the absence of bugs in vast state spaces. Intel reported a \$475 million pretax charge to cover replacement and associated costs [@Intel1995PentiumCharge]. Arithmetic datapath validation moved toward mathematical proof in the years that followed, and by the Core i7 formal verification had become the primary validation vehicle for the execution cluster, with coverage-driven testing dropped there entirely [@KaivolaEtAl2009Corei7Formal]. Formal methods catch error classes that sampling alone cannot.
-:::
-
-## Observation, Evidence, and Decision {#sec-from-feedback-to-decision}
-
-Even with deterministic solvers in place, architecture needs a formalized evidence path where the human architect orchestrates the burden of proof. Raw feedback from any tool just means a run finished. An observation records the specific outputs. Evidence links that observation to a specific design claim. A review judges whether the claim holds.
-
-These deliberate steps prevent raw tool outputs from directly changing the design or automatically updating an AI's training data without human oversight. Treating the AI as an untrusted generator means the architect must demand physical proof, such as a timing report or a formal equivalence check, that independently verifies every proposed architecture change.
-
-### Transitioning Feedback to Evidence
-
-First, a tool return does not automatically become a valid architecture observation, as a broken environment, malformed request, timeout, flexlm license server hang, OOM crash during elaboration, or unsupported action may report only the state of the tool path.
-Second, a valid observation does not automatically become evidence for the claim unless it is strictly relevant to the property, comparison, state, and scope.
-Third, evidence and a review result do not automatically become either training data or an architecture decision without explicit human authorization.
-
-Feedback becomes evidence only by passing through a tool observation, an evidence relation, and a review before it can authorize a knowledge update or an architecture action (@fig-evidence-flow, @tbl-six-part-branch). These steps separate the evaluation of a claim from the two independent choices that follow, namely the knowledge-update branch and the architecture-action branch.
-
-### Credit Assignment Across Structure and Time
-
-While the evidence flow successfully protects the human architect, it highlights the fundamental bottleneck of AI in hardware, which is assigning credit across both structure and time. If a three-day place-and-route and static-timing signoff run fails to meet timing, the evidence clearly rejects the candidate. But for an RL agent, which of the 10,000 architectural tokens or parameters it generated is to blame? A binary "timing failed" report provides virtually zero actionable learning signal. Hardware generators require localized, structurally-aware feedback (such as node-level slack in a graph) to update their policies effectively, not just boolean failure flags at the end of a multi-day horizon.
-
-### The Six-Part Branching Flow
-
-![**Feedback earns authority only by traversing the chain:** it transitions into a tool observation, an evidence relation, and a review result before it can authorize a knowledge update or an architecture action. Invalid inferences, such as an automated bypass straight to action, are explicitly highlighted.](images/F8-evidence-flow){#fig-evidence-flow width="100%" fig-alt="Flowchart diagram mapping the six-part path from initial feedback to an authorized architecture action, highlighting invalid inferences."}
-
-| **Part** | **Visible record** | **Question answered** | **Invalid inference to avoid** |
+| **Returned item** | **What the constructed record contains** | **Interpretation status** | **Required repair** |
 | --- | --- | --- | --- |
-| **Feedback** | Returned signal or response | What came back? | Something came back, so the candidate was measured. |
-| **Tool observation** | Typed result, status, versions, inputs, outputs, uncertainty | What did this path observe? | The observation addresses every property of the candidate. |
-| **Evidence relation** | Claim, comparator, scope, supporting and contrary observations | What does the observation bear on? | A favorable number supports the design in general. |
-| **Review result** | Supported, unsupported, or unresolved, with rationale | What is justified at this scope? | The reviewer has authorized implementation. |
-| **Knowledge-update branch** | Named update surface and acceptance criteria | What project or model knowledge should change? | Every result should become training data or parameter change. |
-| **Architecture-action branch** | Stop, continue, reject, revise, escalate, waive, implement | What action is authorized? | The tool or evidence grants its own permission, or the knowledge update must occur first. |
+| `SRAM-A` values for 2, 3, and 4\ MB | Candidate and `PVT-A` names, reported area and access time, and one reported call per capacity. | The values support the teaching example. They are not independently qualified project measurements because exact inputs, versions, raw reports, and parser status are absent. | Recover the source artifacts or rerun the declared requests with a complete execution record. |
+| Clean 2 and 3\ MB cycle returns | A named workload and software image, one clean baseline, two clean 3\ MB attempts, and aggregate cache, power, and frame results. | The grouped illustration can show comparison logic. Attempt-level attribution, exact conditions, frame identities, and parser status remain unverified. | Preserve per-attempt outputs and matched frame identities before reusing the comparison. |
+| Stale-state 3\ MB attempt | A setup-state failure and no candidate return. | Not a measurement of the 3\ MB candidate. | Repair or reset the environment. Do not learn a design constraint from this failure. |
+| Reported absence of a 4\ MB `SIM-A` call | Printed area and access values above the dispatch thresholds, but no retained parser or dispatch event. | A reported scheduling outcome. It is not by itself a qualified architecture rejection. | Verify the parsed fields and dispatch record before relying on the short-circuit in a live study. |
 
-: **A reviewed claim feeds two branches that diverge independently:** a claim is reviewed against evidence, and from that review result, knowledge updates and architecture actions branch separately. {#tbl-six-part-branch tbl-colwidths="[18,25,25,32]"}
+: **Missing information remains part of the result.** The same number may be
+useful inside a declared teaching illustration and still be inadequate as a
+replayable project measurement.
+{#tbl-lighthouse-return-status tbl-colwidths="[17,31,27,25]"}
 
-The design-loop card introduced in @sec-architecture-20-ontology acts as the binding artifact across these stages. It points to the observation, evidence, review, update, and decision records rather than trying to contain every detail itself.
+This distinction prevents two common errors. An infrastructure failure cannot
+become negative training data about a design. A favorable value with unknown
+conditions cannot become evidence simply because its unit looks familiar.
 
-Evidence comes at three levels, and the rest of the book uses them.
+## Constructing a Valid Comparison {#sec-evidence-specific-to-claim-and-scope}
 
-*Uncalibrated proxy evidence* comes from a fast surrogate nobody has checked against a stronger tool. It can order candidates. It cannot settle anything. *Calibrated proxy evidence* adds that check, a measured rank correlation in the region the search actually visits, which makes the ordering worth acting on. *Signoff-grade evidence* comes from a tool that observes the physical property itself, under stated conditions. Only the third closes a claim.
+Architecture decisions usually depend on differences rather than isolated
+values. A cache study asks how a candidate differs from a baseline under the
+same workload and software state. A method study asks how one proposal process
+differs from a credible alternative under the same search and evaluation
+budget. The comparator is part of the claim, not a footnote added after the
+result.
 
-Moving a result from one level to the next is what this book calls *escalation*. It is a decision, not a fallback. Someone spends a scarcer check to raise what a result can license, having judged that the answer could change what happens next. A result that escalates and comes back the same is not wasted, because the claim it supports is now stronger. A result that escalates and comes back different has just paid for itself.
+@fig-claim-frame summarizes the minimum frame. A candidate and comparator feed
+one measured difference. Workload and design state, tool conditions,
+uncertainty, and check scope bound where that difference applies.
 
-Two more rules follow. Repeating a measurement does not raise its level; only checking it against something that sees more does. And the level a study reached limits what it may commit to, which is the fidelity-versus-authority split of @sec-architecture-20-ontology in the language of evidence. @sec-evaluating-agentic-architect uses these levels to decide how much autonomy an agent has earned, and @sec-what-architect-owns to decide which rights a person keeps anyway.
+![**A comparison binds two designs to one measured difference and its
+limits.** Candidate and comparator are evaluated for the same quantity and
+unit. The result remains conditional on workload and state, tool conditions,
+uncertainty, and the property the check can observe.](images/F7-claim-frame){#fig-claim-frame
+width="100%" fig-alt="Three-column comparison frame. Candidate
+and comparator feed a measured quantity, difference, and uncertainty, which
+are bounded by workload and design state, tool conditions, and check scope."}
 
-## Binding Evidence to Claims {#sec-evidence-specific-to-claim-and-scope}
+For matched cases \(c_j\), the basic paired difference is
 
-While the design-loop card tracks the overall flow, the evidence record itself has no useful strength independent of a specific claim. An observation bears on a property for a candidate relative to a comparator under a stated workload, design state, tool path, metric, assumptions, validity region, uncertainty, and proposed action. A cycle estimate can support a bounded performance comparison while remaining irrelevant to power, timing, isolation, software usability, or system intent (@fig-claim-frame).
+$$
+d_j = y(\text{candidate}, c_j) - y(\text{comparator}, c_j).
+$$
 
-![**A claim binds one candidate-and-comparator to a single property and metric, valid only inside a stated scope:** three columns organize the frame, artifact (candidate and comparator), measurement (property and metric), and scope and validity (workload, tool path, and validity region).](images/F7-claim-frame){#fig-claim-frame width="100%" fig-alt="Three-column diagram of the compact claim frame: an artifact column pairing candidate and comparator, a measurement column pairing property and metric, and a scope-and-validity column, with arrows fanning the metric out to the workload, tool path, and validity region conditions."}
+The sign convention must be stated. Positive may mean improvement for
+throughput and regression for latency. A percentage must name its
+denominator. An aggregate must state whether it is a mean, percentile, maximum,
+geometric mean, or another statistic. Without those choices, two correct
+numbers can still form an incoherent comparison.
 
-The validity region is the load-bearing term in that list and the one most often left implicit. It is the range of conditions over which the measurement was actually taken and is therefore believed, such as the workload mix, the operating point, the corner set, and the design sizes swept. Results inside it are evidence for the claim. Results outside it are a different measurement wearing the same units, which is why a proxy win taken beyond the region is not a weaker result but an unrelated one.
+### Match What Can Change the Result
 
-A compact claim frame reads: candidate and comparator; property and metric; workload and design state; tool path, system software assumptions, and HW/SW contracts; validity region and uncertainty; proposed action and nonclaims.
+The candidate and comparator should differ only along the factors the study
+intends to compare. Workload, software, model version, tool flags, operating
+point, warmup, sampling window, and resource budget can all create a
+difference that has nothing to do with the architecture change. A matched
+comparison records them rather than relying on similar filenames or a shared
+directory.
 
-This traceable link among claim, assumption, evidence, and challenge mirrors the Goal Structuring Notation (GSN) used in safety-critical engineering [@Kelly2004GSN], without implying that every architecture experiment is safety critical. In the quantitative architecture tradition, measurement and abstraction serve bounded comparisons rather than universal conclusions.
+Systematic model error sometimes cancels in a relative comparison. It does so
+only when the model treats the candidate and comparator similarly in the
+region being studied. A frozen simulator can support an ordering even when its
+absolute prediction differs from silicon, but that bargain fails when the
+architecture change crosses an unmodeled boundary or affects one candidate
+differently. Cancellation is a hypothesis to check, not a property of using
+the same tool.
 
-For the 3\ W RISC-V XR subsystem, a structural check can reject a malformed custom instruction encoding. A regression suite can support functional behavior for covered cases. Workload experiments can support a bounded performance comparison for its spatial accelerator matrix and memory hierarchy. A synthesis report can bound timing and area as pre-route estimates under its constraints, and in a physically-aware flow it can estimate routing congestion across the interconnect as well. Because those estimates run on modeled interconnect rather than routed wires, they are optimistic, so their failures reject candidates while their passes close nothing. None of those checks silently establishes the other properties.
+### Put the Difference Beside Its Uncertainty
 
-Throughout this book, a *rejection check* is a declared pass/fail check with named authority to block a transition. A check that only informs is advisory, and a scheduled review is neither. Architecture checks split into property classes, each tool addressing a separate class and each failure blocking a different transition, and every row of @tbl-verification-authorities is a rejection check in exactly this sense.
+Repeated measurements estimate run-to-run variability when the flow or
+workload is variable. Paired resampling can preserve the relationship between
+matched baseline and candidate frames. Numerical tolerances, finite sampling,
+heuristic variation, and model error may require different treatments. One
+generic error bar cannot represent all of them.
 
-| **Check scope** | **Representative checks or signals** | **What a failure can block** |
+The Lighthouse walkthrough uses a different stated sign convention for tail
+latency. It reports improvement as baseline latency minus candidate latency,
+so a positive value means the candidate is faster. Under that convention, the
+reported reduction is 0.3\ ms and its illustrative 95% interval runs from
+-0.1\ ms to 0.7\ ms, using paired block resampling over matched frame
+sequences. Because the interval includes no improvement, the comparison does
+not resolve the declared tail-latency question. The point estimate is
+favorable, but its uncertainty spans both a small regression and a larger
+improvement. The interval cannot be recomputed from the surviving constructed
+record because the matched frame identities are missing. It remains an
+illustrative reported comparison rather than a replayed calculation.
+
+A decision margin adds a second test. If the study requires an improvement of
+at least \(m\), the comparison must resolve the result relative to \(m\), not
+merely relative to zero. A difference inside known measurement resolution or
+uncertainty remains unresolved. Calling it a tie may be appropriate under a
+predeclared rule, but calling it an improvement is not.
+
+### Protect Against Confounding and Selection
+
+A matched comparison can still support the wrong explanation. Confounding
+exists when another changed factor could account for the result. Stable
+versions, ablations, matched contrasts, and sensitivity studies help separate
+the intended change from plausible alternatives.
+
+Selection introduces another problem. If a search evaluates many noisy
+candidates and reports only the best, the selected value retains some of the
+luck that made it win. Repeating the same search data does not remove that
+bias. The chosen candidate should be measured again on fresh seeds, workloads,
+or cases that did not select it. The fresh evaluation asks whether the margin
+survives after the search has stopped choosing the winner.
+
+## What a Check Can and Cannot Establish {#sec-independent-checks-and-correlated-errors}
+
+A valid measurement may still address the wrong property. Syntax checks,
+functional simulation, model checking, performance simulation, synthesis,
+timing analysis, power analysis, and post-silicon characterization answer
+different questions. Their strength is not a single ordering from weak to
+strong. A parser can conclusively reject an illegal request while an expensive
+timing run says nothing about functional correctness. @tbl-check-scope gives
+representative boundaries rather than a universal ordering.
+
+| **Check class** | **What it can support within stated conditions** | **What it does not establish by itself** |
 | --- | --- | --- |
-| **Syntax and interface** | Parsers, type checks, API checks, ISA or ABI conformance, schema validation | Artifacts that cannot legally enter the tool flow. |
-| **Functional** | Unit tests, reference outputs, assertions, formal equivalence, regressions | Candidates that compute the wrong behavior before performance matters. |
-| **Model and workload** | Baseline replay, sensitivity studies, calibration, coverage, drift tests | Proxy wins outside the represented workload or calibrated support. |
-| **Implementation** | CDC/RDC (Clock/Reset Domain Crossing) analysis, structural linting, Synthesis constraints, timing closure, power envelopes, area budgets, Gate-Level Simulation (GLS), Design Rule Checks (DRC) | Architecture candidates that violate physical limits or pre-silicon validation. |
-| **Security** | Information-flow tracking, security assertions and property checks, side-channel analysis, formal path sensitization | Candidates that leak state, bypass isolation, or weaken mitigations before silicon commits them. |
-| **Power integrity and reliability** | Static IR drop, dynamic di/dt droop, electromigration limits, aging margins | Layouts whose logic is correct but whose power delivery or lifetime margins fail signoff. |
-| **Manufacturing test** | Design-for-test (DFT) rule linting, scan-chain integrity, automatic test pattern generation (ATPG) fault-coverage targets | Designs that simulate correctly but cannot be tested, screened, or yielded in production. |
-| **Operational** | SLOs, canary rollouts, rollback, telemetry, reliability, security, incident review | Claims that do not survive deployment conditions or policy boundaries. |
-| **Expert review** | Design review, waived-warning review, evidence-adequacy, residual-risk review | Results whose evidence is too weak for the proposed transition. |
+| **Syntax and interface** | Legal encoding, type, schema, ISA, ABI, or protocol form. | Functional behavior, performance, physical feasibility, or system intent. |
+| **Functional simulation and testing** | Behavior for exercised stimuli and observed properties. | Unexercised behaviors, physical timing, power, or unspecified security properties. |
+| **Formal property and equivalence checks** | A stated property over a modeled transition system, or a stated relation between two artifacts. | Whether the property captures intent, whether assumptions match deployment, or unrelated properties. |
+| **Architecture performance and power models** | Quantities represented by the model for the declared workload and configuration. | Effects the abstraction omits or behavior outside its validated region. |
+| **Implementation and physical analysis** | Timing, area, power, integrity, or rule results for the modeled design, constraints, modes, and corners. | Missing constraints, unmodeled conditions, functional intent, or manufactured variation outside the analysis. |
+| **Post-silicon and operational measurement** | Behavior of sampled parts and systems under measured conditions. | Every manufactured part, workload, environment, lifetime condition, or unmeasured property. |
 
-: **No single check covers every property, so each guards a different transition:** checks are grouped by the property class they cover and the transition their failure can block. {#tbl-verification-authorities tbl-colwidths="[20,38,42]"}
+: **A check is decisive only for the property it observes.** More cost or later
+placement in a flow does not widen that property.
+{#tbl-check-scope tbl-colwidths="[22,39,39]"}
 
-Evidence types cannot be ranked on one universal fidelity scale. Cheap legality checks can decisively reject a candidate, while expensive out-of-scope measurements might be useless for the specific transition. An evidence record is only reusable if it captures six dimensions, from producer and status through shared assumptions (@tbl-evidence-dimensions).
+### Formal Checks and Simulation Make Different Claims
 
-Seen together, these observations are noisy, partial readings of a quantity no tool reports directly, the design's true performance, power, and area in deployment. Inferring that hidden quantity from imperfect measurements is the problem control theory calls state estimation.[^fn-state-estimation-c07] The analogy is a discipline rather than a formula. It requires the architect to treat each proxy, simulator, and synthesis result as a measurement with a characteristic bias and variance rather than as ground truth, weighting a reading by how much it actually constrains the hidden quantity for this decision, and stating the residual uncertainty that no available measurement removes.
+Bounded model checking explores modeled traces through a finite bound \(k\)
+under stated assumptions. A beyond-\(k\) result needs an unbounded proof method
+such as property-directed reachability, induction, abstraction, composition,
+or theorem proving. An unbounded result still proves only the stated property
+for the modeled transition system and assumptions.
 
-[^fn-state-estimation-c07]: **State estimation**: The control-theory problem of reconstructing a system's hidden internal state from sensors that each observe part of it with error. The estimator weights each reading by how much it constrains the unknown quantity.
+Equivalence checking asks whether two artifacts preserve a declared relation.
+Combinational equivalence compares functions without architectural state.
+Sequential equivalence handles state correspondence across time.
+Synthesis-oriented flows can account for expected transformations, while
+retiming, latency changes, or new state correspondence can make the problem
+substantially harder. None of these checks determines whether the original
+specification expressed the right behavior. When one model writes both the RTL
+and its assertions, the shared omission can sit on both sides of a clean proof
+[@FangEtAl2025AssertLLM].
 
-| **Dimension** | **Question the record must answer** |
+Dynamic simulation samples behavior. Directed tests, constrained-random
+stimuli, coverage-guided generation, emulation, formal methods, and
+post-silicon testing complement one another because exhaustive simulation is
+generally computationally infeasible. Code coverage reports exercised
+structures. Functional coverage reports events or bins the verification plan
+defined. Neither reports the fraction of every reachable behavior that has
+been checked.
+
+The Pentium FDIV case makes the limit concrete. Five missing table entries
+escaped pre-silicon testing and produced incorrect results for rare operand
+pairs [@Edelman1997PentiumDivision]. Intel later reported a \$475 million pretax
+charge for replacement and associated costs [@Intel1995PentiumCharge]. The
+case does not show that simulation is useless. It shows that sampled tests
+cannot support an unbounded absence claim, and that another check is needed
+when a property demands one. Formal verification later became the primary
+validation method for the execution cluster in Intel's Core i7 flow
+[@KaivolaEtAl2009Corei7Formal].
+
+### Describe the Check Itself
+
+Three questions make a check reviewable.
+
+**Coverage.** Which failures can the check observe, and which relevant failures
+leave no signal?
+
+**Possible error direction.** Under the declared model and conditions, is the
+result known to be conservative, optimistic, or neither? This must be
+established for the particular flow. A pre-route estimate is not always
+optimistic, and a deterministic computation is not automatically a safe
+bound.
+
+**Shared assumptions.** Which specifications, models, data, workloads,
+constraints, code, and tool paths are shared with the producer or with another
+check? A different program name or model instance does not create
+independence.
+
+@fig-independent-checks contrasts two checking paths. The right side does not
+claim perfect independence. It shows how a check that observes the disputed
+property through a different path can reduce one known shared failure.
+
+![**A second check adds information only when it changes the relevant failure
+path.** A critic using the same assumptions can repeat the producer's omission.
+A claim-specific check based on a sufficiently different model or measurement
+path can reduce that correlation, but its remaining shared inputs and blind
+spots must still be recorded.](images/ch7_independent_checks){#fig-independent-checks
+width="92%" fig-alt="Two-column diagram. A producer and
+critic sharing the same assumptions lead to correlated agreement. A producer
+and a claim-specific check with a different measurement path lead to a
+bounded challenge, with remaining shared assumptions explicitly retained."}
+
+Separate teams can fail together on the same hard inputs. Knight and Leveson
+found correlated failures among independently developed program versions,
+showing that separate implementation does not guarantee independent error
+[@KnightLeveson1986Multiversion]. The same warning applies to a generator and
+critic that share a foundation model, training data, objective, or
+specification. Agreement can be useful corroboration without being an
+independent check.
+
+The missing-property case is different. Spectre and Meltdown escaped deployed
+verification flows because the relevant information-flow and timing-channel
+properties were not adequately observed [@LippEtAl2018Meltdown;
+@KocherEtAl2019Spectre]. More functional tests of ordinary program outputs
+would not settle confidentiality. Tests designed around leakage can bear on
+the security claim, while an ordinary performance suite cannot.
+
+Checks also need checks. Mutation testing injects faults and reports which ones
+a suite detects [@DeMilloLiptonSayward1978Hints]. A mutation score says
+something only about the injected fault model, and equivalent or unobservable
+mutants need careful handling. For AI-authored assertions and testbenches, the
+useful fault set should resemble errors the generator actually makes rather
+than only traditional hand-written mistakes.
+
+## Proxies Need a Validated Range {#sec-proxy-mismatch-metric-gaming-and-calibration}
+
+An architecture proxy is useful because it is cheaper or earlier than the
+quantity that ultimately matters. Estimated IPC, analytical energy, wirelength,
+congestion, utilization, and cycle counts can all help order candidates. They
+remain partial measurements. The danger grows when an optimizer searches
+directly against them, because the search is rewarded for finding every region
+where the proxy and the intended result part company.
+
+This is Goodhart's problem in architecture form. A measure that once tracked a
+goal can stop tracking it after it becomes the optimization target
+[@Goodhart1975MonetaryManagement; @Strathern1997Goodhart]. AI is not unique in
+this behavior. It changes the scale and persistence of the search for
+loopholes.
+
+@fig-trust-calibration is a conceptual schematic, not a measured curve. Both
+axes use normalized quantities. The shaded support region says only where
+matched calibration cases exist. Held-out error, ranking stability, and
+uncertainty relative to the decision margin determine whether the proxy is
+usable even inside that region. Outside it, the relationship is extrapolated
+and may diverge.
+
+![**Observed support is necessary but does not establish calibration
+accuracy.** The normalized curves illustrate one case where a proxy tracks a
+stronger reference over an observed support region and diverges under
+continued search. A real study must establish both support coverage and
+held-out agreement.](images/F9-trust-calibration){#fig-trust-calibration width="100%"
+fig-alt="Conceptual normalized plot. A proxy and stronger reference track in an
+observed support region, then may diverge outside it as optimization continues.
+A label states that support does not establish held-out agreement."}
+
+Six problems should be tested separately (@tbl-proxy-diagnostics).
+
+| **Concern** | **Diagnostic check** | **What an adverse result means** |
+| --- | --- | --- |
+| **Proxy mismatch** | Compare the proxy with a more decision-relevant measurement on matched cases. | The proxy result cannot carry the stronger claim. |
+| **Support coverage** | Place matched calibration cases across the workloads and candidate region the search visits. | The reported candidate lies in unsupported extrapolation. |
+| **Calibration accuracy** | Measure held-out error, ranking stability, and uncertainty against the decision margin inside the supported region. | The proxy cannot reliably order candidates even without extrapolation. |
+| **Confounding** | Hold versions and budgets fixed, use matched contrasts, and test plausible alternative causes. | The difference does not identify the proposed cause. |
+| **Variability** | Repeat stochastic flows or sampled workloads and report dispersion or ranking stability. | The point estimate may not resolve the declared margin. |
+| **Selection bias** | Re-evaluate the selected candidate on fresh cases not used to choose it. | The apparent margin may contain the luck that made the candidate win. |
+
+: **Each weakness requires a different diagnostic.** A second run cannot repair
+a missing property, and a stronger tool cannot repair an unmatched comparator.
+{#tbl-proxy-diagnostics tbl-colwidths="[18,43,39]"}
+
+The public debate over learned macro placement illustrates why calibration and
+matched comparison matter. Proxy metrics such as wirelength and congestion do
+not automatically settle post-route power, performance, and area, and public
+assessments have differed in tool flow, baseline strength, pretraining, and
+available design data [@ChengEtAl2026UpdatedAssessment]. The durable lesson is
+not a verdict on one placement method. It is that a proxy comparison cannot
+silently inherit authority from a stronger result obtained under unmatched
+conditions.
+
+A simulator can also be the exploited reference. In the architecture-agent
+example introduced earlier, a required correctness assertion was absent from
+the optimized configuration, so the cycle-level result did not observe the
+property credited to it [@GuptaEtAl2026ArchAgent]. Calibration to that run
+would reproduce the blind spot. The reference check must itself retain the
+property, configuration, and coverage used to justify it.
+
+## Separate the Outcome from the Mechanism
+
+An outcome says what changed. A mechanism says why. They require different
+comparisons and can reach different statuses.
+
+For the Lighthouse cache study, the reported outcome question concerns
+99th-percentile frame time. The mechanism question asks whether added capacity
+reduces capacity misses and whether that reduction explains a tail-latency
+change. The 12 percent miss reduction supports the reported intermediate
+effect within the cache model. It does not prove that the miss reduction caused
+a tail frame-time change. The frame-time interval crosses zero, so the intended
+performance outcome remains unresolved.
+
+The reverse can also occur. A candidate may improve the measured outcome while
+the proposed explanation fails. The improvement can remain a valid observation
+if the comparison is sound, but an unresolved or contradicted mechanism should
+not guide the next change. A plausible model explanation is a hypothesis, not
+a substitute for a contrast.
+
+Useful mechanism checks include matched workload contrasts, ablations,
+counterfactual configurations, traces of the affected events, and sensitivity
+around the changed parameter. They should be declared before the result when
+possible. Otherwise, an explanation can be fitted to any outcome after the
+fact. @tbl-outcome-mechanism keeps the resulting judgments separate.
+
+| **Question** | **Possible status** | **Lighthouse illustration** |
+| --- | --- | --- |
+| **Did the requested quantity change in the declared direction?** | Supported, contradicted, or unresolved within the stated comparison. | Tail frame-time improvement remains unresolved because the interval includes zero. |
+| **Did the proposed intermediate effect occur?** | Supported, contradicted, unresolved, or not tested. | Capacity misses are reported 12 percent lower for the clean 3\ MB return group. |
+| **Did that intermediate effect cause the outcome?** | Supported only by a distinguishing contrast; otherwise unresolved. | The causal link between fewer misses and tail latency remains unresolved. |
+| **What did the check not observe?** | Explicit nonclaims. | No result establishes thermal behavior, voltage-droop behavior, functional correctness, security, or system-level XR quality. |
+
+: **Outcome and mechanism remain separate results.** A supported intermediate
+effect cannot fill an unresolved architecture comparison.
+{#tbl-outcome-mechanism tbl-colwidths="[26,30,44]"}
+
+This separation makes negative results useful. A contradicted mechanism can
+improve the architecture model even when the candidate result is favorable. A
+resolved regression can rule out a design direction. An unresolved comparison
+can reveal that the observation budget or measurement plan was too weak. None
+of those outcomes is a failed study if the record keeps them distinct.
+
+## The Lighthouse Scoped Interpretation
+
+The chapter's output is a scoped interpretation rather than a permission or a
+design commitment. @tbl-lighthouse-interpretation fills the record for the
+constructed cache example.
+
+| **Interpretation field** | **`XR-L2-CAP-A` entry** |
 | --- | --- |
-| **Producer and status** | Who or what produced the result, and is it measured, computed, digitized, illustrative, or author judgment? |
-| **Source and property observed** | Which simulator, tool stage, experiment, or review produced the observation, and what specific architectural property does it cover? |
-| **Scope** | Which candidate, comparator, workload, design state, and validity region are involved? |
-| **Uncertainty and repetitions** | What metric, limits, error bounds, repetitions, and nondeterminism constrain the result? |
-| **Integrity and provenance** | Which versions, inputs, outputs, commands, and hashes associate the record with the run? |
-| **Shared assumptions** | What models, data, workloads, and paths are shared? (See @sec-independent-checks-and-correlated-errors for check independence.) |
+| **Source status** | Constructed from an earlier illustrative walkthrough. The values are not live project measurements. |
+| **Received execution record** | Three reported `SRAM-A` calls; a clean 2\ MB baseline; one stale-state 3\ MB setup failure; two clean 3\ MB attempts; four cycle-level attempts consumed. Exact inputs, versions, parser status, raw artifacts, frame identifiers, reset state, and attempt-level aggregate attribution are missing. |
+| **Candidate and comparator** | `L2-3M-A` against `L2-2M-A`, with workload `XR-TRACE-A` and software `SW-BASE-A` reported as matched. |
+| **Reported physical-model checks** | 3\ MB reports 1.4\ mm^2^ area and 2.4\ ns access time, below the 1.5\ mm^2^ and 2.5\ ns dispatch limits. Modeled subsystem power is 2.94\ W, below the 3\ W study limit. These are statements inside the illustration, not independently replayed signoff results. |
+| **Reported 4\ MB path** | 1.7\ mm^2^ area and 2.8\ ns access time cross the dispatch limits, and no `SIM-A` call is reported. Accepting the illustrative values as qualified makes 4\ MB a bounded rejection from this study. The incomplete record does not independently verify the parse or dispatch event. |
+| **Matched comparison** | The clean 3\ MB group reports 12 percent fewer capacity misses, 2\ mW more cache leakage, and subsystem power increasing from 2.90\ W to 2.94\ W. The producing tool for the leakage difference is unreported. Using baseline minus candidate, the reported 0.3\ ms tail-frame-time reduction has an illustrative 95% interval from -0.1\ ms to 0.7\ ms. Missing frame identities prevent recomputation. |
+| **Outcome status** | Unresolved. The reported area, access-time, and modeled-power checks clear their local limits for 3\ MB, but the tail-frame-time interval does not resolve an improvement over 2\ MB. |
+| **Intermediate effect** | The clean 3\ MB return group reports fewer capacity misses within the cache model. |
+| **Mechanism status** | Unresolved. The record does not establish that the miss reduction caused a tail-frame-time change. |
+| **Check limits and nonclaims** | No conclusion about unmodeled physical behavior, functional correctness, security, thermal or power-delivery behavior, full-system XR performance, tapeout readiness, or AI effectiveness. |
+| **Required revision** | Start a new bounded study with a complete execution record, a target precision for the tail-latency interval, and a maximum observation budget. Preserve per-attempt artifacts and the contrast needed to test the miss-to-latency mechanism. More samples may narrow sampling error but cannot guarantee a favorable or resolved result. |
+| **Reopening conditions** | Reopen after a workload, software, cache-policy, model, tool, PVT assumption, design revision, or stronger contrary observation changes the scope. |
 
-: **A record supports re-review only if it captures who produced the result and under what scope:** these six dimensions are the minimum an evidence packet must answer. {#tbl-evidence-dimensions tbl-colwidths="[26,74]"}
+: **A scoped interpretation records both the result and the limit of the
+record.** The illustration supports an unresolved performance conclusion and a
+reported cache-miss effect, not a resolved causal mechanism or a larger
+architecture decision.
+{#tbl-lighthouse-interpretation tbl-colwidths="[24,76]"}
 
-## Proxy Mismatch and the PPA Pareto Frontier {#sec-proxy-mismatch-metric-gaming-and-calibration}
+The 4\ MB line deserves care. Accepting the illustrative values as given, its
+reported area and access time fail the declared checks, so 4\ MB is rejected
+from `XR-L2-CAP-A` and no cycle-level call is spent. The surviving record is not
+strong enough to independently replay that interpretation because the parser
+and dispatch evidence is missing. The bounded rejection also does not apply to
+every future study. A new memory compiler, PVT point, area budget, or
+access-time target changes the comparison.
 
-A well-bounded, correctly recorded favorable result can still fail to support the intended architecture conclusion. In computer architecture, physical reality is fundamentally a multi-objective Pareto frontier of Power, Performance, and Area (PPA), the set of designs where no one of the three can be improved without giving up another. Nothing on that surface is best overall; each point is a different bargain. Surrogate metrics often collapse this multi-dimensional reality into a scalar or ignore dimensions entirely.
+The 3\ MB line shows why passing several checks does not settle an architecture
+question. The physical-model values meet their local limits. The reported
+intermediate effect is favorable. The causal mechanism and intended
+tail-latency outcome remain unresolved. Each statement is useful because none
+is allowed to impersonate the others.
 
-Five different problems can weaken a result:
+## Route the Revision and Record Reopening
 
-- **Proxy mismatch:** the optimized metric omits or diverges from the physical PPA ground truth.
-- **Calibration failure:** the proxy no longer tracks a stronger measurement in the region where it is being used.
-- **Confounding:** another difference in workload, implementation, baseline, or tool version could explain the change.
-- **Nondeterminism or variability:** repeated executions produce a distribution that the headline result hides.
-- **Selection bias:** the candidate was chosen by the same search that scored it, so its reported margin still carries the luck that made it win.
+A result should change the part of the study that failed. Sending every
+adverse outcome back to the generator teaches the wrong lesson and leaves the
+real defect in place. A supported result may require no revision at all.
+@tbl-revision-routing sends each defect to its owner when a repair is needed.
 
-### Reward Hacking and the Pareto Frontier
-
-The optimization process naturally exploits the gap between fast proxies and physical ground truth. When an AI "reward hacks" in hardware, it is almost always maximizing a constrained dimension (Performance) by exploiting an unconstrained or poorly-modeled dimension (Area or Power), pushing the design infinitely far off the physical Pareto curve.
-
-If an architect asks an AI to optimize estimated instructions per cycle (IPC) without checking physical constraints, the optimization process will converge on architectural shortcuts that mimic the CoastRunners loophole[^fn-coastrunners-c07] [@CoastRunners]. It might strip out decoupling queues or introduce combinational loops to artificially boost throughput in a high-level CPU simulator. That modification maximizes the proxy metric but guarantees failure during downstream physical routing and timing closure.
-
-This leads to the ML-Sys challenge of reward shaping. Simply relying on physical oracles is insufficient for training, because they are too slow. Developers must carefully shape reward functions to gently penalize PPA constraint violations without causing the model's learning process to collapse. The fundamental limit is that finding a continuous reward function that closely aligns with discontinuous physical constraints (like a strict 3\ W thermal envelope or a boolean DRC violation) has no clean general solution. The difficulty sharpens when an agent trades one physical metric for another. Adhering to a peak-power constraint by stretching out execution time need not raise total energy, since running at half the power for twice as long leaves the power-time product roughly unchanged, but the longer delay still degrades the Energy-Delay Product (EDP) through its delay term.
-
-This was precisely the core technical dispute surrounding AlphaChip's placement claims. The literature debate wasn't solely about reproducible datasets; it centered on whether intermediate proxy metrics (like half-perimeter wirelength and proxy congestion) genuinely correlated with the physical ground truth (post-route PPA and timing closure) [@ChengEtAl2026UpdatedAssessment]. When an AI optimizes an intermediate proxy, it risks discovering regions where the proxy diverges from reality.
-
-[^fn-coastrunners-c07]: **CoastRunners**: A boat-racing video game that became reinforcement learning's canonical specification-gaming example. An agent rewarded for the game score learned to circle a lagoon collecting respawning targets instead of finishing the race, maximizing the proxy while failing the real objective.
-
-It is a form of Goodhart's law [@Goodhart1975MonetaryManagement; @Strathern1997Goodhart], under which a measure that served well as an indicator stops serving once it becomes the optimization target. Fast proxies that worked well for human architects break down when an AI optimizes against them. As illustrated in @fig-trust-calibration, simulator inaccuracies are no longer just random noise; they become loopholes the AI exploits. Consequently, the architect must anchor AI proposals with physical ground-truth oracles to prevent these escapes.
-
-![**Past the calibration boundary, the proxy and physical reality diverge:** as an AI optimizes a surrogate proxy, the metric initially correlates with physical ground truth, but beyond the calibration boundary the AI exploits the proxy's blind spots (reward hacking), causing the ground-truth value to collapse while the proxy score continues to rise.](images/F9-trust-calibration){#fig-trust-calibration width="100%" fig-alt="A line graph showing surrogate proxy score increasing monotonically while the physical ground truth curve collapses sharply after crossing the calibration boundary."}
-
-The curve shows this failure directly. Up to the calibration boundary, the proxy tracks the ground truth, so optimizing the proxy also improves the real design. Past that boundary, the two diverge. The proxy score keeps climbing because the AI has found the shapes the surrogate rewards, while the physical ground truth falls away because those shapes break timing, area, or power that the surrogate never modeled. The widening gap between the two lines is the reward hacking, and it is invisible to anyone watching only the proxy.
-
-Anchoring is necessary and not sufficient, because the anchor can be the thing exploited. The simulator escape of @sec-architecture-20-ontology happened inside a cycle-level simulator, the tool the faster proxies are calibrated against, and it worked because a correctness assertion was compiled out of the optimized build that the simulation campaign required for throughput [@GuptaEtAl2026ArchAgent]. No proxy diverged from ground truth in that case. The reference itself was wrong, and a trace-driven simulator has no notion of correct computation to check it against, so nothing in @fig-trust-calibration would have registered the escape. An oracle earns the name only when something independent confirms that the property it enforces is still enforced in the configuration that actually ran.
-
-### Diagnosing Weak Evidence
-
-Each concern has a diagnostic check that can expose it (@tbl-proxy-diagnostics).
-
-| **Concern** | **Diagnostic check** | **What a failure means** |
+| **Observed problem** | **Revision destination** | **Reason** |
 | --- | --- | --- |
-| Proxy mismatch | Compare the proxy with a more decision-relevant tool or physical measure on matched cases. | The proxy win cannot carry the stronger claim. |
-| Calibration boundary | Use held-out workloads, cross-fidelity comparisons, and sensitivity around the candidate. | The result lies outside the region in which the proxy ranking was validated. |
-| Confounding | Use matched contrasts, stable budgets and versions, ablations, explicit alternative explanations. | The observation reports a difference but does not identify the proposed cause. |
-| Nondeterminism | Repeat runs, preserve seeds and state, report variance or ranking stability, distinguish flaky status from measured variability. | A single run or mean without dispersion may not resolve the decision margin. |
-| Selection bias | Re-evaluate the chosen candidate on held-out seeds and workloads not used in the search. | The search maximum is optimistically biased, so the apparent margin may not survive independent re-measurement. |
-
-: **Each weakness has a check that can expose it before the result is trusted:** every diagnostic below is tied to a specific failure it can surface. {#tbl-proxy-diagnostics tbl-colwidths="[18,41,41]"}
-
-For the illustrative 3\ W RISC-V XR subsystem, an early fast Python ISA simulator acts as a surrogate biomarker,[^fn-biomarker-proxy-c07] estimating performance improvements for a new instruction extension. However, the Phase III trial (physical placement and routing closure) might reverse the apparent preference due to timing degradation. Or, if the performance check omits thermal considerations, the new instruction implementation might create a thermal hotspot that violates the 3\ W limit. Before reaching RTL, an optimization run proposing an SoC topology might game a high-level Transaction-Level Model (TLM) by saturating a bus without modeling protocol arbitration overhead or memory controller queueing delays, requiring Electronic System Level (ESL) calibration before committing to RTL generation.
-
-[^fn-biomarker-proxy-c07]: **Surrogate biomarker**: In clinical trials, an early measurable signal (tumor shrinkage, cholesterol level) used to predict the outcome that matters (survival), with Phase III denoting the definitive large-scale trial. A fast proxy plays the same role for physical results and can mislead the same way.
-
-Calibration checks whether a proxy tracks a decision-relevant measurement in the region where it is used. Architecture predictors must be validated against held-out data[^fn-held-out-c07] or stronger evaluations.
-
-[^fn-held-out-c07]: **Held-out data**: Data deliberately excluded from training or search and reserved for evaluation. Because the optimizer never saw it, performance there estimates generalization rather than the quality of the fit. In generative design or RL, this also requires Out-Of-Distribution (OOD) evaluation, measuring whether an agent's policy generalizes to physical constraints or environment states it did not encounter during training, rather than just memorizing a verified layout.
-
-::: {.callout-architect-checkpoint title="The calibration check"}
-Has the architect stated when a candidate falls outside the range where the generator's proxy was validated? A proxy win supports a claim only within that range. Outside it, the architect must seek a decision-relevant or independent check rather than treat the prediction as evidence.
-:::
-
-Passing a fast software simulation does not guarantee RTL timing closure, and an AI maximizing a high-level proxy metric does not establish that the hardware is physically viable. This distinction separates hardware benchmarking from software benchmarking. A software LLM agent on SWE-bench, a software engineering benchmark, is scored by passing unit tests, but those tests are themselves an incomplete proxy, which is why the curated SWE-bench Verified subset was introduced and why optimization can still game the tests it is graded against [@OpenAI2024SWEBenchVerified].
-
-Hardware agents add an orthogonal set of physical requirements that a functional proxy cannot observe. These include proving timing across process, voltage, and temperature corners and across the design's operating modes such as functional, scan, and test, each carrying its own constraint set (multi-corner multi-mode, MCMM), adhering to dynamic clocking rules (DVFS), respecting power delivery network limits (static IR drop and transient di/dt droop), and passing physical layout constraints (DRC). At advanced nodes, wire delay dominates logic delay; an AI's 5-stage pipeline may fail during post-route STA (Static Timing Analysis) when long wire RC-constants erode the setup time margins. An AI winning a zero-delay RTL simulation or surrogate proxy metric never constitutes architectural evidence without a signoff-grade physical audit. The sim-to-silicon gap is what puts a tapeout at risk, so the architect must maintain a strict boundary between fast proxies used for exploration and the ground-truth oracles required for silicon success.
-
-Nondeterministic observations require careful interpretation relative to the decision margin. Recording a seed is not enough. The review question is whether the observed variation, whether a stochastic tool measurement, an unstable ranking across workloads, or a flaky execution path, is small enough, and sampled appropriately enough, to support the declared margin and ordering. When a generator relies on heuristic search, or an ML-driven place-and-route tool returns a different floorplan under a new random seed, a single deterministic run is fragile evidence. The architect must evaluate the candidate across a distribution of seeds, preferring a shape that stays within its limits across that distribution, to guard against a design that only survives one lucky run.
-
-Guarding a single candidate against a lucky run is not the same as guarding the search against a lucky winner. When AI selects the best of thousands of candidates scored on a noisy proxy, the winner's proxy value is biased upward, because the search preferentially surfaces candidates that happened to score high rather than only those that are genuinely better. The architect must therefore re-measure the selected candidate on fresh held-out seeds and workloads that the search did not use before its apparent margin counts as evidence.
-
-## Coverage, Direction, and Independence {#sec-independent-checks-and-correlated-errors}
-
-Re-measuring on fresh workloads or applying proxy diagnostics is useful only when a purportedly stronger check observes the missing property and is not merely another expression of the same assumptions. Three properties decide what any check's pass is worth. Coverage fixes which failures the check can see at all, the direction it is engineered to err fixes which of its results is decisive, and independence fixes whether a second agreeing result carries weight beyond the first. Independence is also the property most often assumed rather than shown, and it is relative to a claim and a failure class rather than a binary property of components (@fig-independent-checks).
-
-![**A second model shares the first's blind spots; only a physics-grounded oracle is independent:** a correlated check inherits the generator's omissions, while a physical simulator provides an orthogonal modality shift that can reject what the generator missed.](images/ch7_independent_checks){#fig-independent-checks width="100%" fig-alt="Two-column diagram. The left correlated-error column runs from a generator LLM to a critic LLM sharing the same blind spots, ending in red false confidence. The right independent-modality-shift column runs from the generator LLM to a physical simulator applying deterministic physics, ending in green grounded verification."}
-
-Coverage comes first. It fixes which failures the check can observe, so a passing check is only as strong as the coverage behind it; testing can show the presence of defects but never their absence. Soundness is the mirror property. When a reported failure is a real failure rather than a false alarm, a rejection settles the bounded claim the check observes. Few instruments have both at once, which is why the next question is which of the two errors a check was built to make.
-
-Every check also chooses which direction it is allowed to be wrong.[^fn-performance-trust-c07] Static timing analysis stacks corner derates and on-chip-variation margins so that, for the variation it models, a false failure is common and a false pass is hard to produce from the delay analysis itself. That engineered asymmetry is why a timing pass can carry signoff authority, but it holds only while the constraints are right, since a wrong false-path exception, a missing mode or corner, or unmodeled crosstalk delay removes a real path from the analysis and returns a clean run on a design that will fail in silicon. Simulation makes the opposite trade. Its stimulus is sampled, so a pass overclaims in exactly the direction that matters. Before trusting any check, ask which way it errs; a conservative tool's pass and an optimistic tool's fail are the two results that mean something.
-
-[^fn-performance-trust-c07]: **Performance versus trust**: Simon Sinek reports asking US Navy SEAL leadership how they select team members, and being shown two axes, performance on the battlefield and trust off it. The counterintuitive answer was that they will take medium performance with high trust over the reverse, and Sinek's explanation is that we have metrics for performance and none for trust. The framing travels; the conclusion does not. For a person, trust is character accumulated over time. For a tool it is a property of the check itself, and the direction a check is engineered to err is one such metric, measurable and reportable. Independence and coverage are two more. The premise that trust cannot be measured is what this chapter exists to deny.
-
-Independence matters only after a check observes the relevant property, and only when the check does not share the producer's critical model, training data, objective, workload, implementation, tool path, or architectural assumption. Separate prompts, agent names, or reports do not create independence. Correlated checks can still find defects, but the architect should describe agreement among them as corroboration, not independent validation.
-
-::: {.callout-lighthouse title="Why a second opinion on the 3\ W budget is not a second check"}
-Suppose the loop proposes a smaller L2 for the XR Lighthouse subsystem and an analytical power model reports that the design fits the 3\ W envelope. Asking a second model to review that result feels like verification. It is not. A critic working from the same power model inherits whatever that model leaves out, and a switched-capacitance estimate can omit the interconnect toggling on the TileLink path that the shrunken L2 now drives harder. The two checks agree, and their agreement carries no more weight than the first estimate did, because neither one observes the property in dispute. Breaking the correlation takes a modality shift, a physical simulation that charges for the data movement the analytical model never represented. Until that runs, the architect records the agreeing estimates as corroboration at the fidelity they share, and escalates the candidate rather than letting the budget claim reach a decision.
-:::
-
-The more serious gap is not a check that agrees wrongly but a property that no check observes at all, a failure that leaves no trace in any result.
-
-::: {.callout-war-story title="The check no one wrote"}
-**The claim.** The affected processors passed their full functional and performance verification. On every property those suites encoded, the computed results were correct and the cycle counts were as designed.
-
-**The gap.** Meltdown and Spectre, disclosed in January 2018 [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre], exploit speculative execution to leak data across privilege boundaries through shared microarchitectural state. The suites measured result correctness and cycles; none observed information flow or the timing channel, so none could reject the vulnerability. More independent functional checks would not have helped, because independence guards against correlated failure among checks that observe a property, and here no check observed it. Spectre reached shipping CPUs across Intel, AMD, and Arm; Meltdown chiefly Intel.
-
-**The lesson.** A check cannot reject a property it does not observe. Coverage decides which failures are visible at all, while independence only strengthens a challenge to a property already under test. The side channels were later reduced through software and microcode mitigations at a performance cost.
-:::
-
-The mitigations that later closed these channels were not free, and their cost fell unevenly across workloads (@fig-mitigation-overhead).
-
-```{python}
-#| label: fig-mitigation-overhead
-#| fig-cap: |
-#|   **Closing the channel had a real, uneven cost.** Reported performance overhead of the shipped Spectre/Meltdown mitigations, where each bar spans the lowest to the highest overhead reported across the workloads cited for that mitigation. The cost does not come from a single mechanism. KPTI, retpoline, and IBRS tax privilege transitions and kernel indirect branches, so their overhead tracks system-call and I/O rate, while STIBP's 30--50% comes from denying SMT siblings a shared indirect-branch predictor and therefore lands on parallel compute-bound work, and SSBD's 2--8% comes from disabling speculative store bypass and is paid broadly. Compiled from Canella et al. Table 11 [@CanellaEtAl2019Transient], with figures from Gregg (2018) and Phoronix (2018--2019); overhead varies with CPU generation, kernel version, and which mitigations are enabled.
-#| out-width: "92%"
-#| fig-alt: "Horizontal range chart of Spectre and Meltdown mitigation overhead in percent. KPTI spans about 0 to 5 percent, SSBD 2 to 8, retpoline 5 to 10, all default mitigations 7 to 16, IBRS 20 to 30, and STIBP 30 to 50 percent. Each bar spans the lowest to the highest overhead reported across the workloads cited for that mitigation; the microcode mitigations are the most expensive."
-
-import csv
-from pathlib import Path
-
-import matplotlib.pyplot as plt
-import _python.plots as _ap
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Data: reported overhead of shipped transient-execution mitigations, compiled
-# from Canella et al. 2019 Table 11 [@CanellaEtAl2019Transient] with production
-# figures from Gregg (2018) and benchmark roundups from Phoronix (2018-2019).
-# Ranges span the lowest to highest reported overhead across the workloads cited
-# for each mitigation, on 2016-2019-era parts;
-# academic-only proposals and the pathological >800% microbenchmark are excluded.
-# Accessed 2026-07-19. Receipt: data/source-receipts/chapter7-mitigation-overhead.csv
-_root = Path(_ap.__file__).resolve().parents[2]
-rows = []
-with open(_root / "data" / "source-receipts" / "chapter7-mitigation-overhead.csv", encoding="utf-8") as fh:
-    for d in csv.DictReader(fh):
-        rows.append({"m": d["mitigation"], "t": d["threat"], "lo": float(d["low_pct"]), "hi": float(d["high_pct"])})
-rows.sort(key=lambda r: r["hi"])
-
-def _short(mitigation, threat):
-    base = "All mitigations" if mitigation.startswith("All") else mitigation.split(" ")[0]
-    return f"{base} ({threat})"
-
-fig, ax = plt.subplots(figsize=(5.6, 3.0))
-ys = list(range(len(rows)))
-for y, r in zip(ys, rows):
-    ax.hlines(y, r["lo"], r["hi"], color=COLORS["constraints"], lw=3.0, zorder=2)
-    for xv in (r["lo"], r["hi"]):
-        ax.scatter([xv], [y], marker="s", s=15, facecolor=COLORS["note_fill"],
-                   edgecolor=COLORS["constraints"], linewidth=0.9, zorder=3)
-    ax.text(r["hi"] + 1.2, y, f"{r['lo']:.0f}–{r['hi']:.0f}%", ha="left", va="center",
-            fontsize=5.9, fontweight="bold", color=COLORS["constraints_ink"])
-ax.set_yticks(ys)
-ax.set_yticklabels([_short(r["m"], r["t"]) for r in rows], fontsize=6.4)
-ax.set_ylim(-0.6, len(rows) - 0.35)
-ax.set_xlim(-1, 60)
-ax.set_xlabel("Reported slowdown vs. unmitigated (%)", fontsize=7.2)
-ax.set_xticks([0, 10, 20, 30, 40, 50])
-ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
-for _sp in ("top", "right"):
-    ax.spines[_sp].set_visible(False)
-ax.grid(axis="x", color=COLORS["row"], linewidth=0.4, zorder=0)
-ax.text(59, len(rows) - 0.75, "each bar: lowest to highest reported overhead",
-        fontsize=5.0, fontstyle="italic", color=COLORS["muted"], ha="right", va="center")
-fig.subplots_adjust(left=0.22, right=0.97, top=0.94, bottom=0.15)
-```
-
-The mitigations that guard the privilege boundary behave the way the leak suggests they should. KPTI, retpoline, and IBRS tax kernel entries and kernel indirect branches, so compute-bound code that rarely crosses the boundary pays almost nothing while system-call- and I/O-heavy work slows by tens of percent. The two most expensive mitigations do not work that way at all. STIBP stops SMT siblings from sharing an indirect-branch predictor, so its 30 to 50 percent falls on parallel compute-bound code, and SSBD disables speculative store bypass at a cost paid broadly across memory-intensive work. A property left unobserved at verification did not disappear; it reappeared as a permanent tax, and one whose incidence reaches well past the boundary the original leak abused.
-
-Passing a suite of performance tests provides no evidence for security properties, so a public claim for a shipped design needs checks that observe information flow and physical behavior directly, not more of the checks that were already blind to them. A coverage gap is also not the only defect that survives verification. A functional bug already committed to silicon is harder to undo than a patchable side channel, since it can force a respin rather than a microcode update.
-
-While comprehensive coverage is a prerequisite, independence between checks is also weaker than it looks. In safety engineering, Knight and Leveson had teams write program versions independently, yet the versions failed together on the same hard inputs far more often than an independence assumption predicted [@KnightLeveson1986Multiversion]. Independent development of a mechanism does not produce independent failure. Two checks built by separate teams can still miss the same case, because the difficulty often lives in the problem rather than in any one implementation.
-
-AI proposals require independent, out-of-distribution checks. When a generator, critic, verifier, and summarizer share a foundation model or training objective, their agreeing outputs may merely share one correlated error. A correlated error occurs when multiple components fail in the same way because they share the same underlying blind spot.
-
-If an LLM generates both the Verilog RTL and the SystemVerilog testbench, those two artifacts share the same semantic omissions. The testbench will pass the broken design, creating a false sense of security. To break that shared blind spot, the architect must demand an independent oracle rather than accepting consensus among correlated models.
-
-A model asked to check its own output does not reliably correct it without feedback from outside itself [@HuangEtAl2024SelfCorrect], and in hardware the outside feedback that counts is physical. True independence requires a modality shift, where the verification path does not share the generator's assumptions. In practice that means established electronic design automation (EDA) tools computing the property from the design itself, a synthesis run, an equivalence checker, or a timing engine, rather than a second opinion about it. Agreement among model-based checkers is corroboration at the fidelity they share, not an independent rejection path, and an architecture transition needs the rejection path.
-
-Even these EDA oracles sit one step above the ground truth. Signoff static timing analysis is not physics. It is a contractual model, calibrated against SPICE circuit simulation and ultimately against measured silicon. The final oracle arrives at first silicon, in bring-up, characterization, and shmoo plots, and post-silicon validation exists precisely because pre-silicon signoff has escapes[^fn-escape-c07]. FDIV was found in the field by a customer running twin prime calculations, not by a stronger testbench.
-
-[^fn-escape-c07]: **Escape**: A defect that clears every check at one stage and surfaces only at a later one, most often a bug that reaches silicon after a clean pre-silicon signoff. Verification practice treats the word as a countable noun, so a team speaks of counting escapes and of the escape rate a given flow leaves behind.
-
-Independence assumes the checks come from outside the thing they judge. In an AI loop that assumption can quietly fail, because the agent that generates a candidate can also generate its unit tests, its assertions, and the assurance argument that ties them to the claim [@KandeEtAl2024SecurityAssertions]. A suite the generator authored can pass because it omits the case its own design gets wrong, so a green result reports assumed coverage rather than demonstrated coverage. Mutation testing is one probe of the checks themselves. It injects known faults into the design, reruns the suite, and reports the fraction of those faults the suite caught, which is the *mutation score* [@DeMilloLiptonSayward1978Hints]. A high score means the checks observe the failures they are trusted to cover; a low one means a green result was measuring the absence of tests rather than the absence of defects. The score is only as representative as the injected faults, which is why the class of fault injected is itself a design decision this chapter returns to.
-
-Check independence is a separate question from which property the check observes, and both must be stated before a pass counts (@tbl-independence-check).
-
-| **Check property** | **Question** |
-| --- | --- |
-| **Property observed** | Which part of the claim can this check accept or reject? |
-| **Failure condition** | What exact returned observation counts as failure? |
-| **Coverage and blind spots** | Which relevant failures can and cannot be seen? |
-| **Independence basis** | Which models, data, objectives, workloads, code, tools, and assumptions are shared or different? |
-| **Effect of failure** | Which bounded claim or proposed transition must stop, narrow, or escalate? |
-
-: **A check is only as strong as the property it observes and its independence from the producer:** each row records what the check can reject, what it can miss, and what its failure forces. {#tbl-independence-check tbl-colwidths="[26,74]"}
-
-Not every check needs to be an expensive independent oracle. Because a generator can emit syntactically plausible but invalid RTL or scripts, and can propose faster than a human can review, fast deterministic checks belong ahead of expensive ones. A linter, a static bounds check, and a syntax verifier reject a malformed candidate before a simulator or synthesis run is spent on it. Requiring an agent to clear those checks and attach the passing result before it escalates a proposal keeps the volume of generated candidates from overwhelming the reviewer.
-
-## Hardware Trojans: The Ultimate Stress Test {#sec-hardware-trojans}
-
-Generative AI introduces structural security risks that sharpen why traditional coverage models and correlated proxies are insufficient. The hallucinated vulnerability or the maliciously injected hardware trojan acts as the ultimate stress test for an epistemic boundary.
-
-In traditional architecture, a backdoor required a rogue engineer. Today, a generator trained on unvetted, scraped open-source RTL can inadvertently reproduce buried trojans, a corpus-reproduction risk first measured for software code assistants [@PearceEtAl2022Asleep], or an adversary could poison the foundation model's training data. Because these malicious structures (such as a finite state machine that bypasses a privilege check after a specific sequence of branch mispredicts) are structurally valid and functionally silent, they easily evade dynamic simulation coverage models.
-
-To defend against poisoned models, architects must employ formal path-sensitization and Information Flow Tracking (IFT)[^fn-ift-c07] to prove the absence of undocumented data-exfiltration paths. However, applying IFT to detect trojans suffers from massive state-space explosion. While it works on specific IP blocks (like a crypto core's isolation boundary), "proving the absence" of trojans across an entire SoC remains largely an unsolved EDA capacity problem.
-
-That limit decides what an architect writes down rather than whether they act. Scope the proof to a boundary a tool can actually close, a crypto core's isolation perimeter or a privilege-check finite state machine, and name that boundary in the claim. Then record the unproven remainder as a stated nonclaim, so the study asserts that no undocumented path crosses the proven boundary and asserts nothing about the rest of the die. An unbounded assurance that no trojan exists anywhere is not a stronger claim than that. It is an unreviewable one, and the next section gives it the frame it needs.
-
-[^fn-ift-c07]: **Information Flow Tracking (IFT)**: A verification technique that labels data with a security class and then proves, across all executions, that no labeled value reaches a destination its class forbids. It answers where data can travel, a question functional tests and coverage models never ask, since those check what a design computes rather than what it leaks.
-
-## Protected Evidence and Public Claims {#sec-protected-evidence-and-public-claims}
-
-Whether employing advanced formal security proofs or standard performance regressions, a technically appropriate independent check may rely on workloads, flows, or results that cannot be released. Confidentiality changes who can inspect evidence and what can be released; it does not erase the need to state the claim, scope, method, uncertainty, reviewer, and bounded conclusion.
-
-Internal protected evidence may support an internal decision when an authorized reviewer can inspect it. A public claim must remain within what the public record or a credible protected audit can establish. Missing public information is not proof that internal evidence did not exist, while a production report is not an independently replayable comparison.
-
-The AlphaChip dispute (introduced earlier regarding proxy mismatch) also perfectly illustrates how this protected-evidence boundary holds when an internal result meets outside scrutiny. The 2021 AlphaChip paper reported that an RL method generated macro placements comparable to experts, noting its contribution to several TPU generations [@GoldieEtAl2024AlphaChipAddendum; @GoogleDeepMind2024AlphaChip]. Independent assessments questioned the baselines and reproducibility, and the authors replied that those assessments did not reproduce the proprietary pretraining and production setup [@ChengEtAl2026UpdatedAssessment].
-
-Neither side could collapse the disagreement into one shared experiment because the strongest results depended on a proprietary setup that the public cases did not match. A public claim about AI-assisted placement stays within what an outside reviewer can inspect or reproduce, even when a stronger internal result exists.
-
-Each public record in the dispute contributes something specific and leaves something it cannot establish (@tbl-alphachip-evidence-comparison).
-
-| **Public record** | **What it directly contributes** | **What it cannot establish** |
-| --- | --- | --- |
-| Original paper, addendum, deployment report | Reported placement method, proxy comparisons, and later use across TPUs. | The strongest proprietary blocks, pretraining corpus, and production context are not independently replayable. |
-| Independent assessments | Tested released artifacts and public cases, examined proxy correlation and baselines. | Their cases, compute budgets, and tool flow do not match the strongest proprietary setup. |
-| Authors' response | Identified disputed differences and argued the assessments did not reproduce the reported method. | A response can clarify missing conditions but cannot turn unmatched evaluations into a shared experiment. |
-| ChiPBench [@WangEtAl2025ChiPBench] | Provides an end-to-end placement benchmark using final metrics rather than an intermediate proxy. | It supplies a new framework; it does not retroactively align earlier training inputs, budgets, or tools. |
-
-: **Why the records support different claims:** each row pairs what a public artifact directly contributes with the stronger proprietary result it cannot independently establish. {#tbl-alphachip-evidence-comparison tbl-colwidths="[25,37,38]"}
-
-A protected evidence frame must document the restricted data class, which AI tools may access it, the authorized reviewer who can inspect the complete record, the method and scope visible to that reviewer, redaction limits, what a redacted result cannot establish, the bounded conclusion, and who holds authority to approve disclosure.
-
-## Weighing Evidence Cost vs. Consequence {#sec-evidence-cost-and-consequence}
-
-Just as confidentiality limits who can inspect an observation, computational and human cost limits which observations an architect can obtain in the first place. However, cost does not assign confidence or evidentiary strength. A cheap legality check may decisively reject an invalid candidate. An expensive post-route result may still be irrelevant to a security claim. The useful next check is one whose plausible outcomes could change the claim disposition, candidate ordering, scope, or proposed action enough to justify its expense.
-
-Verification schedule and review bandwidth are constrained resources. Available capacity limits both compute and expert attention. The constraint is not hypothetical; industry surveys consistently find verification consuming roughly half of total project engineering effort, with design engineers spending about half their time on it [@Foster2022WilsonVerificationStudy]. Fidelity therefore has to be bought where it changes a decision. Low-fidelity, cheap proxies (like Analytical Models or ISA Simulators) come early in the loop, before escalation to high-fidelity, expensive ones (like 3-day VCS RTL simulations, or Palladium emulation and Protium FPGA prototyping, which buy back run speed only by paying days of compile and bring-up and millions of dollars for dedicated hardware).
-
-No verification effort ends with a proof that the design is correct. Teams tape out on a statistical argument. The bug discovery rate has flattened week over week, coverage closure is complete against the plan, and the open-issue list holds no must-fix items. That flattening curve is the industry's stopping rule, and it is a bounded claim with stated assumptions, exactly what this chapter's frames exist to record. An AI that floods the loop with fresh candidates resets the curve, because each candidate restarts its own discovery clock.
-
-### Density Trades Against Trust
-
-This spectrum of proxies, from linter to signoff oracle, forces a trade for ML-Sys. Machine learning converges far more sample-efficiently under *dense, immediate* feedback, and we rely on linters and fast simulators because they supply it. Sparse terminal rewards are learnable, as AlphaChip's end-of-episode reward shows, but they demand orders of magnitude more episodes. Physical ground-truth oracles return one scalar per multi-day run, so what binds is the number of episodes a project can afford rather than the absence of a learning signal. The dense feedback that makes learning affordable is exactly the surrogate proxy that invites reward hacking, while the ground-truth feedback needed for trust arrives too rarely to learn from at that price. This trade is the second half of the credit assignment problem raised earlier in this chapter. There, sparse ground truth could not tell the generator which of its ten thousand choices was at fault; here, the dense signal that could teach it is exactly the proxy that invites gaming. A feedback budget must record latency, execution cost, fidelity, uncertainty, failure budget, interpretation time, and review cost.
-
-The burden of proof escalates because the cost of an escape does. The working rule of thumb is that a bug grows roughly ten times more expensive at each stage it survives, from RTL review to full-chip regression to post-silicon to the field. At an advanced node the endpoint is concrete. A full mask set costs tens of millions of dollars, and a respin costs a quarter or more of a project's schedule.
-
-Those three figures are illustrative rather than sourced. They carry no process node, year, or design size, and they are offered as the order-of-magnitude shape practitioners reason from rather than as measurements this book stands behind. A team applying this ordering should substitute its own escape costs by stage, which any group that has taped out once can reconstruct from its own history. Only the shape has to hold, that cost per stage rises far faster than the cost of the check which would have caught the escape. That escalating cost, not temperament, is what sets the evidence bar at signoff, and it is why the proposed action and its reversibility determine how much evidence is adequate (see @tbl-evidence-by-consequence).
-
-| **Proposed transition** | **Consequence cues** | **Evidence and review requirements** |
-| --- | --- | --- |
-| Continue local exploration | Candidate can be discarded; no shared interface changes. | Basic validity, provenance, scope, and comparison to decide what to test next. |
-| Advance a bounded experiment | Scarce tool time or deeper test is consumed; rollback is local. | Versioned workload, matched baseline, uncertainty, criteria for escalating. |
-| Change an implementation or interface | RTL, generator, chiplet, security, or cross-component change. | Regression evidence, cross-tool challenge, residual-risk review. |
-| Authorize signoff or deployment | Rollback is difficult, formal obligation or customer effect. | Independent evidence, specified rejection checks, audit trail, recorded waivers. |
-
-: **Evidence burden follows consequence:** as a transition becomes harder to reverse, from local exploration to signoff, the evidence and review it demands escalate. {#tbl-evidence-by-consequence tbl-colwidths="[28,30,42]"}
-
-Returning to the illustrative RISC-V XR subsystem prototype, a cheap structural check rejects illegal parameters quickly. Simulation determines if a performance hypothesis deserves scarce synthesis time. A synthesis flow exposes a timing failure. Security review might be more valuable than an additional cycle estimate if it reveals a shared-state flaw. Each check has a different cost and a different decision job.
-
-## Dispute Resolution {#sec-disputes-waivers-and-reopening}
-
-Even with a clear mapping of check cost to decision job, a finite evidence plan can still produce disagreement or leave a failed condition that someone proposes to accept. A dispute should first determine whether the parties are testing the same claim under aligned workloads, baselines, budgets, implementations, versions, metrics, and tool paths. A review then records supported, unsupported, or unresolved within the declared scope.
-
-A waiver does not turn a failed check into a pass. It accepts a bounded exception and residual risk for a named action and period. For example, waiving a 5% area bloat for a local prototype does not establish tape-out readiness. A waiver requires stating the exact scope, compensating check, expiration, and residual uncertainty.
-
-Reopening is required when new evidence or changed conditions make the old evidence bear on a different claim. A revised target, a shift from prototyping to tape-out, a stronger verification flow, or a shared-interface transition reopens the review. (@sec-loop-patterns-across-stack discusses reopening caused by software evolution, workload drift, and deployment telemetry.)
-
-The design-loop card acts as the compact index for the disputed claim, review result, bounded waiver, and reopening condition. The technical record relies on nine review questions (@tbl-trust-checklist).
-
-| **Question** | **What a credible answer contains** |
-| --- | --- |
-| 1. What bounded claim and action are under review? | A defined architecture task, comparator, workload, scope, nonclaims, and proposed transition. |
-| 2. Which typed observations support or weaken it? | Scope, provenance, uncertainty, and nondeterminism for the supporting and contrary observations. |
-| 3. What proxy, calibration, confounding risk remains? | Explicit diagnostics of mismatch, boundary violations, or alternative explanations. |
-| 4. Which check observes the relevant failure? | The specific tool or review and its independence basis. |
-| 5. Which evidence is protected? | Data classes, authorized reviewer, and what the public can establish. |
-| 6. What is the review result? | Supported, unsupported, or unresolved at the stated level. |
-| 7. Is any failure waived? | Scope, expiration, and compensating condition. |
-| 8. What separately changes in knowledge and architecture? | Named update surface destination, and explicit next action. |
-| 9. What event reopens the claim? | Drift, tool upgrades, new data, or new lifecycle bounds. |
-
-: **A credible review answers all nine questions before committing:** each pairs a review question with what a defensible answer must contain. {#tbl-trust-checklist tbl-colwidths="[30,70]"}
+| Missing parser status, artifacts, versions, reset state, or attempt lineage | Tool-connected environment | The candidate was not measured with a reconstructable execution record. |
+| Candidate state or dependency was represented incorrectly | Design representation | The tool received the wrong design meaning even if it ran cleanly. |
+| Comparator, workload, margin, repetition plan, or contrast is inadequate | Study formulation | The comparison cannot answer its declared question. |
+| Proxy leaves its validated region or omits a decision-relevant property | Method choice or calibration study | The scoring method no longer supports the ordering being used. |
+| A qualified check reports a bounded property failure | Design owner | The candidate or its assumptions need revision within the scope of that check. |
+| Outcome is resolved but mechanism is not | Study formulation | Preserve the result while adding a named mechanism contrast before using the explanation to guide another change. |
+| Sampling uncertainty leaves the outcome unresolved | Study formulation | Set a target precision, maximum observation budget, and stop rule. More matched samples may narrow sampling error but cannot guarantee resolution. |
+| Model bias or proxy mismatch dominates | Method choice or calibration study | Additional repetitions do not repair the wrong abstraction or unsupported ordering. |
+| Numerical extraction error or missing execution conditions dominate | Tool-connected environment | The returned value or its scope must be repaired before interpretation. |
+
+: **Repair follows the failed relation.** Execution defects return to the
+environment, comparison defects return to the study, and qualified design
+failures return to the design.
+{#tbl-revision-routing tbl-colwidths="[32,25,43]"}
+
+Reopening does not authorize an action. It marks the conditions under which an
+old interpretation no longer applies. A new
+workload, software image, tool or model version, operating corner, candidate
+revision, calibration result, or contrary observation can reopen a result.
+Recording these triggers prevents a bounded comparison from becoming a
+permanent fact after its conditions have changed.
+
+The same record distinguishes project learning from model learning. A design
+constraint, contradicted comparison, supported intermediate effect, or
+supported mechanism can update the project state without becoming
+model-training data. A training update needs a named
+target, usable labels, scope, and acceptance test of its own. Tool failures,
+unmatched results, and unresolved comparisons should not be converted into
+simple pass or fail labels.
 
 ## Open Research Questions
 
-The review checklist above describes how a human architect manages evidence today, and several of its steps rest on judgment no tool currently supplies. The boundary outside which a proxy stops meaning anything is drawn by hand, when it is drawn at all. What a check can and cannot reject is asserted rather than measured, and the collateral that decides a pass is increasingly written by the same agent that wrote the design. Proof methods stop well short of the structures a generator produces, and the statistical argument that ends a verification effort assumes a candidate stream that eventually runs dry.
+The open problems begin where current tools stop supplying the interpretation
+fields automatically.
 
-**Theme 1: Where a Proxy Stops Meaning Anything.** A calibration study records where a surrogate was checked against something stronger, which is not the same as where it stops tracking, and the region moves as workload mix, tool version, and design size change. Calibration also inherits whatever the stronger measurement missed, so a reference whose own checks were disabled in the configuration that produced the data will certify a proxy that has learned its blind spot.
+**How can a returned field be qualified without hiding unfamiliar failure
+modes?** Typed schemas make common quantities easy to compare, while tool and
+model changes keep creating warnings and artifacts outside the known schema.
 
-- What evidence establishes the boundary of a proxy's calibrated region well enough for a reviewer to reject a result taken outside it?
-- How can a study confirm that the reference a proxy was calibrated against still enforced the properties credited to it in the configuration that produced the calibration data?
+**How can a proxy's validated region be estimated under active search?** The
+candidate distribution changes as the optimizer learns where the proxy is most
+favorable, which is exactly where previous calibration data may be thinnest.
 
-**Theme 2: Measuring What a Check Can Reject.** Signoff timing analysis earns its authority from an engineered asymmetry, since stacked derates and variation margins make a false failure common and a false pass hard to produce within the variation the tool models. A learned or agent-authored check arrives with no such asymmetry designed into it and none characterized afterward, and the property nobody thought to check remains invisible to every check that did run.
+**How should shared failure sources be measured across checks?** Separate
+tools, models, teams, and modalities can still share specifications, workloads,
+training data, libraries, or assumptions that create correlated error.
 
-- How can the direction a learned check is allowed to err be characterized and certified, so that its pass carries the authority a deliberately conservative tool's pass carries?
-- What method surfaces a property that no check in a flow observes, in the harder case where the property was never written into any verification plan to begin with?
+**Which mutations test AI-authored verification collateral?** Traditional
+fault models may not resemble the semantic omissions, weak assertions, or
+misinterpreted interfaces that generated tests and properties introduce.
 
-**Theme 3: Collateral an Agent Writes for Itself.** Commercial formal tools already flag classic vacuity, where an assertion's antecedent never triggers. The harder failure is an assertion that triggers, passes, and faithfully describes a broken design, and an agent authoring properties at scale produces those faster than a reviewer can read them.
+**How should scarce high-cost measurements be allocated?** The useful next
+check is the one whose possible outcomes can resolve the comparison, narrow
+its scope, or distinguish competing mechanisms, not simply the next tool in a
+fixed sequence.
 
-- What methods detect assertions that are technically non-vacuous yet too weak to constrain the behavior they claim to cover?
-- Which injected-fault classes represent the mistakes a generative model actually makes, so that a mutation score reports something about agent-authored collateral rather than about hand-written bugs?
+**How can credit be assigned without inventing a mechanism?** Long architecture
+flows return sparse outcomes after many interacting changes, while localized
+diagnostics can be correlated with the proxy that selected the candidate.
 
-**Theme 4: Where Proof Stops and Verification Closes.** Two limits decide when a verification effort can end. Proof reaches a block rather than a die, and equivalence checking that must follow a generator across retiming and repipelining scales worst exactly where it is needed most, so whole-chip assurance is assembled from pieces rather than proved. The statistical argument that ends the effort, a flattened bug-discovery rate against closed coverage with no must-fix issue open, assumes in addition that the design stops changing, which is what a generator does not do.
-
-- How can block-scoped proofs that no undocumented path crosses a boundary be composed into a stated whole-chip claim, rather than restarting as one intractable proof?
-- What stopping rule replaces a flattening bug-discovery curve when candidates keep arriving and each one restarts its own discovery clock?
+**How can partial proofs and sampled measurements compose into one bounded
+system claim?** Each check covers a different property and scope, and their
+assumptions can overlap or conflict.
 
 ## Conclusion {#sec-trust-boundary-conclusion}
 
-::: {.callout-design-principle title="Fluency is not evidence"}
-Trust is not a property of the model that produced a result. It is a measurable property of the check that examined it: what the check's coverage lets it observe, which direction it is engineered to err, and whether it is independent of the thing it judges. All three are reportable, and a result that holds only while its generator stays fluent has none of them.
+::: {.callout-design-principle title="A result is useful only when its limits travel with it"}
+A tool return becomes a measurement only after it is bound to a candidate,
+quantity, unit, conditions, source, and error. It becomes a comparison only
+after a matched comparator and decision margin are added. Its interpretation
+must preserve check limits, nonclaims, mechanism status, needed revision, and
+reopening conditions.
 :::
 
+The central boundary is not probabilistic AI on one side and deterministic
+truth on the other. It is the boundary between producing a candidate and
+checking a named property through a separate, qualified path. Generators can
+be deterministic. Verification tools can be heuristic, randomized, sampled,
+or model-dependent. What matters is whether the check observes the property,
+under which conditions, with what uncertainty, and with which shared
+assumptions.
 
-The boundary that makes any of this work is the epistemic one, between what a model probabilistically intends and what a deterministic tool can confirm. Property checking and equivalence checking exist to carry an artifact across it, and they do not remove trust so much as relocate it. A proof is exhaustive about whether the RTL satisfies its properties and silent about whether those properties were the right ones to state. When the same generator writes the design and the assertions, both sides of the proof sit inside one untrusted producer, the assertions can faithfully describe a broken implementation, and human review of the specification is the last independent check still standing.
+The Lighthouse example makes the discipline concrete. A stale-state attempt is
+an execution failure, not a design measurement. Reported physical-model values
+can clear local limits without settling tail performance. A 12 percent miss
+reduction can support an intermediate effect inside the cache model while the
+causal mechanism and frame-time improvement remain unresolved. Missing
+artifacts and conditions remain missing even when the teaching conclusion is
+clear.
 
-A returned result is not evidence until it has been traced through the observation it actually is, the claim it bears on, and the review that accepts or rejects it. That trace binds a favorable number to one candidate, one property, and the region it was measured in, so a proxy win carried outside that region is not a smaller result but a different one. A check's authority then comes from the direction it is allowed to err, which is why a conservative tool's pass and an optimistic tool's fail carry weight a symmetric result does not. Which failures a check can observe is the prior question, because independence only strengthens a challenge to a property some check already sees.
-
-Cheaper generation raises that standard rather than lowering it. A model trained on unvetted RTL can reproduce a buried trojan that is structurally valid and functionally silent, which is exactly the failure a coverage model was never asked about. An optimizer scored on a fast proxy will learn the proxy, including the places where it parts company with the physics it stands in for, so a surrogate's ranking stops meaning anything past the region it was calibrated in. And two checks that share a blind spot agree for the same reason they are both wrong, which makes independence something to demonstrate rather than a count of tools.
-
-Where proof cannot reach, the discipline holds by scoping the claim to a boundary a tool can close and recording the remainder as an explicit nonclaim. Confidentiality constrains the same sentence from the other side, since an internal decision may rest on protected evidence an authorized reviewer can inspect, while a public claim stays inside what an outside reviewer could check, even when a stronger internal result governs the decision. How much evidence is enough follows from what the transition would cost to reverse rather than from how sophisticated the check is, and a failure that is accepted anyway is a bounded waiver with a compensating check, an expiration, and a reopening trigger named in advance, never a pass.
-
-Running underneath all of it is one tension the chapter never resolves and should not pretend to. The sparse, physically grounded verdict that protects the architect is exactly the signal too rare to teach a generator, while the dense signal that could teach it is the surrogate that invites gaming. Every mechanism here buys trust by making feedback sparser, and every one of them makes the learning problem harder.
-
-What this machinery produces when a real result comes back is the subject of the next chapter, where @sec-running-the-loop runs one bounded study end to end and claims nothing stronger than its record supports.
+This chapter therefore hands forward one set of interpretation fields. They
+are measurement status, candidate and comparator, quantity and conditions,
+difference and uncertainty, check scope and shared assumptions, outcome and
+mechanism status, nonclaims, revision destination, and reopening conditions.
+@sec-running-the-loop applies those fields to one bounded array-shape study and
+keeps a tie, a failed explanation, and a stopping decision separate.
