@@ -149,7 +149,7 @@ must answer.
 
 ## Changed Conditions Create Test Obligations
 
-The comparison is causal when each changed condition produces a concrete
+The adaptation becomes concrete when each changed condition produces a test
 obligation rather than a vague demand for more rigor
 (@tbl-ch9-source-target).
 
@@ -158,7 +158,7 @@ obligation rather than a vague demand for more rigor
 | Result cost and delay | Fast analytical simulation and replay | Compiler experiments, RTL, synthesis, floorplanning, and routed checks | Use the simulator for screening; budget slower checks and the review needed to interpret them. |
 | Reversibility | A simulated shape can be discarded | An array and interface freeze creates downstream software and hardware rework | Keep 32 by 32 provisional and preserve a fallback until target checks settle. |
 | Coupling and interface span | Array dimensions varied while mapping and interfaces stayed fixed | Compiler mapping, SRAM, interconnect, host, and accelerator contracts interact | Measure the executable software path and end-to-end offload cost. |
-| Observability | Cycles, utilization, and modeled word traffic | Correctness, latency, bandwidth, area, timing, congestion, power, and thermal behavior | Add memory-system, RTL, implementation, and thermal checks. |
+| Observability and check independence | Cycles, utilization, and modeled word traffic from one simulator | Correctness, latency, bandwidth, area, timing, congestion, power, thermal behavior, reliability, and security properties required by the target | Add memory-system, RTL, implementation, thermal, fault, and security checks where the target consequence requires them; derive checks separately where practical and disclose shared assumptions. |
 | Consequence | A local no-change recommendation | A 3\ W subsystem commitment affecting later implementation | Replace the local score with target criteria and state what remains untested. |
 | Workload | Synthetic three-layer XR-like GEMM slice | Trace-backed spatial-tracking distribution, including tails and drift | Rebuild workload coverage; do not treat the source slice as representative. |
 | Software turnover | One frozen mapping and tool configuration | Compiler and runtime versions will continue to change | Version hardware and software together and rerun affected claims after material changes. |
@@ -180,6 +180,9 @@ that false acceptance. That loss includes reversal and rework cost plus any
 consequence that cannot be reversed. Workload mismatch, limited observability,
 and unsupported proxies raise the first factor. Interface coupling, downstream
 commitment, and system consequence raise the second. Some changes raise both.
+Security and reliability do not enter every study through a universal
+checklist. They enter when the target's assets, threat model, failure model, or
+consequence of failure makes them part of the architecture decision.
 
 This comparison supplies a general procedure. Name the source and target
 decisions, compare the seven conditions, and retain every obligation created
@@ -214,13 +217,16 @@ whether an RTL block is synthesizable, whether its interface is correct, or
 whether the routed design meets timing, power, and thermal constraints.
 
 The target study therefore needs a staged implementation path. Functional
-simulation and independently derived properties exercise the intended
-behavior. Lint and synthesis expose structural and legality failures. Formal
-properties or equivalence checks cover the blocks and invariants where proof
-remains tractable. Physical implementation must then check setup and hold
-timing across relevant corners, congestion, design rules, signal integrity,
-and power-delivery limits. Each check observes a different failure class, and
-none alone establishes implementation readiness.
+simulation exercises selected cases. Independently derived formal properties
+can prove stated behavior within their assumptions, while equivalence checks
+can establish a specified relation between representations. Lint and synthesis
+expose structural and legality failures. Physical implementation must then
+check setup and hold timing across relevant corners, congestion, design rules,
+signal integrity, and power-delivery limits. When the target decision carries reliability or
+security consequences, the path must also state the relevant fault and threat
+models, then exercise the protection, recovery, isolation, and
+information-flow properties derived from them. Each check observes a different
+failure class, and none alone establishes implementation readiness.
 
 Wire effects make the escalation substantive. Synthesis and physical
 synthesis can include wire estimates, but those estimates do not replace
@@ -422,9 +428,12 @@ latency cost and the data-movement bound before promoting the specialization.
 
 [^fn-machine-balance-c09]: **Machine balance point**: The arithmetic intensity, measured in operations performed per byte of memory traffic, at which a machine's peak compute rate and its peak memory bandwidth are exactly matched. A kernel below that ratio stays bandwidth-bound no matter how fast the compute units run, and a kernel above it becomes compute-bound, which is the ridge where the Roofline curve bends from one regime into the other.
 
-The software path connects domain intent to hardware. Programming models, compiler IRs, libraries, runtimes, and generated code form the executable path that makes specialized hardware usable (@fig-codegen-narrow-waist).
+The software path connects domain intent to hardware. Programming models,
+compiler intermediate representations (IRs), libraries, runtimes, and
+generated code form the core construction path shown in
+@fig-codegen-narrow-waist.
 
-![**The software path to specialized hardware.** Domain-specific architectural claims require executable software paths and evidence about correctness, performance, portability, and maintenance.](images/F9b-codegen-narrow-waist){#fig-codegen-narrow-waist width="92%" fig-alt="Narrow-waist diagram showing programming models, compiler representations, libraries, runtimes, and generated code connecting specialized hardware to evidence checks."}
+![**A software path to specialized hardware.** Domain-specific architectural claims require executable software paths and evidence about correctness, performance, portability, and maintenance.](images/F9b-codegen-narrow-waist){#fig-codegen-narrow-waist width="92%" fig-alt="Narrow-waist diagram showing programming models, compiler representations, libraries, runtimes, and generated code connecting specialized hardware to evidence checks."}
 
 Read this figure from top to bottom. Domain intent and the workload
 distribution meet the architecture mechanisms and hardware constraints before
@@ -433,10 +442,14 @@ representations, libraries, runtime, and generated code then carry the
 specialization into an executable path. Tool feedback tests that path for
 correctness, performance, portability, and maintainability.
 
-A local kernel result cannot bypass this software path. The hardware and
-lowering path must be retained so a failure on either side invalidates the
-paired claim. The target study must record the kernel, schedule, compiler,
-runtime, interface, and hardware version that produced each result.
+The figure is deliberately a narrow waist, not a complete system-software
+inventory. A target may also depend on operating-system services, device
+drivers, firmware, memory management, synchronization, and deployment
+configuration. A local kernel result cannot bypass the parts of that path that
+carry its claim. The target study must retain the hardware and lowering path,
+then record the kernel, schedule, compiler, runtime, driver and firmware
+versions where applicable, interface, and hardware version that produced each
+result.
 
 That hardware-interface boundary matters because a candidate can look strong
 in isolation and still collapse once the compiler, data movement, and
@@ -448,13 +461,14 @@ compiler-generated end-to-end measurement before promoting the candidate.
 
 ## Cheap Checks Help Only Within Validated Coverage
 
-SCALE-Sim can remain a cheap screen for the exact configurations exercised in
-the source record. Use elsewhere in the target region requires calibration.
-The simulator cannot establish physical energy, timing, congestion, or
-end-to-end software cost. A sampled set of target candidates therefore needs a
-higher-fidelity reference path that can reveal where the cheap ordering stops
-holding. ArchGym and Apollo demonstrate why architecture searches use common
-interfaces and transferred evaluations to reduce expensive simulation
+SCALE-Sim remains a valid measurement and replay path for the source
+configurations it already evaluated. Using it to screen new target workloads or
+candidates requires calibration. The simulator cannot establish physical
+energy, timing, congestion, or end-to-end software cost. A sampled set of
+target candidates therefore needs a higher-fidelity reference path that can
+reveal where the cheap ordering stops holding. ArchGym and Apollo demonstrate
+why architecture searches use common interfaces and transferred evaluations
+to reduce expensive simulation
 [@KrishnanEtAl2023ArchGym; @yazdanbakhsh2021apollo]. Transfer saves work only
 after the target checks show which source relationships still hold.
 
@@ -498,6 +512,10 @@ lift that ceiling without increasing validated coverage. The model bounds
 expected service work. It becomes a throughput bound only when the modeled
 work consumes the bottleneck resource under stated capacity and concurrency
 assumptions.
+
+@fig-rejection-bound-ceiling makes this limit visible. At any fixed validated
+coverage \(f\), lower check cost moves the colored curves toward the dashed
+ceiling, but only broader validated coverage moves the ceiling itself.
 
 ```{python}
 #| label: fig-rejection-bound-ceiling
@@ -638,6 +656,11 @@ record and decision-holder review determine whether that revision becomes new
 target state. Both paths return through review, so a fast software result can
 reopen the hardware question without silently overwriting it.
 
+In this figure, software state includes the compiler, runtime, interface, and
+generated artifacts. A target whose execution also depends on drivers,
+firmware, operating-system services, or device control must version those
+elements in the same lane.
+
 Design-time results, deployment telemetry, and later software enablement are
 scoped to the artifact versions and conditions they observe, and they support
 different claims. A simulator result belongs to the candidate and conditions it
@@ -681,11 +704,11 @@ or a revision of the hardware's design-time result.
 
 ## A Bounded Adaptation Decision
 
-The source-to-target comparison now supports a complete disposition
+The source-to-target comparison now supports a bounded action plan
 (@tbl-ch9-adaptation-disposition). It keeps the source record intact while
 refusing to make it carry a different claim.
 
-| **Disposition** | **What happens in the target study** |
+| **Treatment** | **What happens in the target study** |
 | --- | --- |
 | **Reuse** | Keep the record schema, provenance structure, raw simulator outputs, four judgments, and candidate identities as historical anchors. |
 | **Refresh** | Replace the synthetic slice with a trace-backed workload distribution; pin compiler, runtime, mapping, interface, and target objective versions. |
@@ -700,8 +723,9 @@ artifact does not imply reuse of its conclusion. {#tbl-ch9-adaptation-dispositio
 
 Read the rows as an allocation of what survives and what must be reopened.
 Reuse protects the historical artifacts. The middle four rows rebuild the
-target evidence path, while narrow and reject constrain what may be claimed.
-This disposition authorizes a new study, not the 32 by 32 freeze.
+checks needed for the target, while narrow and reject constrain what may be
+claimed.
+This plan authorizes a new study, not the 32 by 32 freeze.
 
 ::: {.callout-lighthouse title="Reuse the record, not the conclusion"}
 Do not freeze the 32 by 32 array or its interface from the result in
@@ -718,20 +742,20 @@ The study brief now has explicit tests and boundaries
 These rows are not a universal signoff checklist. Each comes from a specific
 difference between the closed source study and the target decision. The source
 result is preserved, the changed condition creates a new test obligation, and
-the disposition states what can proceed if that test is absent. A different
+the plan states what can proceed if that test is absent. A different
 target would produce a different set.
 
 | **Target obligation** | **Minimum test** | **Boundary if absent** |
 | --- | --- | --- |
 | Workload coverage | Trace-backed common and tail cases, versioned with stated exclusions. | No representativeness claim. |
 | Candidate comparison | Preregister the legal target space, search and evaluation budgets, credible comparator, decision rule, and a sensitivity or resolving-power check. | No claim outside evaluated candidates and no comparative AI-contribution claim when the study cannot distinguish its arms. |
-| Mapping and software path | Compiler-generated end-to-end execution using pinned mapping, compiler, runtime, and interface versions. | No claim that the array is usable by the target stack. |
+| Mapping and software path | Compiler-generated end-to-end execution using pinned mapping, compiler, runtime, driver and firmware versions where applicable, and interface versions. | No claim that the array is usable by the target stack. |
 | Interface and memory cost | Offload granularity, bandwidth, traffic, latency, and a calibrated or validated energy-and-power model with execution rate, duty cycle, leakage and idle power, and the complete subsystem boundary. | No 3\ W or system-speedup claim. |
 | Cheap-screen validity | Representative random or stratified target samples checked against a separate higher-fidelity path, with class-specific error limits, uncertainty, abstention behavior, and a later drift audit. | SCALE-Sim remains a source-study tool, not a target decision filter. |
-| RTL behavior | Independently derived reference tests and properties where practical, plus lint, functional simulation, synthesis, and formal checks within their stated reach. | No implementation-readiness claim. |
+| RTL behavior | Independently derived reference tests and properties where practical, plus lint, functional simulation, synthesis, and formal checks within their stated reach; add fault- and threat-model properties required by the target. | No implementation-readiness, reliability, or security claim beyond the properties checked. |
 | Physical behavior | Pin the selected 3\ nm-class low-power process design kit, libraries, and process, voltage, and temperature conditions; then test area and floorplan feasibility, relevant setup and hold corners, congestion and design rules, routed dynamic and leakage power, power delivery, and electrothermal behavior. | No signoff, tapeout, or physical-feasibility claim. |
-| Containment | Exercise each proposed bypass, disable, guardband, or fallback against the failure class it is intended to contain. | No claim that the implementation can recover from that failure. |
-| Program comparison | Repeat the target study against a credible alternative and record human, machine, tool, and review cost. | No claim that the complete AI-assisted system improves the design program. |
+| Containment | Exercise each proposed bypass, disable, guardband, isolation mechanism, or fallback against the fault or attack it is intended to contain. | No claim that the implementation can contain or recover from that failure. |
+| Design-process comparison | Repeat the target study against a credible alternative and record human, machine, tool, and review cost. | No claim that the complete AI-assisted system improves the design process. |
 
 : **Each obligation changes what the next evaluation must measure.** Untested
 boundaries remain visible rather than being absorbed into a general claim.
@@ -743,7 +767,7 @@ RTL checks, physical checks, and containment mechanisms can support a claim.
 The final row passes a complete-system comparison obligation to
 @sec-evaluating-agentic-architect. It does not perform that evaluation here.
 
-This technical packet does not change decision rights. Bounded automated
+This plan does not change decision rights. Bounded automated
 components may propose or screen candidates inside the declared study.
 Rejection, waivers, the architecture freeze, signoff, and tapeout remain with
 the named roles defined in @sec-what-architect-owns.
@@ -754,9 +778,17 @@ The source conclusion cannot.
 
 ## Open Research Questions
 
+### Transferring and Reopening Claims
+
 **When has a target changed enough to require a new study?** The seven
 conditions provide a comparison, but no calibrated threshold yet distinguishes
 a harmless version change from a change that invalidates the source evidence.
+
+**How should workload and software turnover reopen an implementation-facing
+claim?** The target record needs a change detector that names which tests must
+rerun without silently replacing the earlier workload, objective, or result.
+
+### Calibrating Reuse and Checks
 
 **How can validated coverage be estimated without sending every case through
 the expensive reference?** A useful answer needs sampling, uncertainty, and
@@ -766,10 +798,6 @@ drifts.
 **How should correlated failures between generation and checking be
 measured?** Model identity and prompt lineage are useful disclosures, but the
 engineering quantity is the failure class that both paths miss together.
-
-**How should workload and software turnover reopen an implementation-facing
-claim?** The target record needs a change detector that names which tests must
-rerun without silently replacing the earlier workload, objective, or result.
 
 ## Conclusion
 
@@ -797,7 +825,7 @@ supports a system result. The executable software path and its end-to-end
 measurements are part of the architecture claim.
 
 The third principle bounds inexpensive checking by validated coverage. Cases
-outside the measured support region still require the higher-fidelity
+outside the validated region still require the higher-fidelity
 reference, and proposal bursts still require review-capacity headroom. A lower
 unit check cost cannot remove that remaining work.
 
@@ -813,7 +841,7 @@ recalibrate the cheap screen, and add independent implementation checks. Do
 not transfer the local score, AI-contribution comparison, failed mechanism
 explanation, or pending recommendation.
 
-@sec-evaluating-agentic-architect receives this compact obligation packet. It
+@sec-evaluating-agentic-architect receives this set of obligations. It
 contains the varied target conditions, complete-system costs, validated
 cheap-check scope, versioned hardware-software state, implementation checks,
 and a requirement for comparison with a credible alternative. That chapter
