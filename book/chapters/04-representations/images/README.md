@@ -2,8 +2,9 @@
 
 Image-backed figures currently used by the chapter:
 
-- `F4-data-pyramid`: observation sources with different cost and fidelity
-  characteristics.
+- `F4-data-pyramid`: property-specific observation paths that preserve source,
+  coverage, cost, conditions, and blind spots without imposing a universal
+  fidelity order.
 - `F4b-split-brain-causality`: stale reference state diverging from current
   project state.
 - `F5a-trajectory-record`: accepted and rejected work linked to the state and
