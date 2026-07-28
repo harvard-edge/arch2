@@ -1,22 +1,31 @@
 # Chapter 5 Figure Inventory
 
-Current figures:
+Static figures used by the chapter:
 
-- `F7-method-role-map`: method roles in architecture work.
 - `F5-architecture-world-model`: separate prediction and tool-observation
   paths.
 - `F5c-macro-placement`: sequential placement actions and weighted proxy
   feedback.
-- `F6-verification-lifecycle`: verification-related method roles.
-- `ch6_ai_roles`: AI role taxonomy used by the chapter.
 
 Executable Quarto figures in the chapter:
 
-- `fig-evidence-gap`: Matplotlib design-space versus evidence-budget plot.
+- `fig-ch06-kernel-funnel`: attempted, correct, and correct-and-faster
+  KernelBench results.
+- `fig-ch06-conformal-coverage`: synthetic support-change illustration.
+- `fig-evidence-gap`: large design-space anchors beside the represented
+  Lighthouse candidate and evaluation counts.
+- `fig-bayesian-optimization`: illustrative Gaussian-process posterior and
+  upper-confidence-bound acquisition.
 
-Needed next:
+Deferred figure sources:
 
-- Keep quantitative method-selection plots executable in Quarto/Python.
-- Keep the method-role framing aligned with the book's chapter contracts.
-- Ensure every generated/predicted/optimized object has an evidence path that
-  can reject it.
+- `book/scratch_figures/deferred-chapter-05/F6-verification-lifecycle.svg`
+  awaits the Chapter 6/7 visual audit.
+- `book/scratch_figures/deferred-chapter-05/F7-method-role-map.svg` awaits the
+  Chapter 7/11 visual audit.
+- `book/scratch_figures/deferred-chapter-05/ch6_ai_roles.svg` awaits the Chapter
+  6 visual audit.
+
+The deferred files preserve the original hand-authored sources without forcing
+later-chapter concepts into Chapter 5. Their old PDF companions are generated
+derivatives and can be recreated after a destination is selected.
