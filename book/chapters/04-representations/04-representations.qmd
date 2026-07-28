@@ -34,13 +34,13 @@ It permits only the L2 capacity to change. Before any method can help, those
 facts have to exist in a form that the method can inspect without silently
 changing their meaning.
 
-That requirement is easy to underestimate. Model parameters may encode the
-RISC-V specification, common cache organizations, and the usual relationships
-among capacity, misses, area, latency, and power. None of that knowledge identifies
-the current design revision, the software image that will run on it, the
-workload snapshot used for comparison, or the conditions under which earlier
-results remain relevant. General knowledge can suggest plausible work. It
-cannot substitute for the state of this project.
+That requirement is easy to underestimate. The weights of a trained model may
+reflect the RISC-V specification, common cache organizations, and the usual
+relationships among capacity, misses, area, latency, and power. None of that
+knowledge identifies the current design revision, the software image that will
+run on it, the workload snapshot used for comparison, or the conditions under
+which earlier results remain relevant. General knowledge can suggest plausible
+work. It cannot substitute for the state of this project.
 
 Representation is therefore an architecture decision, not a file-format
 choice. It decides which system relationships remain visible, which designs
@@ -218,7 +218,9 @@ from a declared synthesis and physical-design flow
 [@ChaiEtAl2022CircuitNet]. It attempted 12,960 back-end runs and retained
 10,242 layouts after excluding failed runs. These datasets support different
 questions. Neither supplies the current state or complete history of a live
-design project.
+design project. CircuitNet's retained layouts also illustrate a general
+dataset risk. A model trained only on the surviving layouts can learn the
+properties of completed runs without learning where the flow failed or why.
 
 Public benchmarks add another risk. Models trained on public HDL corpora may
 have seen the standard benchmark solutions, and contamination studies have
@@ -233,8 +235,9 @@ Successful designs can also present a biased view of the space. When a project
 retains the winning configuration while deleting failed synthesis runs,
 unroutable netlists, and rejected alternatives, the remaining data is not an
 unbiased sample [@Rubin1976InferenceMissingData]. The missing records are
-concentrated near the boundaries that later work most needs to understand. A
-timing failure may report only that slack became negative, and a crashed run
+concentrated near the boundaries that later work most needs to understand. The
+missingness is systematic because failure itself affects whether a record
+survives. A timing failure may report only that slack became negative, and a crashed run
 may return no metric at all. Treating the surviving results as though they were
 an unbiased sample makes the feasible region look larger than it
 is.[^fn-censored-c04]
@@ -336,10 +339,10 @@ name enough of its source conditions and acquisition cost for a later architect
 to decide whether it applies and what it took to produce.
 
 Taken together, the earlier cat-label contrast, the source-cost spectrum, and
-the acquisition record reject the simplification that architecture results are
-interchangeable examples with fixed labels. Architecture observations are
-costly conditional results tied to a design history and a set of property
-checks (@tbl-architecture-observations-not-labels).
+the acquisition record show why architecture results are not interchangeable
+examples with fixed labels. Architecture observations are costly conditional
+results tied to a design history and a set of property checks
+(@tbl-architecture-observations-not-labels).
 
 | **Dataset simplification** | **Architecture observation** | **Consequence for later use** |
 | --- | --- | --- |
@@ -439,10 +442,10 @@ generators can expose a bounded set of changes while retaining the lowering
 path to RTL.
 
 Typed representations are not safe in general. They reject only violations
-covered by their types and checks. SystemVerilog, FIRRTL, typed dialects in the
-CIRCT compiler infrastructure, and companion formats such as Synopsys Design
-Constraints (SDC) and Unified Power Format (UPF) preserve different properties
-[@CIRCT] (@tbl-representation-formats).
+covered by their types and checks. SystemVerilog, FIRRTL, typed dialects in
+Circuit IR Compilers and Tools (CIRCT), and companion formats such as Synopsys
+Design Constraints (SDC) and Unified Power Format (UPF) preserve different
+properties [@CIRCT] (@tbl-representation-formats).
 
 | **Representation** | **What It Makes Explicit** | **What Still Requires Attention** |
 | --- | --- | --- |
@@ -708,6 +711,37 @@ The representation should keep only what the study needs, but it cannot omit
 the identity required to decide whether two records describe the same
 conditions.
 
+### Current State Has a Maintenance Cost
+
+A freshness check reports a condition at one moment. It does not keep the state
+current. Each source that could change the decision needs a named owner and an
+invalidation trigger. A new design revision, compiler release, workload capture,
+tool calibration, constraint, library, process assumption, or expired waiver can
+make some part of the represented problem stale.
+
+When a trigger occurs, the owner must determine which dependent artifacts and
+observations are affected. The response may be to regenerate an artifact, rerun
+a consistency check, recapture data, recalibrate a model, repeat a measurement,
+or mark the earlier result unavailable for the current comparison. The
+dependency links matter because they keep a compiler update from forcing
+unrelated physical work while ensuring that a changed cache generator reaches
+the configurations, RTL, constraints, tests, and results that depend on it.
+
+This maintenance consumes the same resources that data acquisition does.
+Regeneration and checking use compute, licenses, storage, and tool time.
+Recapturing a workload or recalibrating a model uses data and engineering time.
+Broken links and source conflicts require diagnosis and review. Those recurring
+costs should remain separate in the project record so that maintaining a rich
+representation is not treated as free and so a later evaluation can see whether
+the retained state repaid its cost.
+
+Not every source should be maintained forever. When refresh cost exceeds the
+value of keeping a source live, the project can narrow the representation,
+freeze a versioned snapshot with an explicit review condition, or retain the
+missing relationship as a blind spot. A source with no owner, invalidation
+trigger, or affordable refresh path is historical context, not current project
+state.
+
 ### Cross-Layer Relationships Need Provenance
 
 Freshness also runs vertically through the stack. A high-level decision such as
@@ -768,7 +802,7 @@ surface only after a later tool, reviewer, or field observation exposes it.
 Both should remain visible so that a later method does not convert missing
 information into an assumed favorable value.
 
-For this bounded study, @tbl-represented-problem is the minimum handoff. It
+For this bounded study, @tbl-represented-problem provides the minimum useful handoff. It
 contains enough identity and context to reconstruct the comparison, expose
 legal changes, and recognize when the representation is no longer useful. A
 longer-lived or more consequential use needs more retained history and source
@@ -811,34 +845,40 @@ a resolution, or if no one can state where the representation is useful.
 
 ## Open Research Questions
 
+### Learning from architecture observations
+
 **How can AI-assisted methods learn from failed and censored design data without
 treating every local failure as a universal boundary?** Failed runs contain
 valuable information near feasibility limits, but their meaning depends on the
 exact design, tools, workload, and constraints that produced them.
+
+**How can a method expose a blind spot that no current source has named?**
+Declared omissions can be recorded directly, but unrecognized missing
+relationships may appear only after a later tool, reviewer, or workload exposes
+them.
+
+### Representing relationships and legal changes
 
 **Which representation lets a method preserve the neighborhood that matters
 for a given architecture decision?** A scalar schema, graph, spatial model, or
 typed IR makes different relationships visible and creates different notions
 of adjacency.
 
-**How can an automated method detect that represented state no longer describes
-the artifact it names?** Regeneration catches divergence where state owns the
-build, but hand edits, generated collateral, and external tool transformations
-create additional paths for drift.
-
 **How should a method represent hardware and software dependencies when no
 single artifact owns the interface between them?** ISA, compiler, runtime,
 firmware, and microarchitecture changes often cross repositories and
 organizational boundaries.
 
+### Keeping project state useful
+
+**How can an automated method detect that represented state no longer describes
+the artifact it names?** Regeneration catches divergence where state owns the
+build, but hand edits, generated collateral, and external tool transformations
+create additional paths for drift.
+
 **What is the smallest useful record for an AI-assisted bounded study?** Too
 little state makes a result uninterpretable, while indiscriminate capture
 creates cost, privacy, and maintenance burdens that can outlive the study.
-
-**How can a method expose a blind spot that no current source has named?**
-Declared omissions can be recorded directly, but unrecognized missing
-relationships may appear only after a later tool, reviewer, or workload exposes
-them.
 
 ## Conclusion
 
