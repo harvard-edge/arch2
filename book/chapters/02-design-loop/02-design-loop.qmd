@@ -32,13 +32,26 @@ than an earlier one. It must keep all of that consistent long enough to support
 one decision. Much of the complexity an architect once inherited from the next
 process node now has to be coordinated explicitly across teams and tools.
 
-That growth is not a flat list of independent problems. The pressures build on one another as a system gains layers. Microarchitecture and multicore execution add policies and coherence, specialization tailors a block to a workload, composing specialized blocks into a system-on-chip or a set of chiplets adds integration boundaries, and the executable software contract adds compilers, runtimes, and tests that keep moving even after the hardware is fixed. Each layer carries the constraints of the one beneath it and adds its own, so a fair comparison must hold more of the system at once. This chapter works through those layers in order, then turns to a pressure of a different kind, the rising cost and irreversibility of the evidence needed to settle the resulting comparison.
+That growth is not a flat list of independent problems. The pressures build on
+one another as a system gains layers. Microarchitecture and multicore execution
+add policies and coherence. Specialization tailors a block to a workload.
+Composing specialized blocks into a system-on-chip or a set of chiplets adds
+integration boundaries. The executable software contract adds compilers,
+runtimes, and tests that keep moving even after the hardware is fixed.
+
+Each layer carries the constraints of the one beneath it and adds its own, so a
+fair comparison must hold more of the system at once. This chapter works through
+those layers in order, then turns to a pressure of a different kind, the rising
+cost and irreversibility of the evidence needed to settle the resulting
+comparison.
 
 As those layers accumulate, the difficulty is not simply that modern projects can generate more candidates. Work becomes hard to complete when the project cannot keep its information
 current, define useful and valid choices, afford decisive evaluation, review
 the resulting evidence, or connect that evidence to a decision. These five
-failure modes are candidate diagnoses rather than conclusions. The chapter
-follows one *work-item class*, a named kind of architecture work with stated
+failure modes are candidate diagnoses rather than conclusions. They provide the
+diagnostic lens used after the chapter has shown how the layers compound.
+
+The chapter follows one *work-item class*, a named kind of architecture work with stated
 entry and exit conditions, over one *observation window*, a fixed period in
 which arrivals and completions of its individual instances, delays, and rework
 are counted. After the layers are in view, those observations help determine
@@ -144,7 +157,19 @@ consistent at once.
 
 ## What a Fair Comparison Must Carry
 
-For decades, computing advanced through a layered stack of technology, architecture, and optimization, abbreviated here as TAO. Device scaling supplied faster transistors, microarchitecture organized them, and compilers mapped software onto the result. Each layer could largely be reasoned about on terms the layer beneath it supplied, which is what kept those boundaries usable. The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept power density constant as transistors shrank, ended that arrangement. Because a chip's transistors could no longer all switch within its power budget, a growing fraction had to stay dark at any moment, the dark-silicon problem [@EsmaeilzadehEtAl2011DarkSilicon], which made specialized, selectively powered blocks the primary route to further efficiency.
+For decades, computing advanced through a layered stack of technology,
+architecture, and optimization, abbreviated here as TAO. Device scaling
+supplied faster transistors, microarchitecture organized them, and compilers
+mapped software onto the result. Each layer could largely be reasoned about on
+terms the layer beneath it supplied, which kept those boundaries usable. The
+redrawn stack adds specialization, making the abbreviation TAOS.
+
+The end of Dennard scaling [@DennardEtAl1974Scaling], the property that kept
+power density constant as transistors shrank, ended the earlier arrangement.
+Because a chip's transistors could no longer all switch within its power budget,
+a growing fraction had to stay dark at any moment, the dark-silicon problem
+[@EsmaeilzadehEtAl2011DarkSilicon]. Specialized, selectively powered blocks
+became a primary route to further efficiency.
 
 That three-layer reading is the conventional one. The redrawing asks how
 specialization changes a stack whose layers could once be evaluated largely on
@@ -338,7 +363,26 @@ also let architects mix process technologies, IP blocks, and memory. Open
 standards such as UCIe stabilize the interface while leaving partitioning and
 implementation to architects [@UCIeConsortium2026Spec].
 
-Composition adds a dense layer of coupled choices in return. A chiplet system is more than a larger board-level system inside a package; the package alters latency, bandwidth, energy, thermal coupling, and physical constraints. Furthermore, a modern SoC integrates dozens to hundreds of heterogeneous IP blocks from different vendors. Real SoCs are often brownfield environments. An architect is not just composing new chiplets; they must often integrate a novel accelerator with legacy controllers and proprietary PHYs where the vendor does not provide the source RTL. The traditional design loop struggles here because undocumented interface quirks, mismatched reset sequences, and cross-clock domain (CDC) constraints resist analytical modeling. Coherence-protocol mismatches, unstated timing constraints, and system-level deadlocks often surface only when the full SoC is assembled.[^fn-soc-deadlocks-c02] Two blocks whose individual behavior is perfectly verified can hang the system when a mismatched credit-return protocol between them closes a cycle of dependencies, and a hang of that kind survives block-level simulation and can cost months of post-silicon bring-up to locate. Each added block narrows the set of valid designs. Moving a function across a chiplet boundary changes the available interfaces, software path, and tools needed to evaluate it.
+Composition adds a dense layer of coupled choices in return. A chiplet system is
+more than a larger board-level system inside a package. The package alters
+latency, bandwidth, energy, thermal coupling, and physical constraints. A modern
+SoC also integrates dozens to hundreds of heterogeneous IP blocks from different
+vendors.
+
+Real SoCs are often brownfield systems. An architect may have to integrate a new
+accelerator with legacy controllers and proprietary physical-interface blocks
+whose vendor does not provide the source RTL. Undocumented interface behavior,
+mismatched reset sequences, and cross-clock-domain (CDC) constraints resist
+analytical modeling. Coherence-protocol mismatches, unstated timing constraints,
+and system-level deadlocks can surface only when the full SoC is
+assembled.[^fn-soc-deadlocks-c02] Two blocks that pass their individual checks
+can still hang the system when a mismatched credit-return protocol closes a
+cycle of dependencies. Such a hang can survive block-level simulation and take
+months of post-silicon bring-up to locate.
+
+Each added block narrows the set of valid designs. Moving a function across a
+chiplet boundary changes the available interfaces, software path, and tools
+needed to evaluate it.
 
 In the XR Lighthouse, this composition challenge extends directly to routing congestion. The Lighthouse Network-on-Chip (NoC) must arbitrate between the bursty traffic of the SLAM accelerator and the absolute, rigid latency deadlines of the display engine.
 
@@ -452,6 +496,11 @@ Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and ev
 deep-neural-network (DNN) accelerators, provides a concrete example. For a single
 CNN layer with seven nested loops and a four-level memory hierarchy, the
 unconstrained mapspace already contains $(7!)^4 \times (2^4)^3$ arrangements.
+The first factor permits a different ordering of the seven loops at each of four
+memory levels. The second permits a binary bypass choice at those four levels
+for each of three data spaces. The formula is not a count of useful mappings. It
+is the space from which legality, capacity, and performance constraints must
+remove most candidates.
 
 | **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
 | --- | --- | --- |
@@ -549,11 +598,16 @@ raises how many candidates receive an estimate. It does not by itself raise how
 many receive an estimate strong enough to support a commitment. Its support is
 limited to the data behind it, and it may not warn when a candidate falls
 outside that coverage unless the method estimates uncertainty or detects
-distribution shift.
+distribution shift.[^fn-distribution-shift-c02]
 Search capacity and evaluation capacity are separate budgets. A comparison
 between exploration methods must therefore make evaluation fidelity, tool cost,
 total compute, and engineering effort comparable rather than equalize candidate
 count alone [@KrishnanEtAl2023ArchGym].
+
+[^fn-distribution-shift-c02]: **Distribution shift** occurs when the candidates
+or workloads being evaluated differ in important ways from the data used to
+build or calibrate a model. A predictor can remain confident even when those
+differences make its earlier error measurements unreliable.
 
 ## The Software Contract
 
@@ -565,7 +619,15 @@ Even when a hardware candidate clears physical constraints and evaluation budget
 
 A hardware proposal is therefore incomplete until architects can inspect and test the software path needed to use it, and modern tensor programs make that path a search problem of its own. Frameworks like Halide and MLIR make scheduling, lowering, and intermediate representations part of the performance comparison [@RaganKelleyEtAl2017HalideCACM; @LattnerEtAl2020MLIR]. A hardware optimizer might select a mechanism that the compiler cannot target, or whose software overhead erases the predicted gain. A credible comparison must cover an executable hardware-software path, not a hardware block in isolation.
 
-A joint search can, in principle, vary compiler schedules alongside hardware parameters, using a shared schema such as an MLIR dialect to co-generate the intermediate representation and the RTL. Combinations found together can beat anything either domain finds alone. The demonstrated half is software. Autotuners search billions of tensor-program schedules [@ChenEtAl2018AutoTVM]. The joint claim, hardware and schedule co-optimized together, still depends on an evaluation that can score both sides at matched fidelity, and that evaluation, not the search, is where co-design efforts stall.
+A joint search can, in principle, vary compiler schedules alongside hardware
+parameters, using a shared schema such as an MLIR dialect to co-generate the
+intermediate representation and the RTL. Combinations found together can beat
+anything either domain finds alone. The software side has already demonstrated
+search at enormous scale. Autotuners search billions of tensor-program schedules
+[@ChenEtAl2018AutoTVM]. The stronger claim, that hardware and schedule were
+co-optimized together, still depends on an evaluation that can score both sides
+at matched fidelity. That evaluation, not merely the search, is where co-design
+efforts stall.
 
 At the distributed scale, this software path becomes even more complex. It is not enough to compile code for a single node; the software path must include distributed communication primitives (like MPI or NCCL) and cluster-aware compilers (like Alpa [@ZhengEtAl2022Alpa] or Megatron [@NarayananEtAl2021Megatron]) that can map tensor operations across thousands of GPUs over optical networks.
 
@@ -1084,7 +1146,7 @@ compilation, and bring-up costs. Actual rates depend on the model, workload,
 host, tool, and platform. The budget question is therefore not only whether a
 candidate can be measured, but which candidates earn an expensive tier.
 
-Active-learning and surrogate-guided methods can direct expensive EDA runs
+Active-learning[^fn-active-learning-c02] and surrogate-guided methods can direct expensive EDA runs
 toward candidates that appear most informative, and such methods have
 accelerated architectural exploration in practice
 [@KrishnanEtAl2023ArchGym]. They still consume training data and evaluation
@@ -1095,6 +1157,11 @@ SimPoint selecting representative program regions
 a method-selection question for
 @sec-methods-generation-prediction-optimization. The point here is narrower.
 Expensive evaluation can limit how many candidates receive a decisive check.
+
+[^fn-active-learning-c02]: **Active learning** chooses the next measurement
+partly for how much it is expected to improve a model, rather than evaluating
+only the candidate with the best current score. In architecture work, the
+selected measurement may still require an expensive simulator or EDA run.
 
 The allocation decision is itself difficult. Generating or scoring another
 candidate may be cheap, but an inaccurate screen can discard a useful design or
@@ -1157,7 +1224,24 @@ makes verification a condition worth checking in any proposal to generate
 architectural candidates faster. It does not establish that verification is
 the limiting condition in every project.
 
-If a search outputs dozens of novel RTL accelerators a week, but a verification engineer requires weeks to write the testbenches and covergroups for just one, the generation speed is wasted. This gap grounds the state-space explosion in the daily reality of an RTL team. Foster's summary of the 2022 Wilson Research Group functional-verification study reports that demand for IC/ASIC verification engineers grew nearly three times as much as demand for design engineers from 2007 to 2022, about 146 percent versus 50 percent (@fig-verification-demand-scissors). Mean peak staffing was roughly one verification engineer per design engineer across most market segments, processor projects reached ratios as high as five to one, and design engineers spent 49 percent of their time on verification in 2022 [@Foster2022WilsonVerificationStudy]. Every invalid candidate that reaches these stages consumes compute and scarce engineering time. Generated candidates are cheap only until they require tools, verification, and expert review.
+If a search outputs dozens of novel RTL accelerators a week, but a verification
+engineer requires weeks to write the testbenches and covergroups for just one,
+the generation speed is wasted. This gap grounds the state-space explosion in
+the daily reality of an RTL team.
+
+Foster's summary of the 2022 Wilson Research Group functional-verification study
+reports that demand for IC/ASIC verification engineers grew nearly three times
+as much as demand for design engineers from 2007 to 2022, about 146 percent
+versus 50 percent (@fig-verification-demand-scissors). Mean peak staffing was
+roughly one verification engineer per design engineer across most market
+segments, processor projects reached ratios as high as five to one, and design
+engineers spent 49 percent of their time on verification in 2022
+[@Foster2022WilsonVerificationStudy].
+
+These figures do not prove that every project is verification-limited. They do
+show that every invalid candidate reaching these stages consumes compute and
+scarce engineering time. Generated candidates are cheap only until they require
+tools, verification, and expert review.
 
 That staffing ratio suggests a hypothesis rather than a project diagnosis. If
 verification packages are waiting for engineers, a generator that drafts
@@ -1663,6 +1747,8 @@ been named.
 Several questions remain open because project records support a local diagnosis
 without providing universal thresholds or guarantees.
 
+### Diagnosing the limiting work
+
 **How can a project detect that faster candidate generation has begun to delay
 the decision by filling evaluation and review queues?** Arrival, completion,
 waiting, and rejection behavior provide a starting point, but useful thresholds
@@ -1674,15 +1760,17 @@ choose what to fix first?** The five conditions often coexist, so a practical
 diagnostic must handle more than one constraint without turning every delay
 into the same category.
 
-**How can a learned physical estimator report that a proposed topology falls
-outside its tested range instead of returning a confident estimate?** Dynamic
-IR drop and routing congestion are especially important cases because the
-stronger physical check is expensive and may reverse an early ranking.
-
 **What makes verification effort predictable early enough to compare it with
 power, performance, area, and schedule?** A novel candidate creates coverage
 and review work that is often discovered only after the architecture is
 substantially fixed.
+
+### Keeping models and comparisons valid
+
+**How can a learned physical estimator report that a proposed topology falls
+outside its tested range instead of returning a confident estimate?** Dynamic
+IR drop and routing congestion are especially important cases because the
+stronger physical check is expensive and may reverse an early ranking.
 
 **Which change in a workload trace, compiler version, or model family
 invalidates an architecture comparison?** Detecting a version change is
@@ -1691,6 +1779,8 @@ mechanical, but deciding whether it overturns the supported claim is not.
 **How should a hardware candidate be evaluated for robustness to software drift
 between design commitment and deployment?** The answer must distinguish useful
 adaptability from extra hardware cost paid for changes that may never occur.
+
+### Budgeting evaluation and review
 
 **At what design-space scale does automated search produce a better decision
 than an expert-guided parameter sweep under the same evaluation and review
