@@ -155,6 +155,171 @@ tool checks helped architecture scale because they stabilized a particular
 boundary. Modern specialization requires several of those boundaries to remain
 consistent at once.
 
+## The Technology Dividend Has Changed
+
+For roughly fifty years, processor generations improved through a familiar progression where device scaling regularly delivered faster, cheaper, and more energy-efficient transistors. Quantitative analysis gave architects a way to compare the resulting design choices. As scaling slowed, microarchitecture, parallelism, and eventually domain specialization provided the remaining gains [@HennessyPatterson2017QuantitativeApproach; @HennessyPatterson2019GoldenAge]. This shift is visible in fifty years of frontier microprocessor data. Clock frequency plateaued in the mid-2000s and never recovered, while transistor counts continued to rise, core counts turned upward, and frontier power resumed climbing toward 500\ W (@fig-microprocessor-trends).
+
+```{python}
+#| label: fig-microprocessor-trends
+#| fig-cap: |
+#|   **Frequency stalls while power keeps climbing:** the end of Dennard scaling closed one road and opened the modern design problem. Data from Karl Rupp's public microprocessor dataset are summarized as the highest value in each four-year interval [@Rupp2022MicroprocessorTrendData]. Clock frequency plateaus in the mid-2000s as Dennard scaling ends, while transistor counts continue to rise, core counts turn upward, and frontier power resumes climbing to 500\ W [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon]. The figure shows frontier values rather than every processor; the era boundaries are approximate [@HennessyPatterson2019GoldenAge].
+#| out-width: "100%"
+#| fig-alt: "Log-scale line chart of frontier microprocessor trends from 1971 to 2021 with five series. Transistors per chip rise from a few thousand to tens of billions by 2021. Single-thread performance rises steeply until the mid-2000s and then slows. Clock frequency plateaus near 3 to 5 GHz after about 2005, while frontier power keeps climbing toward 500 W and logical core counts climb from one to the hundreds. Dashed vertical lines mark the approximate end of Dennard scaling around 2005 and the specialization turn around 2016. A dotted boundary past 2025 marks AI-assisted cross-layer design as a prospective era rather than a measured trend."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, add_note_box, apply_style
+
+apply_style()
+
+# Fifty-year microprocessor trend data; per-series frontier points
+# (per-4-year-bucket maxima) transcribed from the public dataset
+# github.com/karlrupp/microprocessor-trend-data (50yrs/*.dat, CC-BY 4.0),
+# which compiles the Horowitz/Labonte/Shacham/Olukotun/Hammond/Batten
+# collection through 2010 plus Rupp's additions through 2021. Values are
+# dataset-transcribed, not recomputed; fractional years as in the dataset;
+# transistors in thousands, single-thread performance in SpecINT x 1000.
+# Era-boundary annotations (~2005 Dennard end, ~2016 specialization turn)
+# are approximate: [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon; # @HennessyPatterson2019GoldenAge]. Accessed 2026-07-14.
+# Receipt: data/source-receipts/chapter1-micro-trend.csv
+series = [
+    {
+        "label": "Transistors\n(thousands)",
+        "color": COLORS["purple"],
+        "points": [(1974.3, 6.1), (1982.3, 136), (1985.9, 274), (1989.5, 1210),
+                   (1992.7, 3110), (1998.9, 15300), (2002.9, 221000),
+                   (2007.0, 583000), (2009.7, 2.31e6), (2014.8, 5.7e6),
+                   (2018.5, 2.11e7), (2021.9, 5.82e7)],
+        "label_y": 5.82e7,
+    },
+    {
+        "label": "Single-thread perf\n(SpecINT x 1000)",
+        "color": COLORS["blue"],
+        "points": [(1988.7, 83.5), (1994.8, 599), (1998.9, 3550),
+                   (2002.4, 9390), (2007.0, 35200), (2010.3, 42000),
+                   (2014.8, 66000), (2017.6, 83600), (2021.3, 105000)],
+        "label_y": 1.05e5,
+    },
+    {
+        "label": "Frequency (MHz)",
+        "color": COLORS["orange"],
+        "points": [(1974.3, 2.02), (1982.3, 6.1), (1985.9, 16.1),
+                   (1988.7, 40.3), (1994.7, 297), (1997.5, 538),
+                   (2002.4, 2250), (2004.9, 3650), (2007.7, 4660),
+                   (2012.7, 3700), (2016.7, 4000), (2020.9, 3200)],
+        "label_y": 3.2e3,
+    },
+    {
+        "label": "Typical power (W)",
+        "color": COLORS["red"],
+        "points": [(1974.3, 0.922), (1982.3, 3.02), (1986.2, 3.02),
+                   (1988.7, 3.96), (1993.0, 35.2), (1998.9, 90.6),
+                   (2001.7, 98.2), (2003.4, 155), (2010.4, 168),
+                   (2013.4, 300), (2018.5, 250), (2021.9, 500)],
+        "label_y": 7.5e2,
+    },
+    {
+        "label": "Logical cores",
+        "color": COLORS["green"],
+        "points": [(1971.9, 1), (1979.6, 1), (1985.9, 1), (1988.7, 1),
+                   (1992.4, 1), (1995.4, 1), (1999.2, 1), (2006.0, 8),
+                   (2010.2, 16), (2013.4, 240), (2016.5, 272), (2021.9, 208)],
+        "label_y": 1.1e2,
+    },
+]
+
+fig, ax = plt.subplots(figsize=(6.4, 3.6))
+fig.subplots_adjust(left=0.075, right=0.775, top=0.90, bottom=0.225)
+
+ax.set_yscale("log")
+ax.set_xlim(1970, 2032.5)
+ax.set_ylim(0.4, 3e9)
+
+for x in (2005, 2016):
+    ax.axvline(x, color=COLORS["muted"], linewidth=0.8,
+               linestyle=(0, (4, 3)), zorder=1)
+
+era_labels = [
+    (1987.5, "Device-scaling era"),
+    (2010.5, "Parallelism era"),
+    (2020.5, "Specialization\nera"),
+]
+for x, text in era_labels:
+    ax.text(x, 6.5e8, text, ha="center", va="center", fontsize=6.2,
+            fontweight="bold", color=COLORS["ink"])
+
+# Prospective era: annotation only, no data points and no band fill, styled
+# like the other era boundaries but dotted to mark a prospective argument.
+ax.axvline(2025, color=COLORS["muted"], linewidth=0.8,
+           linestyle=(0, (1.5, 2.5)), zorder=1)
+ax.text(2028.9, 6.5e8, "AI-assisted\ncross-layer\ndesign?", ha="center",
+        va="center", fontsize=5.4, fontweight="bold",
+        color=COLORS["workload_ink"], linespacing=1.2)
+ax.text(2028.9, 2.5e7, "(prospective,\nnot measured\ndata)", ha="center",
+        va="top", fontsize=5.4, color=COLORS["muted"], linespacing=1.25)
+
+ax.text(2004.3, 4e7, "Dennard scaling\nends", ha="right", va="center",
+        fontsize=5.6, color=COLORS["muted"], linespacing=1.15)
+ax.text(2016.4, 1.6e6, "specialization\nturn", ha="left", va="center",
+        fontsize=5.6, color=COLORS["muted"], linespacing=1.15)
+
+for s in series:
+    xs = [p[0] for p in s["points"]]
+    ys = [p[1] for p in s["points"]]
+    ax.plot(xs, ys, color=s["color"], linewidth=1.6, zorder=2)
+    ax.scatter(xs, ys, s=13, color=s["color"], zorder=3)
+    ax.text(1.015, s["label_y"], s["label"], ha="left", va="center",
+            fontsize=6.0, fontweight="bold", color=s["color"],
+            clip_on=False, linespacing=1.15,
+            transform=ax.get_yaxis_transform())
+
+ax.set_xticks([1970, 1980, 1990, 2000, 2010, 2020])
+ax.set_yticks([1, 1e2, 1e4, 1e6, 1e8])
+ax.set_yticklabels([r"$10^0$", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^8$"])
+ax.tick_params(axis="both", labelsize=6.5, length=2.5, width=0.6, pad=2)
+ax.grid(axis="y", color=COLORS["grid"], linewidth=0.6)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+add_note_box(
+    fig,
+    "Four-year frontier maxima from Rupp's 50-year dataset; "
+    "era boundaries are approximate.",
+    xywh=(0.075, 0.03, 0.70, 0.075),
+    fontsize=5.6,
+)
+
+plt.show()
+plt.close(fig)
+```
+
+@fig-microprocessor-trends marks the end of a free lunch [@Sutter2005FreeLunch]. Transistor counts kept climbing, but once Dennard scaling ended around 2005, the single-thread gains that had arrived automatically each generation slowed from roughly 50 percent a year to a few percent [@HennessyPatterson2017QuantitativeApproach]. Further gains now had to fit within the power a package could dissipate.
+
+Dennard scaling ended for a specific physical reason. Supply voltage stopped falling with feature size because threshold voltage had reached the floor set by leakage. Pushing it lower leaves transistors that never fully switch off, so static power climbs sharply. With voltage pinned, each additional transistor clocked at full frequency adds net power. That is the arithmetic behind both the frequency plateau in @fig-microprocessor-trends and the dark-silicon fraction that followed, the share of the chip that must stay powered off to fit its thermal budget. The field recovered the lost gains first through parallelism and then through specialization. Each turn handed architects more of the machine to manage rather than inheriting it from the next process node. The figure's dotted rightmost era marks a possible next turn. The open question is whether AI can help architects co-design across those layers rather than tune each in isolation.
+
+The end of Dennard scaling is not the only pressure, and the second one is
+economic rather than physical. What remains of Moore's law
+[@Moore1965Cramming] still delivers more transistors at each node, but the cost
+to design and verify them keeps climbing
+(@fig-design-cost-composition). Human design effort, not transistor count
+alone, can now become the binding constraint on what a team can ship.
+
+The turn to specialization multiplied the architectures, software interfaces, and physical constraints the architect must hold in view. New dataflows, memory systems, and programming interfaces appeared in quick succession [@HennessyPatterson2019GoldenAge]. Yet much of the coordination among workloads, compilers, simulators, RTL, and physical design still falls directly to architects.
+
+Specialization also made architecture decisions tightly coupled. A new dataflow can simultaneously change memory traffic, compiler mapping, verification effort, and physical feasibility. As these cross-layer dependencies multiply, the resulting design space becomes a massive, rugged, high-dimensional discrete space[^fn-rugged-search-c02] that unaided judgment and exhaustive sweeps cannot cover reliably. In one open benchmarking framework, the DRAM memory controller subproblem alone defines a search space of roughly 19 million configurations, while its accelerator and SoC[^fn-soc-c02] design spaces reach $10^{14}$ to $10^{17}$ [@KrishnanEtAl2023ArchGym].
+
+Worse, navigating this space carries severe economic stakes. Software errors can be serious, but many can be patched after deployment without remanufacturing the machine. A hardware error that escapes pre-silicon verification and appears only in fabricated silicon can force a respin and add fabrication, validation, and schedule cost. The cost of a mistake forces an architect to coordinate far more models, tools, and evidence just to defend a single choice.
+
+[^fn-rugged-search-c02]: **Rugged search space**: A discrete search space riddled with local optima, where stepwise improvement can strand a search far from the best design. Convexity is not even defined on such a space, so greedy and gradient-style methods carry no optimality guarantee, which is why scale defeats both exhaustive sweeps and human intuition.
+
+[^fn-soc-c02]: **SoC (system-on-chip)**: A single chip that integrates CPU cores, accelerators, memory controllers, and I/O blocks on one die, tied together by an on-chip interconnect. The design space is combinatorial because every block competes with the others for the same power, area, and memory bandwidth, so a local choice rarely stays local.
+
+This pressure does not make AI strictly necessary, but it explains the turn toward AI assistance. The golden age established that specialization is now where major gains live. Hameed and colleagues found that a general-purpose core spends well over 90 percent of its energy on instruction fetch, decode, and data movement rather than on the arithmetic itself. Removing that overhead accounts for about an order of magnitude. The rest of the gap they measured came from wider parallelism, cheaper data staging, and operations fused into single hardware steps. For the kernels they studied, a fixed-function application-specific integrated circuit (ASIC) was roughly 500 times more energy efficient than a general-purpose core [@HameedEtAl2010Inefficiency].
+
+That result does two different jobs here. It establishes the scale of the architectural opportunity, and it bounds any claim about where the gain came from. A search method cannot remove work that the workload does not perform, and it cannot claim as its own the efficiency gained simply by removing general-purpose overhead. Every part of the specialization benefit handed back for programmability is still a decision the architect must defend.
+
 ## What a Fair Comparison Must Carry
 
 For decades, computing advanced through a layered stack of technology,
