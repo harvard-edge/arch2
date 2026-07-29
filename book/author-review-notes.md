@@ -1029,3 +1029,485 @@ A candidate structure to test after feedback collection is:
 This structure should be judged against the final Chapter 2 revision. Chapter
 3 should inherit Chapter 2's motivation without depending on a detailed queue
 example that a reader must remember.
+
+## Chapter 4: Building Architecture Data and Representations
+
+### Chapter Purpose
+
+Chapter 4 should answer a practical question:
+
+> What data does AI-assisted architecture need, where can that data come from,
+> what does each sample cost, how should it be curated, and how can the result
+> be represented so that a model can learn from it and act on a design?
+
+The chapter should begin with the data problem. Architecture data is
+heterogeneous, expensive to acquire, difficult to label, often proprietary,
+strongly dependent on tools and conditions, and biased toward successful
+designs. The chapter should explain how to build useful datasets from those
+sources before asking how current project knowledge is maintained.
+
+### Why the Current Chapter Does Not Land
+
+**Author observation.** The current opening begins with Chapter 3's cache-sizing
+study and a section titled "From a Declared Study to a Represented Problem."
+That assumes too much continuity and does not establish the chapter's own
+purpose. Terms such as *architectural observation* and *study contract* sound
+foreign to practicing architects and obscure the data question.
+
+**Editorial diagnosis.** The current revision changed the center of the
+chapter. The `dev` version was organized around:
+
+- architectural knowledge;
+- sources and datasets;
+- the cost of acquiring a data sample;
+- knowledge ingestion;
+- representations and encodings;
+- project state;
+- cost models and world models;
+- drift and provenance;
+- semantic handoffs.
+
+The current version is organized around:
+
+- turning a declared study into a represented problem;
+- identifying which source controls each field;
+- maintaining current project state;
+- recording history, authority, freshness, and permitted changes;
+- exposing representation limits.
+
+Much of the current material is useful, but it answers a narrower state-
+management question. That question displaced the intended teaching about
+building datasets, sample cost, ingestion, curation, encodings, and learned
+knowledge.
+
+**Likely direction.** Restore data acquisition and dataset construction as the
+chapter's primary spine. Retain the strongest current material on source
+conditions, failures, provenance, freshness, and legal changes as requirements
+for a usable architecture dataset or project representation. Do not discard the
+current chapter wholesale, but do not allow its state-management vocabulary to
+define the chapter.
+
+### A Standalone Opening
+
+**Author observation.** Chapter 4 opens Part II and should stand on its own
+while still building on the earlier argument. It should not begin by assuming
+that the reader remembers a cache study or a detailed Chapter 3 contract.
+
+**Likely direction.** Open with a general statement:
+
+- AI systems learn from data and from the forms in which that data is
+  presented.
+- Architecture does not have an ImageNet-like supply of cheap, independent,
+  consistently labeled samples.
+- Useful data is distributed across specifications, software, RTL, traces,
+  simulators, EDA flows, prototypes, silicon, failed runs, and engineering
+  decisions.
+- A data point has meaning only with the design, workload, software, tool,
+  conditions, and property that produced it.
+- Building that data infrastructure is therefore an architecture and systems
+  problem, not only a model-training problem.
+
+The Lighthouse example can appear later to make the sources and pipeline
+concrete. It should not be needed to understand the opening.
+
+### Historical Motivation
+
+**Author observation.** The chapter may benefit from a short history of how
+other fields built the datasets and shared tasks that enabled rapid progress.
+The existing ImageNet discussion is a useful starting point.
+
+**Editorial assessment.** Chapter 4 earns a historical opening because its
+subject is data infrastructure. The history should teach a specific lesson,
+not merely claim that large datasets produce breakthroughs.
+
+Candidate cases to investigate include:
+
+- ImageNet as a combination of a curated dataset, label structure, task, and
+  evaluation protocol;
+- large text and code corpora that enabled broad pretraining while introducing
+  contamination, licensing, and provenance problems;
+- scientific databases whose shared schemas made results comparable;
+- architecture and EDA benchmarks, traces, contests, and open tool flows that
+  enabled particular forms of comparison without becoming general training
+  corpora.
+
+The chapter should ask what the architecture equivalent would require and why
+it is harder to build. Do not add a historical prologue to every chapter by
+default. Use one here because it motivates the chapter's central engineering
+task.
+
+### Foundation Models
+
+**Author observation.** The book says that AI might be applied to architecture
+but does not clearly explain whether the intended mechanism is a foundation
+model that can be adapted to downstream design tasks. Foundation models are
+changing other fields and should appear somewhere in the book.
+
+**Editorial assessment.** The book should explain foundation models, but it
+should not equate all AI-assisted architecture with foundation models. Useful
+architecture methods also include specialized predictors, surrogate models,
+Bayesian optimization, reinforcement learning, retrieval systems, program
+synthesis, and conventional analysis.
+
+A foundation model is broadly pretrained on diverse data and then adapted,
+conditioned, or connected to tools for downstream tasks. It does not
+automatically understand a new architecture project, its private state, or its
+physical constraints.
+
+**Likely direction.**
+
+- Introduce foundation models briefly when Chapter 1 first establishes the
+  modern AI opportunity.
+- Use Chapter 4 to explain the data, modalities, adaptation, retrieval, and
+  project context such models would require.
+- Use Chapter 5 to compare foundation-model-based methods with other prediction,
+  generation, and optimization approaches.
+
+Before writing this material, perform a focused primary-source review of the
+term, its established definition, multimodal and code-model adaptation, and
+current hardware or EDA foundation-model efforts. Avoid buzzword-driven claims
+or the assumption that one universal chip model is the inevitable goal.
+
+### What Counts as Architecture Data
+
+**Likely direction.** Organize the chapter's sources in familiar engineering
+terms:
+
+- papers, manuals, standards, and specifications;
+- software, compilers, runtimes, libraries, and tests;
+- architecture models, configuration files, and parameter sweeps;
+- RTL, typed intermediate representations, netlists, and physical constraints;
+- workload traces, profiles, counters, and field telemetry;
+- simulator, synthesis, timing, power, placement, routing, and verification
+  results;
+- FPGA, emulation, prototype, post-silicon, and fleet measurements;
+- failed runs, rejected alternatives, waivers, review notes, and decisions.
+
+For each source, explain:
+
+- what it can teach;
+- what it omits;
+- how it is obtained;
+- what it costs;
+- what conditions give it meaning;
+- whether it is public, proprietary, licensed, or privacy-sensitive.
+
+The current source table and observation-source figure can contribute to this
+section after their terminology and visual style are revised.
+
+### Restoring the Cost of a Sample
+
+**Author observation.** The chapter appears to have lost the earlier emphasis
+on the cost of obtaining one architecture sample.
+
+**Comparison against `Arch2/dev`.** The material was not completely deleted,
+but it was demoted and reframed. The current chapter still includes:
+
+- BOOM-Explorer evaluations taking roughly six to fourteen hours;
+- distinctions among analytical, trace-driven, cycle-level, RTL, FPGA,
+  emulation, and silicon sources;
+- execution time, queue time, compute, memory, license, and human-work
+  acquisition fields;
+- the warning that equal row counts do not imply equal acquisition cost.
+
+The `dev` chapter made the subject explicit through:
+
+- a section titled "Weighing Data Sample Costs";
+- a fidelity-and-volume pyramid;
+- a table comparing sample-cost regimes;
+- the incompatibility between data-hungry learning and expensive RTL or EDA
+  feedback;
+- active-learning and multi-fidelity approaches;
+- the distinction between cheap synthetic data and scarce high-fidelity data.
+
+**Likely direction.** Restore a visible section on sample economics. Combine
+the `dev` chapter's clear data-building argument with the current chapter's
+stronger sourcing, BOOM-Explorer example, and acquisition records.
+
+The section should teach:
+
+- one simulator call, synthesis run, physical-design run, or silicon
+  measurement is not one interchangeable "sample";
+- fidelity, workload coverage, tool cost, license use, setup, failure
+  diagnosis, and expert review all contribute to acquisition cost;
+- sample cost determines which learning and optimization methods are feasible;
+- cheap data can map broad regions while scarce high-fidelity data checks
+  boundaries and important candidates;
+- failed and timed-out runs consume budget and should not disappear from the
+  dataset.
+
+### Building the Dataset
+
+**Author observation.** The intended chapter should explain where data comes
+from, how it is aggregated, cleaned, curated, and made useful. Examples include
+gem5 logs and other simulator or EDA outputs.
+
+**Editorial diagnosis.** The current chapter discusses source authority,
+provenance, failure retention, contamination, and compatible conditions, but it
+does not present them as one understandable dataset-construction pipeline.
+
+**Likely direction.** Introduce a concrete pipeline:
+
+1. **Define the task and properties.** State what the dataset must help a model
+   predict, generate, rank, retrieve, or explain.
+2. **Identify sources.** Select specifications, code, traces, tool runs,
+   failures, measurements, and decisions relevant to those properties.
+3. **Acquire records.** Run tools or collect existing artifacts while recording
+   design, workload, software, configuration, tool version, seed, fidelity,
+   status, and cost.
+4. **Parse and normalize.** Convert heterogeneous reports into stable fields
+   without discarding the original artifacts.
+5. **Clean and qualify.** Detect malformed runs, stale inputs, empty outputs,
+   inconsistent units, duplicated candidates, and incomparable conditions.
+6. **Retain negative data.** Preserve failed, timed-out, censored, unroutable,
+   and rejected cases with reasons.
+7. **Split and protect evaluation data.** Control design-family leakage,
+   workload leakage, benchmark contamination, and dependencies among related
+   runs.
+8. **Version and govern.** Record provenance, licensing, access, privacy,
+   ownership, and changes to schemas or source tools.
+9. **Create model-facing forms.** Produce text, sequences, graphs, tensors,
+   spatial structures, trajectories, or retrieval indexes suitable for the
+   intended method.
+10. **Feed new results back carefully.** Add later tool results only after
+    checking their identity, conditions, and status.
+
+This pipeline should be explained in prose before being summarized visually or
+in a table.
+
+### Use Plain Terms for Data Records
+
+**Author observation.** *Architectural observation* is not a familiar term and
+reads like invented framework language.
+
+**Editorial assessment.** The underlying distinction is valuable. Architecture
+data is often a conditional measurement or tool result rather than a universal
+label. The coined term is not needed to teach that point.
+
+**Likely direction.** Prefer familiar phrases such as:
+
+- measurement;
+- simulation result;
+- tool result;
+- run record;
+- data sample;
+- design example;
+- evaluation result.
+
+Then explain that every such data point must remain associated with the design,
+workload, software, tool, configuration, conditions, property, and run status
+that produced it.
+
+### Define Representation Before Using It
+
+**Author observation.** The chapter uses *representation* without first
+teaching what the word means, where the idea comes from, or what an
+architectural representation should encode.
+
+**Editorial assessment.** The chapter currently moves among several meanings:
+
+- an architecture artifact or model;
+- current project state;
+- a model-facing encoding;
+- a learned feature space or embedding;
+- a collection of linked project records.
+
+Those meanings must be separated.
+
+**Likely definitions to develop.**
+
+> **Representation.** A representation is a chosen form for expressing some
+> properties of an object while leaving other properties implicit or absent.
+> The choice determines what a person, model, or tool can inspect and change.
+
+> **Architectural representation.** An architectural representation encodes a
+> system's relevant structure, behavior, parameters, interfaces, software and
+> workload relationships, constraints, and physical assumptions at a chosen
+> level of abstraction.
+
+> **Learned representation.** A learned representation is an internal set of
+> features or embeddings acquired from data because they help a model perform
+> one or more tasks.
+
+The exact wording and intellectual history need a focused source review. A
+footnote may help, but the main distinction belongs in the prose because it is
+central to the chapter.
+
+### Connect Architectural and Learned Representations
+
+**Author observation.** The discussion should use the ML meaning of
+representation and explain how data becomes embeddings or other model-facing
+forms.
+
+**Editorial assessment and pushback.** The chapter needs the ML lens, but it
+should not use that lens alone. Computer architecture already relies on
+explicit representations such as ISAs, block diagrams, performance models,
+HDL, typed IRs, dependency graphs, traces, netlists, and floorplans. Learned
+embeddings do not replace these tool-facing forms.
+
+The distinctive synthesis is the connection:
+
+> Raw architecture sources → qualified dataset → explicit architecture
+> representation → learned representation or retrieval index → model output →
+> executable architecture artifact → tool feedback
+
+The chapter should explain where information can be lost at every translation.
+A vector embedding may preserve statistical similarity while omitting a hard
+legality constraint. A netlist preserves connectivity but may omit the design
+intent that makes one connection preferable. A workload trace preserves
+observed events while omitting behavior outside its capture policy.
+
+### What an Architectural Representation Must Capture
+
+**Likely direction.** Explain the requirements before cataloguing encodings.
+Depending on the task, an architectural representation may need to capture:
+
+- hierarchy, components, and connectivity;
+- parameters and legal values;
+- interfaces and protocols;
+- workload and software behavior;
+- mappings from software to hardware;
+- timing, power, area, thermal, reliability, and security constraints;
+- implementation state and physical assumptions;
+- changes the method is permitted to make;
+- relationships among versions and derived artifacts;
+- uncertainty, unavailable information, and known blind spots;
+- provenance linking a model-facing value back to its source.
+
+No one representation needs to encode everything. It must preserve the
+properties that can change the intended task or invalidate its result.
+
+### Representation Forms
+
+After defining the purpose, compare useful forms:
+
+- natural language and retrieved documents;
+- tables and parameter schemas;
+- sequences and execution traces;
+- graphs for hierarchy, connectivity, and dependencies;
+- spatial tensors or grids for floorplans and physical data;
+- typed intermediate representations for executable structure;
+- multimodal combinations linking text, code, graphs, traces, and tool results;
+- learned embeddings for retrieval, prediction, or generation.
+
+Table 4.6's idea that a representation makes some properties explicit and
+others difficult to express is valuable. It should follow the definition and
+requirements rather than serve as the reader's first explanation of the term.
+
+### Data, Knowledge, State, and Representation
+
+**Editorial direction.** Explicitly distinguish four objects that the current
+chapter partially collapses:
+
+- **Dataset:** A collection of examples assembled for training, tuning,
+  retrieval, or evaluation.
+- **Knowledge source:** A specification, document, codebase, prior result, or
+  other source from which relevant information can be obtained.
+- **Current project state:** The authoritative design, software, workload,
+  constraints, and unresolved conditions for the project now.
+- **Representation:** The form in which selected properties of those objects
+  are exposed to a person, model, or tool.
+
+Model parameters, embeddings, retrieval indexes, and in-context information
+then have distinct relationships to those four objects. The current chapter's
+authority and freshness material can survive here after the distinction is
+clear.
+
+### Useful Current Material to Preserve
+
+The current Chapter 4 contains valuable material that should not be lost in a
+dataset-first rewrite:
+
+- public architecture datasets support different tasks and often omit live
+  project context;
+- benchmark contamination can invalidate evaluation;
+- failed, censored, and rejected runs reveal important boundaries;
+- BOOM-Explorer makes high-fidelity acquisition cost concrete;
+- source conditions determine whether two results are comparable;
+- workload traces represent a sampled population, not all behavior;
+- encodings shape neighborhood and search geometry;
+- graphs, spatial forms, typed IRs, and schemas expose different properties;
+- design state, generated artifacts, and dependent constraints can drift apart;
+- rejected work and project history remain useful only under recorded
+  conditions;
+- provenance and cross-layer mappings help trace lower-level failures back to
+  higher-level choices;
+- known unknowns and blind spots should remain visible.
+
+These ideas should support dataset construction and representation rather than
+replace them as the chapter's central narrative.
+
+### Material to Reconsider or Move
+
+- The opening cache-study dependency should be removed.
+- The detailed *study contract* language should not organize Chapter 4.
+- *Architectural observation* should be replaced with ordinary engineering
+  language.
+- The current authority table may be retained in a smaller role after data,
+  knowledge, state, and representation are distinguished.
+- World models and method selection should be coordinated with Chapter 5 to
+  avoid duplication.
+- Operational execution and environment details should remain primarily in
+  Chapter 6.
+- Measurement interpretation and evaluation validity should remain primarily
+  in Chapters 7 and 10.
+
+### Figure 4.1 Visual Style
+
+**Author observation.** Figure 4.1 uses rounded boxes, while the established
+book figure style uses square rectangular corners.
+
+**Confirmed defect.** The SVG contains rounded-corner `rx` attributes on the
+question, selector, source group, source cards, and output record. This is
+inconsistent with the current visual system.
+
+**Likely direction.** Do not spend time merely restyling the existing figure
+until the chapter structure is settled. It may be replaced or substantially
+revised as a sources-to-dataset pipeline. Any retained boxes should follow the
+established square-corner style.
+
+### Candidate Chapter 4 Figures
+
+The chapter may need two foundational visuals:
+
+1. **Architecture data pipeline.** Sources flow through acquisition, parsing,
+   qualification, curation, representation, model use, tool feedback, and
+   controlled update.
+2. **Data cost and fidelity.** Analytical models, traces, simulation, RTL and
+   EDA, FPGA or emulation, silicon, and field data differ in cost, coverage,
+   observability, and volume without forming one universal ranking for every
+   property.
+
+A third visual may connect explicit architecture representations to learned
+representations and executable tool artifacts. Add it only if the first two do
+not already make that relationship clear.
+
+### Candidate Chapter 4 Flow
+
+A candidate structure to test after feedback collection is:
+
+1. **Why architecture needs a data strategy.** Explain why architecture data is
+   different and why useful AI depends on deliberate data construction.
+2. **What counts as architecture data.** Survey sources and the properties each
+   can supply.
+3. **What one sample costs.** Restore data economics, fidelity, coverage, and
+   acquisition budgets.
+4. **Building the dataset.** Cover acquisition, parsing, cleaning, failed runs,
+   splits, contamination, versioning, governance, and controlled updates.
+5. **From data to representation.** Define representation, architectural
+   representation, learned representation, and the translation among them.
+6. **Choosing an encoding.** Compare text, schemas, sequences, graphs, spatial
+   forms, typed IRs, multimodal forms, and embeddings.
+7. **Foundation models and project knowledge.** Explain pretraining, retrieval,
+   adaptation, current project state, authority, and freshness without
+   presenting foundation models as the only approach.
+8. **A Lighthouse data and representation example.** Assemble the relevant
+   sources, costs, dataset records, explicit state, and model-facing encoding.
+9. **What the next method receives.** Hand Chapter 5 a well-defined data and
+   representation problem without selecting the method in advance.
+10. **Broad research questions and conclusion.**
+
+This is a recovery-oriented structure. It should be compared carefully with
+both the current chapter and `Arch2/dev` before any prose is changed. The goal
+is to restore the intended data chapter while preserving later improvements in
+source quality, quantitative grounding, failure retention, and provenance.
