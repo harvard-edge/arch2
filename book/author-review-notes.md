@@ -759,3 +759,273 @@ A candidate structure to test after feedback collection is:
 This structure is provisional. It records the current editorial hypothesis and
 does not authorize a rewrite until the remaining chapter feedback has been
 collected.
+
+## Chapter 3: Structuring AI-Assisted Design Work
+
+### Chapter Purpose
+
+Chapter 3 should answer the question that follows naturally from Chapter 2:
+
+> If AI might help with system and chip design, how should architects organize
+> the work so that it is systematic, reviewable, and repairable rather than an
+> ad hoc collection of models, prompts, scripts, and tools?
+
+The chapter should give a complete high-level life cycle. A technically
+oriented leader who stops after Chapter 3 should still understand why structure
+is needed, what the stages are, what each stage accomplishes, where feedback
+returns, and which responsibilities remain with the team.
+
+### Why the Current Opening Is Hard to Follow
+
+**Author observation.** The chapter appears to follow Chapter 2, but its
+opening flow is difficult to understand. It begins with a separate technical
+problem, while the six-stage life cycle that seems to be the chapter's main
+idea appears much later.
+
+**Editorial diagnosis.** The current opening spends several paragraphs
+distinguishing Chapter 2's finalist-package review queue from a separate cache
+comparison. It then introduces a bounded study, an architectural claim, a large
+study contract, an ontology chain, and multiple figures before presenting the
+six stages.
+
+The distinctions are technically careful but narratively expensive. The reader
+must understand too many structural objects before seeing the organizing idea
+that makes them useful. The opening also inherits a detailed operational
+diagnosis from Chapter 2 that may itself move elsewhere.
+
+**Likely direction.** Remove the separate-problem disclaimer from the opening.
+Begin with the general need for a disciplined AI-assisted design life cycle.
+Introduce the six-stage overview early. Use the Lighthouse cache comparison
+later as one application of that life cycle rather than as the reason the
+chapter exists.
+
+### Why AI Makes Structure More Important
+
+**Author observation.** The chapter needs a new early section that motivates
+why applying AI requires a systematic approach. It should explain why teams
+cannot simply assemble prompts, models, scripts, and tools ad hoc.
+
+**Editorial assessment.** AI does not create every lifecycle problem, but it
+amplifies several existing ones:
+
+- Candidate artifacts and analyses can be produced faster than teams can
+  evaluate them.
+- Model behavior depends on training data, retrieved context, prompt state,
+  tool state, and versioned inputs that may change independently.
+- Probabilistic or learned outputs can vary even when the apparent request is
+  unchanged.
+- A model can optimize a local metric while exploiting an incomplete
+  simulator, proxy, or tool interface.
+- AI-assisted work may cross architecture, software, RTL, verification, and
+  physical-design boundaries before any one person sees the complete chain.
+- Hardware errors can survive into expensive and difficult-to-repair
+  implementation stages.
+- Multiple people, tools, and agents need explicit handoffs, checks, stopping
+  conditions, and decision authority.
+
+The chapter should present lifecycle structure as a way to localize failure,
+preserve the design question, coordinate handoffs, and determine what a result
+supports. It should not present lifecycle management as administrative process
+for its own sake.
+
+### Lessons to Synthesize from Adjacent Fields
+
+**Author observation.** The chapter should draw on relevant ideas beyond the
+papers or examples already familiar to the author. It should synthesize lessons
+that help explain why disciplined AI-assisted work matters.
+
+**Editorial direction.** Candidate traditions to investigate and synthesize
+include:
+
+- **Systems engineering:** Requirements, implementation, verification, and
+  validation remain connected rather than becoming independent activities. The
+  useful lesson from V-model thinking is the pairing of design decisions with
+  corresponding checks, not a rigid waterfall schedule.
+- **Experimental science:** A claim, comparator, conditions, measurements, and
+  observations are separated so that an experiment can fail informatively.
+- **Decision analysis and operations research:** The decision, alternatives,
+  objectives, constraints, uncertainty, and value of additional information
+  are declared before choosing a search method.
+- **Software engineering and MLOps:** Versioned state, tests, reproducible
+  environments, monitoring, and repair paths matter because code, data, models,
+  and deployment conditions change at different rates.
+- **Safety and assurance engineering:** A favorable result does not grant its
+  own authority. Independent checks and named responsibility connect technical
+  evidence to consequential action.
+- **EDA and signoff practice:** Increasing fidelity, implementation checks, and
+  signoff stages keep high-level choices connected to physical consequences.
+
+The chapter should not become a survey or a table of borrowed methodologies.
+It should extract a small number of common requirements for AI-assisted
+architecture work:
+
+1. preserve the question and intended decision;
+2. make the current state and allowed changes explicit;
+3. distinguish candidate production from valid execution;
+4. match every important claim with an appropriate check;
+5. retain failures and uncertainty rather than only successful outputs;
+6. route inadequate work back to the place that can repair it;
+7. keep decision authority explicit.
+
+Primary sources should be selected only after this conceptual role is settled.
+
+### Introduce the Six-Stage Life Cycle Early
+
+**Author observation.** Formulate, Explore, Implement, Evaluate, Explain, and
+Review and Decide appear too late. They seem to be the chapter's main teaching
+device and should come much earlier.
+
+**Likely direction.** After motivating why structure is necessary, show the
+complete six-stage life cycle:
+
+1. **Formulate** the question, comparison, constraints, and intended decision.
+2. **Explore** legal alternatives within the declared space.
+3. **Implement** or otherwise make a selected alternative executable in the
+   relevant environment.
+4. **Evaluate** valid tool returns against the declared checks.
+5. **Explain** whether the proposed mechanism accounts for the result.
+6. **Review and Decide** what the cumulative work supports, what needs repair,
+   or why the effort should stop.
+
+The first life-cycle figure should appear beside this overview. The chapter can
+then explain why the stages are separated, when they can be combined, and how
+feedback returns to the stage that owns an inadequate output.
+
+### Audit the Stage Names
+
+**Open question.** The current meaning of *Implement* is narrower than many
+architecture readers will expect. In the chapter it means turning a candidate
+into an executable tool request and confirming that the requested work ran. It
+does not necessarily mean implementing RTL or committing a design to silicon.
+
+Before revising the chapter, test whether the name can be defined clearly
+enough or whether a term such as *Realize* or *Execute* would reduce confusion.
+Do not rename the stage casually because the six-stage vocabulary recurs across
+the manuscript and visual system.
+
+### Structure Before the Detailed Contract
+
+**Author observation.** The chapter should first explain how to think about the
+life cycle, then show how the Lighthouse scenario is structured within it.
+
+**Likely direction.** Move the detailed cache-study contract after the reader
+has seen the full lifecycle. The contract can then instantiate Formulate rather
+than appearing to define the whole chapter.
+
+The current material on questions, comparators, scope, constraints,
+measurements, budgets, stopping conditions, and exclusions remains valuable.
+Its role becomes clearer when the reader understands which stage produces it
+and how later stages consume it.
+
+### Reduce the Number of Competing Structural Objects
+
+**Editorial diagnosis.** The current first half introduces several related
+objects in quick succession:
+
+- bounded architecture study;
+- architectural claim;
+- study contract;
+- ontology chain;
+- six-stage life cycle;
+- design loop;
+- cumulative study record;
+- design-loop card.
+
+Each object can be useful, but their relationships are not immediately obvious.
+The chapter should identify one primary map and reveal the supporting objects
+only when the lifecycle needs them.
+
+**Likely direction.**
+
+- Use the six-stage life cycle as the chapter's primary organizing map.
+- Treat the contract as Formulate's output.
+- Treat the architectural claim as one component of that contract.
+- Treat the represented state, methods, environments, and checks as
+  capabilities that support stages rather than as a competing lifecycle.
+- Treat iteration as a possible return within the life cycle.
+- Treat the cumulative record as what survives the stages and handoffs.
+- Treat the compact card as an index into that record, not as another framework.
+
+Audit whether the ontology-chain and structured-layer figures remain necessary
+once a single primary map is established. Preserve any figure that performs a
+distinct explanatory job, but avoid asking the reader to reconcile several
+nearly equivalent diagrams.
+
+### Big-Picture Completeness
+
+**Author observation.** Chapter 3 should not merely preview later chapters.
+Nevertheless, a reader who stops here should understand the full approach.
+
+**Likely direction.** Give the chapter a self-contained systems view. The
+life-cycle stages rely on several persistent capabilities:
+
+- represented design state and permitted changes;
+- methods for generation, prediction, optimization, or conventional analysis;
+- executable environments and tool interfaces;
+- measurement, feedback, and independent checks;
+- cumulative records, review, and decision authority.
+
+Later chapters can deepen each capability without Chapter 3 reading as a table
+of contents. A useful summary figure could place the six-stage lifecycle above
+or inside these supporting capabilities. It should communicate the complete
+operating model without naming chapter numbers.
+
+### Handoffs Among People, Tools, and Agents
+
+**Author observation.** One way to test the lifecycle is to imagine that its
+work is handed to different people or agents. The team should still be able to
+coordinate and understand what each participant must produce.
+
+**Editorial assessment.** This is a powerful motivation for the stage
+contracts. A handoff is safe only when the next participant knows:
+
+- what question is being answered;
+- which state and versions are authoritative;
+- what changes are allowed;
+- what input it receives;
+- what output it must produce;
+- which checks determine whether that output is adequate;
+- where failures should return;
+- what the output does and does not authorize.
+
+The same logic applies to human teams, automated tools, and AI agents. Avoid
+framing the lifecycle as a multi-agent architecture alone. The durable point is
+that explicit handoffs let heterogeneous participants cooperate without
+silently changing the problem.
+
+### Lighthouse as an Application
+
+**Likely direction.** After the life cycle and its supporting capabilities are
+clear, apply them to one Lighthouse question. The cache example can show how a
+broad product intent becomes a formulated comparison and then moves through
+the six stages.
+
+The example should no longer be introduced as a separate technical problem
+whose lack of connection to Chapter 2 requires several disclaimers. It is one
+concrete application of the general structure. Lighthouse callouts should
+continue to pass the book-wide skip test and advance the secondary narrative.
+
+### Candidate Chapter 3 Flow
+
+A candidate structure to test after feedback collection is:
+
+1. **Why AI-assisted design needs a life cycle.** Establish the risks of ad hoc
+   assembly and the lessons synthesized from adjacent fields.
+2. **The complete six-stage life cycle.** Show Formulate through Review and
+   Decide immediately.
+3. **Why the stages are distinct.** Explain outputs, checks, repair paths, and
+   when adjacent stages can be combined.
+4. **Formulating the Lighthouse study.** Introduce the contract and
+   architectural claim as outputs of Formulate.
+5. **Lighthouse through the life cycle.** Walk the same question across all six
+   stages without pretending that later measurements have already been run.
+6. **A record that survives handoff.** Explain the cumulative record and the
+   compact card.
+7. **The complete operating model.** Connect represented state, methods,
+   environments, checks, records, and authority to the stages without turning
+   the section into a preview of chapter numbers.
+8. **Open field-level questions and conclusion.**
+
+This structure should be judged against the final Chapter 2 revision. Chapter
+3 should inherit Chapter 2's motivation without depending on a detailed queue
+example that a reader must remember.
