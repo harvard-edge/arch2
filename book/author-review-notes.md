@@ -1,7 +1,7 @@
 # Architecture 2.0 Author Review Notes
 
 **Review date:** July 29, 2026
-**Current scope:** Front matter, preface, and Chapters 1 through 5
+**Current scope:** Front matter, preface, and Chapters 1 through 6
 **Editorial status:** Feedback collection. Except for the title-page build date,
 none of the observations below have been applied to the manuscript.
 
@@ -64,6 +64,23 @@ The packet should be created before prose changes begin and kept separate from
 the reader-facing narrative. A chapter earns space for a paper only when the
 paper helps establish a durable idea, a revealing comparison, a quantitative
 anchor, or an important limitation.
+
+Run this as a dedicated research-and-synthesis exercise for every chapter:
+
+1. Restate the chapter's unique question and the concepts it must establish.
+2. Search broadly enough to identify the relevant fields, then narrow to
+   foundational and representative primary sources.
+3. Assemble and read the source packet, including systems that disagree,
+   expose limitations, or solve the problem differently.
+4. Compare the systems by the design choices that matter to the chapter rather
+   than summarizing one paper at a time.
+5. Distill the recurring principles, conditional choices, quantitative
+   anchors, and open problems.
+6. Revise the chapter from that synthesis, then check every major claim and
+   example against the sources.
+
+The output should read as the book's perspective on the field, not as a
+chronological literature review.
 
 ## Resolved Production Note
 
@@ -2020,3 +2037,738 @@ The research questions should remain at the chapter's level:
 
 These questions are broad enough to define the field while remaining anchored
 in method selection.
+
+## Chapter 6: Building Environments Around Architecture Tools
+
+### Chapter Purpose
+
+Chapter 6 should teach what an environment is and how to build one around the
+tools used in architecture, software, verification, and chip design. The
+chapter should explain the parts of an environment, the interfaces among them,
+what happens while work is running, and how results return to a person or
+method.
+
+The reader should leave able to answer:
+
+- What is the difference among a tool, simulator, wrapper, harness, and
+  environment?
+- Which design and software state must be set up before a run?
+- Which interfaces must be standardized, and what does that standardization
+  buy?
+- How are actions translated into tool-specific commands without changing
+  their meaning?
+- What must the runtime do about queues, parallel jobs, retries, resets,
+  checkpoints, caches, licenses, and failures?
+- Which state can a method observe, which actions may it request, and which
+  results come back?
+- How does the environment retain enough information to reproduce, compare,
+  and diagnose its runs?
+- Where does environment execution end and feedback or verification begin?
+
+The durable lesson is that an environment is an engineered system around the
+tools. It is not simply a simulator, shell command, or Python `step()` function.
+
+### The Current First Section Is a Strong Starting Point
+
+**Author observation.** Section 6.1 is useful because it distinguishes an
+environment, wrapper, and harness.
+
+**Editorial assessment.** Preserve this distinction:
+
+- A **tool** performs a particular operation, model, analysis, transformation,
+  or check.
+- A **simulator** is one kind of tool. It models selected behavior at a stated
+  level of abstraction and fidelity.
+- A **wrapper** adapts one tool to a usable interface. It validates inputs,
+  translates them into the tool's form, invokes the tool, and parses what came
+  back.
+- A **harness** coordinates runs and records what happened across tools,
+  candidates, failures, retries, and costs.
+- An **environment** is the complete tool-connected system exposed to the
+  person or method. It includes the available state, permitted actions, tools,
+  runtime, and returned observations.
+
+The current example showing that a successful shell exit does not prove which
+candidate, workload, model, or configuration was evaluated is concrete and
+worth retaining. The example establishes why a wrapper and harness are needed
+without inventing a new conceptual framework.
+
+### Remove "Execution Contract" as the Organizing Idea
+
+**Author observation.** *Execution contract* reads like another invented or
+buzzword-heavy term.
+
+**Editorial assessment.** The underlying engineering requirements are valid.
+Before running a tool, a project must know:
+
+- what design and software are being evaluated;
+- which fields may change;
+- which tool and version will run;
+- which inputs and conditions it receives;
+- which outputs are expected;
+- what the run may cost;
+- how failure, timeout, retry, reset, and cancellation work;
+- what files and results will be retained.
+
+Those requirements do not need a special name. They can be taught as the
+environment's setup, interface, runtime policy, and result record. The large
+current table called an *execution contract* should become either:
+
+- a short table titled "What an environment must define before a run"; or
+- four smaller examples placed in the corresponding setup, interface, runtime,
+  and result sections.
+
+The second option will probably read better. It avoids placing a large table
+near the beginning and lets each requirement appear where the reader learns
+why it matters.
+
+### A Four-Part Environment Model
+
+The author's proposed structure is a strong organizing model.
+
+#### 1. Setup
+
+The setup establishes everything on which a run depends:
+
+- design revision and generated artifacts;
+- software, compiler, runtime, libraries, and input data;
+- workload and measurement interval;
+- tool versions, models, process libraries, and configuration files;
+- environment variables, seeds, host or container image, and permissions;
+- licenses, compute, memory, storage, and time limits;
+- clean starting state, reusable state, and unavailable dependencies.
+
+This is more than installation. It ensures that a requested run refers to a
+specific hardware–software system under identifiable conditions. Chipyard and
+FireSim are useful examples because their productivity comes partly from
+packaging compatible hardware, software, build, deployment, and simulation
+elements rather than exposing a simulator alone.
+
+#### 2. Interfaces and Tool Adapters
+
+The interfaces define what a method can read, what it may request, and what each
+tool returns. A wrapper adapts those common needs to a specific simulator,
+compiler, EDA shell, formal engine, profiler, or measurement platform.
+
+The chapter should explain:
+
+- accepted inputs, parameter types, units, legal values, and dependencies;
+- available actions and operations;
+- capability discovery, including what the tool does not model or check;
+- exact translation from a common request to tool-specific files, flags, or
+  scripts;
+- returned metrics, artifacts, warnings, and error classes;
+- versioning and extension points when a tool exposes information that the
+  shared interface does not.
+
+The goal is not to make every tool appear identical. It is to standardize the
+parts that allow methods, tools, and experiments to connect without private
+glue code or ambiguous meanings.
+
+A concrete interface may need common operations such as:
+
+- inspect the available state and tool capabilities;
+- validate a proposed action without running it;
+- submit work and receive an attempt identifier;
+- poll progress and obtain partial results;
+- cancel work;
+- reset to a known state;
+- resume from a named checkpoint where the tool supports it;
+- collect the final status, artifacts, metrics, warnings, and realized cost.
+
+The exact operation names are not important. The chapter should teach why the
+operations are needed and how their semantics remain stable across wrapper and
+tool versions. Capability discovery, unit conventions, idempotent submission,
+and schema evolution deserve explicit treatment because a method should not
+have to guess whether an operation was duplicated or whether a field silently
+changed meaning.
+
+#### 3. Runtime and Orchestration
+
+The runtime manages work after a request is accepted:
+
+- dependency ordering across compilation, simulation, synthesis, verification,
+  and physical design;
+- parallel and asynchronous jobs;
+- queue, scheduler, and license state;
+- progress and partial results;
+- timeouts, cancellation, retries, and escalation;
+- clean resets, checkpointing, and caching;
+- resource and tool-call budgets;
+- isolation of generated code and tool scripts;
+- recovery after tool, host, storage, or parser failures.
+
+This section should retain the current chapter's important observation that
+architecture and EDA tools are slow, stateful, and asynchronous. A clean
+`reset()` and `step()` interface is useful, but it hides queues, licenses,
+working directories, checkpoints, and returns that may arrive hours later.
+
+The runtime should make those conditions visible without forcing every method
+to reimplement scheduling and failure recovery.
+
+Setup readiness should be a first-class runtime state. Before scheduling
+expensive work, the environment should be able to report whether required
+inputs, tools, licenses, storage, credentials, and compatible model or library
+views are available. A setup failure is different from a candidate failure and
+should be visible before possible.
+
+#### 4. State, Observations, and Returned Results
+
+The environment makes selected state observable and returns what happened:
+
+- current candidate and fixed system context;
+- queued, running, completed, cancelled, failed, and timed-out work;
+- raw logs and artifacts;
+- parsed metrics with units and conditions;
+- warnings and output that the parser did not recognize;
+- partial results and stages that never ran;
+- realized runtime, compute, storage, license, and tool-call cost;
+- links among the request, generated artifacts, tool invocation, and returned
+  results.
+
+This creates the information needed for a method to choose another action and
+for an architect to diagnose the run. It does not by itself establish that a
+metric is accurate, a comparison is fair, or a candidate is acceptable. Those
+questions lead into Chapter 7.
+
+### State, Action, Observation, and Feedback
+
+**Author suggestion.** A state–observation–action loop may help organize the
+interface and the returned feedback.
+
+**Editorial judgment.** This is useful if the terms are kept precise and the
+chapter does not force every architecture tool into a reinforcement-learning
+formulation.
+
+- **State** is the relevant internal condition of the design, software, tools,
+  runtime, and outstanding work.
+- **Observation** is the part of that state and its returned results exposed to
+  the person or method.
+- **Action** is a permitted request to change an artifact, invoke a tool, or
+  perform another operation.
+- **Feedback** is information from the returned result used to revise a model,
+  choose another action, reject a proposal, or increase confidence.
+
+The distinction between state and observation matters. A wrapper may expose a
+summary of an EDA database without exposing every internal object. A queued job
+is part of runtime state even though no design metric has returned. A partial
+placement report is an observation even though routing and signoff have not
+run.
+
+The environment supplies observations and records where they came from.
+Chapter 7 should determine how those observations become useful feedback,
+which checks are independent, and what confidence they support. Chapter 6
+should not call every scalar a reward or every failed run negative design
+feedback.
+
+Gymnasium's distinction between task termination and truncation transfers
+usefully. A design task may reach its declared stopping condition, while an
+attempt can also end because of a timeout, quota, cancellation, scheduler
+eviction, or lost license. Those outcomes should not carry the same meaning.
+
+### Why Standard Interfaces Matter
+
+The chapter should make the benefit of standardization explicit. A useful
+interface can:
+
+- allow several methods to operate against the same tool or benchmark;
+- allow one method to operate across several compatible environments;
+- compare algorithms under the same actions, observations, workloads, and
+  evaluation budget;
+- replace or upgrade a tool adapter without rewriting the entire method;
+- collect data in a consistent form across runs and fidelities;
+- make failures, costs, and unavailable results visible;
+- let researchers reproduce and extend previous experiments;
+- reduce the amount of private, task-specific glue needed to enter the field.
+
+OpenAI Gym and Gymnasium demonstrate how a small common interface can separate
+algorithms from environments. CompilerGym applies that idea to real compiler
+optimization tasks and adds datasets, fault tolerance, and reproducibility
+checks. ArchGym connects several architecture simulators to search methods
+through a common interface and budget. MLPerf shows a different benefit:
+standard workloads, rules, and harness behavior make measurements comparable
+across otherwise different systems.
+
+MLPerf also provides a useful boundary among the system being tested, the
+harness that drives it, and the checker that determines whether the result
+meets the benchmark condition. Chapter 6 can use that separation without
+importing MLPerf's entire benchmark policy into an architecture environment.
+
+These examples support a durable conclusion. Standardization is most useful at
+the boundary between a method and the engineering system it acts on.
+
+### Do Not Force One Universal Hardware Interface
+
+**Editorial pushback.** Standardization should not erase the meaning and
+fidelity of individual tools.
+
+A cycle-level simulator, compiler, RTL simulator, synthesis tool, router,
+formal checker, FPGA prototype, and silicon measurement platform do not return
+interchangeable observations. Their actions, failure modes, runtime, and
+claims differ.
+
+A practical environment needs:
+
+- a small common core for identity, actions, lifecycle state, results, cost,
+  errors, and provenance;
+- tool-specific schemas for capabilities, inputs, outputs, units, warnings,
+  and constraints;
+- an explicit way to ask what a tool supports;
+- refusal when a request cannot be represented without changing its meaning.
+
+This is closer to a family of compatible interfaces than one universal API.
+The principle should be semantic consistency, not identical JSON fields for
+every tool.
+
+### Multi-Tool and Multi-Fidelity Environments
+
+Architecture work usually crosses several tools. One candidate may require:
+
+- a compiler and runtime build;
+- functional or ISA simulation;
+- a performance model or cycle-level simulation;
+- RTL generation and simulation;
+- synthesis, placement, routing, timing, and power analysis;
+- FPGA or emulation runs;
+- measurements on hardware.
+
+The environment should preserve one candidate's identity as artifacts branch
+and change across those paths. It should also expose what each stage can and
+cannot establish. A synthesis estimate must not appear to be a signoff result,
+and a functional simulator must not return an implied timing conclusion.
+
+The current Chapter 6 contains valuable material on:
+
+- artifact identity across compilation, RTL, and physical tools;
+- staged EDA results;
+- multi-tool dependencies;
+- tool throughput and evaluation cost;
+- queues, retries, resets, checkpoints, and caches;
+- partial output and parser failures.
+
+These points should be retained, but organized as environment design elements
+rather than as a detailed execution record for one cache study.
+
+### Reproducibility and Reuse
+
+The current chapter records versions, hashes, parent artifacts, resets, and
+cached results, but it should more directly teach the differences among:
+
+- **Replay:** rerunning the same recorded commands and inputs.
+- **Repeatability:** obtaining sufficiently consistent results in the same
+  environment under the same declared conditions.
+- **Reproduction:** rebuilding or rerunning the work in a meaningfully
+  independent environment.
+- **Reuse:** using a prior artifact, checkpoint, or result because all
+  conditions on which it depends still match.
+
+A content hash identifies bytes. It does not prove that a build is reproducible
+or that two artifacts are functionally equivalent. A replay can reproduce the
+same configuration mistake. A cached result is safe only when every input on
+which it depends, including workload, software, tools, models, flags, and
+relevant hidden state, still matches.
+
+The chapter should show a simple rerun procedure and explain which sources of
+nondeterminism must be measured rather than assumed away. It should also
+distinguish estimated cost used to plan a run from realized cost recorded after
+the attempt.
+
+### Failure Is Part of the Interface
+
+The current failure taxonomy contains an important lesson. The environment
+must distinguish:
+
+- an invalid request that never reached the tool;
+- missing or inconsistent setup;
+- infrastructure, host, storage, queue, or license failure;
+- tool failure;
+- timeout or cancellation;
+- missing, stale, partial, or unparseable output;
+- a completed return that reports a design violation.
+
+Collapsing these into *success* and *failure* can cause a method to learn the
+behavior of a cluster or wrapper instead of the design space. At the same time,
+the chapter should be careful not to infer architectural infeasibility merely
+because the same tool failed repeatedly. A fixed resource limit, wrapper
+defect, or unsupported case may reproduce just as reliably.
+
+Use familiar engineering language such as status, error, warning, retry,
+timeout, and incomplete result. Avoid turning the taxonomy into a new named
+framework.
+
+Reset should also be distinguished from restart. Restarting a process does not
+necessarily restore a known design, tool database, cache, seed, or working
+directory. A reset must identify which state was restored, discarded, or
+retained.
+
+### Parsing and Observability
+
+Architecture tools often return text reports, databases, logs, waveforms, and
+generated files rather than one clean value. A wrapper should provide
+structured results without discarding the original artifacts or unfamiliar
+warnings.
+
+The chapter should explain:
+
+- why raw output alone is difficult for both people and automated methods;
+- why a parser must retain units, tool stage, conditions, and missing fields;
+- why a zero exit status is not enough;
+- why recognized fields and unclassified output should both survive;
+- how large results can be summarized hierarchically while remaining
+  inspectable;
+- how parser versions and schema changes affect old records.
+
+Avoid phrases from the earlier `dev` chapter such as *telemetry wall* and
+*log-to-semantic parser*. Ordinary terms such as tool-output parser, structured
+summary, raw log, and unrecognized warning communicate the same ideas.
+
+### Comparison with `Arch2/dev`
+
+The earlier `dev` chapter offered several useful subjects:
+
+- the mismatch between a synchronous `step()` call and slow, stateful EDA
+  tools;
+- multi-fidelity architecture environments;
+- stage-specific EDA outputs;
+- a read/action/return interface;
+- standardized hardware representations and interfaces;
+- tool-output parsing;
+- orchestration across tool graphs;
+- process isolation, timeouts, and recovery;
+- Chipyard as a full-system example;
+- artifact identity and reproducibility.
+
+It also relied heavily on coined or dramatic language:
+
+- *human–API mismatch*;
+- *semantic gap*;
+- *three-path interface*;
+- *safe-by-construction action space*;
+- *telemetry wall*;
+- *log-to-semantic parsers*;
+- *environment contract*;
+- a broad claim that an architecture environment should act like a database
+  query planner.
+
+The current chapter removed much of that language and strengthened
+statefulness, failure handling, and attempt accounting. It then overcorrected
+by centering another coined object, the *execution contract*, and by turning the
+Lighthouse cache study into the chapter's main organizing example.
+
+The revision should combine the best parts:
+
+- the current chapter's precise environment/wrapper/harness distinction,
+  asynchronous runtime, failure handling, cost accounting, and exact tool
+  translation;
+- the `dev` chapter's broader discussion of interfaces, full-system
+  environments, multiple fidelities, tool-output parsing, and standardized
+  representations;
+- a new four-part structure using setup, interfaces, runtime, and returned
+  observations.
+
+### Frameworks and Papers to Study
+
+The dedicated Chapter 6 source packet should include several kinds of systems.
+
+**Standard environment interfaces**
+
+- OpenAI Gym and Gymnasium for the separation between algorithm and
+  environment, action and observation spaces, reset, termination, and
+  interoperability;
+- CompilerGym for adapting production compilers, exposing multiple
+  observations and rewards, handling faults, and finding reproducibility
+  defects;
+- ArchGym for connecting architecture simulators to several search methods and
+  comparing them under controlled evaluation budgets.
+
+**Architecture and chip-design platforms**
+
+- gem5 for modular simulation and configurable architecture models;
+- Chipyard for connecting generators, software, simulation, FPGA, and VLSI
+  flows;
+- FireSim for packaging and scaling full-system FPGA-accelerated simulation;
+- OpenROAD for an integrated, reproducible RTL-to-GDS flow;
+- Hammer and modular flow generators for separating common flow structure from
+  tool- and technology-specific adapters;
+- representative commercial-style EDA flows for stateful shells, licenses,
+  long runtimes, staged results, and proprietary data.
+
+**Autotuning and search systems**
+
+- AutoTVM and Ansor for the relationship among candidate construction, cost
+  models, search, compilation, and target measurement;
+- architecture design-space systems that combine analytical models,
+  simulators, learned methods, and high-fidelity checks.
+
+**Benchmark and workflow harnesses**
+
+- MLPerf and MLHarness for workload definitions, rules, system descriptions,
+  submission interfaces, and comparable measurements;
+- workflow systems such as Snakemake and Nextflow where their handling of
+  dependency graphs, caching, retries, and distributed execution provides a
+  genuinely transferable lesson.
+
+**Tool-using AI systems**
+
+- ChatEDA and more recent tool-interactive EDA systems;
+- InterCode and similar executable tool environments for iterative actions,
+  observations, reset, and isolation;
+- hardware-agent benchmarks that pin repositories, toolchains, tests, and
+  runtime environments;
+- negative or comparative studies that separate model capability from harness
+  and environment design.
+
+**Provenance and packaging**
+
+- established provenance models such as W3C PROV for the minimal relationships
+  among artifacts, activities, and actors;
+- ReproZip and related packaging work for capturing data dependencies,
+  libraries, configuration, and replay procedures.
+
+These sources can help the chapter use established concepts without turning
+provenance into a new author-specific vocabulary. Provenance shows where an
+artifact came from; it does not prove the result is valid or reproducible.
+
+The purpose is not to name every framework in the finished chapter. It is to
+identify recurring design choices and work backward to the principles that
+generalize.
+
+### Recurring Patterns to Test in the Literature
+
+The source review should determine how consistently the following patterns
+appear:
+
+- separate the method from the environment through a stable interface;
+- define legal actions and meaningful observations;
+- expose tool capabilities and fidelity limits;
+- package the full hardware–software setup, not only the central simulator;
+- keep workload, design, software, tool, and condition identities together;
+- make execution asynchronous when tools are slow;
+- distinguish infrastructure failure from candidate results;
+- retain raw artifacts alongside structured summaries;
+- control evaluation count, runtime, compute, licenses, and storage;
+- support clean reset, caching, checkpointing, and reproducible replay;
+- preserve candidate identity across several tools and transformed artifacts;
+- provide simple extension points for new tools and methods;
+- avoid letting the harness silently change the problem being studied.
+
+These are hypotheses for the source review, not conclusions to impose on the
+literature.
+
+### Candidate Chapter 6 Figures and Tables
+
+1. **Anatomy of an architecture environment.** Show setup and design state
+   feeding standardized interfaces, wrappers around several tools, a runtime
+   that schedules them, and observations returning through the harness.
+2. **State, action, and observation across time.** Show asynchronous jobs,
+   partial results, completion, and failure rather than a single instantaneous
+   `step()`.
+3. **One candidate across several tools.** Connect software, simulation, RTL,
+   EDA, and hardware paths while preserving candidate and condition identity.
+4. **Interface comparison table.** Compare Gymnasium, CompilerGym, ArchGym,
+   Chipyard/FireSim, and MLPerf by what they standardize and what remains
+   domain-specific.
+5. **Failure and result table.** Keep a compact version of the current failure
+   taxonomy if it materially helps the reader decide what the runtime should
+   return.
+
+The current interface, artifact-identity, and multi-tool figures should be
+audited against these jobs before adding new visuals.
+
+### Candidate Chapter 6 Flow
+
+1. **What an environment is.** Distinguish tools, simulators, wrappers,
+   harnesses, and environments.
+2. **Why architecture needs engineered environments.** Explain heterogeneous
+   tools, full-system state, cost, long runtimes, failures, and proprietary
+   constraints.
+3. **Setup.** Establish hardware, software, workload, tools, resources, and
+   clean state.
+4. **Interfaces and wrappers.** Define actions, observations, capabilities,
+   exact translation, and standardization.
+5. **Runtime and orchestration.** Cover dependencies, asynchronous execution,
+   queues, licenses, budgets, retries, reset, checkpoints, caching, and
+   isolation.
+6. **Observations and returned results.** Cover raw and structured output,
+   partial results, status, cost, and provenance.
+7. **Multi-tool and multi-fidelity environments.** Preserve one candidate
+   across compiler, simulator, EDA, FPGA, and hardware paths.
+8. **Patterns from existing systems.** Distill a small number of concrete
+   frameworks rather than presenting a catalogue.
+9. **Lighthouse environment.** Apply the component model without returning to
+   large project identifiers and a contract table.
+10. **A practical design recipe.** Inventory tools and dependencies, establish
+    setup readiness, define capabilities and interfaces, adapt each tool,
+    isolate and run work, expose lifecycle operations, parse results, retain
+    cost and provenance, and fault-test the harness.
+11. **What Chapter 7 receives.** Hand forward observations, failures, costs,
+    and tool results whose meaning and confidence still need to be assessed.
+12. **Broad research questions and conclusion.**
+
+### Research Questions
+
+The chapter's research questions should remain at the level of environment
+design:
+
+- Which parts of an architecture environment can be standardized across
+  simulators, compilers, EDA tools, prototypes, and silicon?
+- How should an interface expose capability and fidelity so a method cannot
+  request or infer properties the tool does not support?
+- How can a runtime schedule expensive, asynchronous tool calls while sharing
+  licenses and computing resources with human engineers?
+- What state must be reset, versioned, or retained so that repeated runs remain
+  comparable?
+- How should environments distinguish infrastructure, wrapper, tool, and
+  candidate failures when the immediate symptoms are similar?
+- How can large, heterogeneous tool outputs be summarized for automated use
+  without hiding unfamiliar warnings or important detail?
+- What makes an environment reusable across methods while remaining faithful
+  to domain-specific tool semantics?
+- How much observed performance difference comes from the method, and how much
+  comes from the wrapper, harness, tool configuration, or runtime?
+
+These questions make the environment itself a serious systems and architecture
+research subject without inventing a private vocabulary for it.
+
+## Preliminary Structure Checkpoint: Chapters 6 through 11
+
+This checkpoint records the author's evolving view of the final part of the
+book. It is not yet a detailed review of Chapters 7 through 11.
+
+### Two Meanings of Execution
+
+The word *execution* currently risks joining two different subjects:
+
+1. **Tool execution.** How an environment sets up, invokes, monitors, and
+   records compilers, simulators, EDA tools, prototypes, and measurements.
+   This belongs in Chapter 6.
+2. **Design-loop execution.** How a team repeatedly proposes, evaluates,
+   revises, allocates effort, decides when to escalate, and eventually stops.
+   This belongs in Chapter 8.
+
+Chapter 7 sits between them. It explains what the returned observations mean,
+how they become feedback, which checks provide confidence, and how results can
+support learning or revision.
+
+Keeping these meanings separate avoids turning Chapter 6 into the entire
+design loop or reducing feedback and verification to a runtime callback.
+
+### Recommended Sequence
+
+The current conceptual sequence remains strong:
+
+| Chapter | Unique job |
+| --- | --- |
+| **6. Environments** | Build the tool-connected system that can execute work and return identifiable results. |
+| **7. Feedback, Verification, and Learning** | Determine how results become useful feedback, how properties are checked, and how confidence is gained. |
+| **8. Running the Design Loop** | Operate the iterative process across people, methods, environments, feedback, budgets, and stopping decisions. |
+| **9. General Patterns Across Design Problems** | Identify what transfers across architecture problems and what remains problem-specific. |
+| **10. Evaluation and Red Teaming** | Evaluate the resulting designs and the AI-assisted system or process that produced them. |
+| **11. The Architect's Role** | Explain what architects own when more proposal, analysis, and tool operation can be automated. |
+
+This order creates a progression from machinery, to meaning, to repeated
+operation, to generalization, to evaluation, and finally to professional
+responsibility.
+
+### Chapter 7 Should Not Become "Running the Loop"
+
+**Author thought.** With data, methods, and environments established, Chapter 7
+might cover execution or the execution loop.
+
+**Editorial pushback.** Preserve Chapter 7 as the feedback and verification
+chapter. Verification is a central architecture problem and deserves a full
+conceptual treatment:
+
+- what an observation actually measures;
+- whether the property was checked independently;
+- how functional, performance, power, timing, physical, security, and system
+  checks differ;
+- where formal verification fits;
+- how failures guide repair or another experiment;
+- how repeated feedback supports learning;
+- how confidence grows and where it remains incomplete.
+
+If this material is folded into loop operation, the book risks teaching how to
+run an automated process without teaching why its returned results deserve
+belief.
+
+Chapter 8 can then show how feedback is used while the loop runs: which action
+comes next, which result causes revision, when a method changes, how budgets
+are allocated, and when the team stops.
+
+### Chapter 9 Needs a Clear Meaning of "Design Problem"
+
+Chapter 9 should generalize patterns across several kinds of work, such as:
+
+- microarchitecture configuration;
+- hardware–software partitioning;
+- compiler and runtime mapping;
+- RTL and verification work;
+- physical design;
+- system configuration and deployment.
+
+The purpose is not to claim that one loop or method solves all of them. It is
+to ask which structures recur: expensive feedback, mixed discrete and
+continuous choices, proxy objectives, multiple fidelities, constrained actions,
+tool-dependent observations, cross-layer interactions, and human decisions.
+
+### Chapter 10 Has Two Evaluation Subjects
+
+**Author direction.** After the loop produces a design or recommendation,
+Chapter 10 must explain what to evaluate about both the result and the AI
+system or agent.
+
+This distinction should organize the chapter.
+
+**The design or recommendation**
+
+- correctness and specification compliance;
+- performance, power, area, cost, and other architecture objectives;
+- robustness across workloads, corners, configurations, and failures;
+- physical feasibility, security, reliability, and maintainability;
+- improvement relative to appropriate baselines and alternatives;
+- uncertainty and limits on the claim.
+
+**The AI-assisted system and process**
+
+- task success and failure rate;
+- quality relative to a human, heuristic, solver, compiler, or other baseline;
+- generalization across designs, workloads, tools, and unseen conditions;
+- number and fidelity of simulator, tool, prototype, or hardware calls;
+- model calls, tokens, runtime, compute, licenses, and monetary cost;
+- sample efficiency and time to a usable result;
+- invalid actions, broken artifacts, retries, and recovery;
+- human review, intervention, and correction effort;
+- calibration, robustness, security, backdoors, contamination, and red-team
+  behavior;
+- reproducibility and sensitivity to the harness or environment;
+- ablations that identify which method, tool, data source, or feedback
+  mechanism produced the improvement.
+
+The chapter should distinguish three questions:
+
+1. Did the process produce a good design?
+2. Was the process itself effective and economical?
+3. Did the AI component contribute beyond the existing tools, baselines, and
+   human effort?
+
+This prevents a strong final design from hiding an ineffective agent and
+prevents a high agent task score from substituting for a useful architecture
+result.
+
+### Chapter 11 Should Emerge from the Earlier Boundaries
+
+The final chapter should become easier once Chapters 6 through 10 are stable.
+Its argument should follow from the responsibilities that could not be
+delegated in the earlier chapters:
+
+- framing the architecture question;
+- deciding which constraints and tradeoffs matter;
+- choosing what must be represented and measured;
+- selecting methods and tools;
+- judging whether feedback supports a claim;
+- deciding when the loop should continue, change, or stop;
+- accepting responsibility for the recommendation and its consequences.
+
+Chapter 11 should synthesize these responsibilities rather than introduce a
+new framework at the end of the book.
