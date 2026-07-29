@@ -237,6 +237,13 @@ example.
 - The callout grounds the local concept in Lighthouse.
 - The sequence of Lighthouse callouts forms a coherent secondary narrative.
 
+Apply this as a book-wide editorial contract rather than as a Chapter 2-only
+fix. Each useful callout should advance the running example by introducing a
+new question, constraint, representation, method choice, tool interaction,
+check, result, or decision. It should not merely repeat the surrounding chapter
+in XR language. Aim for continuity across the book, but do not force a callout
+into a chapter or section where Lighthouse adds no explanatory value.
+
 ### Design Principles
 
 **Author observation.** The book needs a clear definition of a design principle.
@@ -508,6 +515,32 @@ currently hides the unifying argument.
 
 Select examples because they demonstrate that pattern, not to create a general
 history of computing.
+
+### Raising the Level of Abstraction
+
+**Author observation.** Chapter 2 might conclude its historical discussion by
+explaining that architecture has often responded to increasing complexity by
+raising the level of abstraction.
+
+**Editorial assessment.** This is the right historical pattern with an
+important qualification. Raising abstraction worked when the field also built
+interfaces, transformations, tools, and checks that kept higher-level decisions
+connected to implementation. An abstraction that hides physical consequences
+without providing a way to recover and test them does not solve the
+architecture problem.
+
+**Likely direction.** Use this point near the end of the historical section and
+return to it when introducing AI. AI may let designers express requests at a
+higher level and may help translate among representations, but the resulting
+artifacts still need executable tool paths and implementation-level checks.
+The durable pattern is therefore:
+
+> Raise the level at which designers express decisions while strengthening the
+> tools and checks that connect those decisions to implementation.
+
+This framing connects Mead-Conway methods, hardware-description languages,
+logic synthesis, compiler abstractions, and modern AI assistance without
+claiming that AI is automatically the next successful abstraction.
 
 ### Sections 2.1, 2.2, and 2.3
 
