@@ -165,8 +165,9 @@ The complete life cycle has six responsibilities.
    objectives, legal changes, planned checks, and an intended decision.
 2. **Explore** identifies alternatives worth testing and preserves enough of
    the search to show what was and was not considered.
-3. **Implement** turns a candidate into valid, executable work for the relevant
-   tools and establishes that the requested work actually ran.
+3. **Implement** makes a candidate executable by the relevant tools and
+   establishes that the requested work actually ran. It does not necessarily
+   mean producing RTL.
 4. **Evaluate** compares valid measurements with the declared requirements and
    objectives.
 5. **Interpret and Explain** determines what the result means and whether the
@@ -282,10 +283,10 @@ declarations make the comparison and its limits inspectable.
 | Comparator | The current 2\ MB L2 baseline. Both larger candidates are compared against the same rerun baseline. |
 | Scope | One cache-capacity decision inside the compute subsystem. Cache policy, network-on-chip topology, compiler, runtime, and the rest of the memory system remain fixed. |
 | Permitted changes | L2 capacity may take the values 2\ MB, 3\ MB, or 4\ MB. No other architecture parameter may change in this study. |
-| Hard constraints | Modeled subsystem dynamic plus leakage power must not exceed 3\ W. The cache macro must not exceed 1.5\ mm^2^, and its modeled access time must not exceed the 2.5\ ns allocation used by the 2\ GHz microarchitecture. Required thermal and resistive voltage-drop (IR-drop) review remains independent. |
+| Hard constraints | Modeled subsystem dynamic plus leakage power must not exceed 3\ W. The cache macro must not exceed 1.5\ mm^2^, and its modeled access time must not exceed the 2.5\ ns, or five-cycle, allocation used by the 2\ GHz microarchitecture. Required thermal and resistive voltage-drop (IR-drop) review remains independent. |
 | Objectives and tradeoffs | Reduce 99th-percentile frame time while limiting added power and area. A candidate that improves tail latency at higher cost remains a tradeoff alternative rather than an automatic winner. |
 | Conditions | Workload snapshot `XR-TRACE-A`, including stable frame identifiers and boundaries; RISC-V software image `SW-BASE-A`; and recorded versions of the cycle-level simulator, cache model, power model `PM-A`, static random-access memory (SRAM) model `SRAM-A`, and process, voltage, and temperature assumptions `PVT-A`. |
-| Planned measurements and checks | Measure 99th-percentile frame time, cache misses by classification including capacity misses, dynamic and leakage power, macro area, and access time while retaining stable frame identifiers. Estimate the frame-time reduction and its 95% interval with paired block resampling over matched contiguous frame groups from the baseline and candidate together. A capacity advances only if its physical checks pass and that interval relative to 2\ MB lies above zero. |
+| Planned measurements and checks | Run the same functional regression suite for every capacity, require identical ISA-visible outputs for the declared test inputs, and require no failure from the simulator's coherence-invariant checks. Measure 99th-percentile frame time, cache misses by classification including capacity misses, dynamic and leakage power, macro area, and access time while retaining stable frame identifiers. Estimate the frame-time reduction and its 95% interval with paired block resampling over matched contiguous frame groups from the baseline and candidate together. A capacity advances only if its functional and physical checks pass and that interval relative to 2\ MB lies above zero. |
 | Budget | Four cycle-level executions in total, including reruns after infrastructure failures, plus one SRAM timing, area, and power evaluation per declared capacity. No RTL synthesis or physical signoff is included. |
 | Stopping conditions | Stop when the intended decision is resolved, all permitted capacities are exhausted, the run budget is spent, or a required input or measurement remains unavailable. |
 | Intended decision | Recommend at most one cache capacity for a later RTL study. This plan does not authorize implementation, signoff, tapeout, or a product commitment. |
@@ -301,8 +302,9 @@ constraint rules out a candidate. A design that misses timing is not rescued
 by excellent energy efficiency. An objective ranks or compares candidates that
 remain feasible. Power, area, latency, and implementation effort may pull in
 different directions, so exploration may return a Pareto set rather than one
-universally best design. A Pareto alternative is one that cannot improve one
-declared objective without worsening another.
+universally best design. A candidate is Pareto optimal when no other feasible
+candidate improves at least one declared objective without worsening any other
+declared objective.
 
 The table's tail-latency objective is intentional. Real-time XR is judged by
 whether frames meet their deadlines, not only by average throughput. A cache
@@ -318,7 +320,9 @@ the baseline and candidate together. Block resampling preserves short-range
 dependence under its stationarity assumptions [@Kunsch1989BlockBootstrap].
 Pairing the baseline and candidate blocks is this study's application of that
 method, so each comparison uses corresponding workload intervals rather than
-unrelated samples.
+unrelated samples. The interval describes within-trace sampling uncertainty. It
+does not cover simulator model error, workload representativeness, or transfer
+to another trace.
 
 An architectural claim makes the expected result falsifiable.
 
@@ -331,6 +335,15 @@ For this study, the claim is that at least one larger L2 reduces
 capacity misses while remaining inside the declared power, area, and timing
 constraints. The claim does not assume that fewer misses necessarily reduce
 frame time. It makes that connection something the measurements must test.
+
+Requirements must remain traceable as the study proceeds. The 3\ W requirement,
+for example, becomes a subsystem power allocation under recorded activity and
+model assumptions, then an acceptance check on dynamic plus leakage power. A
+change to the software image, activity, power model, or voltage assumptions
+invalidates that result and reopens the check. Functional obligations follow a
+separate trace. Varying cache capacity does not permit a candidate to change
+the declared coherence behavior, memory semantics, or ISA-visible software
+result, so the plan must name the functional check that preserves them.
 
 A cheap analytic check can reject an impossible claim before any simulator is
 invoked. If the frames that set the tail spend 18 percent of their latency
@@ -407,7 +420,7 @@ one should advance.
 
 ## Implement a Testable Candidate
 
-Implementation turns a selected candidate into executable work. In an
+Implementation makes a selected candidate executable by the intended tools. In an
 AI-assisted setting, this may mean generating RTL, modifying simulator
 parameters, constructing a workload, writing a compiler transformation, or
 preparing a sequence of EDA tool commands. The essential result is not code or
@@ -463,7 +476,8 @@ and validity conditions declared during formulation. The result is not merely
 a score. It states which checks passed, which failed, which remain unresolved,
 and how much confidence the available measurements justify.
 
-The XR study first applies hard physical checks. A cache macro outside the
+The XR study first requires the declared functional regression and coherence
+checks to pass, then applies the hard physical checks. A cache macro outside the
 1.5\ mm^2^ area limit, beyond the 2.5\ ns access-time allocation, or above the
 3\ W subsystem envelope is rejected even if it improves frame time. A feasible
 candidate then faces the tail-latency comparison with the rerun 2\ MB baseline.
@@ -478,8 +492,9 @@ It does not make the lower-fidelity checks unimportant. Their assumptions and
 error bounds determine which candidates survive long enough to reach the
 expensive tools.
 
-Higher fidelity strengthens an answer to the declared question, but it does
-not widen the decision the study may support. A successful cycle-level
+Higher fidelity can strengthen an answer to the declared question when its
+assumptions and validation support the comparison. It does not automatically
+widen the decision the study may support. A successful cycle-level
 simulation does not authorize RTL implementation if the study promised only a
 recommendation for further evaluation. Likewise, an RTL result does not waive
 thermal, IR-drop, reliability, or product review that the study excluded.
@@ -623,6 +638,13 @@ An unexplained frame-time gain may request additional telemetry or an ablation.
 A revised product requirement can reopen formulation. The recorded reason for
 the return prevents the next turn from repeating the same work blindly.
 
+Parallel work needs the same discipline. Each branch names the study-state
+revision it used and binds every action and result to that revision. Results
+from two branches may be merged only after their assumptions, interfaces, and
+permitted changes are checked for compatibility. When one branch changes a
+shared requirement, model, or interface, the affected results from other
+branches return for revalidation rather than silently carrying forward.
+
 The lower bar in the figure separates fidelity from authority. A study may
 move from a proxy to simulation and then to a higher-fidelity check, usually at
 increasing cost. A higher-fidelity result does not by itself authorize a more consequential decision. It can strengthen the answer to the declared question,
@@ -637,6 +659,13 @@ A cumulative review record makes those distinctions inspectable.
 > It retains the plan, stage outputs, failed or unevaluated work, unresolved
 > questions, stopping reason, and supported decision, with links to the
 > detailed artifacts needed for review or replay.
+
+Every study needs a small common record. For each consequential transition, it
+names the study-state revision, who or what proposed and approved the action,
+what executed it, what checked the result, and what later change would
+invalidate it. Higher-consequence, novel, uncertain, or expensive work may
+require additional fields and independent review. The common record should not
+grow merely because a template can hold more information.
 
 The existing design-loop card is a compact index into that record.
 
@@ -671,9 +700,9 @@ later entries visibly open (@tbl-design-loop-card-fields).
 | Environment | The required simulator, power, and SRAM model work is named. Exact interfaces, isolation, and recovery remain open. |
 | Method role | No AI method is selected. Direct enumeration is an available approach because the declared space is small. |
 | Feedback budget | Four cycle-level executions including infrastructure reruns, plus one SRAM timing, area, and power evaluation per declared capacity. The budget is available but not yet spent. |
-| Evidence | Awaiting execution. Planned results include cache-miss classifications, power, area, access time, tail latency, the interval around the frame-time comparison, and links to observations needed to test the mechanism. |
+| Evidence | Awaiting execution. Planned results include functional-regression and coherence-check outcomes, cache-miss classifications, power, area, access time, tail latency, the interval around the frame-time comparison, and links to observations needed to test the mechanism. |
 | Failed runs and rejected alternatives | None yet. Later records must distinguish infrastructure failures, unevaluated candidates, and candidates rejected by a declared check. |
-| Rejection checks and authority | Power, area, access time, and tail-latency checks are declared. They can reject a candidate within this study. Authority to waive later thermal or IR-drop review is not granted here. |
+| Rejection checks and authority | Functional regression, coherence invariants, power, area, access time, and tail latency are declared checks. They can reject a candidate within this study. Authority to waive later thermal or IR-drop review is not granted here. |
 | What the evidence supports | Open until valid tool returns are evaluated and the proposed mechanism is tested. |
 | Accountable decision | Open. Possible outcomes are to advance at most one candidate, reject candidates on declared checks, narrow the conclusion, revise a named part of the study, or stop honestly. Product commitment remains outside this study. |
 
