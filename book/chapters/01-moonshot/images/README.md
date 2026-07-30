@@ -1,16 +1,17 @@
-# Chapter 1 Figure Plan
+# Chapter 1 Figure Inventory
 
-Current figures:
+Active hand-authored figures:
 
-- `F1-moonshot-stack`: lighthouse prompt decomposition.
-- `F1d-design-method-progression`: historical design-method progression and the
+- `F1d-design-method-progression`: historical design-method shifts and the
   prospective AI-assisted architecture target.
-- `F2a-design-loop-breaks`: Architecture 1.0 versus Architecture 2.0 loop state.
+- `F1c-moonshot-venn`: the intersection of an architecture challenge, a change
+  in design practice, and an enabling technical advance.
+- `F1-moonshot-stack`: the architecture and engineering work hidden by the
+  compact Lighthouse prompt.
+- `F2a-design-loop-breaks`: the design state needed for human-orchestrated and
+  AI-assisted architecture studies.
 
-Needed next:
+Executable Quarto figures in the chapter:
 
-- Keep the prompt visible as a concrete object before the stack abstraction.
-- Make every added figure explain its claim in nearby prose, not only in the
-  caption.
-- Keep prediction, generation, and optimization in the methods chapter rather
-  than adding a second method-family summary here.
+- `fig-swebench-progress`: dated progress on SWE-bench Verified as an example
+  of rapid task-level iteration under a standardized harness.

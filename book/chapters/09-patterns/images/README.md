@@ -1,20 +1,17 @@
-# Chapter 9 Figure Plan
+# Chapter 9 Figure Inventory
 
-Current figures:
+Active hand-authored figures:
 
-- `F10a-domain-specificity-shapes`: domain-specific architecture shapes.
-- `F10b-codegen-narrow-waist`: code generation as the DSA bottleneck.
-- `F10c-hardware-software-coevolution`: hardware target state and software
+- `F9a-domain-specificity-shapes`: six obligations that test whether a
+  specialization case is durable.
+- `F9b-codegen-narrow-waist`: the software path connecting domain intent to
+  specialized hardware and its checks.
+- `F9c-hardware-software-coevolution`: hardware target state and software
   path state co-evolve through shared evidence.
 
 Executable Quarto figures in the chapter:
 
-- `fig-specialization-speedup-warning`: Matplotlib specialization speedup plot.
-
-Needed next:
-
-- Add the benchmark/workload drift plot or table when defensible data is ready.
-- Keep DSA figures architecture-centric: domain shape, interface, codegen,
-  deployment feedback, and verification should all be visible.
-- Chapter 9 can be figure-driven, but each figure must still earn its place in
-  the prose.
+- `fig-logca-breakeven`: an illustrative break-even model for useful
+  acceleration after communication cost.
+- `fig-rejection-bound-ceiling`: the ceiling that follows when an unchecked
+  rejection rate compounds across reused decisions.
