@@ -33,11 +33,14 @@ substantial effort. It can also preserve an obsolete assumption, stale tool
 state, or conclusion that the new decision no longer supports. The useful
 question is not whether the earlier work transfers as a whole. It is which
 parts transfer, what changed around them, and which target checks must now run.
+AI-assisted design makes that question more urgent because data, learned
+components, tool wrappers, and generated artifacts can each remain usable for
+different lengths of time.
 
 The completed study in @sec-running-the-loop provides a concrete source. Five
 unique systolic-array shapes were evaluated under a synthetic three-layer
-workload and a frozen configuration of SCALE-Sim, an analytical simulator for
-systolic-array accelerators. No evaluated nonbaseline shape
+workload and a frozen configuration of SCALE-Sim, a cycle-accurate simulator for
+systolic-array accelerators [@RajEtAl2025ScaleSimV3]. No evaluated nonbaseline shape
 cleared the declared 1 percent margin. The model and weak fixed heuristic
 tied, the model's directional explanation failed, and the recorded
 recommendation to retain 32 by 32 still required the architect's decision.
@@ -59,6 +62,12 @@ qualified for the target, and whether hardware and software results still
 apply to their current versions. The outcome is a specific action for each
 part and a target check for every material change.
 
+The recurring structure is the transfer test, not the design problem itself.
+Different problems expose different permitted actions, observations,
+objectives, failure classes, feedback relationships, and commitment rules. The
+same procedure can organize those differences without pretending that one
+taxonomy or tool sequence applies everywhere.
+
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
@@ -67,7 +76,7 @@ After reading this chapter, you can:
 - Separate the data, represented state, methods, tools, checks, policies,
   configured system, and conclusions that might transfer.
 - Assign an appropriate action to each part, including reuse, refresh, rerun,
-  recalibrate, adapt, retrain, replace, retire, narrow, or reject.
+  requalify, recalibrate, adapt, retrain, replace, retire, narrow, or reject.
 - Convert every changed condition into a concrete test or an explicit untested
   boundary.
 - Charge interface overhead, offload granularity, and the executable software
@@ -119,8 +128,11 @@ teams. The same 32 by 32 artifact participates in both problems, but the
 decision, conditions, required evidence, and consequence have changed.
 
 The source record therefore carries each result forward with the boundary that
-prevents it from settling the target. @tbl-ch9-source-record pairs each
-completed source result with the scope that survives the change in decision.
+prevents it from settling the target. Reproducing that source result asks
+whether the retained source computation can run again. Requalifying a
+component for the target asks whether it remains supported after the problem
+changes. @tbl-ch9-source-record pairs each completed source result with the
+scope that survives the change in decision.
 
 | **Source record from the completed study** | **Status carried forward** |
 | --- | --- |
@@ -128,7 +140,7 @@ completed source result with the scope that survives the change in decision.
 | 32 by 32 and 16 by 64 tie on the frozen local score | No-change result for the five evaluated shapes; not an implementation ranking. |
 | Model and weak fixed heuristic tie at equal simulator-call budgets | No study-local AI advantage; no result about another proposer or repeated runs. |
 | Directional mechanism prediction fails its contrast | Failed recorded explanation; no replacement mechanism established. |
-| SCALE-Sim reports cycles, utilization, and modeled word traffic | Analytical simulator outputs; no measured energy, RTL, timing, congestion, or thermal result. |
+| SCALE-Sim reports cycles, utilization, and modeled word traffic | Cycle-accurate simulator outputs; no measured energy, RTL, timing, congestion, or thermal result. |
 | Retain 32 by 32 and stop the local search | Technical recommendation remains pending and cannot settle the target decision. |
 
 : **The complete source record remains local.** Its artifacts and limitations
@@ -178,7 +190,7 @@ obligation rather than a vague demand for more rigor
 
 | **Condition** | **Completed source study** | **Implementation-facing target** | **Obligation created by the change** |
 | --- | --- | --- | --- |
-| Result cost and delay | Fast analytical simulation and replay | Compiler experiments, RTL, synthesis, floorplanning, and routed checks | Use the simulator for screening; budget slower checks and the review needed to interpret them. |
+| Result cost and delay | Seconds-scale cycle-accurate simulation and replay in the completed run | Compiler experiments, RTL, synthesis, floorplanning, and routed checks | Use the simulator for screening; budget slower checks and the review needed to interpret them. |
 | Reversibility | A simulated shape can be discarded | An array and interface freeze creates downstream software and hardware rework | Keep 32 by 32 provisional and preserve a fallback until target checks settle. |
 | Coupling and interface span | Array dimensions varied while mapping and interfaces stayed fixed | Compiler mapping, SRAM, interconnect, host, and accelerator contracts interact | Measure the executable software path and end-to-end offload cost. |
 | Observability and check independence | Cycles, utilization, and modeled word traffic from one simulator | Correctness, latency, bandwidth, area, timing, congestion, power, thermal behavior, reliability, and security properties required by the target | Add memory-system, RTL, implementation, thermal, fault, and security checks where the target consequence requires them; derive checks separately where practical and disclose shared assumptions. |
@@ -190,8 +202,7 @@ obligation rather than a vague demand for more rigor
 : **Changed conditions accumulate test obligations.** The target study keeps
 the source record but cannot inherit the source conclusion. {#tbl-ch9-source-target tbl-colwidths="[15,23,25,37]"}
 
-Read each row from the completed source condition through the
-implementation-facing change to the resulting obligation. The first three
+The first three
 rows move from a cheap, reversible, isolated simulation to slower checks and
 a coupled executable path. The next two add observations and decision
 consequences that the local score did not carry. The final three reopen workload
@@ -205,6 +216,9 @@ that false acceptance. That loss includes reversal and rework cost plus any
 consequence that cannot be reversed. Workload mismatch, limited observability,
 and unsupported proxies raise the first factor. Interface coupling, downstream
 commitment, and system consequence raise the second. Some changes raise both.
+The complete decision also prices false rejection, missed benefit, and the
+cost of requalification. A policy that prevents every false acceptance by
+rejecting every transfer is not useful.
 Security and reliability do not enter every study through a universal
 checklist. They enter when the target's assets, threat model, failure model, or
 consequence of failure makes them part of the architecture decision.
@@ -241,17 +255,23 @@ architecture simulation remain useful early checks, but they cannot observe
 whether an RTL block is synthesizable, whether its interface is correct, or
 whether the routed design meets timing, power, and thermal constraints.
 
-The target study therefore needs a staged implementation path. Functional
-simulation exercises selected cases. Independently derived formal properties
-can prove stated behavior within their assumptions, while equivalence checks
-can establish a specified relation between representations. Lint and synthesis
-expose structural and legality failures. Physical implementation must then
-check setup and hold timing across relevant corners, congestion, design rules,
-signal integrity, and power-delivery limits. When the target decision carries reliability or
-security consequences, the path must also state the relevant fault and threat
-models, then exercise the protection, recovery, isolation, and
-information-flow properties derived from them. Each check observes a different
-failure class, and none alone establishes implementation readiness.
+The target study therefore needs an implementation path whose checks match the
+claims at risk. Functional simulation exercises selected cases. Independently
+derived formal properties can prove stated behavior within their assumptions,
+while equivalence checks can establish a specified relation between
+representations. Lint and synthesis expose structural and legality failures.
+Physical implementation checks setup and hold timing across relevant corners,
+congestion, design rules, signal integrity, and power-delivery limits. When the
+target decision carries reliability or security consequences, the path must
+also state the relevant fault and threat models, then exercise the protection,
+recovery, isolation, and information-flow properties derived from them.
+
+This is neither a universal sequence nor a monotonic rise in confidence.
+Simulation, proof, equivalence, synthesis, floorplanning, routing, extraction,
+and signoff operate on different representations and observe different failure
+classes. A later return can invalidate earlier RTL, constraints, mappings, or
+interfaces and force the study to re-enter an earlier part of the path. None
+alone establishes implementation readiness.
 
 Wire effects make the escalation substantive. Synthesis and physical
 synthesis can include wire estimates, but those estimates do not replace
@@ -301,10 +321,9 @@ independence is unavailable. A separate specification reading, synthesis
 flow, formal property set, or implementation check can expose a different
 failure class without being treated as ground truth.
 
-Learned synthesis and placement studies, along with a vendor-reported
-physical-design search, demonstrate bounded proposal and search roles within
-these stages [@RoyEtAl2021PrefixRL; @MirhoseiniEtAl2021GraphPlacement;
-@Synopsys2023DSOai]. Each proposal must still reach the target check that can
+Learned synthesis studies and a vendor-reported physical-design search
+demonstrate bounded proposal and search roles within these stages
+[@RoyEtAl2021PrefixRL; @Synopsys2023DSOai]. Each proposal must still reach the target check that can
 observe its relevant failure class. The study record must retain tool versions,
 failed candidates, check results, and untested boundaries.
 
@@ -317,23 +336,17 @@ unhelpful choice between copying everything and starting over.
 @tbl-ch9-transfer-map separates the units that commonly appear in an
 AI-assisted architecture study. For each unit, it asks what dependency changed,
 which action remains valid, and what target check is needed before the unit can
-support new work. The optional architecture foundation model in the table is a
-broadly trained learned component that can contribute prior knowledge or
-representations across architecture tasks. It is one possible component, not a
-required center of the system.
+support new work.
 
 | **Transfer unit** | **Changed dependency** | **Valid action** | **Required target check** |
 | --- | --- | --- | --- |
-| **Source data and records** | Workload, design space, objectives, provenance, or collection conditions differ. | Reuse the historical record; refresh target data; narrow unsupported coverage. | Check trace and artifact provenance, target coverage, exclusions, and source-to-target overlap. |
+| **Data, records, and current knowledge** | Workload, design space, objectives, provenance, collection conditions, specifications, manuals, libraries, or project documents differ. | Reuse the historical record; refresh target data and sources; retire stale sources; narrow unsupported coverage. | Check trace and artifact provenance, source identity and version, target coverage and exclusions, source-to-target overlap, and whether retrieved material supports the target fact. |
 | **Representation and project state** | Constraints, interfaces, artifact versions, or cross-layer relationships differ. | Refresh live state; adapt the representation; replace a representation that hides a required relationship. | Check schema and constraint completeness, version consistency, and integration with neighboring state. |
-| **Retrieved and current knowledge** | Specifications, tool manuals, libraries, or project documents have changed. | Refresh the indexed sources; replace or retire stale sources. | Check source identity, version, retrieval coverage, and whether returned passages support the target fact. |
-| **Optional architecture foundation model** | The target lies outside its training support, or its prior knowledge conflicts with current project facts. | Reuse a supported prior; adapt or retrain the learned component; replace or retire it when support is inadequate. | Test held-out target tasks, stale knowledge, and agreement with current project artifacts and tool results. |
-| **Specialized predictor, generator, or optimizer** | Inputs, outputs, objectives, constraints, or operating distribution changed. | Recalibrate a predictor; rerun a generator or optimizer; adapt, retrain, replace, or retire a learned component when needed. | Measure target accuracy or calibration, candidate legality, objective quality, failure classes, and performance against the declared comparator. |
+| **Learned component** | Training support, inputs, outputs, objectives, constraints, project facts, or data-generating conditions changed. | Requalify the unchanged component; rerun a generator or optimizer; recalibrate a numerical mapping; adapt, retrain, replace, or retire the component when needed. | Test every role it fills on held-out target tasks, including accuracy or calibration, candidate legality, objective quality, stale knowledge, failure classes, and performance against the declared comparator. |
 | **Conventional method** | Analytical assumptions, solver formulation, design space, or objective changed. | Reuse, adapt, rerun, replace, or retire the method. | Check its assumptions on the target and compare its target result with the same decision rule used for other methods. |
-| **Tool interface or wrapper** | Command syntax, parameter meaning, output schema, status codes, or tool version changed. | Adapt, replace, or retire the interface. | Run target-version interface tests, including failure classification and output parsing. |
-| **Environment component** | Tool, library, license, runtime, machine resource, reset behavior, or isolation changed. | Refresh configuration; adapt or replace the component; rerun affected work. | Check target-version execution, reset and isolation behavior, resource accounting, and integration with connected tools. |
-| **Empirical predictor or screening check** | Target coverage, fidelity, operating distribution, or error tolerance changed. | Recalibrate, adapt, rerun, replace, or retire the check. | Measure target coverage and class-specific errors against a separate higher-fidelity or independently derived reference. |
-| **Formal, deterministic, or rule-based check** | The target specification, assumptions, properties, rules, or tool version changed. | Review the specification mapping; adapt, rerun, replace, or retire the check. | Check property and assumption coverage, qualify the target tool version, and exercise known positive, negative, and inconclusive cases. |
+| **Tool interface and environment component** | Command syntax, parameter meaning, output schema, status codes, tool or library version, license, runtime, machine resource, reset behavior, or isolation changed. | Refresh configuration; adapt, replace, or retire the component; rerun affected work. | Check target-version execution, interface parsing and failure classification, reset and isolation behavior, resource accounting, and integration with connected tools. |
+| **Empirical screening check** | Target coverage, observed conditions, error tolerance, or relationship to the target reference changed. | Requalify before reuse; recalibrate only when a numerical mapping or threshold changes; adapt, rerun, replace, or retire the check. | Measure target support and class-specific errors against a separate reference capable of observing the property at risk. |
+| **Formal, equivalence, deterministic, or rule-based check** | The target specification, assumptions, properties, representation relation, rules, or tool version changed. | Review the specification mapping; requalify the target setup; adapt, rerun, replace, or retire the check. | Check property and assumption coverage, the relation being established, target tool integration, and known positive, negative, and inconclusive cases. |
 | **Routing or escalation policy** | Check cost, consequence, qualified coverage, or available review capacity changed. | Adapt, replace, narrow, or retire the policy. | Exercise routing thresholds, uncertain cases, failure injection, escalation, and resource limits on the target. |
 | **Complete configured technical system** | Any neighboring component or interface changed, even when this configuration did not. | Rerun target integration; adapt, replace, narrow, or reject the configuration when required. | Repeat the end-to-end target task with pinned versions, total product-path costs, failures, and a credible alternative. |
 | **Architecture and AI-contribution conclusions** | The target decision, comparator, budget, or measured path differs from the source. | Narrow the conclusion to its supported source scope or reject its transfer. | Repeat the architecture comparison and the matched AI-contribution comparison under target conditions. |
@@ -342,19 +355,28 @@ required center of the system.
 action suited to the dependency that changed and a target check capable of
 observing the resulting risk. {#tbl-ch9-transfer-map tbl-colwidths="[20,27,25,28]"}
 
-Read the table in two passes. The first six rows cover information and methods.
-The next six cover the executable system that obtains and checks results. The
-last row is different because a conclusion is not a component that can be
-updated mechanically. It must be narrowed to the conditions already tested or
-rejected for the new decision.
+The information, methods, executable environment, checks, and configured
+system can receive different dispositions. The last row is different because a
+conclusion is not a component that can be updated mechanically. It must be
+narrowed to the conditions already tested or rejected for the new decision.
 
 Only learned components can be retrained. Data can be refreshed, a
 representation can be adapted, a tool interface can be replaced, and a check
 can be recalibrated, but none of those actions is retraining unless the unit
-itself learns from data. An architecture foundation model can contribute a
-broad prior or candidate knowledge. It does not carry the live project state,
-current tool checks, or architecture conclusions inside that prior. Those
-remain explicit target artifacts.
+itself learns from data. A broadly trained architecture model can contribute a
+prior or candidate knowledge, while a specialized model can predict, generate,
+optimize, or check. One learned component can fill several roles and inherits
+the target obligations of every role it fills. No learned prior carries live
+project state, current tool checks, or architecture conclusions inside itself.
+Those remain explicit target artifacts.
+
+The check rows do not imply equal claim strength. A formal proof establishes
+only the stated properties under its assumptions. An equivalence check
+establishes a specified relation between representations. A deterministic
+analysis reports the quantities it implements, while a rule-based heuristic
+supplies no proof merely because it is repeatable. Passing target-version
+regressions can qualify tool integration, but it does not enlarge formal
+property coverage or make a heuristic sound.
 
 An unchanged component still needs an integration check after a neighbor
 changes. A wrapper that parses the same simulator correctly may receive new
@@ -391,13 +413,12 @@ impossible.
 
 ![**Six questions test whether a specialization case is durable.** Kernel stability, data and precision, memory behavior, program interface, deployment targets, and drift and verification each create an obligation. Flexibility can mitigate a weak condition, but its cost belongs in the target comparison.](images/F9a-domain-specificity-shapes){#fig-domain-specificity-shapes width="100%" fig-alt="Central question about what is stable enough to specialize, surrounded by kernel family, data and precision, memory behavior, program interface, deployment and quality-of-service, and drift and verification."}
 
-Read the figure from the top row to the bottom row. Kernel family, data and
-precision, and memory behavior determine whether the computation has a stable
-shape. Program interface, deployment targets, and drift and verification
-determine whether that shape remains usable after it leaves the local kernel.
-The central claim depends on both rows. A weak condition does not rule out
-specialization, but its flexibility, fallback, and verification costs belong in
-the product-path comparison.
+Kernel family, data and precision, and memory behavior determine whether the
+computation has a stable shape. Program interface, deployment targets, and
+drift and verification determine whether that shape remains usable after it
+leaves the local kernel. The central claim depends on both groups. A weak
+condition does not rule out specialization, but its flexibility, fallback, and
+verification costs belong in the product-path comparison.
 
 An author-derived Amdahl-style expression makes the end-to-end obligation
 explicit [@Amdahl1967ValiditySingleProcessor]. Normalize all terms to the
@@ -409,7 +430,9 @@ S_{\mathrm{system}} \le
 $$
 Here, $\phi$ is the improvable fraction of baseline time, $s$ is local
 speedup, and the $\epsilon$ terms are interface and software overheads under
-that normalization. A useful decomposition is
+that normalization. The inequality allows omitted nonnegative costs. It becomes
+an equality only when the expression includes every additive cost and the
+no-overlap assumption holds. A useful decomposition is
 $\epsilon_{\mathrm{interface}} = (N L_{\mathrm{startup}} +
 \text{Data Volume}/\text{Bandwidth})/T_{\mathrm{baseline}}$. Too many
 invocations or too much data movement can erase the local compute gain. For
@@ -537,12 +560,14 @@ generated code form the core construction path shown in
 
 ![**A software path to specialized hardware.** Domain-specific architectural claims require executable software paths and evidence about correctness, performance, portability, and maintenance.](images/F9b-codegen-narrow-waist){#fig-codegen-narrow-waist width="92%" fig-alt="Narrow-waist diagram showing programming models, compiler representations, libraries, runtimes, and generated code connecting specialized hardware to evidence checks."}
 
-Read this figure from top to bottom. Domain intent and the workload
-distribution meet the architecture mechanisms and hardware constraints before
-they reach the code-generation waist. The programming model, compiler
+Domain intent and the workload distribution meet the architecture mechanisms
+and hardware constraints before they reach the code-generation waist. The
+programming model, compiler
 representations, libraries, runtime, and generated code then carry the
-specialization into an executable path. Tool feedback tests that path for
-correctness, performance, portability, and maintainability.
+specialization into an executable path. Tools can measure correctness and
+performance on a declared target. Portability requires repeated target
+configurations, while maintainability requires evidence from change, repair,
+rebuild, and human review.
 
 The figure is deliberately a narrow waist, not a complete system-software
 inventory. A target may also depend on operating-system services, device
@@ -577,6 +602,13 @@ to reduce expensive simulation
 [@KrishnanEtAl2023ArchGym; @yazdanbakhsh2021apollo]. Transfer saves work only
 after the target checks show which source relationships still hold.
 
+Here, *higher fidelity* is property-specific rather than a global rank. A
+simulator, formal proof, equivalence check, extracted timing run, thermal
+analysis, and silicon measurement observe different quantities under different
+assumptions. They can be complementary or incomparable. The target reference
+must be capable of observing the property and failure class that qualify the
+cheap check.
+
 The target plan sends some candidates through cheap screening and others
 through expensive reference checks. A generator that increases proposal
 volume without increasing qualified review capacity grows a queue rather than
@@ -610,6 +642,12 @@ the case within the declared error limits and no cheap-check work is spent on
 items that later escalate. Incorrectly accepted items cannot disappear from
 the accounting. They must count as failures against those error limits or the
 comparison with the all-reference baseline is invalid.
+
+The bound's best case assumes an ideal router that knows which items the cheap
+check will settle. A practical system must infer support or abstain before it
+knows the reference result. That routing gate is another predictor. It needs
+target qualification, and false routing must enter both the class-specific
+error limits and the service-work calculation.
 
 As $c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ and $\epsilon = 0$, the
 free-check ceiling approaches $1/(1-f)$. No reduction in unit check cost can
@@ -696,7 +734,7 @@ for text in legend.get_texts():
 
 add_note_box(
     fig,
-    "Solid curves route the cheap check only where it settles the case (a = f); dashed color curves screen every candidate (a = 1). The black dashed line is the free-check ceiling 1/(1-f).",
+    "Solid curves show an ideal router that pays for the cheap check only where it settles the case (a = f); dashed color curves screen every candidate (a = 1). The black dashed line is the free-check ceiling 1/(1-f).",
     xywh=(0.10, 0.03, 0.80, 0.11),
     fontsize=5.5,
 )
@@ -716,16 +754,15 @@ candidate and pays for checks that later escalate. Every case outside
 validated coverage still pays the high-fidelity cost. At $f = 0.6$, a free
 check cannot exceed 2.5x in this model. A reported review-speedup claim
 therefore needs coverage, class-specific error bounds, the sampling and
-confidence calculation behind them, and the cost ratio.
+confidence calculation behind them, and the cost ratio. A consequential
+decision should use a conservative lower confidence bound on supported coverage
+rather than the point estimate of $f$.
 
-Iteration time also includes queueing delay, which grows before a queue
-diverges. Under a simple M/M/1 model with one server, Poisson arrivals, and
-exponential service times, normalized queue wait is $\rho/(1-\rho)$
-[@Kleinrock1975QueueingSystems]. At a fixed mean service time, 90 percent
-utilization produces nine times the queue wait at 50 percent utilization.
-Variability can make it worse, and generated proposal streams can be bursty.
-The target study therefore needs review-capacity headroom or admission control
-in addition to a service-work estimate.
+Service work does not by itself predict iteration time. Under a simple M/M/1
+model, normalized queue wait is $\rho/(1-\rho)$
+[@Kleinrock1975QueueingSystems], so the target study also needs review-capacity
+headroom or admission control. The complete workflow evaluation in
+@sec-evaluating-agentic-architect owns the stronger queueing and latency claim.
 
 ## Hardware and Software Results Remain Version-Bound
 
@@ -752,13 +789,19 @@ joined by one study record so the fast path cannot replace the slower checks
 
 ![**Recording hardware and software state.** Hardware target state and software path state evolve together through a shared study record, ensuring fast software tuning does not replace slower hardware checks.](images/F9c-hardware-software-coevolution){#fig-hardware-software-coevolution width="100%" fig-alt="Two-lane diagram of hardware target state and software path state evolving together through a shared study record and target review."}
 
-Read the figure from the two upper lanes into the shared record. The hardware
-target exposes legal knobs to the software interface, while generated kernels
-and schedules can reveal pressure to revise the hardware snapshot. The arrow
+The hardware target exposes legal knobs to the software interface, while
+generated kernels and schedules can reveal pressure to revise the hardware
+snapshot. The arrow
 labeled "changes target" represents a proposed revision. The shared study
 record and decision-holder review determine whether that revision becomes new
 target state. Both paths return through review, so a fast software result can
 reopen the hardware question without silently overwriting it.
+
+The figure does not prescribe a synchronized universal loop. Hardware and
+software can advance at different cadences. Each result remains bound to an
+immutable hardware-software version pair, and review joins only claims whose
+dependencies intersect rather than serializing every change through one fixed
+cycle.
 
 In this figure, software state includes the compiler, runtime, interface, and
 generated artifacts. A target whose execution also depends on drivers,
@@ -782,30 +825,41 @@ automatically. It reopens the claims whose inputs, path, observation, or
 interpretation it can change.
 
 Machine learning gives useful names to three different responses. Distribution
-shift describes a change between source and target conditions
+shift describes a change in the data-generating conditions between source and target
 [@QuinoneroCandelaEtAl2009DatasetShift]. Robustness asks whether a component
 remains acceptable without modification. Adaptation changes a component, while
 target evaluation determines whether that change restored support. Keeping the
 three ideas separate prevents every changed condition from becoming an
-automatic retraining request.
+automatic retraining request. A tool, process, specification, representation,
+or interface change can still invalidate a learned mapping even when observed
+feature distributions appear stable.
 
 The response should match the changed unit. Refresh data, documents, or live
-project state when their contents changed. Recalibrate a predictor, screen, or
-threshold when its relationship to the higher-fidelity target changed. Adapt a
-representation, interface, method configuration, or policy when its structure
-still fits but its target details do not. Retrain only a learned component, and
-only when target data and a held-out check justify doing so. Replace or retire a
-model, method, tool, or check that no longer has adequate support.
+project state when their contents changed. *Requalify* an unchanged component
+to test whether its stated support still holds on the target. *Recalibrate* only
+when fitting a numerical mapping, confidence estimate, score-to-risk
+relationship, or threshold. Recalibration cannot recover a missing feature or
+repair invalid semantics. Adapt a representation, interface, method
+configuration, or policy when its structure still fits but its target details
+do not. Retrain only a learned component, and only when target data and a
+held-out check justify doing so. Replace or retire a model, method, tool, or
+check that no longer has adequate support.
 
 Only dependent claims reopen. For the changed target, those claims expire
-until the appropriate refresh, rerun, recalibration, adaptation, retraining,
-replacement, or retirement is complete and the target check passes. Unaffected
+until the appropriate refresh, rerun, requalification, recalibration,
+adaptation, retraining, replacement, or retirement is complete and the target
+check passes. Unaffected
 claims remain scoped to their original versions and conditions, although a
 changed neighbor still requires an integration check. The old result remains
 historical evidence. It is not deleted or silently relabeled as current. The
 record should name the change that triggered review, the dependent claims that
 reopened, and the claims judged unaffected so version churn does not force
 indiscriminate repetition.
+
+Rollback must restore the configured dependency set, not only model weights.
+If a schema, representation, compiler, runtime, interface, tool, library, or
+hardware target changed, returning to an earlier learned component without its
+compatible configuration does not restore the earlier system.
 
 Attributed field observations can motivate a new calibration study for a
 later hardware generation. They do not update a surrogate or design rule
@@ -827,18 +881,30 @@ or a revision of the hardware's design-time result.
 
 ## What Carries Forward to the New Study
 
-The source-to-target comparison now supports a specific action plan
-(@tbl-ch9-adaptation-disposition). It keeps the source record intact while
-refusing to make it carry a different claim.
+The transfer test can be applied in five steps.
+
+1. Name the source and target decisions.
+2. Separate the source system into transfer units.
+3. Identify the dependency that changed for each unit.
+4. Assign reuse, refresh, rerun, requalify, recalibrate, adapt, retrain,
+   replace or retire, narrow, or reject.
+5. Require a target check capable of observing the risk introduced by the
+   change, plus an integration check for an unchanged neighbor.
+
+The test succeeds only when no target conclusion advances without an
+appropriate target check. Applied to the array study, it produces the action
+plan in @tbl-ch9-adaptation-disposition. The plan keeps the source record
+intact while refusing to make it carry a different claim.
 
 | **Treatment** | **What happens in the target study** |
 | --- | --- |
 | **Reuse** | Keep the record schema, provenance structure, raw simulator outputs, four judgments, and candidate identities as historical anchors. |
 | **Refresh** | Replace the synthetic slice with a trace-backed workload distribution; pin compiler, runtime, mapping, interface, and target objective versions. |
 | **Rerun** | Define the legal target space and evaluation budget, then evaluate the reference and target alternatives under the new workload, mapping, memory path, offload costs, and decision rule. |
-| **Recalibrate** | Compare SCALE-Sim ordering with a sampled higher-fidelity reference in the target region, then state where the cheap screen remains usable. |
+| **Requalify** | Compare SCALE-Sim ordering with a sampled property-specific reference in the target region, then state where the unchanged cheap screen remains supported. |
+| **Recalibrate** | If the screen retains the required inputs and semantics but its numerical relationship or threshold changed, fit that relationship on a target calibration set and verify it on separate held-out target cases. |
 | **Adapt** | Update the represented project state, tool interfaces, environment configuration, routing policy, and verification path for the implementation-facing target. Derive functional references and properties separately where practical. |
-| **Retrain** | Retrain only a learned predictor, generator, optimizer, verifier, or optional architecture foundation model whose target support is inadequate and for which suitable target data and held-out checks exist. |
+| **Retrain** | Retrain only a learned component whose target support is inadequate and for which suitable target data and held-out checks exist. |
 | **Replace or retire** | Remove a method, wrapper, environment component, or check that cannot support the target versions or required failure classes. |
 | **Narrow** | Treat 32 by 32 only as the retained reference candidate for the new comparison. |
 | **Reject** | Do not transfer the source 1 percent score, AI-contribution result, failed mechanism explanation, or pending recommendation into the RTL decision. |
@@ -846,11 +912,12 @@ refusing to make it carry a different claim.
 : **The adaptation keeps the record and reopens the claim.** Reuse of an
 artifact does not imply reuse of its conclusion. {#tbl-ch9-adaptation-disposition tbl-colwidths="[20,70]"}
 
-Read the rows as an allocation of what survives and what must be reopened.
-Reuse protects the historical artifacts. Refresh, rerun, recalibrate, and
-adapt rebuild the target state and checks. Retrain, replace, and retire apply
-only to components that need those actions. Narrow and reject constrain what
-may be claimed. This plan authorizes a new study, not the 32 by 32 freeze.
+Reuse protects the historical artifacts. Refresh and rerun rebuild the target
+state and observations. Requalification tests whether an unchanged component
+still applies, while recalibration changes a numerical relationship or
+threshold. Retrain, replace, and retire apply only to components that need
+those actions. Narrow and reject constrain what may be claimed. This plan
+authorizes a new study, not the 32 by 32 freeze.
 
 ::: {.callout-lighthouse title="Reuse the record, not the conclusion"}
 Do not freeze the 32 by 32 array or its interface from the result in
@@ -876,7 +943,7 @@ target would produce a different set.
 | Candidate comparison | Predeclare the legal target space, search and evaluation budgets, credible comparator, decision rule, and a sensitivity or resolving-power check. | No claim outside evaluated candidates and no comparative AI-contribution claim when the study cannot distinguish its arms. |
 | Mapping and software path | Compiler-generated end-to-end execution using pinned mapping, compiler, runtime, driver and firmware versions where applicable, and interface versions. | No claim that the array is usable by the target stack. |
 | Interface and memory cost | Offload granularity, bandwidth, traffic, latency, and a calibrated or validated energy-and-power model with execution rate, duty cycle, leakage and idle power, and the complete subsystem boundary. | No 3\ W or system-speedup claim. |
-| Cheap-screen validity | Representative random or stratified target samples checked against a separate higher-fidelity path, with class-specific error limits, uncertainty, the ability to decline a prediction when support is inadequate, and a later drift audit. | SCALE-Sim remains a source-study tool, not a target decision filter. |
+| Cheap-screen validity | Representative random or stratified target samples checked against a separate property-specific reference path, with class-specific error limits, uncertainty, the ability to decline a prediction when support is inadequate, and a later drift audit. | SCALE-Sim remains a source-study tool, not a target decision filter. |
 | RTL behavior | Independently derived reference tests and properties where practical, plus lint, functional simulation, synthesis, and formal checks within their stated reach; add fault- and threat-model properties required by the target. | No implementation-readiness, reliability, or security claim beyond the properties checked. |
 | Physical behavior | Pin the selected 3\ nm-class low-power process design kit, libraries, and process, voltage, and temperature conditions; then test area and floorplan feasibility, relevant setup and hold corners, congestion and design rules, routed dynamic and leakage power, power delivery, and electrothermal behavior. | No signoff, tapeout, or physical-feasibility claim. |
 | Containment | Exercise each proposed bypass, disable, guardband, isolation mechanism, or fallback against the fault or attack it is intended to contain. | No claim that the implementation can contain or recover from that failure. |
@@ -892,28 +959,30 @@ RTL checks, physical checks, and containment mechanisms can support a claim.
 The final row passes a complete AI-assisted workflow comparison to
 @sec-evaluating-agentic-architect. It does not perform that evaluation here.
 
-Two compact stress tests show how the same four-step reasoning applies beyond
+Three compact stress tests show how the same reasoning applies beyond
 the array study (@tbl-ch9-transfer-stress-tests). Each names the transfer unit,
 the dependency that changed, a valid action, and the target check. The examples
-are deliberately different. One concerns continuing software improvement on
-fixed hardware, while the other concerns a physical defect that software could
-not correct.
+are deliberately different. One concerns a learned physical-design predictor,
+one concerns continuing software improvement on fixed hardware, and one
+concerns a physical defect that software could not correct.
 
 | **Transfer unit** | **Changed dependency** | **Valid action** | **Required target check** |
 | --- | --- | --- | --- |
+| Learned placement or congestion predictor trained on one process, library, and design family [@ChaiEtAl2022CircuitNet; @WangEtAl2025ChiPBench] | The target process, library, netlist family, placement flow, or routed-result definition changes. | Requalify the unchanged predictor first; recalibrate, adapt, retrain, or retire it only after identifying what no longer holds. | Measure class-specific target error and decision quality against routed target results kept separate from calibration or training data. |
 | H100 software-optimization result reported between MLPerf Training v2.1 preview and v3.0 [@EassaEryilmaz2023H100MLPerfSoftware] | A later compiler, library, workload, or hardware generation changes the paired configuration. | Narrow the published improvement to its reported versions and workload; rerun the comparison for the new pair. | Repeat the end-to-end workload measurement with both hardware and software versions pinned and the same result definition. |
 | Cougar Point containment and correction result [@Intel2011CougarPoint] | The target defect and the mechanisms able to reach it differ. Intel's announced permanent correction used revised silicon and repair or replacement; the release did not present firmware as the correction. | Do not assume a firmware-only remedy can reach a silicon defect; use a correction or containment mechanism matched to the failure. | Exercise the corrected silicon and any proposed containment against the target failure class before claiming correction. |
 
-: **The same transfer test applies to software continuation and physical
-correction.** The action follows the changed dependency, and the target check
+: **The same transfer test applies to learned, software, and physical
+components.** The action follows the changed dependency, and the target check
 must observe the failure or improvement being claimed.
 {#tbl-ch9-transfer-stress-tests tbl-colwidths="[24,29,23,24]"}
 
-The H100 case preserves the reported result without turning 17 percent into a
-general software-improvement rate. The Cougar Point case preserves the lesson
-about failure reach without assuming that every silicon defect requires the
-same remedy. Both cases retain useful source knowledge while refusing to move
-the conclusion beyond the configuration that produced it.
+The learned-predictor case prevents a familiar model name from substituting for
+target support. The H100 case preserves the reported result without turning 17
+percent into a general software-improvement rate. The Cougar Point case
+preserves the lesson about failure reach without assuming that every silicon
+defect requires the same remedy. All three retain useful source knowledge while
+refusing to move the conclusion beyond the configuration that produced it.
 
 This plan does not change decision rights. Automated components may propose or
 screen candidates inside the declared study.
@@ -982,12 +1051,14 @@ conditions are not a general checklist. They are the material differences in
 this design problem.
 
 The component map then assigns work precisely. Historical data can be reused
-while target data is refreshed. Project state and interfaces can be adapted.
-A predictor or cheap screen can be recalibrated. A learned component can be
-retrained when target data and held-out checks justify it. Unsupported methods,
-tools, and checks can be replaced or retired. Architecture and AI-contribution
-conclusions receive a different treatment. They are narrowed to the source
-conditions or rejected for the target until the comparison is repeated.
+while target data is refreshed. Project state and interfaces can be adapted. A
+predictor or cheap screen can be requalified and, when its numerical
+relationship changed without invalidating its inputs or semantics,
+recalibrated. A learned component can be retrained when target data and
+held-out checks justify it. Unsupported methods, tools, and checks can be
+replaced or retired. Architecture and AI-contribution conclusions receive a
+different treatment. They are narrowed to the source conditions or rejected
+for the target until the comparison is repeated.
 
 Transfer also depends on the complete product path. A local array gain must
 repay startup, data movement, compiler, runtime, and maintenance costs before it
@@ -999,11 +1070,11 @@ overwrite the older result.
 
 These principles support a completed adaptation plan and an unresolved
 architecture commitment. Keep 32 by 32 as the reference candidate. Refresh the
-workload and software state, rerun the target comparison, recalibrate the cheap
-screen, adapt the target environment and verification path, and add the
-implementation checks that the source study never ran. Do not transfer the
-local score, AI-contribution comparison, failed mechanism explanation, or
-pending recommendation.
+workload and software state, rerun the target comparison, requalify the cheap
+screen and recalibrate it only if warranted, adapt the target environment and
+verification path, and add the implementation checks that the source study
+never ran. Do not transfer the local score, AI-contribution comparison, failed
+mechanism explanation, or pending recommendation.
 
 @sec-evaluating-agentic-architect receives the varied target conditions,
 validated cheap-check scope, versioned hardware-software state, implementation
