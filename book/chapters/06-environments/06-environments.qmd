@@ -95,24 +95,36 @@ Five terms divide the work:
 - A *simulator* is one kind of tool. It executes a model of hardware and
   software behavior and returns only the behavior that model exposes. It is not
   the complete environment.
-- The *environment* is the complete tool-connected surface available to the
-  study. It defines the state a method may read, the requests it may issue, the
-  tools it may reach, and the returns it may receive.
 - A *wrapper* surrounds one tool. It validates a request, translates the
   request into tool-specific inputs, invokes the tool, and parses the returned
   files.
 - A *harness* coordinates the wrappers and records attempts, state, costs,
   failures, retries, resets, and produced artifacts.
+- The *environment* is the complete tool-connected surface available to the
+  study. It defines the state a method may observe, the requests it may issue,
+  the tools it may reach, and the returns it may receive.
 
 One environment may contain wrappers for an SRAM model, a cycle-level
 simulator, a cache model, and a power model. One harness keeps their outputs
 tied to the same candidate and conditions.
 
-A usable environment also defines the design and workload state, legal
-actions, observations, and transitions between states. It prices each request,
-states when work stops, and specifies how failure changes the next permissible
-action. These elements exist whether a learned method, a conventional search,
-or an architect issues the request.
+A usable environment also distinguishes several related terms. *State* is the
+full relevant condition of the design, software, tools, runtime, resources,
+and outstanding work. An *observation* is the authorized portion of that state,
+or a returned result, exposed to the caller. An *action* is a permitted typed
+request with identity and preconditions. A *transition* records what changed
+when an action was accepted, completed, failed, cancelled, or reset. A tool
+*return* is the raw and structured output of one attempt. It is feedback about
+that attempt. Later qualification determines whether the return supports an
+update, a stopping decision, or no change.
+
+These responsibilities form four parts of an environment. Setup establishes
+the starting design, software, workload, tool, and resource state. Interfaces
+and wrappers define what may be requested and translate it exactly. The runtime
+and harness schedule, isolate, budget, cancel, retry, and record the work.
+Finally, the return path preserves execution state, artifacts, parsed results,
+warnings, cost, and lineage. The four parts exist whether a learned method, a
+conventional search, or an architect issues the request.
 
 The interface has three paths. The read path supplies the represented
 candidate, fixed state, tool identities, available resources, and prior
@@ -125,14 +137,13 @@ environment inspectable from both sides (@fig-environment-tool-interface).
 separate.** The wrapper validates and translates one request, while the harness
 records the attempt and preserves each return status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question, action schema, constraints, and metric definitions enter an environment as a typed request. A wrapper separates invalid requests from tool execution. The tool path can fail, return partial output, or complete; the parser retains raw and structured output, and the harness records every outcome with cost, provenance, and execution status."}
 
-Read from left to right, the represented question and state enter the
-environment as a typed request. The wrapper either refuses an invalid request
-or translates it to the declared tool path. That path can fail, return only
-part of the expected output, or complete, and the parser keeps the raw output
-alongside the fields it recognizes. The harness places every outcome in the
-record for that attempt with its identity, cost, provenance, and status. Later
-work can then distinguish a request that never ran from a failed, partial, or
-complete return.
+The represented question and state enter the interface as a typed request. The
+wrapper either refuses an invalid request or translates it to the declared tool
+path. That path can fail, return only part of the expected output, or complete,
+and the parser keeps the raw output alongside the fields it recognizes. The
+harness places every outcome in the record for that attempt with its identity,
+cost, provenance, and status. Later work can then distinguish a request that
+never ran from a failed, partial, or complete return.
 
 ## Why Architecture Environments Are Hard
 
@@ -144,14 +155,15 @@ long failures. A single candidate may require software construction,
 simulation, RTL, formal checks, synthesis, and physical implementation. No
 generic software sandbox supplies those architecture meanings automatically.
 
-Architecture and EDA tools often expose command shells or text interfaces
-rather than stateless APIs. OpenROAD and its OpenSTA timing engine, for example,
-provide Tcl command interfaces [@AjayiEtAl2019OpenROAD]. A wrapper for such a
-tool must reconstruct the declared state before each invocation, use the tool's
-error mechanism to return an explicit status, and serialize the recognized
-fields. It must also retain the raw transcript and any unclassified output. A
-clean structured record is useful, but it is not sufficient if an unfamiliar
-warning was discarded while the record was built.
+Architecture and electronic design automation (EDA) tools often expose command
+shells or text interfaces rather than stateless APIs. OpenROAD and its OpenSTA
+timing engine, for example, provide Tcl command interfaces
+[@AjayiEtAl2019OpenROAD]. A wrapper for such a tool must establish or validate
+the declared state before each invocation, use the tool's error mechanism to
+return an explicit status, and serialize the recognized fields. It must also
+retain the raw transcript and any unclassified output. A clean structured
+record is useful, but it is not sufficient if an unfamiliar warning was
+discarded while the record was built.
 
 Real projects also inherit IP blocks, software, constraints, generated files,
 vendor models, and tool databases. The environment need not reveal protected
@@ -288,7 +300,9 @@ technology assumptions under `PVT-A`; an implementation return carries its
 corner, mode, libraries, constraints, and flags; and `SIM-A`, `CACHE-A`, and
 `PM-A` carry workload, software, warm-up, region, seed, checkpoint, and model
 configuration. The environment preserves these fields without judging their
-sufficiency.
+sufficiency. A timing-slack return of `-12\ ps` at a slow process corner is not
+interchangeable with the same numeric return at a typical corner. The number
+travels with the condition that gives it meaning.
 
 The host environment can also change a result. Mytkowicz and colleagues showed
 that link order and UNIX environment size can perturb measured performance by
@@ -313,6 +327,22 @@ read-only. The wrapper refuses a request outside that action set. It does not
 silently project the request to the nearest supported design. Exact translation
 preserves the requested architecture meaning; a meaning-changing repair creates
 a new candidate.
+
+Standardization should remove accidental interface differences without hiding
+tool meaning. A common core can standardize request identity, permitted
+actions, lifecycle status, errors, cost, cancellation, retry, and lineage.
+Each wrapper must still expose its supported operations, stages, properties,
+fidelities, units, assumptions, defaults, and warnings. This division lets
+another method use the harness and another architect interpret its return
+without depending on private glue knowledge.
+
+Capability and schema discovery make that division inspectable. Each request
+and return records the wrapper, request-schema, return-schema, parser, and tool
+versions. A caller can inspect supported actions and fields before submitting
+work. An unsupported request is refused rather than silently dropping a field,
+changing a default, or substituting another fidelity. A retained request is
+never reinterpreted under a newer schema. An explicit migration creates a new
+request artifact linked to the original.
 
 Errors are part of the interface. Validation errors, tool diagnostics, missing
 outputs, parse failures, and unclassified warnings remain distinct and retain
@@ -366,23 +396,38 @@ be queued, cancelled, or fail. A completed run may still be missing an
 artifact. None of those process states is a valid architecture result by
 itself.
 
-The harness therefore needs explicit states rather than one blocking call. The
-minimal state machine includes validation, queueing, running, completed,
-partial, failed, cancelled, and timed out. Retry eligibility is a separate
-field. An infrastructure failure may be retryable, while a cancelled job may
-not be. Neither status says anything about the candidate until the later review
-qualifies the return.
+Automated work also shares queues, machines, storage, and licenses with
+engineers and production flows. The environment applies the site's admission
+policy through in-flight limits, project quotas or priorities, reservations,
+and backpressure. It exposes pending work, accepted work, and remaining
+authorization so a method does not resubmit merely because a queued job is not
+yet visible.
+
+The harness therefore needs explicit states rather than one blocking call. A
+request is validated and admitted; each authorized attempt is then queued, run,
+and brought to a terminal process state. Terminal cause, artifact completeness,
+parser status, cancellation status, and retry eligibility are separate fields
+rather than additional scheduling states. A process can complete with partial
+artifacts, or time out after producing a parseable report. An infrastructure
+failure may be retryable, while a cancelled job may not be. None of these
+fields says what the candidate means until later measurement qualification.
 
 The execution interface uses two linked records. @lst-environment-interface
 keeps the request identifiable from validation through termination.
 
 ```{.text #lst-environment-interface lst-cap="**One request remains identifiable through execution:** Request identity, scheduling state, termination, retry, reset, and resource use remain connected."}
-envelope = create_attempt(
+envelope, created = create_attempt_once(
+    submission_key,
     attempt_id, request_id, candidate_id, condition_id,
     tool_type, tool_stage, fidelity,
     configuration_id, seed, translated_input_hashes,
     retry_parent, reset_parent
 )
+
+if not created:
+    if immutable request fields differ from the retained attempt:
+        refuse reuse of the submission key
+    return current_record(envelope.attempt_id)
 
 if translation changes request meaning:
     return envelope(
@@ -391,26 +436,44 @@ if translation changes request meaning:
         parse_status=NOT_RUN
     )
 
-job_id = submit(envelope)
-record scheduling_state=QUEUED
-record setup_status=PASSED or FAILED or NOT_CHECKED
+setup_status = check_setup_and_dependencies(envelope)
+if setup_status is not PASSED:
+    return envelope(
+        terminal_cause=SETUP_FAILURE,
+        artifact_status=NOT_CREATED,
+        parse_status=NOT_RUN
+    )
+
+submission = admit_reserve_and_submit_once(envelope)
+if submission.status is REFUSED:
+    return envelope(
+        terminal_cause=ADMISSION_REFUSED,
+        artifact_status=NOT_CREATED,
+        parse_status=NOT_RUN
+    )
+
+job_id = submission.job_id
+record scheduling_state=current_scheduler_state(job_id)
 
 while job is queued or running:
     record scheduling_state, queue_time, and partial_artifact_ids
     if cancellation is authorized:
         request termination
-        terminal_cause = CANCEL_REQUESTED
+        record cancellation_status=REQUESTED
         break
     if timeout is reached:
         request termination
-        terminal_cause = TIMEOUT_REQUESTED
+        record cancellation_status=TIMEOUT_REQUESTED
         break
 
 wait until scheduler and process report a terminal state
 if termination cannot be confirmed:
-    return envelope(
-        terminal_cause=TERMINATION_UNCONFIRMED,
-        retry_eligibility=NO
+    return open_envelope(
+        scheduling_state=UNKNOWN or last_observed_state,
+        cancellation_status,
+        termination_status=UNCONFIRMED,
+        retry_eligibility=NO,
+        uncertain_outputs=QUARANTINED
     )
 record final scheduler state
 record queue_time, run_time, cpu_time, gpu_time,
@@ -441,16 +504,26 @@ else:
 
 return envelope(
     scheduling_state, setup_status, process_outcome, terminal_cause,
+    cancellation_status, termination_status,
     artifact_status, parse_status, retry_eligibility,
     resource_record, retry_parent, reset_parent, lineage
 )
 ```
 
 Recording candidate identity before submission prevents late returns from
-attaching to whichever candidate is current when a job finishes. Polling does
-not create duplicate attempts, and cancellation or timeout still produces a
-terminal record. The return then separates process completion, expected
-artifacts, and parser status so later review can locate the failed work.
+attaching to whichever candidate is current when a job finishes. Repeating
+submission with the same idempotency key returns the existing attempt or job
+identifier rather than launching duplicate work. An intentional retry receives
+a new attempt identifier, links to its parent, and consumes the declared retry
+budget.
+
+Cancellation also remains a request until termination is confirmed. A process
+may report cancellation, terminate after producing partial artifacts, or
+complete before the cancellation takes effect. The environment retains any
+late return under its original attempt. It does not expose that return as a
+live observation until the current request revision and budget policy admit
+it. The return then separates process completion, expected artifacts, and
+parser status so later review can locate the failed work.
 
 The resource record is a typed vector rather than one opaque cost field
 (@tbl-attempt-resource-record). Fields that the environment cannot observe
@@ -461,7 +534,7 @@ one invocation.
 | **Record group** | **Fields to preserve for each attempt** |
 | --- | --- |
 | **Tool and work identity** | Tool type, stage, fidelity, version, candidate, conditions, unique configuration, and seed. |
-| **Attempt accounting** | Attempt identifier, final status, retry parent, reset parent, and whether the required artifacts and typed fields returned. |
+| **Attempt accounting** | Attempt identifier, scheduling state, cancellation status, termination status, terminal cause, artifact completeness, parse status, retry eligibility, retry parent, and reset parent. |
 | **Time** | Submission, queue, start, and completion times; queue duration, run duration, and elapsed time. |
 | **Compute and storage** | CPU and accelerator time, peak memory where available, intermediate and retained storage, and host or cluster identity when it affects comparability. |
 | **Scarce tool resources** | License or token occupancy, reserved capacity, and any admission-control wait. |
@@ -473,7 +546,7 @@ configurations remain separate from invocation attempts, and retries remain
 linked rather than increasing apparent sample coverage.
 {#tbl-attempt-resource-record tbl-colwidths="[24,76]"}
 
-Read the first two rows as work identity and attempt accounting. The next four
+The first two rows preserve work identity and attempt accounting. The next four
 separate elapsed time, compute and storage, scarce resources, and the enclosing
 model and tool budget. The last retains the human work associated with setup,
 diagnosis, review, and repair. The decisive distinction is between one unique
@@ -507,7 +580,9 @@ Safe caching follows the same identity rule. A complete return is reusable
 only when its inputs, transformations, tools, libraries, PDK views, flags,
 conditions, and relevant state all match the cache key. Partial and failed
 outputs may support diagnosis, but they are not served as completed
-observations. Unknown dependencies invalidate the entry.
+observations. Unknown dependencies invalidate the entry. Reuse saves execution
+cost; it does not establish that the retained return answers the present
+architecture question.
 
 The 1996 Ariane 5 inquiry documented what happens when a reused component
 carries an operating assumption into a changed system [@LionsAriane1996].
@@ -554,8 +629,8 @@ it hands forward, so they describe execution rather than architecture judgment
 | Tool failure | A tool crashes, reports an internal error, or exhausts a tool-local resource. The same input may repeat the failure under controlled retries. | Tool status, diagnostics, partial artifacts, realized cost, retry history, and all recorded conditions. | Retry, restart cleanly, resume a valid checkpoint, or stop according to policy. Repetition alone does not prove physical infeasibility. |
 | Partial or incomplete return | A tool stops after synthesis but before placement, or exits zero with an expected report absent, stale, or partly written. | Completed and missing stages, expected-artifact check, produced files, raw output, parse status, and terminal cause. | Preserve the partial return; repair or rerun before treating it as complete, and do not convert it automatically into a design score. |
 | Parser failure | A retained report does not match the declared schema or contains units, fields, or warnings the parser cannot classify. | Parser version and status, raw report identity, parse diagnostics, recognized fields, and unclassified residual. | Repair or replace the parser and parse the retained raw artifact again when safe. Do not rerun the tool merely to hide a parser defect. |
-| Formal solver outcome | A formal engine reports a proof result, counterexample, bounded result, `unknown`, or a resource limit for a named property. | Property, model, assumptions, bound where applicable, solver and version, outcome, counterexample or proof artifact, and cost. | Preserve the solver outcome exactly and hand it forward. Do not turn one property result into a general correctness verdict. |
-| Measured design violation | A completed timing, power, congestion, design-rule, or functional run reports a declared limit violation. | Typed value or violation, units, candidate and condition identity, warnings, raw artifact, and cost. | Record a complete return and hand it forward without the environment rejecting or penalizing the candidate. |
+| Formal solver outcome | A formal engine reports a proof result, counterexample, bounded result, `unknown`, or a resource limit for a named property. | Property, model, assumptions, bound where applicable, solver and version, outcome, counterexample or a proof artifact when the tool emits one, and cost. | Preserve the solver outcome exactly and hand it forward. Do not turn one property result into a general correctness verdict. |
+| Reported design-limit violation | A completed timing, power, congestion, design-rule, or functional run reports a declared limit violation. | Typed value or violation, units, candidate and condition identity, warnings, raw artifact, and cost. | Record a complete return and hand it forward without the environment rejecting or penalizing the candidate. |
 | Complete tool return | Expected artifacts exist and parse under the declared schema, including reports that contain limit violations. | Typed fields, units, conditions, warnings, raw artifacts, cost, and lineage. | Retain the complete return for measurement qualification without deciding what it establishes. |
 
 : **Execution status determines what ran, not what the architecture means.**
@@ -563,13 +638,13 @@ Invalid requests, failed paths, partial returns, parser failures, and complete
 returns stay separate so the next repair targets the right problem.
 {#tbl-failure-taxonomy tbl-colwidths="[18,25,31,26]"}
 
-Read each row across from the observed execution condition through the retained
-record to the next execution action. Invalid requests, setup failures, and
-infrastructure failures leave the candidate unevaluated. Tool, artifact, and
-parser failures identify different recovery owners. A formal solver outcome
-and a measured design violation are completed returns, not process failures,
-but neither supplies a broad design verdict. Every completed result goes
-forward with its scope intact.
+The retained record and next execution action depend on the observed execution
+condition. Invalid requests, setup failures, and infrastructure failures leave
+the candidate unevaluated. Tool, artifact, and parser failures identify
+different recovery owners. A formal solver outcome and a reported design-limit
+violation are completed returns, not process failures, but neither supplies a
+broad design verdict. Every completed result goes forward with its scope
+intact.
 
 A clean exit becomes a complete tool return only after the expected-artifact
 check and parser succeed. Consider a synthesis script that selects no valid
@@ -594,18 +669,16 @@ the stage and its conditions so an early estimate cannot be mistaken for a
 later report.
 {#tbl-eda-stage-interface tbl-colwidths="[23,42,35]"}
 
-Read down the stages as increasing implementation completion. Each stage
-exposes new artifacts but remains limited to the modes, corners, and conditions
-run. Even signoff supplies neither architecture interpretation nor
-authorization to proceed.
+Each successive stage exposes more implementation artifacts but remains
+limited to the modes, corners, and conditions run. Even signoff supplies
+neither architecture interpretation nor authorization to proceed.
 
-Raw logs remain part of the return. A commercial electronic design automation
-(EDA) tool or a detailed simulator may emit thousands of lines. Passing all of
-that text to a model is impractical, but discarding everything outside a fixed
-parser is unsafe. The wrapper should return structured fields for recognized
-metrics and failures, an explicitly marked residual of unclassified warnings
-and errors, and both a retrievable artifact identifier and integrity hash for
-the complete raw log.
+Raw logs remain part of the return. A commercial EDA tool or a detailed
+simulator may emit thousands of lines. Passing all of that text to a model is
+impractical, but discarding everything outside a fixed parser is unsafe. The
+wrapper should return structured fields for recognized metrics and failures,
+an explicitly marked residual of unclassified warnings and errors, and both a
+retrievable artifact identifier and integrity hash for the complete raw log.
 
 ::: {.callout-failure-mode title="The parser recognizes only yesterday's warnings"}
 **The trap.** A parser keeps only known warning classes and drops every line it
@@ -701,16 +774,14 @@ tool's model, inputs, conditions, stage, latency, and artifacts instead of
 collapsing several returns into one generic score.
 {#tbl-multi-fidelity-spectrum tbl-colwidths="[19,22,29,30]"}
 
-Read each row across from representative use to the property modeled or checked
-and then to the identity the environment must preserve. A compiler constructs
-an executable path but does not return hardware timing. Functional ISA
-execution returns instruction and software behavior without microarchitectural
-timing. Cycle-level and RTL simulation expose different timing and logic
-behavior, while a formal tool reports only the property and model it received.
-FPGA execution does not establish ASIC implementation results. An
-implementation flow remains limited to its declared stages, libraries,
-constraints, modes, and corners. The tool class therefore determines the type
-of return, not a universal quality rank.
+A compiler constructs an executable path but does not return hardware timing.
+Functional ISA execution returns instruction and software behavior without
+microarchitectural timing. Cycle-level and RTL simulation expose different
+timing and logic behavior, while a formal tool reports only the property and
+model it received. FPGA execution does not establish ASIC implementation
+results. An implementation flow remains limited to its declared stages,
+libraries, constraints, modes, and corners. The tool class therefore
+determines the type of return, not a universal quality rank.
 
 For one prospective `L2-3M-A` environment, each row names a distinct branch
 from the same candidate. `SRAM-A` receives the exact cache organization and
@@ -774,12 +845,12 @@ generates related artifacts for RTL simulation, VLSI work, and FPGA emulation
 while retaining a common configuration
 source.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard framework. A configuration system feeds Chisel generators and the FIRRTL compiler, then fans out to RTL simulation, a VLSI flow, and FPGA emulation."}
 
-Read the upper path from the configuration system through the Chisel generators
-and FIRRTL compiler, then follow the fan-out to RTL simulation, the VLSI flow,
-and FPGA emulation. The common configuration preserves a shared parent for the
-three branches, but each branch produces a different artifact and examines
-different properties. The fan-out does not imply a fixed execution order or
-make the branch results interchangeable.
+The common configuration passes through the Chisel generators and FIRRTL
+compiler before it fans out to RTL simulation, the VLSI flow, and FPGA
+emulation. It preserves a shared parent for the three branches, but each branch
+produces a different artifact and examines different properties. The fan-out
+does not imply a fixed execution order or make the branch results
+interchangeable.
 
 The environment may execute independent branches in parallel and dependent
 branches in order. Workflow systems such as Nextflow and Snakemake show how a
@@ -827,11 +898,11 @@ The request, translation, state, expected outputs, failure behavior, cost, and
 limits are fixed before invocation.
 {#tbl-environment-contract tbl-colwidths="[24,76]"}
 
-Read the upper rows as the identities and fixed state that translation must
-preserve. The middle rows bind those identities to the tool order, expected
-returns, budget, and stopping conditions. The execution-order row is the hinge.
-Its SRAM predicate may suppress a later simulator call, but it does not reject
-the candidate. The lower rows then define failure, retry, reset, permissions,
+The upper rows preserve the identities and fixed state through translation.
+The middle rows bind those identities to the tool order, expected returns,
+budget, and stopping conditions. The execution-order row is the hinge. Its
+SRAM predicate may suppress a later simulator call, but it does not reject the
+candidate. The lower rows define failure, retry, reset, permissions,
 containment, retention, and the decisions the environment cannot make.
 
 This specification must still be written before the first tool call. Filled
@@ -867,14 +938,12 @@ successor attempts, and call counts without claiming real measurements,
 attempt-level provenance, or completeness.
 {#tbl-lighthouse-execution-record tbl-colwidths="[12,19,19,25,25]"}
 
-Read each row across from candidate and constructed state to execution status,
-retained return, and known cost and lineage. The SRAM rows establish the first
-three calls, and the simulator rows carry the four-attempt chronology. The
-4\ MB row records no simulator request, the stale 3\ MB attempt returns no
-candidate result, and the two later
-clean attempts share aggregate values without attempt-level attribution. The
-table therefore supports a teaching chronology and budget account, not a
-complete measurement record or candidate decision.
+The SRAM rows establish the first three calls, and the simulator rows carry the
+four-attempt chronology. The 4\ MB row records no simulator request, the stale
+3\ MB attempt returns no candidate result, and the two later clean attempts
+share aggregate values without attempt-level attribution. The table therefore
+supports a teaching chronology and budget account, not a complete measurement
+record or candidate decision.
 
 The trace includes three aggregate values across the clean 3\ MB returns.
 Capacity misses fall `12%` relative to baseline, cache leakage rises `2\ mW`,
@@ -995,4 +1064,6 @@ The illustrative return values, call counts, setup failure, aggregate
 clean-return group, and explicit missing fields are therefore inputs to later
 measurement qualification. They do not yet establish which fields are valid
 measurements, which comparisons are sound, what the checks can see, or what
-the result supports.
+the result supports. Measurement qualification is the next task, developed in
+@sec-feedback-verification-trust. It determines how the returned measurements
+can become useful feedback.
