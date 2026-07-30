@@ -49,11 +49,11 @@ COMPANION_METADATA: dict[str, dict[str, str]] = {
         "nature": "download",
         "description": "YAML template for a machine-checkable design-loop card.",
     },
-    "https://arch2.mlsysbook.ai/examples/design-loop-cards/array-study-v2.yaml": {
-        "purpose": "synthetic companion example",
+    "https://github.com/harvard-edge/arch2/blob/main/labs/examples/ai_systolic_array_study/README.md": {
+        "purpose": "replayable study companion",
         "owner": PROJECT_OWNER,
         "nature": "example",
-        "description": "Synthetic schema-valid card and replay fixture used to teach the contract.",
+        "description": "README for the retained systolic-array study, including its recorded inputs, execution path, results, and replay instructions.",
     },
     "https://arch2.mlsysbook.ai/schemas/design-loop-card.v2.schema.json": {
         "purpose": "machine-readable companion contract",

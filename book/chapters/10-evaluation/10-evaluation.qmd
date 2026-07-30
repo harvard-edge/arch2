@@ -155,7 +155,7 @@ The system record should pin at least the elements in
 | **Element** | **What the record must identify** | **Why it matters** |
 | --- | --- | --- |
 | Learned components | Model, version, inference settings, and any fine-tuning or adaptation | A changed model or setting creates a different system. |
-| Design information | Starting artifacts, retrieved sources, represented state, and update policy | Extra or fresher information can explain an apparent capability gain. |
+| Design information | Starting artifacts, retrieved sources with identities and versions, represented state, decision-relevant retrieval coverage, conflict handling, and update policy | Extra or fresher information can explain an apparent capability gain. |
 | Methods | Generation, prediction, optimization, and composition rules | The model may only be one component in a stronger conventional search procedure. |
 | Legal action space | Which design, tool, script, parameter, test, and constraint changes are permitted | The allowed actions determine both the supported claim and the ways the system can alter its own evaluation. |
 | Environment | Tool wrappers, executable tools, configurations, checkpoints, and returned fields | The harness determines which actions are possible and which failures become visible. |
@@ -238,7 +238,10 @@ checklist. Four groups are usually needed.
   programmability, or quality of service.
 - **Implementation feasibility** records the deepest tool stage reached,
   analysis corners, congestion, timing, power delivery, thermal limits, and
-  other evidence that the candidate can be realized.
+  other evidence that the candidate can be realized. For a silicon-bound
+  decision, it also covers manufacturability and yield assumptions,
+  design-for-test and fault coverage, packaging, and the planned path through
+  post-silicon bring-up.
 - **Lifecycle burden** covers integration, verification, maintainability,
   traceability, and the work required to make likely future changes.
 
@@ -307,7 +310,7 @@ request to save every internal token or private chain of thought. It is a
 request to preserve the engineering information needed to understand why the
 workflow changed the design or its conclusion.
 
-Five failure classes deserve separate measurement.
+Six failure classes deserve separate measurement.
 
 1. **Role-selection failures** occur when the system uses generation where a
    lookup, predictor, optimizer, formal check, or human decision would have
@@ -315,13 +318,16 @@ Five failure classes deserve separate measurement.
 2. **State failures** occur when constraints, candidate identity, tool status,
    units, or prior results are dropped, duplicated, or carried to the wrong
    design.
-3. **Tool-selection failures** occur when the system uses an unsuitable tool
+3. **Information-use failures** occur when retrieval omits a
+   decision-relevant source, uses the wrong version, hides conflicting sources,
+   or returns material that does not support the downstream claim.
+4. **Tool-selection failures** occur when the system uses an unsuitable tool
    or fidelity, repeats an uninformative run, or pays for a high-fidelity check
    before a cheaper test could reject the candidate.
-4. **Interpretation failures** occur when the tool call completes but the
+5. **Interpretation failures** occur when the tool call completes but the
    workflow reads the result incorrectly, treats an inconclusive check as a
    pass, or attributes a change to the wrong mechanism.
-5. **Control failures** occur when the system should stop, escalate, roll back,
+6. **Control failures** occur when the system should stop, escalate, roll back,
    or request human review but instead continues or commits a bad state.
 
 These distinctions prevent a common counting error. A completed tool call is
@@ -332,6 +338,13 @@ which it discards a candidate that an evaluator-owned check later shows was
 viable. Parser failures, stale caches, incomplete logs, and corrupted state
 belong in the same record because they affect the information available to the
 workflow.
+
+Retrieved information also needs positive quality measures. Record the identity
+and version of each source, coverage of facts relevant to the decision,
+unresolved conflicts, and whether the returned material actually supports the
+claim that later steps make from it. An ablation can show that retrieval changed
+an outcome, but it cannot establish that the information was current, complete,
+or correctly used.
 
 Decision quality should be compared against declared expected actions or
 independent engineering review where such a reference can be established. For
@@ -706,7 +719,7 @@ supports only a dependency claim under that comparison
 | Generation | Replace generated candidates with the same-size human, rule-based, or existing candidate set | Whether generation changed candidate quality or diversity at the declared cost |
 | Prediction | Remove the learned screen or replace it with a conventional proxy and send a matched sample to the higher-fidelity check | Whether prediction saved evaluation work without discarding decisive candidates |
 | Optimization | Replace the search policy with the strongest practical conventional method at matched budgets | Whether the optimizer improved the cost-quality relationship |
-| Retrieved design information | Remove, freeze, or substitute the retrieval source while preserving the remaining system | Whether retrieved material changed results and which source dependencies remain |
+| Retrieved design information | Remove, freeze, or substitute the retrieval source while preserving the remaining system; check source versions, decision-relevant coverage, conflicts, and local claim support | Whether retrieved material changed results and which source dependencies remain |
 | Routing and role selection | Replace adaptive routing with a fixed sequence or evaluator-declared component choice | Whether dynamic method and tool selection improved decisions or merely added complexity |
 | Tool feedback | Restrict or delay selected feedback fields while keeping tool stages fixed | Which returned information enables correction and which merely adds cost |
 | Automated checking | Replace one checker with an independently developed check where feasible | Whether the conclusion depends on one checker or one shared assumption |
@@ -1118,27 +1131,34 @@ of the strongest candidates, and simple regret near the acceptance boundary.
 Here, simple regret is the stronger-check objective gap between the selected
 candidate and the best candidate audited by that stronger check.
 
+The following documented dispute draws on the original reinforcement-learning
+placement result and two later assessments that disagree about the reproduced
+setup and conclusion [@MirhoseiniEtAl2021GraphPlacement;
+@ChengEtAl2023MacroPlacement; @GoldieEtAl2024ThatChipHasSailed].
+
 ::: {.callout-war-story title="The placement proxy dispute"}
 **The claim.** A reinforcement learning method for chip floorplanning reported
 expert-comparable macro placements. It trained against a fast analytical proxy
 combining wirelength and estimated congestion rather than waiting for a full
-commercial physical-design flow [@MirhoseiniEtAl2021GraphPlacement].
+commercial physical-design flow.
 
 **The gap.** An independent assessment of the public Circuit Training
 implementation found weak correlation between proxy and post-route outcomes
 on its tested cases. Its commercial-flow comparison favored strengthened
-simulated annealing, a commercial macro placer, and human placements
-[@ChengEtAl2023MacroPlacement]. The original authors argued that the assessment
+simulated annealing, a commercial macro placer, and human placements.
+The original authors argued that the assessment
 omitted pretraining, used less compute, stopped before convergence, and
-evaluated different older-node cases [@GoldieEtAl2024ThatChipHasSailed].
+evaluated different older-node cases.
 Proprietary TPU cases remain a separate reproducibility limit.
 
 **The lesson.** Proxy quality, system identity, and the final implementation
 check cannot be separated. When the strongest setup is unavailable, the
-disagreement remains limited by that missing comparison. A placement benchmark
-such as ChiPBench can make more of the physical-flow comparison inspectable
-[@WangEtAl2025ChiPBench], but its result remains tied to that flow.
+disagreement remains limited by that missing comparison.
 :::
+
+A placement benchmark such as ChiPBench can make more of the physical-flow
+comparison inspectable, but its result remains tied to that flow
+[@WangEtAl2025ChiPBench].
 
 ### Attacking Constraints and Unrewarded Requirements
 
@@ -1305,8 +1325,8 @@ judge the AI-assisted system. It should contain the fields in
 | Complete-system identity | Versioned AI-assisted workflow, represented information, methods, legal action space, tools, checks, people, budgets, and stopping rules |
 | Matched alternative | Strongest practical conventional or human-directed workflow and any remaining mismatch |
 | Benchmark identity and health | Task and benchmark versions, remaining contamination risk, refresh or retirement status, fidelity depth, and aggregation policy |
-| Architecture outcomes | Per-task supported results, failures, verification depth, maintainability, integration and change burden, comparators, uncertainty, and nonclaims |
-| Coordination and decision quality | Role, state, tool, interpretation, and control failures; useful observations; supported decisions; false accepts and rejects; escalation, stopping, recovery, and human overrides |
+| Architecture outcomes | Per-task supported results, failures, verification depth, maintainability, integration and change burden, comparators, uncertainty, and nonclaims; manufacturability, test, packaging, and bring-up evidence when the decision reaches silicon |
+| Coordination and decision quality | Role, state, information-use, tool, interpretation, and control failures; retrieval quality; useful observations; supported decisions; false accepts and rejects; escalation, stopping, recovery, and human overrides |
 | Incremental AI contribution | Difference in result quality, total cost, or both, with the comparison that supports it |
 | Total cost | Human setup, operation, review and decision work, model and general compute, data and samples, engineering tools by type and fidelity, verification, integration, future change work, recovery, and elapsed time |
 | Reliability and robustness | Repeated-run success and failure distributions, calibration, worst cases, constraint violations, recovery and override behavior, apparatus sensitivity, and behavior under declared perturbations |
