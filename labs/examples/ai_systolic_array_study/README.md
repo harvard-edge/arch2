@@ -87,10 +87,10 @@ accountable decision status remains `awaiting_author_confirmation`.
 From `labs/` in the documented Python 3.11 environment:
 
 ```bash
-../.venv/bin/python -m arch2_labs.study validate-model
-../.venv/bin/python -m arch2_labs.study verify-reference \
+.venv/bin/python -m arch2_labs.study validate-model
+.venv/bin/python -m arch2_labs.study verify-reference \
   --reference examples/ai_systolic_array_study/recorded/reference
-../.venv/bin/python -m arch2_labs.study replay \
+.venv/bin/python -m arch2_labs.study replay \
   --reference examples/ai_systolic_array_study/recorded/reference
 ```
 
@@ -116,7 +116,7 @@ recorded generation.
 export ARCH2_MODEL_COMMAND='your-model-command --json'
 export ARCH2_MODEL_ID='exact-model-identifier'
 export ARCH2_MODEL_PROVIDER='provider-or-local-runtime'
-../.venv/bin/python -m arch2_labs.study_live --out /tmp/arch2-live-proposal
+.venv/bin/python -m arch2_labs.study_live --out /tmp/arch2-live-proposal
 ```
 
 For a runtime that needs a credential, set
