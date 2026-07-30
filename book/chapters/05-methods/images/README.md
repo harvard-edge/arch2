@@ -14,8 +14,6 @@ Executable Quarto figures in the chapter:
 - `fig-ch05-kernel-funnel`: attempted, correct, and correct-and-faster
   KernelBench results.
 - `fig-ch05-conformal-coverage`: synthetic support-change illustration.
-- `fig-evidence-gap`: large design-space anchors beside the represented
-  Lighthouse candidate and evaluation counts.
 - `fig-bayesian-optimization`: illustrative Gaussian-process posterior and
   upper-confidence-bound acquisition.
 
