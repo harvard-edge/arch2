@@ -114,34 +114,83 @@ determine whether the team framed the right problem, represented the right
 relationships, or selected the right objectives. It explains only how work
 moves through a sequence of costly checks and where queues form.
 
-### Proposed Primary Placement
+### Placement Options and Current Recommendation
 
-The model should first appear in Chapter 2 after the discussion of evaluation
-and verification capacity and before the chapter turns to where assistance
-might help.
+The model should be visible enough to become a reusable analytical lens without
+forcing queueing theory into the book's opening. Four placements require
+comparison:
 
-That placement lets the chapter proceed in this order:
+1. a full treatment in Chapter 2, where evaluation and verification capacity
+   first become explicit;
+2. a full treatment in Chapter 3, where the life cycle exposes distinct stages,
+   costs, and return paths;
+3. a compact introduction in the main text with the derivation and extensions
+   in an appendix; and
+4. a distributed treatment that introduces one idea at a time and later
+   reconnects them.
 
-1. modern architecture work creates more alternatives and more expensive
-   checks;
-2. every checking stage has finite capacity;
-3. faster candidate production can overload the remaining stages;
-4. useful assistance must relieve the actual bottleneck rather than merely
-   create more work.
+The current recommendation combines the third and fourth options:
 
-Chapter 5 can reuse the diagnosis in the method-selection guide. Chapter 7 can
-add false acceptance, false rejection, check scope, and correlated failures.
-Chapter 10 can use time and total cost per supported decision as evaluation
-metrics. The complete explanation should not be repeated in every chapter.
+- Chapter 1 states only that candidate-production rate and
+  supported-decision rate are different.
+- Chapter 2 establishes the qualitative mismatch between candidate production
+  and evaluation or verification capacity. It should explain that assistance
+  can relieve or worsen the active bottleneck without introducing the full
+  derivation.
+- Chapter 3 orients the reader to where candidate work, tool use, return paths,
+  and stopping occur. It should state explicitly that life-cycle
+  responsibilities are not serial queueing stations.
+- Chapter 5 owns the analytical model inside its discussion of result economics
+  and feedback budgets. The model gives the method-selection guide a
+  quantitative bottleneck diagnosis.
+- The Chapter 5 treatment includes the governing quantities, the load
+  condition, and a small checked example. It should remain understandable
+  without reading the appendix.
+- Chapter 6 explains which run records are needed to estimate service time,
+  retries, queueing, and resource contention.
+- Chapter 7 connects capacity with check quality, uncertainty, and correlated
+  failure.
+- Chapter 8 uses observed counts and durations only if they reveal a real
+  bottleneck in the worked study.
+- Chapter 9 explains why capacities, routing, and observed survival fractions
+  must be re-estimated after a problem changes.
+- Chapter 10 uses time and total cost per supported decision as evaluation
+  metrics.
+- An appendix develops the derivation, measurement worksheet, parallel stages,
+  branching and return paths, variable processing times, false acceptance and
+  false rejection, sensitivity, and a more complete worked calculation.
+
+The expert panel should pressure-test this placement before prose is drafted.
+The complete derivation should not be repeated across chapters, and the
+appendix should extend the argument rather than hold the only substantive
+explanation.
+
+### Relation to Design Methods and Checks
+
+The capacity model describes functions in the design process rather than one
+fixed AI pipeline:
+
+- a generative or conventional method may produce candidates;
+- a predictive or analytical method may estimate outcomes or screen
+  candidates;
+- an optimizer may select candidates or allocate a limited measurement budget;
+- simulators, implementation tools, formal methods, tests, and reviewers check
+  different properties; and
+- the architect uses the qualified comparisons to make a decision.
+
+These functions may appear in a different order, run in parallel, repeat, or be
+absent. Verification is not a fourth learned-method family. It is the set of
+checks that determines which claims a result can support.
 
 ### First-Order Model
 
 Let:
 
 - \(g\) be the candidate-generation rate;
-- \(p_i\) be the fraction of candidates that survive checking stage \(i\);
-- \(c_i\) be the parallel capacity at stage \(i\), such as machines, tool
-  licenses, or review slots;
+- \(p_i\) be the observed or assumed conditional fraction of candidates that
+  survive checking stage \(i\) among candidates that reach it;
+- \(c_i\) be the number of parallel slots at stage \(i\), such as machines,
+  tool licenses, or review slots;
 - \(t_i\) be the mean processing time for one candidate at stage \(i\); and
 - \(\mu_i\) be the processing capacity of stage \(i\).
 
@@ -158,15 +207,17 @@ The offered load at stage \(i\) is:
 g \times \prod_{j=1}^{i-1} p_j.
 \]
 
-Finite expected queueing delay requires:
+The stage utilization is:
 
 \[
-\lambda_i < \mu_i
+\rho_i = \frac{\lambda_i}{\mu_i}.
 \]
 
-at every stage. Equality is not an adequate operating target in a stochastic
-system because small variations can create a growing delay. The corresponding
-upper bound on the input rate is:
+A first-order load check requires \(\rho_i < 1\) at every stage. This condition
+is necessary for the simple model and is not a guarantee of finite expected
+delay under arbitrary arrival and service distributions. Equality is not an
+adequate operating target because small variations can create a growing delay.
+The corresponding first-order upper bound on the input rate is:
 
 \[
 g <
@@ -177,68 +228,74 @@ g <
 \right).
 \]
 
-If all stages remain stable, the expected rate of fully qualified candidates
-after \(m\) stages is:
+If all stages remain within their load bounds, the expected finalist-output
+rate after \(m\) stages is:
 
 \[
 q =
 g \times \prod_{i=1}^{m} p_i.
 \]
 
-A supported architecture decision may require several qualified alternatives,
-a matched baseline, and architect review. Therefore, \(q\) is an upper bound
-on candidate qualification rather than a direct claim about decision
-throughput.
+A supported architecture decision may require several finalists, a matched
+baseline, additional checks, and architect review. Therefore, \(q\) is not
+architecture-decision throughput or end-to-end latency. The product of the
+survival fractions describes flow attrition and is not the probability that a
+surviving candidate is correct.
 
 ### Checked Illustrative Example
 
-Consider three stages:
+Assume a system proposes \(g = 32\) candidates per day:
 
-| **Stage** | **Capacity** | **Survival fraction** |
+| **Stage** | **Parallel slots \(c_i\)** | **Mean service time \(t_i\)** | **Capacity \(\mu_i\)** | **Conditional survival \(p_i\)** |
+| --- | ---: | ---: | ---: | ---: |
+| Structural and legality screen | \(1\) | \(1\) minute | \(1{,}440\)/day | \(0.25\) |
+| Cycle-level simulation | \(4\) | \(8\) hours | \(12\)/day | \(0.10\) |
+| Implementation screening | \(1\) | \(24\) hours | \(1\)/day | \(0.50\) |
+
+The first-order input-rate limits are:
+
+| **Stage constraint** | **Calculation** | **Maximum input rate** |
 | --- | ---: | ---: |
-| Cheap legality and syntax checks | \(120\) candidates/hour | \(0.25\) |
-| Simulation and software evaluation | \(12\) candidates/hour | \(0.10\) |
-| Implementation and verification | \(0.5\) candidates/hour | \(0.50\) |
+| Structural screen | \(1{,}440\) | \(1{,}440\)/day |
+| Cycle-level simulation | \(12 / 0.25\) | \(48\)/day |
+| Implementation screening | \(1 / (0.25 \times 0.10)\) | \(40\)/day |
 
-The maximum candidate-generation rate allowed by each stage is:
-
-| **Stage constraint** | **Maximum input rate** |
-| --- | ---: |
-| Legality checks | \(120\) candidates/hour |
-| Simulation | \(12 / 0.25 = 48\) candidates/hour |
-| Implementation and verification | \(0.5 / (0.25 \times 0.10) = 20\) candidates/hour |
-
-Implementation and verification form the bottleneck. A rate of \(20\)
-candidates/hour would operate that stage at full utilization, so the example
-instead uses \(g = 16\) candidates/hour, which gives the bottleneck 80 percent
-utilization.
+Implementation screening forms the bottleneck. A rate of \(40\) candidates/day
+would operate it at full utilization, so the example instead uses \(32\)
+candidates/day and leaves 20 percent headroom at that stage.
 
 The resulting offered loads are:
 
 | **Stage** | **Calculation** | **Offered load** | **Utilization** |
 | --- | --- | ---: | ---: |
-| Legality checks | \(16\) | \(16\)/hour | \(16/120 = 13.3\%\) |
-| Simulation | \(16 \times 0.25\) | \(4\)/hour | \(4/12 = 33.3\%\) |
-| Implementation and verification | \(16 \times 0.25 \times 0.10\) | \(0.4\)/hour | \(0.4/0.5 = 80\%\) |
+| Structural screen | \(32\) | \(32\)/day | \(32/1{,}440 = 2.2\%\) |
+| Cycle-level simulation | \(32 \times 0.25\) | \(8\)/day | \(8/12 = 66.7\%\) |
+| Implementation screening | \(32 \times 0.25 \times 0.10\) | \(0.8\)/day | \(0.8/1 = 80\%\) |
 
-The fully qualified output rate is:
+The finalist-output rate is:
 
 \[
-16 \times 0.25 \times 0.10 \times 0.50
-= 0.20
+32 \times 0.25 \times 0.10 \times 0.50
+= 0.40
 \]
 
-qualified candidates/hour, or one qualified candidate every five hours on
-average. If a decision requires two fully checked alternatives, the resulting
-upper bound is one comparison every ten hours before architect review and
-other decision costs.
+finalists/day, or one finalist every 2.5 days in steady-state output. This does
+not mean that one candidate's end-to-end turnaround is 2.5 days. The first
+candidate already requires its screening, simulation, and implementation
+service times before queueing delay. A supported decision still requires
+comparison, verification, and review.
 
-Increasing generation to \(60\) candidates/hour would not increase supported
+Increasing generation to \(60\) candidates/day would not increase supported
 decision throughput. Simulation would receive \(60 \times 0.25 = 15\)
-candidates/hour despite having capacity for only \(12\). Even when simulation
+candidates/day despite having capacity for only \(12\). Even when simulation
 is saturated, its output would offer approximately
-\(12 \times 0.10 = 1.2\) candidates/hour to an implementation stage that can
-process only \(0.5\). Both queues would grow.
+\(12 \times 0.10 = 1.2\) candidates/day to an implementation stage that can
+process only \(1\). Both queues would grow.
+
+The eight-hour simulation and one-day implementation values are illustrative.
+The literature and data audit should seek public runtime anchors, and the final
+example should be generated from executable calculations rather than
+hand-maintained derived values.
 
 ### Required Extensions and Limits
 
@@ -260,6 +317,44 @@ The most important extension is the tradeoff between early rejection and false
 rejection. A filter that improves throughput by discarding every unusual design
 can eliminate the best candidate. Later chapters should connect capacity to
 coverage, uncertainty, and decision quality.
+
+### Runtime and Source Audit
+
+Do not use one generic “simulation time.” Architecture studies use checks with
+different setup costs, fidelities, parallelism, and reuse:
+
+- analytical and learned estimates;
+- trace-driven, event-driven, and cycle-level simulation;
+- software compilation and execution;
+- RTL simulation and formal analysis;
+- synthesis, place and route, timing, power, and design-rule checks; and
+- FPGA or silicon measurement.
+
+Before the illustrative values enter the manuscript, assemble a source packet
+for representative checks. Record:
+
+| **Field** | **Why it matters** |
+| --- | --- |
+| Tool and version | Tool behavior and performance change over time. |
+| Check or study performed | “Simulation” alone does not identify the work. |
+| Workload, warm-up, and sample length | Runtime depends strongly on how much execution is modeled. |
+| Model or implementation fidelity | A fast estimate and a detailed implementation answer different questions. |
+| Host resources and parallel slots | Service time and total capacity are not the same quantity. |
+| Setup, compile, and reuse assumptions | Cached artifacts can dominate comparisons. |
+| Wall-clock time and compute consumption | Queue capacity and total resource cost need both. |
+| Source and reproduction status | Public evidence must be distinguishable from an illustrative assumption. |
+
+The main-text example may use rounded representative values once their
+interpretive limits are explicit. The appendix should include at least one
+source-backed scenario and a worksheet readers can replace with measurements
+from their own environment.
+
+The literature audit should also test whether the simple model should cite or
+borrow from established work on queueing networks, heavy-traffic delay,
+sequential experimental design, value of information, optimal computing-budget
+allocation, computer experiments, multistage inspection, and common-cause
+failure. These connections should sharpen the model without turning the
+chapter into a queueing-theory survey.
 
 ### Figure Candidate
 
@@ -372,10 +467,10 @@ unresolved.
 | **Chapter** | **Unique job** | **Special audit focus** |
 | --- | --- | --- |
 | 1. Moonshot | Establish the ambitious capability and expand the Lighthouse request into a full-stack architecture problem | Opening pace, prompt versus specification, foundation-model figure, terminology, broad research agenda |
-| 2. Why assistance | Explain the compounding pressures and where assistance might help | Historical build-up, technology scaling, evaluation and verification capacity, capacity model, transition to AI assistance |
+| 2. Why assistance | Explain the compounding pressures and where assistance might help | Historical build-up, technology scaling, evaluation and verification scarcity, qualitative capacity mismatch, transition to AI assistance |
 | 3. Life cycle | Explain how to organize AI-assisted design and why each stage exists | Tacit knowledge, progressive introduction of the stages, iteration and stopping, avoiding process bureaucracy |
 | 4. Data, knowledge, and representation | Explain how architecture data is collected and represented and why it is distinctive | Data as intervention, sample cost, failures and censoring, exact and learned representations, embeddings, current project state |
-| 5. Methods | Teach when and how to use prediction, generation, optimization, conventional methods, or combinations | Concrete methods, roles versus families, bottleneck-driven decision guide, feedback cost, no fixed ordering |
+| 5. Methods | Teach when and how to use prediction, generation, optimization, conventional methods, or combinations | Concrete methods, roles versus families, candidate-to-decision capacity model, bottleneck-driven decision guide, feedback cost, no fixed ordering |
 | 6. Environments | Define what a tool-connected design environment must provide | Tool versus wrapper versus harness versus environment, state, interfaces, runtime, failures, cost, reproducibility |
 | 7. Feedback | Explain how tool returns become qualified feedback and how checks change the work | Formal and empirical scope, uncertainty, proxy failure, independent checks, allocation of check capacity |
 | 8. Complete study | Show the XR Lighthouse study operating end to end | Reproducible reasoning, honest failures, matched budgets, complete cost, stopping, sufficient technical detail |
@@ -429,7 +524,7 @@ citations and still fail to explain the mechanism. Another paragraph may
 present a useful author synthesis without claiming that a source established
 it.
 
-### Expert Review Lenses
+### Expert Panel
 
 Each chapter receives fresh, independent reviews from:
 
@@ -591,6 +686,90 @@ such as:
 > and the checks that could reject a candidate. Together, the rows show why
 > the prompt is a starting point rather than a specification.
 
+### Comparison With the Local Dev Version
+
+Create a complete visual inventory against the local `dev` checkout before
+declaring that the current manuscript has the right visual support:
+
+- figures present in `dev` but absent from the working manuscript;
+- figures still present as files but no longer referenced;
+- figures whose explanatory idea survived only as prose;
+- figures that changed meaning, data, or scope;
+- tables and listings removed or materially condensed; and
+- visuals whose old concept remains useful even when the old execution or style
+  should not return.
+
+Do not restore a figure merely because it once existed. Classify each candidate
+as:
+
+- restore as-is;
+- recover the idea and redraw;
+- recover the data and replot;
+- retain the current replacement;
+- defer pending a source or permissions check; or
+- leave removed.
+
+The initial comparison identifies a small set of high-value candidates:
+
+| **Candidate** | **Initial disposition** | **Reason** |
+| --- | --- | --- |
+| Dev Chapter 9 review-bottleneck figure | Recover the idea and redraw | It directly supports the candidate-to-decision capacity argument, but it should expand beyond human review to staged checks, survival fractions, and service capacity. |
+| Dev Chapter 5 verification-lifecycle figure | Review for recovery | Its distinction among pass, repair, critique, and human escalation may clarify how checks affect the flow without treating verification as a single terminal stage. |
+| Dev Chapter 6 cheap-to-expensive checking funnel | Review for recovery or replacement | A staged checking figure may help, but the old drug-discovery analogy should return only if it remains accurate and useful for architecture readers. |
+| Dev Chapter 2 bottleneck causal loop | Review as a possible replacement | It may complement the scissors argument, but adding it beside the existing figure and diagnostic table would overload the section. |
+| Dev Chapter 1 automation timeline | Retain only if it replaces the current progression figure | The two visuals perform substantially the same historical teaching job. |
+| Dev Chapter 10 quantitative-looking concept plots | Leave removed unless supported by traceable data | Illustrative geometry should not be presented as measured evidence. |
+
+The comparison also found materially different versions of shared figures in
+Chapters 3, 4, 6, 7, 8, and 11. These require semantic comparison, not file
+restoration. In several cases the current figure preserves distinctions that
+the dev version collapses, such as separating a run's status from whether a
+design is adopted.
+
+The initial count also identifies where visual additions would be most risky:
+
+| **Chapter** | **Current figures/tables/listings** | **Initial pacing concern** |
+| --- | ---: | --- |
+| 1 | 5 / 4 / 0 | Already full; a recovered history figure should replace rather than supplement. |
+| 2 | 12 / 3 / 0 | Figure-heavy; test section-level clustering before adding anything. |
+| 3 | 5 / 4 / 0 | Balanced by count; audit meaning and placement. |
+| 4 | 4 / 10 / 0 | Table-heavy; inspect two dense clusters in the rendered flow. |
+| 5 | 7 / 10 / 0 | Densest chapter; the capacity model may require replacing or consolidating an existing device. |
+| 6 | 3 / 6 / 0 | Has room for one distinct argument figure if it earns the space. |
+| 7 | 4 / 7 / 0 | A new figure should replace rather than simply supplement nearby material. |
+| 8 | 4 / 7 / 0 | Similar balance to dev; judge by worked-study flow. |
+| 9 | 5 / 6 / 0 | Do not restore the much denser dev figure set wholesale. |
+| 10 | 3 / 8 / 0 | Table-heavy; prefer a strong replacement to an additional summary grid. |
+| 11 | 2 / 5 / 0 | Tables already carry much of the argument; another opener is optional. |
+
+Counts are a screening device, not a target. The rendered page and the
+teaching job determine whether a chapter is balanced.
+
+### Whole-Book Media Balance
+
+Run a dedicated pass across figures, tables, listings, equations, and callouts.
+The purpose is reader pacing rather than equal counts per chapter.
+
+Check:
+
+- whether a chapter opens with enough explanation before its first dense
+  visual;
+- whether several figures, tables, or listings arrive without prose between
+  them;
+- whether a long abstract stretch needs one clarifying example or visual;
+- whether a table duplicates prose instead of improving comparison;
+- whether a listing teaches a mechanism that prose alone cannot show;
+- whether repeated callouts interrupt the main argument;
+- whether each visual appears close to the passage that needs it;
+- whether captions and surrounding prose divide the explanatory work cleanly;
+  and
+- whether the overall rhythm gives readers time to absorb one representation
+  before the next appears.
+
+Do not solve imbalance by adding decorative figures or deleting useful
+technical material. The pass should improve explanatory pacing and the match
+between the idea and its representation.
+
 ### Chapter 1 Foundation-Model Figure
 
 Recover the earlier figure and its source material from repository history and
@@ -657,7 +836,7 @@ Each independent reviewer should receive:
 - one complete chapter;
 - that chapter's approved goal;
 - its section map;
-- the review lens; and
+- the assigned panel role; and
 - only the standards relevant to that review.
 
 Reviewers should not receive the entire conversation, unrelated chapters, or
@@ -672,6 +851,32 @@ handoffs, research questions, and figure or table introductions.
 This process protects fresh perspectives while keeping one editor responsible
 for the book-wide argument and the seams between chapters.
 
+### Expert Panel Review Process
+
+Maintain one canonical expert-panel workflow for chapter-level technical
+review. It should define:
+
+- a stable core panel consisting of computer architecture, EDA and
+  verification, ML systems, and research-advisor or pedagogy perspectives;
+- rotating specialists within those areas when a chapter requires memory,
+  interconnect, compilers, physical design, formal methods, data engineering,
+  optimization, security, or organizations expertise;
+- one fresh chapter read per reviewer;
+- structured findings rather than automatic rewrites;
+- an explicit statement of what the reviewer left unchanged;
+- a skeptical review for consequential recommendations;
+- an author triage gate before manuscript edits;
+- separate narrative-flow and media-balance passes; and
+- a compact handoff that lets the book-level editor preserve the larger
+  argument without loading every review transcript.
+
+The private review workflow implementation should have one owner for each job:
+book architecture, chapter-level technical review, fresh-reader clarity,
+narrative flow, manuscript-artifact balance, chapter development, and prose
+editing. Overlapping implementations should route to that owner. Duplicate
+instructions should be merged, and stale variants should be retired only after
+confirming that no unique guardrail would be lost.
+
 ## Milestones and Approval Gates
 
 ### Milestone 0. Baseline and Inventory
@@ -681,6 +886,8 @@ for the book-wide argument and the seams between chapters.
   questions, citations, and existing quantitative data.
 - Compare the working manuscript with the local `dev` version and repository
   history where earlier material may have been lost.
+- Produce a specific inventory of removed, unused, replaced, and materially
+  changed figures, tables, and listings.
 - Produce compact review packets.
 
 **Gate:** Confirm that the inventory is complete before starting content
@@ -714,6 +921,8 @@ proposed prose before author triage.
 - Resolve the final term for the complete AI-assisted design mechanism.
 - Pressure-test the candidate-to-decision capacity model.
 - Review the mathematical assumptions and illustrative calculation.
+- Decide what Chapters 1 through 3 preview, what Chapter 5 must teach, what
+  Chapters 6 through 10 reuse, and what the appendix extends.
 - Decide whether the model earns a figure, a table, or both.
 - Finalize the Chapter 5 method-selection guide.
 - Determine which candidate synthesis lenses are already supported by the
@@ -749,7 +958,11 @@ capability from the body without seeing the opening summary or conclusion.
 ### Milestone 6. Figures, Tables, and Quantitative Grounding
 
 - Audit every figure and table in context.
+- Audit listings, equations, and callouts as part of the same reader-pacing
+  pass.
 - Replace gratuitous directional instructions.
+- Compare the current visual program with local `dev` and recover useful
+  concepts that were lost.
 - Recover and redesign the Chapter 1 foundation-model figure.
 - Propose the candidate-capacity figure.
 - Identify missing conceptual and quantitative visuals.
@@ -813,10 +1026,13 @@ The audit should revisit these items without changing them automatically:
 - which phrasing should become Chapter 11's canonical closing design
   principle;
 - which documented cases can support war stories in Chapters 4, 5, and 11;
-- whether the candidate-capacity model belongs wholly in Chapter 2 or should
-  split one concept and one application across Chapters 2 and 5; and
+- whether the candidate-capacity model should follow the current distributed
+  recommendation with its main teaching home in Chapter 5 and its extensions
+  in an appendix;
 - whether the foundation-model figure should be one two-panel figure or two
-  separate figures.
+  separate figures; and
+- which existing expert-panel and editorial workflows should be merged,
+  updated, or retired after their uncommitted drafts are reconciled.
 
 ## Deferred Work
 
