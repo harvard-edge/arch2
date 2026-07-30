@@ -335,6 +335,108 @@ It should state a bold complete-system target, explain why that target forces
 the important questions into view, and introduce Lighthouse as the concrete
 test without trying to perform the detailed diagnosis owned by Chapter 2.
 
+### Chapter Opening as an Unnumbered Abstract
+
+**Author observation.** The prose between the chapter title and Section 1.1
+needs a clear and consistent purpose. Similar opening material appears in every
+chapter, but it is not always functioning as a coherent introduction.
+
+**Editorial assessment.** Keep this material unnumbered. A numbered
+"Preamble" or "Abstract" would add another level to the chapter and make the
+opening feel like a separate section. Instead, treat the unnumbered opening as
+a chapter abstract with four jobs:
+
+1. orient a reader who enters the chapter directly;
+2. state the chapter's central question and why it matters now;
+3. define the chapter's boundary without depending heavily on the previous
+   chapter; and
+4. preview what the reader will be able to understand or do by the end.
+
+This convention should apply book-wide. The opening should not summarize every
+section, introduce detailed evidence prematurely, or carry an argument that
+belongs in Section x.1.
+
+### Learning Objectives Need Reader-Level Outcomes
+
+**Author observation.** The current learning objectives do not read as useful
+learning objectives from the reader's point of view.
+
+**High-priority editorial pass.** Rewrite the objectives after the chapter's
+micro-flow is settled. Each objective should name a durable capability a
+student, researcher, or practitioner gains from the chapter. Avoid using the
+objectives as a contents list. For Chapter 1, the outcomes should center on
+explaining the moonshot, unpacking a compact design request into a system and
+chip design problem, distinguishing generated artifacts from supported
+architecture results, and stating how progress toward the moonshot should be
+judged.
+
+### Section 1.1 Micro-Flow
+
+**Author observation.** The opening discussion moves too quickly from AI
+methods to scarce data and then to inference cost. Although each point matters,
+the causal connection between the paragraphs is difficult to follow.
+
+**Likely direction.** Run a sentence- and paragraph-level flow pass rather than
+adding more facts. Establish the progression explicitly:
+
+1. the field is *starting to apply* AI across architecture design tasks;
+2. the relevant methods have different capabilities and roles;
+3. architecture imposes domain-specific limits, beginning with scarce,
+   expensive, and proprietary data; and
+4. assistance also consumes resources, so its value depends on the total work
+   and checking cost it changes.
+
+Each paragraph should earn the next one. The prose should not preview the data,
+methods, and evaluation chapters so densely that the moonshot disappears.
+Change "The field is now applying AI" to "The field is starting to apply AI"
+to avoid overstating maturity.
+
+### Smoother Qualification of the Lighthouse Prompt
+
+**Author observation.** "The prompt does not imply a single model or
+invocation" is technically useful but arrives abruptly.
+
+**Likely direction.** Connect it to the preceding explanation with a short
+qualification such as "It is important to note that this prompt does not imply
+a single model or invocation." Preserve the substantive point that Lighthouse
+requires a coordinated design capability rather than one fluent response.
+
+### Section 1.6 Transition into Efficiency
+
+**Author observation.** The efficiency section begins abruptly and its
+connection to the preceding XR discussion is unclear. Language that assumes
+"the AI process can proceed" also sounds awkward.
+
+**Likely direction.** Begin from the architecture question already raised by
+Lighthouse. The XR target is useful because its latency, energy, thermal,
+software, and physical constraints force the proposed assistance to improve a
+real system result rather than merely produce more artifacts. From there,
+explain why the cost of the AI-assisted process must be included in the
+efficiency claim. Do not introduce AI overhead as an unrelated caveat.
+
+### Book-Organization Sentence
+
+**Author observation.** "The rest of the book is ordered by what each chapter
+equips the design loop with, and it closes on who owns what the loop produces"
+feels dropped into the surrounding argument.
+
+**Open question.** Do not create a new section for a single navigation
+sentence. Either integrate a brief roadmap into the unnumbered chapter opening
+or place a concise "How the Book Proceeds" passage near the end of Chapter 1
+only if readers genuinely need it. The roadmap should describe the intellectual
+progression, not force every chapter into design-loop terminology.
+
+### HTML Mathematics Escaping
+
+**Confirmed defect.** At least one HTML rendering exposes literal LaTeX
+delimiters around powers of ten, including the accelerator and SoC design-space
+range. The PDF and HTML paths are not interpreting the same source form.
+
+**Likely direction.** Locate the generated label or inline expression and use a
+Quarto-compatible math form that renders in both formats. Include representative
+powers, units, superscripts, and inline equations in the final HTML/PDF
+cross-format audit rather than treating this as an isolated visual correction.
+
 ### The 500 W Value
 
 **Author observation.** The figure stating that frequency stalls while power
