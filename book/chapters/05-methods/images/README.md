@@ -6,6 +6,8 @@ Static figures used by the chapter:
   paths.
 - `F5c-macro-placement`: sequential placement actions and weighted proxy
   feedback.
+- `F5d-role-method-map`: many-to-many relationship among engineering roles,
+  method families, concrete techniques, inspectable outputs, and next checks.
 
 Executable Quarto figures in the chapter:
 
