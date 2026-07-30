@@ -105,7 +105,11 @@ be revised or discarded. Human judgment shapes the comparison throughout, from
 workload selection and proxy choice to the decision that a candidate deserves
 deeper analysis.
 
-SPEC CPU 2017 provides an industry-standard suite for compute-intensive performance across processor, memory-system, and compiler behavior [@SPEC2017CPU]. What matters here is how the comparison is bounded. It uses a stated workload set, model, and metrics and rejects weak candidates explicitly.
+SPEC CPU 2017 provides an industry-standard suite for compute-intensive
+performance across processor, memory-system, and compiler behavior
+[@SPEC2017CPU]. What matters here is how the comparison is bounded. Its
+workloads, run rules, and reporting conventions make candidates easier to
+compare under stated conditions.
 
 What makes that comparison sound is not all written into it. Experienced architects carry the rest implicitly. They know which workloads were excluded, which tool settings are trusted, why a previous candidate failed, and what decision is actually under review. As projects scale, keeping that context synchronized across larger teams and more complex toolchains becomes harder and can limit progress.
 
@@ -121,7 +125,7 @@ design work.
 | **Shift** | **What the design process made explicit** | **Why it mattered** |
 | --- | --- | --- |
 | **System/360 compatibility** | A stable Instruction Set Architecture (ISA) contract separated architecture from implementation across a product family [@AmdahlBlaauwBrooks1964System360]. | The ISA carries architectural commitments across implementations and product generations. |
-| **Mead--Conway VLSI and MOSIS** | Design rules, layout abstractions, and fabrication access turned custom-chip design into a shareable and reusable loop [@USCISI2025MOSISFirstYear]. | Shared representations and fabrication access broaden participation in architecture work. |
+| **Mead--Conway VLSI and MOSIS** | Design rules, layout abstractions, and fabrication access turned custom-chip design into a shareable and reusable loop [@MeadConway1980VLSI; @USCISI2025MOSISFirstYear]. | Shared representations and fabrication access broaden participation in architecture work. |
 | **Reduced instruction set computer (RISC)** | Workload, compiler, Very Large-Scale Integration (VLSI), and the quantitative cost/performance case became the architectural argument [@PattersonDitzel1980RISC]. | A complete comparison includes the workload, compiler, and implementation cost. |
 | **SPEC-style benchmarking** | Workload selection, run rules, reporting conventions, and comparability became community infrastructure [@SPEC2017CPU]. | Benchmarks govern workload choice, execution, and comparison. |
 | **Logic synthesis and timing closure** | Hardware Description Language (HDL), libraries, constraints, and timing reports let downstream checks reject upstream choices [@DeMicheli1994SynthesisOptimization]. | Implementation checks can rule out architecture candidates before the project commits to them. |
@@ -164,7 +168,19 @@ once.
 
 ## The Technology Dividend Has Changed
 
-For roughly fifty years, processor generations improved through a familiar progression where device scaling regularly delivered faster, cheaper, and more energy-efficient transistors [@Moore1965Cramming]. Quantitative analysis gave architects a way to compare the resulting design choices. As scaling slowed, microarchitecture, parallelism, and eventually domain specialization provided the remaining gains [@HennessyPatterson2017QuantitativeApproach; @HennessyPatterson2019GoldenAge]. This shift is visible in fifty years of frontier microprocessor data. Clock frequency plateaued in the mid-2000s and never recovered, while transistor counts continued to rise, core counts turned upward, and frontier power resumed climbing toward 500\ W (@fig-microprocessor-trends).
+For roughly fifty years, processor generations improved through a familiar
+progression. Transistor density continued to rise while voltage scaling made it
+possible, for a time, to use more transistors without a proportional increase
+in power [@Moore1965Cramming; @DennardEtAl1974Scaling]. Quantitative analysis
+gave architects a way to compare the resulting design choices. As voltage and
+frequency scaling slowed, microarchitecture, parallelism, and eventually domain
+specialization carried more of the burden
+[@HennessyPatterson2017QuantitativeApproach;
+@HennessyPatterson2019GoldenAge]. This shift is visible in fifty years of
+frontier microprocessor data. Clock frequency plateaued in the mid-2000s, while
+transistor counts continued to rise, core counts turned upward, and the
+highest-power parts in the dataset approached 500\ W
+(@fig-microprocessor-trends).
 
 ```{python}
 #| label: fig-microprocessor-trends
@@ -379,7 +395,14 @@ Each of those levers also adds corner cases a fair comparison must cover. A pref
 
 That these levers have intrinsic limits is not a recent discovery. Palacharla, Jouppi, and Smith showed that the wakeup, selection, and bypass logic of a wide issue window scales badly enough to bound the clock it can support [@PalacharlaEtAl1997ComplexityEffective]. Agarwal and colleagues then projected that wire delay and clock scaling together would end the frequency-first road for conventional microarchitectures [@AgarwalEtAl2000ClockRateVersusIPC].
 
-These costs are not hypothetical. Intel's Pentium 4, built on the NetBurst microarchitecture, pushed pipeline depth hard to chase clock frequency, reaching 31 pipeline stages in its 90\ nm Prescott generation [@BoggsEtAl2004Pentium4NinetyNm] on a roadmap that had projected clocks approaching 10\ GHz. The bet was internally coherent and wrong for the machine it produced. A pipeline that deep made every branch misprediction expensive to refill, and at 90\ nm the rising power density stalled frequency far short of the projected targets, leaving a part that ran hot and retired fewer instructions per clock than shorter-pipeline contemporaries. Intel abandoned the frequency-first design and moved to shorter pipelines and multiple cores. The direction of that reversal had been argued in the literature before the part shipped. The analysis existed, and the cost of the bet was still paid in silicon.
+These costs are not hypothetical. Intel's Pentium 4, built on the NetBurst
+microarchitecture, reached 31 pipeline stages in its 90\ nm Prescott generation
+as part of a design that emphasized high clock frequency
+[@BoggsEtAl2004Pentium4NinetyNm]. More stages can shorten the work done in one
+cycle, but they also increase the refill work after a branch misprediction and
+add pipeline overhead. The example makes the tradeoff concrete. Frequency is
+not an independent design objective; the mechanism used to raise it changes the
+work each instruction requires and the energy the machine expends.
 
 That turn to multiple cores added a further layer. Coherence protocols, memory-ordering rules, synchronization costs, and workload partitioning all shape how a candidate behaves under a real workload, and none of them shows up in a single-thread proxy. Even here, before any specialized block is added, the information a comparison must carry has already outgrown a single number.
 
@@ -574,17 +597,17 @@ non-process cannot be automated
 integration rule that no supplier has written down in a form it can read.
 
 Composition multiplies the physical and economic constraints a candidate must
-satisfy, and each one adds evaluation the search cannot skip. Software bring-up
-runs trillions of cycles, past the reach of software simulation, so it falls to
-hardware emulation and field-programmable gate array (FPGA) prototyping, which
-compile in days and give far less debug visibility than a simulator. Chiplet
-stacking adds a manufacturing constraint. In 2.5D and 3D integration such as
-TSMC CoWoS [@TSMCCoWoS] or Intel Foveros [@IntelFoveros], a defective die
-discovered after packaging can make an expensive assembly unusable, including
-the silicon interposer and High Bandwidth Memory stacks. Pre-bond screening
-reduces that risk without proving that every die will survive assembly and
-operation, so a proposed partition must preserve adequate test access, the
-Known-Good-Die constraint.[^fn-known-good-die-c02]
+satisfy, and each one adds evaluation the search cannot skip. Long software
+bring-up workloads can exceed the practical reach of detailed software
+simulation, so teams may move to hardware emulation or field-programmable gate
+array (FPGA) prototyping. Those platforms trade some observability and setup
+effort for higher execution throughput. Chiplet stacking adds a manufacturing
+constraint. In 2.5D and 3D integration such as TSMC CoWoS [@TSMCCoWoS] or Intel
+Foveros [@IntelFoveros], discovering a defective die after packaging can waste
+other components in the assembly. Pre-bond screening reduces that risk without
+proving that every die will survive assembly and operation, so a proposed
+partition must preserve adequate test access, the Known-Good-Die
+constraint.[^fn-known-good-die-c02]
 
 [^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: A bare die screened before packaging to reduce the risk that a defective component is committed to a multi-die assembly. The available tests improve confidence but cannot guarantee performance through every assembly and operating condition.
 
@@ -634,9 +657,19 @@ before deployment.
 
 ### Warehouse-Scale Computing and Distributed Systems
 
-As architectures expand beyond a package or wafer-scale fabric, the boundary of the computer ceases to be the chip and instead becomes the entire data center. Modern infrastructure relies on scale-out fabrics, distributed memory pooling (like CXL),[^fn-cxl-c02] and massive optical networks to handle data-parallel workloads. At this scale, we enter the domain of Warehouse-Scale Computing (WSC) [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem expands to encompass thousands of heterogeneous servers, shared cooling infrastructure, megawatts of provisioned power, and cluster-level scheduling.
+As architectures expand beyond a package or wafer-scale fabric, the boundary of
+the computer can become the entire data center. Scale-out networks, coherent
+device and memory interconnects such as CXL,[^fn-cxl-c02] and cluster software
+make placement and resource sharing architectural questions. At this scale, we
+enter the domain of warehouse-scale computing (WSC)
+[@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem
+expands to encompass heterogeneous servers, shared cooling infrastructure,
+facility power, and cluster-level scheduling.
 
-[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect standard layered on top of PCI Express that lets a processor address memory physically attached to another device or to a shared pool. It turns memory capacity into something provisioned across a rack rather than soldered next to one socket, which moves a capacity decision out of the chip's design space and into the facility's.
+[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect
+standard for processors, accelerators, and memory devices. Its memory semantics
+and switching support can make device-attached or pooled memory part of a
+system-level provisioning decision [@CXLConsortium2026CXL].
 
 No practical study models a 100,000-node system at the cycle-level fidelity used
 for one core, and component failure is a continuous condition rather than an
@@ -695,16 +728,17 @@ useful.
 
 [^fn-dse-c02]: **Design-space exploration (DSE)**: The systematic search over a parameterized family of architectural configurations, such as cache capacities, issue widths, or accelerator array shapes, for the ones that best satisfy a stated objective under stated constraints. A trial may require a simulator run, analytical evaluation, synthesis run, or another architecture measurement, which is why the evaluation budget rather than the space size sets the practical limit.
 
-Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and evaluating
-deep-neural-network (DNN) accelerators, provides a concrete example. For a single
-convolutional neural network (CNN) layer with seven nested loops and a
-four-level memory hierarchy, the
-unconstrained mapspace already contains $(7!)^4 \times (2^4)^3$ arrangements.
+Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and
+evaluating deep-neural-network (DNN) accelerators, provides a concrete lower
+bound on this combinatorial growth. For a convolutional neural network (CNN)
+layer with seven nested loops and a four-level memory hierarchy, loop ordering
+and level-bypass choices alone produce $(7!)^4 \times (2^4)^3$ arrangements.
 The first factor permits a different ordering of the seven loops at each of four
 memory levels. The second permits a binary bypass choice at those four levels
-for each of three data spaces. The formula is not a count of useful mappings. It
-is the space from which legality, capacity, and performance constraints must
-remove most candidates.
+for each of three data spaces. Factorization choices enlarge the mapspace
+further. The formula is therefore not the complete count and not a count of
+useful mappings. It isolates two sources of growth before legality, capacity,
+and performance constraints remove most candidates.
 
 | **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
 | --- | --- | --- |
@@ -732,9 +766,9 @@ compared without treating equal counts as equal amounts of evaluation work
 ```{python}
 #| label: fig-search-vs-eval-gap
 #| fig-cap: |
-#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to Timeloop's unconstrained mapspace [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
+#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
 #| out-width: "92%"
-#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and Timeloop's 2.6 times ten to the eighteenth unconstrained mappings."
+#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
 
 from math import factorial
 
@@ -746,8 +780,9 @@ from _python.plots import COLORS, apply_style, row_axis, top_log_axis
 # - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
 # - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
 #   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
-# - Timeloop unconstrained mapspace: (7!)^4 * (2^4)^3 ~= 2.6e18, computed from the
-#   stated expression [@ParasharEtAl2019Timeloop]. Values not recomputed from sources.
+# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
+#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
+#   recomputed from sources.
 # As-of: 2026-07-14.
 
 toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
@@ -757,7 +792,7 @@ rows = [
     {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
     {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
     {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
-    {"label": "Timeloop unconstrained mapspace", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
+    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
 ]
 
 apply_style()
@@ -788,8 +823,8 @@ plt.close(fig)
 ```
 
 Read the markers from left to right. The toy count sits in the thousands,
-MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed mapspace lies
-almost ten orders of magnitude farther right. AutoTVM's hollow marker
+MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed lower bound
+lies almost ten orders of magnitude farther right. AutoTVM's hollow marker
 distinguishes its order-of-magnitude estimate from the stated or computed
 counts. The full span is nearly fifteen orders of magnitude, but horizontal
 position encodes only candidate count. It says nothing about the cost, fidelity,
@@ -1099,15 +1134,15 @@ the same shift. Abstractions remain essential, but architects must now represent
 more of the workload, software, hardware, and physical information that earlier
 abstractions could safely hide.
 
-Benchmarks are one way to keep a changing workload comparable. MLPerf
-defines shared tasks and reporting rules for machine-learning systems
-[@MattsonEtAl2020MLPerf], and its inference results stay comparable across a
-field of vendors that share almost no hardware assumptions
-[@ReddiEtAl2020MLPerfInference] because the benchmark fixes scenarios, latency
-constraints, accuracy targets, and reporting rules while leaving submitters free
-to optimize their own software toolchains [@ReddiEtAl2021VisionBehindMLPerf].
-That comparability is maintained rather than inherent. It holds only while the
-community maintains the tasks and run rules that make results comparable.[^fn-metrology-calibration-c02]
+Benchmarks are one way to keep a changing workload comparable. MLPerf defines
+shared tasks and reporting rules for machine-learning systems
+[@MattsonEtAl2020MLPerf]. Within the same benchmark version, division, scenario,
+and accuracy target, its inference rules make results from different systems
+meaningfully comparable [@ReddiEtAl2020MLPerfInference] while leaving
+submitters room to optimize their software toolchains
+[@ReddiEtAl2021VisionBehindMLPerf]. That comparability is maintained rather
+than inherent. It holds only while the community maintains the tasks and run
+rules that make results comparable.[^fn-metrology-calibration-c02]
 When those rules change, an earlier comparison may no longer answer the same
 question.
 
@@ -1320,7 +1355,11 @@ work a real program does.
 
 **The gap.** Those figures did not describe how a workload used the machine. The shared structures became limits on workloads that needed strong per-thread performance, which trailed even AMD's previous generation, and raising clocks increased power. The later FX-9590 part carried a 220\ W rating [@Cutress2014FX9590].
 
-**The lesson.** Rank a candidate on the metric its workload rewards, not the number that is easiest to count. In silicon that gap is expensive to discover, because it appears only after the design has shipped. Restoring competitive per-thread performance took a clean-sheet microarchitecture, Zen [@AMDZen], several years later.
+**The lesson.** Rank a candidate on the metric its workload rewards, not the
+number that is easiest to count. In silicon that gap is expensive to discover,
+because it appears only after the design has shipped. AMD later introduced the
+Zen microarchitecture with renewed emphasis on core performance and efficiency
+[@AMDZen].
 :::
 
 These physical constraints and reliability concerns define a large search
@@ -1709,8 +1748,8 @@ physical estimators screen candidates before detailed simulation or analysis
 [@yazdanbakhsh2021apollo], and generators can draft testbenches when
 verification-authoring effort is the relevant limit [@QiuEtAl2024AutoBench].
 At warehouse scale, learned schedulers and reconfigurable fabrics show how
-automated decisions can sit behind telemetry and rollback mechanisms
-[@MaoEtAl2016DeepRM; @JouppiEtAl2023TPUv4].
+automated decisions can be evaluated against cluster-level workloads and
+system-level constraints [@MaoEtAl2016DeepRM; @JouppiEtAl2023TPUv4].
 
 Each use has a different cost and a different failure mode
 (@tbl-ai-contributions-by-bound). A method is useful only when its reduced
