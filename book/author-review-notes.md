@@ -231,6 +231,42 @@ The book does not need exactly four personas.
 
 ## Book-Wide Language and Presentation
 
+### Section-Scale Reader-Flow Audit
+
+**Author direction.** The final prose pass must test whether a reader can follow
+the reasoning within each section. It is not enough to smooth sentences or
+remove awkward wording. Paragraphs must form a necessary sequence, transitions
+must name the connection when it is not obvious, and the section must deliver
+the point promised by its heading.
+
+**Editorial method.** Review one section at a time, with enough context to read
+the chapter opening, the preceding section's conclusion, and the following
+section's opening. For each section, have a fresh reader produce a short
+reasoning map before proposing edits:
+
+1. the question the section answers;
+2. the claim or teaching job of each paragraph;
+3. why each paragraph follows from the previous one;
+4. what each figure, table, example, or callout contributes;
+5. the conclusion the reader should carry forward; and
+6. any point at which the reader must infer an unstated connection.
+
+The reviewer should flag missing premises, abrupt topic changes, repeated
+claims, premature detail, unsupported conclusions, and paragraphs that belong
+elsewhere. It should not rewrite merely to create stylistic variation.
+
+After the reasoning problems are corrected, run a separate prose-craft pass for
+plain professional language, sentence rhythm, unnecessary signposting,
+template-like openings, inflated abstractions, and other patterns that make the
+text sound machine-written. A final chapter-level stitch pass should then check
+section order and transitions without reopening sound section-level arguments.
+
+**Placement in the queue.** Run this after citation and technical-grounding
+corrections, because those corrections can change the local argument, and
+before the final figure/table balance and continuous whole-book reading pass.
+Pilot the method on one known rough section in Chapter 1 and one later chapter
+before scaling it across the manuscript.
+
 ### Overuse of "Bounded Study"
 
 **Author observation.** The manuscript returns to "bounded study" too often and
