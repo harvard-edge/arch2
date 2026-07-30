@@ -27,9 +27,11 @@ a real-time mobile XR workload. A useful answer has to connect workload
 behavior, compiler and runtime support, memory traffic, accelerator choices,
 verification, a 3\ W subsystem budget, thermal behavior, and physical
 implementation. This chapter does not pretend that one retained simulator run
-answers all of those questions. It traces the full-system goal down to one
-local array-shape decision, shows exactly what happened when that decision was
-run, and then returns the limited result to the XR system.
+answers all of those questions. The reduction from that system goal to three
+synthetic matrix workloads is an unvalidated study premise, not a decomposition
+derived from a measured XR pipeline. The chapter follows that local premise
+through one array-shape decision, shows exactly what happened when the decision
+was run, and then returns the limited result to the XR system.
 
 The recorded numbers come from one model runtime and SCALE-Sim, a configurable
 cycle-accurate systolic-array simulator. The local architecture outcome is no
@@ -121,6 +123,15 @@ item. It compares several systolic-array shapes under one fixed analytical
 model and synthetic workload slice. It does not execute the compiler, runtime,
 host-memory system, RTL, formal checks, synthesis, place and route, power
 delivery, thermal model, or a real XR workload.
+
+The working chain is therefore narrower than the moonshot. A 3\ W real-time XR
+intent motivates an assumed dense-matrix subproblem. That subproblem supplies
+array-shape variables to SCALE-Sim, which returns cycles, utilization, and
+modeled memory traffic for a local recommendation. The run executes only the
+last three links. It does not identify an XR trace, derive the matrix dimensions
+or 1,024-processing-element cap from that trace, assign a clock or frame-time
+requirement, allocate the 3\ W budget, or model the shared memory system. Those
+missing links remain requirements for a system-level decision.
 
 This is a separate executed array-shape study, not the prospective cache study
 used elsewhere in the book. Its purpose is to follow one decision through
@@ -270,12 +281,12 @@ recompute the tie and inspect the aspect-ratio rule, though it cannot make the
 slice representative.
 
 Only the datapath's array dimensions vary. Dataflow, on-chip scratchpad
-capacity, interface bandwidth, layout, simulator version, workload, deadline,
-and scoring rule remain fixed. This narrowness isolates array shape within the
-declared model, but the preregistration omitted a resolving-power check. After
-proposal generation, the two arms differed by only one nonbaseline candidate
-each. The completed comparison can report that weak discrimination; it cannot
-claim that the tie was inevitable before the proposals were seen.
+capacity, interface bandwidth, layout, simulator version, workload, cycle
+cutoff, and scoring rule remain fixed. This narrowness isolates array shape
+within the declared model, but the preregistration omitted a resolving-power
+check. After proposal generation, the two arms differed by only one nonbaseline
+candidate each. The completed comparison can report that weak discrimination;
+it cannot claim that the tie was inevitable before the proposals were seen.
 
 [^fn-gemm-c08]: **GEMM (general matrix multiply)**: The dense matrix-matrix multiplication kernel, conventionally described by the three dimensions M, N, and K, that accounts for most of the arithmetic in a neural-network layer. An accelerator array is ultimately judged by how well its height and width fit the M, N, and K of the layers it has to run, which is why those numbers, not the layer names, are what a shape study must record.
 
@@ -319,18 +330,26 @@ action pending, so completing the workflow does not itself authorize a design
 change.
 
 - **Architecture-outcome claim.** At least one evaluated nonbaseline shape
-selected by either arm improves the local decision score over the 32 by 32
-baseline by at least 1 percent for the frozen workload and simulator
-configuration. The outcome is no change if none of those evaluated shapes
-clears that decision margin.
+  selected by either arm improves the local decision score over the 32 by 32
+  baseline by at least 1 percent for the frozen workload and simulator
+  configuration. The outcome is no change if none of those evaluated shapes
+  clears that decision margin.
 
 - **AI-contribution claim.** With four SCALE-Sim evaluations per arm, including
-the same mandatory baseline, the recorded model arm finds a score at least 1
-percent lower than the fixed aspect-ratio heuristic arm. A difference within 1
-percent is a tie. A worse model result is adverse. Equal simulator calls do not
-equalize model inference, human setup, prior knowledge encoded in the heuristic,
-or total labor. One model call cannot establish a population-level result about
-a model family, even if it wins.
+  the same mandatory baseline, the recorded model arm finds a score at least 1
+  percent lower than the fixed aspect-ratio heuristic arm. A difference within 1
+  percent is a tie. A worse model result is adverse. Equal simulator calls do
+  not equalize model inference, human setup, prior knowledge encoded in the heuristic,
+  or total labor. One model call cannot establish a population-level result about
+  a model family, even if it wins.
+
+The mandatory baseline makes this an operational comparison between the two
+four-call arms. It can hide differences between proposal sets when the baseline
+beats every proposal in both arms. In this run, the proposal-only comparison
+also ties because both arms select 16 by 64 as their best nonbaseline shape.
+The arm-level tie is therefore unchanged, but it should not be read as an
+uncensored measure of proposal quality. The single stochastic proposal call
+also supplies no variance, interval, or reliability estimate for the generator.
 
 These two outcome claims were fixed before proposal generation. The mechanism
 hypothesis follows a different sequence. The architect fixed a mirrored-shape
@@ -361,7 +380,10 @@ as a predeclared local ordering rule, not as ADP, a universal accelerator
 metric, or a physical measurement. The 1,024-processing-element legality cap,
 not the score, forecloses oversized arrays. Reporting cycles and utilization
 separately exposes the ingredients the score combines, though neither reveals
-an omitted axis such as memory traffic.
+an omitted axis such as memory traffic. The score contains no explicit
+processing-element-count or area term. Utilization can indirectly favor a
+smaller array, but the score does not directly value the possible area
+advantage of a 512-processing-element candidate.
 
 The retained runner defines total cycles as the sum of the `Total Cycles`
 column in SCALE-Sim's `COMPUTE_REPORT.csv`. It excludes the separate `Total
@@ -380,8 +402,8 @@ make later changes visible (@tbl-executed-study-protocol).
 | --- | --- |
 | **Workloads** | One three-layer GEMM slice, plus a versioned copy with M and N exchanged for the mechanism test. |
 | **Legal shapes** | Rows and columns each in {8, 16, 32, 64, 128}; product no greater than 1,024 processing elements. These rules admit fifteen shapes. The cap is a declared scope bound for this study, chosen to keep candidates in a range plausible for a 3\ W mobile subsystem, not a limit derived from the power budget by this simulator, which was run here with no power or area model enabled. |
-| **Environment** | SCALE-Sim 3.0.0, GEMM interface, weight-stationary dataflow [@RajEtAl2025ScaleSimV3], 128 KiB per SRAM, and 64 interface words per cycle. |
-| **Baseline and rejection criteria** | Insert 32 by 32 into both arms; reject shapes above 1,024 processing elements or runs above 90,000 cycles. |
+| **Environment** | SCALE-Sim 3.0.0, GEMM interface, weight-stationary dataflow [@RajEtAl2025ScaleSimV3], 128 KiB per SRAM, and a configured 64-word-per-cycle bandwidth on each input, weight, and output operand path. |
+| **Baseline and rejection criteria** | Insert 32 by 32 into both arms; reject shapes above 1,024 processing elements or runs above the declared 90,000-cycle cutoff. |
 | **Proposal arms** | Three model proposals and three candidates from a fixed aggregate-aspect-ratio heuristic. |
 | **Evaluation budget** | Four SCALE-Sim evaluations per arm, including the mandatory 32 by 32 baseline; no post-result replacement. |
 | **Model repair** | At most one complete repair response after reported schema or legality errors; invalid proposals consume the initial call. |
@@ -399,6 +421,13 @@ calls per arm. The repair and decision rules fix how invalid model output and
 small score differences will be treated. The mechanism contrast challenges the
 generated explanation, while the final row leaves approval outside both the
 model and simulator.
+
+A limitation of the retained package is that these declarations were not
+machine-enforced. The runner hardcodes the workload, legal shapes, baseline,
+processing-element cap, cycle cutoff, score, margin, SRAM sizes, and configured
+bandwidths rather than loading the preregistration file. The declared and
+executed values can be compared by a reviewer, but the package contains no
+validator that requires them to match.
 
 A production physical-design flow needs a different cost budget. Its stages
 can vary by orders of magnitude in runtime, compute, and license use, so raw
@@ -419,6 +448,11 @@ the freeze, so total human effort remains unknown. A future protocol should add
 those fields before work begins rather than claim that this frozen record
 contained them.
 
+The retained history also does not say whether exploratory SCALE-Sim runs,
+heuristic tuning, workload construction, baseline selection, cutoff choice, or
+score selection preceded the freeze. Their absence from the record is a limit
+on the historical claim, not evidence that no such work occurred.
+
 Nor does preregistration intrinsically justify the
 three-layer workload, local score, 32 by 32 baseline, 1 percent decision margin,
 90,000-cycle cutoff, SCALE-Sim abstraction, or four-call budget. Each remains
@@ -433,28 +467,10 @@ need not cancel. This study did not estimate that residual error. The margin
 therefore resolves only the comparison as represented by this simulator,
 workload, and score.
 
-Every rule frozen in @tbl-executed-study-protocol exists because a comparison left unfixed can be adjusted after the result arrives, and nothing in the published record will show that it was. An entire research literature demonstrates the consequence at scale.
-
-A survey of leakage in machine-learning studies documents the corrected
-civil-war prediction case and related failures across 17 fields
-[@KapoorNarayanan2023Leakage].
-
-::: {.callout-war-story title="Civil-war prediction and the margin that was a leak"}
-**The claim.** Political-science studies reported that complex machine-learning
-models substantially outperformed logistic regression at predicting the onset
-of civil war.
-
-**The gap.** The results did not reproduce after researchers removed leakage
-between training and test data, often caused by filling in missing values before
-the split. After correction, the complex models
-did not beat logistic regression in the examined cases. The survey found
-related leakage across 17 fields.
-
-**The lesson.** Preregistration blocks post-result retuning and reselection, but
-it can also freeze a flawed data pipeline. A credible study therefore fixes the
-comparison before execution and separately audits the pipeline that produces
-the result.
-:::
+Every rule frozen in @tbl-executed-study-protocol exists because an unfixed
+comparison can be adjusted after the result arrives without leaving a visible
+record. Freezing the comparison does not make a flawed workload, score, data
+pipeline, or simulator sound. Those choices still require a separate audit.
 
 ## Choosing Candidates Under a Fixed Budget
 
@@ -542,23 +558,45 @@ complete human-effort account. Those absences matter because a clean result
 table alone would hide which recovery behavior was exercised and which was
 never tested.
 
+| **Recorded event** | **Action and return** | **Disposition** | **Retained support and known cost** |
+| --- | --- | --- | --- |
+| **Freeze, 18:19:48 UTC** | The preregistration records the candidates, score, margin, budget, rejection checks, mechanism contrast, and authority boundary. | Begin the local study under the declared rules. | Internal timestamp only. No external timestamp, commit binding, or complete pre-freeze work history. |
+| **Rejected request, 18:21:00 UTC** | The response-format service rejects the schema before inference. | Classify as a setup failure, not a model or candidate result. | Failure class and hashes are recorded. The rejected schema body, service response, and currency cost are not retained. |
+| **Schema amendment, 18:21:41 UTC** | The record says two constant-string properties receive explicit types. | Permit one corrected request. The package cannot independently verify that the amendment preserved every semantic field. | Old and new schema hashes are recorded; the before-and-after bodies are not both available. |
+| **Proposal call, 18:21:51--18:22:24 UTC** | One valid call returns three unique legal candidates and a directional prediction. | No model repair call is needed. | Complete response, exposed settings, token counts, and 32.90 seconds of wall time are recorded. Provider revision, seed, currency cost, exact prompt, and host details are unavailable. |
+| **Simulator execution, 18:31:23--18:31:42 UTC** | The runner completes eight proposal-arm evaluations and four mechanism probes. | All twelve returns are recorded as successful; no candidate repair, retry, timeout, or rejection path fires. | Aggregate runner window is 19.05 seconds. Per-evaluation commands, timestamps, exit codes, logs, queue time, resource use, and human effort are not retained. |
+| **Stop and later audit, times not recorded** | The arms tie and the reversal prediction fails. A later audit exposes an omitted memory-traffic axis. | Stop the frozen local study under its declared rule with no architecture change for the evaluated set. Record the later finding as a limitation rather than rescore the run. The architecture handoff remains incomplete. | Results, raw reports, current replay path, and limitations are retained. No accountable receiver or response is recorded. |
+
+: **The actual run contains one setup repair and no candidate repair.** The
+chronology connects each action to its return and disposition without inventing
+failure paths that the study did not exercise.
+{#tbl-executed-study-chronology tbl-colwidths="[16,30,25,29]"}
+
+The first three rows separate declaration, request failure, and repair. The
+proposal and simulator rows then show what actually ran and what it cost in the
+fields the record preserves. The final row distinguishes a technically closed
+local study from the uncompleted architecture handoff.
+
 ### Handling Toolchain Errors
 
 The first attempt to invoke the runtime never reached inference. The
 response-format service rejected the request's JSON Schema before any tokens
 were generated.[^fn-json-schema-c08] This was an invalid request caused by the
 study setup, not a model result and not evidence about an architecture
-candidate. The schema-only correction was recorded before inference.
+candidate. The record describes the correction as schema-only and places it
+before inference.
 
 [^fn-json-schema-c08]: **JSON Schema rejection (detail)**: The record states that two constant-string properties lacked explicit types, so no model output or usage was produced. The preregistration amendment preserves the old and new schema hashes but not the rejected schema body or service response, so the exact failure cannot be independently inspected from this package.
 
-Fixing the schema was a recorded setup repair, not a concession to the model
-or a change to the architecture comparison. A harness driving a real toolchain
-would need to distinguish setup defects, transient service failures,
-deterministic tool failures, and candidate violations from the available
-records. Repeating an unchanged input can help diagnose a failure, but
-repetition alone does not reveal its cause. A deterministic wrapper defect can
-repeat without saying anything about the candidate, while a candidate can
+The available record treats the amendment as a setup repair rather than a
+concession to the model or a change to the architecture comparison. Because the
+rejected body and service response are missing, the package cannot independently
+establish semantic equivalence between the two requests. A harness driving a
+real toolchain would need to distinguish setup defects, transient service
+failures, deterministic tool failures, and candidate violations from the
+available records. Repeating an unchanged input can help diagnose a failure,
+but repetition alone does not reveal its cause. A deterministic wrapper defect
+can repeat without saying anything about the candidate, while a candidate can
 trigger an intermittent resource failure. Only a failure linked to a named
 candidate property should become negative architecture evidence. This run
 recorded only the pre-inference schema rejection, which carried no
@@ -580,12 +618,22 @@ prompts and failed runs that led to it.
 
 ### Capturing Call Provenance
 
-The subsequent call returned a schema-valid response. Since semantic validation found three unique legal candidates, no repair call was made. The complete response is retained, not only the candidate coordinates or a prose summary. The runtime exposed only part of the provenance needed to identify the call. The available fields bound how far its identity can be reconstructed, and missing values remain unavailable rather than inferred (@tbl-model-provenance). A production EDA run would fill the execution-environment field far more heavily, pinning the PDK version, standard-cell library PVT corners,[^fn-pvt-corners-c08] binary patches, and Tcl setup scripts through Nix or containers to prevent environmental drift; this study carried none of that toolchain, so the field is recorded as empty rather than left to inference.
+The subsequent call returned a schema-valid response. Since semantic validation
+found three unique legal candidates, no repair call was made. The complete
+response is retained, not only the candidate coordinates or a prose summary.
+The runtime exposed only part of the provenance needed to identify the call.
+The available fields bound how far its identity can be reconstructed, and
+missing values remain unavailable rather than inferred
+(@tbl-model-provenance). A production EDA run would record the host and
+toolchain in more detail, including the PDK version, standard-cell library PVT
+corners,[^fn-pvt-corners-c08] binary patches, and Tcl setup scripts. This model
+call used no EDA toolchain, but its host and runtime environment still should
+have been recorded.
 
 | **Provenance field** | **Recorded value** |
 | --- | --- |
 | **Provider and interface** | OpenAI through Codex CLI 0.144.4, noninteractive ephemeral execution, read-only empty workspace. |
-| **Execution environment** | None beyond the runtime above; the study ran in a read-only empty workspace with no EDA toolchain, PDK, or standard-cell libraries in play. |
+| **Model-call execution environment** | Host operating system, architecture, Python or runtime dependencies, and container identity were not recorded. The read-only empty workspace describes the session's permissions and initial files, not the host environment. No EDA toolchain, PDK, or standard-cell libraries were used. |
 | **Requested and accepted model alias** | gpt-5.4; provider revision or digest was not exposed. |
 | **Time** | 2026-07-14 18:21:51--18:22:24 UTC; 32.90 seconds wall time. |
 | **Settings** | Medium reasoning effort; temperature, top-p, and seed were not exposed or available through the runtime. |
@@ -596,13 +644,12 @@ The subsequent call returned a schema-valid response. Since semantic validation 
 
 : **Provenance is only as good as the runtime exposes.** The record reports the values the runtime supplied and marks the rest as unavailable rather than inferring them. {#tbl-model-provenance tbl-colwidths="[27,63]"}
 
-Read down from the provider, interface, and execution environment to the model
-alias, time, and exposed settings, then to usage, cost, interaction history,
-and privacy. The decisive pattern is the boundary around what the runtime did
-not expose. Provider revision, sampling settings, seed, and currency cost are
-not reconstructed from the retained response. The table identifies the
-recorded call as far as the available fields allow, but it cannot make the
-hosted generator exactly reproducible.
+The recorded provider, interface, alias, time, settings, usage, cost, and
+interaction history define the available boundary. Provider revision, sampling
+settings, seed, host environment, and currency cost are not reconstructed from
+the retained response. The table identifies the recorded call as far as the
+available fields allow, but it cannot make the hosted generator exactly
+reproducible.
 
 Temperature and top-p control how broadly a language model samples among
 plausible next tokens. A seed aids repeatability only when the provider, exact
@@ -612,25 +659,26 @@ runtime, not comparable units of engineering work across different models.
 
 [^fn-pvt-corners-c08]: **PVT corners**: The process, voltage, and temperature extremes that a standard-cell library is characterized at, such as a slow-process, low-voltage, high-temperature combination. Cell delay and leakage change substantially from one corner to the next, so a timing or power number carries no meaning unless the corner it was measured at travels with it.
 
-The retained files record a five-event chronology. The preregistration was
-frozen at 18:19:48 UTC. The response schema was rejected at 18:21:00 and amended
-at 18:21:41. The valid model call ran from 18:21:51 to 18:22:24. The twelve
-evaluations were recorded during one aggregate study-runner execution window
-from 18:31:23 to 18:31:42. That window includes runner setup and result
-serialization, not only simulator time. These internal timestamps record the
-claimed order, but no external timestamp or commit binding independently proves
-that order. The execution record also supplies only the aggregate window, not a
-timestamp for each evaluation.
+The simulator execution provenance records macOS 26.4 on arm64, Python 3.11.15,
+`arch2_labs` 0.1.0, SCALE-Sim 3.0.0, and the local executable path. It does not
+bind those values to a container, dependency lock, or repository commit. The
+aggregate 18:31:23--18:31:42 UTC window includes runner setup and result
+serialization, not only simulator time. Per-evaluation timestamps, commands,
+exit codes, standard output, standard error, and resource records are not
+retained. The internal timestamps support the claimed order in
+@tbl-executed-study-chronology, but no external timestamp or commit binding
+independently proves it.
 
 Three limits matter when interpreting this record. First, the valid proposal
 used one call and no repair, so later candidate replacement cannot explain the
 outcome. One call cannot establish the reliability or expected utility of a
-model family. That program-level evaluation requires repeated model calls,
-strong checks, and a design space capable of separating the compared methods;
-@sec-evaluating-agentic-architect takes up that problem. Second, the requested
-alias is not a pinned model identity, since a hosted model behind a fixed alias
-can change [@ChenEtAl2024ChatGPTBehavior]. The response hash pins the retained
-output rather than the hosted generator.
+model family, estimate variation across calls, or supply an uncertainty
+interval over generator behavior. That program-level evaluation requires
+repeated model calls, strong checks, and a design space capable of separating
+the compared methods; @sec-evaluating-agentic-architect takes up that problem.
+Second, the requested alias is not a pinned model identity, since a hosted model
+behind a fixed alias can change [@ChenEtAl2024ChatGPTBehavior]. The response
+hash pins the retained output rather than the hosted generator.
 
 Third, the retained prompt copy does not match its recorded identity. Both the
 preregistration and runtime provenance name SHA-256
@@ -818,7 +866,10 @@ failure condition.
 
 Each margin below compares the two shapes on one workload, so the four runs form two within-workload pairs rather than a single cross-workload comparison. On the original workload, 16 by 64 wins by 38.56 percent, with scores of
 33,782.40 and 54,985.25. After transposition, it still wins by 7.57 percent,
-23,530.65 to 25,458.11. The predicted reversal does not occur. The margin does narrow sharply, evidence that the transposition changed something the failed explanation cannot account for, even though the shift stopped short of a reversal.
+23,530.65 to 25,458.11. The predicted reversal does not occur. The narrower
+margin is an exploratory observation, not a successful mechanism test. Because
+the contrast changes interacting N- and K-fold behavior, the shift supports
+neither the proposed orientation mechanism nor a replacement explanation.
 
 The directional prediction therefore fails its declared contrast. The
 surviving prompt copy did not pin the mapping semantics, and the package cannot
@@ -902,6 +953,18 @@ Lighthouse system, and this study measures neither contention nor physical energ
 SCALE-Sim reports one-byte interface words in this configuration, not
 identified DRAM transactions, so converting the counts into energy requires a
 memory-system model that this run does not have.
+
+The runner configures the input-feature-map, weight, and output-feature-map
+paths to 64 words per cycle. SCALE-Sim 3.0.0 obtains the first two values from
+separate SRAM-bank-bandwidth fields and the output value from the first entry
+of its `Bandwidth` field; the three repeated entries in that field are not
+themselves a one-to-one list of the three operand paths. These settings are not
+a verified cap on one shared system interface. One retained layer in the
+transposed 16 by 64 probe reports average output-feature-map DRAM bandwidth of
+`79.073` words per cycle, above the configured value. That discrepancy may
+reflect SCALE-Sim's reporting semantics rather than a violated physical
+interface, but this study did not resolve it. Bandwidth is outside the frozen
+score, so the four judgments do not change.
 :::
 
 An architect who discovered this proxy mismatch after a run
@@ -943,14 +1006,15 @@ ax.set_title("Frozen Score Omits Modeled Memory Traffic", fontsize=7.5, pad=8)
 ax.set_xlabel("Compute Cycles (lower is better)", fontsize=6.5)
 ax.set_ylabel("Modeled DRAM-word writes (lower is better)", fontsize=6.5)
 
-# Deduplicate points by candidate_id
+# Deduplicate deterministic points by workload and geometry
 seen = set()
 for r in arm_runs:
-    cid = r["candidate_id"]
-    if cid in seen: continue
-    seen.add(cid)
+    key = (r["workload_id"], r["array_rows"], r["array_cols"])
+    if key in seen: continue
+    seen.add(key)
 
-    cycles = r["gates"]["deadline"]["observed"]
+    cid = r["candidate_id"]
+    cycles = r["metrics"]["total_cycles"]
     dram_writes = r["metrics"]["dram_writes"]
 
     label = cid.replace("model_baseline_", "").replace("ai_wide_", "").replace("ai_extreme_", "").replace("ai_compact_", "").replace("conventional_baseline_", "").replace("heuristic_", "")
@@ -973,8 +1037,15 @@ for r in arm_runs:
         ax.plot(cycles, dram_writes, marker=marker, markersize=4, color=color, alpha=0.6)
         ax.text(cycles + 300, dram_writes, label, color=COLORS["ink"], fontsize=5, ha="left", va="center", alpha=0.7)
 
-# Mark the shared minimum-cycle coordinate
-ax.axvline(x=13917, color=COLORS["grid"], linestyle="--", linewidth=0.8, zorder=0)
+# Mark the retained baseline coordinate
+baseline_cycles = next(
+    r["metrics"]["total_cycles"]
+    for r in arm_runs
+    if r["workload_id"] == "original"
+    and r["array_rows"] == 32
+    and r["array_cols"] == 32
+)
+ax.axvline(x=baseline_cycles, color=COLORS["grid"], linestyle="--", linewidth=0.8, zorder=0)
 
 ax.tick_params(axis="both", labelsize=5.9, length=2.5, width=0.6, pad=2)
 ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
@@ -988,12 +1059,12 @@ plt.show()
 
 [^fn-dram-traffic]: At identical cycles and utilization, SCALE-Sim reports 409,726 one-byte DRAM-word writes for 16 by 64 against 204,863 for the baseline, twice as many, and about 1.6 times the total modeled word accesses.
 
-Read toward the lower-left because both axes are lower-is-better simulator
-outputs. The baseline and shared 16 by 64 candidate align at 13,917 cycles, but
-the shared candidate sits much higher on modeled DRAM-word writes. The baseline
-therefore dominates that candidate on these two reported quantities even
-though the frozen composite score ties them. The plot exposes an omitted axis;
-it does not authorize post-run rescoring or establish physical memory energy.
+Both axes are lower-is-better simulator outputs. The baseline and shared 16 by
+64 candidate align at 13,917 cycles, but the shared candidate sits much higher
+on modeled DRAM-word writes. The baseline therefore dominates that candidate
+on these two reported quantities even though the frozen composite score ties
+them. The plot exposes an omitted axis; it does not authorize post-run
+rescoring or establish physical memory energy.
 
 The 16 by 64 candidate already fails to advance under the frozen rule because
 it does not clear the one-percent margin. The post-run modeled-write
@@ -1041,6 +1112,13 @@ records a commit identity nor binds the executable heuristic implementation
 to one. The historical execution record still contains a local executable
 path, so the package is not fully path-scrubbed or self-contained.
 
+These files coexist in the package, but one manifest does not bind all of them
+into a sealed historical identity. The reference manifest covers the retained
+reference-output tree. It does not cover the preregistration, model prompt and
+response, model provenance, runner source, dependency lock, or repository
+commit. Reference integrity and whole-package identity are therefore different
+claims.
+
 The [companion README](https://github.com/harvard-edge/arch2/blob/main/labs/examples/ai_systolic_array_study/README.md)
 lists the retained files, replay commands, and known provenance limits.
 
@@ -1056,17 +1134,16 @@ Each retained artifact answers a specific review question
 | **Provenance record** | Requested model alias, interface, timestamps, exposed settings, usage, response hash, pre-inference error, and unavailable identity fields. |
 | **Fixed aspect-ratio heuristic** | The preregistration records the rule and declared candidates. The executable implementation is in repository code, but the manifest does not bind it to a commit, so the exact historical code identity is not established by the package alone. |
 | **Reference evaluations and execution provenance** | Exact topology, layout, SCALE-Sim configuration, raw run locations, parsed metrics, rejection results, and conclusions for all twelve evaluations. |
-| **Reference manifest and replay** | Whether retained files match their hashes and a network-free rerun regenerates every stable input, report, metric, and result. |
+| **Reference manifest and replay** | Whether files in the retained reference-output tree match their hashes and the currently retrieved runner regenerates every stable input, report, metric, and result. The manifest does not bind the complete package or historical runner identity. |
 
 : **Each review question maps to a retained artifact.** These files do not establish that the simulator is accurate or the workload representative, and the prompt mismatch leaves one provenance question unresolved. {#tbl-study-archive tbl-colwidths="[26,64]"}
 
-Read from the declaration artifacts to the model and provenance files, then to
-the fixed heuristic, raw evaluations, manifest, and replay. The first group
-lets a reviewer inspect what was intended and what the model returned. The
-second connects those declarations to the executed simulator results and
-retained hashes. Together they support review and replay of the recorded
-computation, but they do not establish simulator fidelity or workload
-representativeness.
+The declaration and model artifacts let a reviewer inspect what was intended
+and what the model returned. The evaluation files, reference manifest, and
+replay path connect the current package to the retained simulator results.
+Together they support review and current replay of the recorded computation,
+but they do not establish one sealed historical package, simulator fidelity,
+or workload representativeness.
 
 #### What Each Follow-up Checks
 
@@ -1076,8 +1153,8 @@ in which one result proves the next.
 
 | **Follow-up** | **Study status** | **What a successful result would support** | **What it would not establish** |
 | --- | --- | --- | --- |
-| **Reference integrity check** | The retained manifest can be checked against the archived files. | The archived files still match their recorded hashes and sizes. | That the computation can be regenerated or that the simulator is faithful. |
-| **Deterministic simulator replay** | A network-free replay path is packaged; completion must be reported separately. | The retained runner, simulator version, inputs, and parsing regenerate the stable study outputs. | Simulator fidelity, workload representativeness, or an independent result. |
+| **Reference integrity check** | Passed during current validation on 2026-07-30 at commit `30b8959d`. | The reference-output files still match their recorded hashes and sizes. | That the computation can be regenerated, that the complete package is historically bound, or that the simulator is faithful. |
+| **Deterministic simulator replay** | Passed during the same current validation under Python 3.11.15 and SCALE-Sim 3.0.0. | The currently retrieved runner, documented simulator version, inputs, and parsing regenerate the stable study outputs. | Historical runner identity, simulator fidelity, workload representativeness, or an independent result. |
 | **Generator re-execution** | Exact reproduction is unavailable because provider revision and seed were not exposed and the retained prompt hash does not match. | A new call could measure behavior of the currently available model and runtime. | Recreation of the recorded proposal or truth of the architecture claim. |
 | **Independent architecture check** | Not performed. | A different implementation or testbench could test whether the local result or proposed mechanism survives different modeling assumptions. | Automatic removal of every shared specification, workload, or modeling error. |
 
@@ -1085,12 +1162,12 @@ in which one result proves the next.
 repeatability under shared assumptions; a separately designed check can reduce
 some shared assumptions without becoming ground truth. {#tbl-verification-levels tbl-colwidths="[20,22,30,28]"}
 
-Read downward as four different questions rather than four levels of proof.
 Reference integrity asks whether the retained files changed. Simulator replay
 asks whether the same computation can be regenerated. Generator re-execution
 tests current behavior without recreating the recorded call, while an
-independent architecture check changes part of the modeling path. Success in
-one row cannot supply the conclusion reserved for another.
+independent architecture check changes part of the modeling path. These are
+four different questions rather than four levels of proof. Success in one row
+cannot supply the conclusion reserved for another.
 
 #### Verifying the Replay
 
@@ -1109,6 +1186,13 @@ metrics. The package compares stable summary reports and parsed results; any
 disagreement requires investigation rather than a presumption about which
 artifact is correct.
 
+The current validation on 2026-07-30 used commit `30b8959d`, Python 3.11.15,
+and SCALE-Sim 3.0.0. Model-response validation passed without repair, reference
+integrity passed, deterministic replay matched, and sixteen focused study tests
+passed. This is a dated receipt for the currently retrieved package. It does
+not prove which runner revision or host state produced the historical
+reference outputs.
+
 An optional provider-neutral live adapter writes to a separate output directory
 and checks the requested model alias. That check does not recover the exact
 provider revision or digest used for the recorded call. The adapter halts if the
@@ -1116,14 +1200,14 @@ runtime or credential is unavailable, the response is invalid, or a proposed
 geometry is illegal. It never changes the recorded reference results. Commands
 and failure details remain in the companion rather than the printed chapter.
 
-A successful replay confirms that the retained computation can be regenerated
-under the retained code and inputs in a compatible environment matching the
-documented versions. It is not an independent
-result because it shares the same runner, simulator, workload, score, and
-assumptions. It does not validate SCALE-Sim against fabricated silicon,
-establish workload representativeness, justify the local score or thresholds,
-resolve the missing mapping semantics, or predict another model call. Those
-are new claims requiring new evidence.
+The successful current replay confirms that the retained computation can be
+regenerated under the currently retrieved runner and inputs in a compatible
+environment matching the documented versions. It is not an independent result
+because it shares the same runner, simulator, workload, score, and assumptions.
+It does not validate SCALE-Sim against fabricated silicon, establish workload
+representativeness, justify the local score or thresholds, resolve the missing
+mapping semantics, or predict another model call. Those are new claims
+requiring new evidence.
 
 ### Judging the Four Claims
 
@@ -1177,7 +1261,10 @@ record.
 The technical disposition does not decide the system commitment. Retaining 32
 by 32 for the evaluated set remains a recommendation: no architecture change
 has been authorized, no accountable owner is named, and the Lighthouse system
-remains open.
+remains open. The handoff is incomplete. Completing it requires a dated record
+of the receiving role, its authority, the artifact received, its response, and
+the conditions under which it would reopen the study. This chapter does not
+invent those missing facts.
 
 One completed record keeps the frozen plan, its four judgments, and the
 pending architecture action together (@tbl-practitioner-path).
@@ -1192,22 +1279,20 @@ pending architecture action together (@tbl-practitioner-path).
 | **Mechanism status** | The predicted winner reversal does not occur. The directional explanation fails. A replacement mechanism remains unresolved because the surviving prompt copy omitted mapping semantics, the exact recorded context cannot be verified, and the contrast did not isolate orientation. |
 | **Stopping and decision status** | The local technical study stops. Retaining 32 by 32 is the recorded recommendation, no architecture change has been authorized, and the record does not name the accountable owner. |
 | **Record limits** | The exact model prompt cannot be verified because the retained copy does not match the recorded hash. The rejection checks did not fire inside the study, the score omitted modeled memory traffic, and replay shares the study's simulator, workload, score, and assumptions. |
-| **Reopening conditions** | Reopen through a newly frozen study if the workload, objective, dataflow, mapping semantics, simulator, model identity, energy model, implementation constraints, or decision scope changes, or if an independent check contradicts the recorded result. |
+| **Reopening conditions** | A changed model identity, comparator, or evaluation budget reopens the AI-contribution comparison. Changed mapping semantics reopen the mechanism claim. A changed workload, legal or evaluated candidate set, baseline, score, decision margin, dataflow, or simulator reopens the local architecture outcome. New energy, implementation, or system conditions reopen the action or XR decision. An independent contradiction reopens the claim it bears on. Each requires a newly frozen study rather than an edit to this record. |
 
 : **The completed local record separates outcome from action.** The study is
 technically closed, its recommendation is explicit, and the architecture action
 remains pending.
 {#tbl-practitioner-path tbl-colwidths="[24,66]"}
 
-Read down from the frozen plan through execution and measurements before
-reaching the architecture-outcome, AI-contribution, mechanism, and stopping
-fields. The final rows state the record limits and the conditions that require
-a new study. This order keeps the conclusions attached to what actually ran
-and what the tools returned. It also preserves the difference between a
-technically closed study and an architecture action that still lacks
-confirmation and a named owner. Assigning that owner later would create a
-dated post-study action record; it would not rewrite the preregistered roles or
-the historical run.
+The frozen plan, execution, and measurements keep each conclusion attached to
+what actually ran and what the tools returned. The final rows state the record
+limits and the claim-specific conditions that require a new study. They also
+preserve the difference between a technically closed study and an architecture
+action that still lacks confirmation and a named owner. Assigning that owner
+later would create a dated post-study action record; it would not rewrite the
+preregistered roles or the historical run.
 
 ## Open Research Questions
 
@@ -1307,3 +1392,8 @@ commitment remains open. Its workload fidelity,
 software path, shared-memory behavior, verification, 3\ W budget, thermal
 behavior, and physical implementation still require their own decisions and
 measurements.
+
+This study closes one frozen local problem. The next question is what can
+transfer when the workload, objective, tool, implementation target, or system
+context changes, and which claims must be established again. The book next
+develops that transfer problem in @sec-loop-patterns-across-stack.

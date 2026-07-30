@@ -11,5 +11,5 @@ Executable Quarto figures in the chapter:
 
 - `fig-ai-study-result`: matched cycle-count results for the retained array
   study.
-- `fig-proxy-mismatch`: disagreement between the recorded explanation and the
-  observed fold-count proxy.
+- `fig-proxy-mismatch`: the frozen score plotted against modeled memory
+  traffic, exposing an axis that the score omits.
