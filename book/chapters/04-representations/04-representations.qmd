@@ -345,24 +345,28 @@ gate-level analysis, FPGA or emulation, and fabricated silicon. Each obtained
 observation retains its source and version, property coverage, acquisition
 cost, conditions, and blind spots." width="100%"}
 
-Read the diagram from top to bottom. The study starts with the property it must
-observe, compares candidate sources by coverage, cost, conditions, and blind
-spots, and may choose several. The six sources appear in parallel because none
-is uniformly more informative than the others. When a source produces an
-observation, its record keeps the context needed to interpret and compare it.
-The choice follows the property and decision rather than a generic fidelity
-rank.
+The study starts with the property it must observe, then compares candidate
+sources by coverage, cost, conditions, and blind spots. It may choose several.
+The six sources appear in parallel because none is uniformly more informative
+than the others. When a source produces an observation, its record keeps the
+context needed to interpret and compare it. The choice follows the property and
+decision rather than a generic fidelity rank.
 
-An observation source becomes usable only when its appropriate use is paired
-with the limit the representation must retain
-(@tbl-observation-source-limits).
+The overview groups major observation paths rather than every distinct return
+type. An observation becomes usable only when its appropriate use is paired
+with the limit and provenance its representation must retain
+(@tbl-observation-source-limits). The table separates simulation, formal
+analysis, and implementation-facing flows because they return different kinds
+of results.
 
 | **Source** | **Useful For** | **Important Limit to Represent** |
 | --- | --- | --- |
 | Analytical model | Fast sensitivity studies and early bounds. | Simplifying equations, calibration range, and omitted interactions. |
 | Trace-driven model | Repeatable study of behavior contained in a captured instruction or event stream. | No behavior that depends on timing feedback absent from the trace. |
 | Cycle-level simulator | Detailed modeled microarchitectural behavior. | Simulator abstractions, unsupported states, calibration, and execution cost. |
-| RTL, formal, or gate-level flow | Logic behavior, property results, and implementation-facing checks within the executed flow. | Test or proof coverage, unknown or incomplete outcomes, process assumptions, constraint quality, and physical effects outside the flow. |
+| RTL simulation | Logic, interface, and microarchitectural behavior over the exercised testbench and observed properties. | Stimulus and testbench identity, functional and code coverage, unknown-value handling, simulator version, and timing abstractions. |
+| Formal analysis | Proof, counterexample, bounded-only, or inconclusive status for a stated property, model, and assumptions. | Exact property and assumptions, abstraction, proof method, bound or completeness argument, vacuity checks, and returned status. |
+| Synthesis or gate-level implementation flow | Logic transformation and implementation-facing timing, area, power, or rule checks within the executed flow. | Libraries, modes, corners, constraints, waivers, tool versions, and physical effects outside the flow. |
 | FPGA or emulation platform | High-throughput functional or timing-model execution after mapping. | Mapping differences, compile cost, debug visibility, and non-transferable ASIC power or timing. |
 | Fabricated silicon | Behavior of a physical implementation under measured conditions. | Limited design variants, observability, stepping, test conditions, and inability to answer every counterfactual question. |
 
@@ -371,13 +375,14 @@ representation records both so that later chapters can choose and evaluate a
 tool path for the actual question.
 {#tbl-observation-source-limits tbl-colwidths="[20,34,36]"}
 
-Read across each row from the source's useful role to the condition that limits
-it. Analytical and trace-driven sources provide fast or repeatable results but
-omit interactions or timing feedback. RTL, FPGA, emulation, and silicon expose
-more implementation-facing behavior while retaining limits in coverage,
-mapping, process assumptions, observability, and the ability to examine unbuilt
-alternatives. The rows do not order the sources. The property under study
-determines which limits are acceptable and whether several sources are needed.
+Analytical and trace-driven sources provide fast or repeatable results but omit
+interactions or timing feedback. RTL simulation observes exercised behavior,
+formal analysis returns a scoped logical status, and synthesis or gate-level
+flows add implementation assumptions and constraints. FPGA, emulation, and
+silicon extend throughput or physical observation while retaining limits in
+mapping, observability, and the ability to examine unbuilt alternatives. The
+rows do not order the sources. The property under study determines which
+limits are acceptable and whether several sources are needed.
 
 These costs also shape the available data. Expensive observation paths usually
 produce fewer observations, and only observations with compatible designs,
@@ -445,6 +450,25 @@ of observation, the designs and workloads that must be covered, the properties
 to be measured, and the failures or unknown outcomes that must remain visible.
 Those choices determine which sources are needed and which expensive tool calls
 are worth acquiring.
+
+Coverage needs an acquisition plan before a learned method or optimizer begins
+choosing points. The plan declares the legal design regions, workloads,
+conditions, and outcomes that the dataset must support. Its initial samples
+should cover those groups without placing related designs or workload
+derivatives on both sides of a later evaluation. When active learning or
+multifidelity selection chooses subsequent runs, every observation retains the
+selection rule, its version, the available candidate set, and the observations
+available at the time [@Settles2009ActiveLearning;
+@PeherstorferWillcoxGunzburger2018Multifidelity]. Adaptively acquired data
+describes the region that the selection policy visited. It is not an unbiased
+map of the legal design space.
+
+The acquisition process must retain attempted points, failures, and censored
+returns, and it must reserve design or workload groups that the selector cannot
+consume. These requirements let a later reviewer distinguish broad support
+from dense sampling near a predicted optimum. Method selection belongs to
+@sec-methods-generation-prediction-optimization. The present chapter records
+how that choice shaped the dataset.
 
 For a tool-derived dataset, one row should identify a design, software image,
 workload, tool and model version, conditions, and execution attempt before it
@@ -776,15 +800,13 @@ later checks.** Choosing one also chooses which legal designs are easy,
 difficult, or impossible to express.
 {#tbl-representation-formats tbl-colwidths="[24,34,32]"}
 
-Read each row from the property made explicit to the obligation left for
-another check. HDL and typed IR expose logic, types, and connectivity. Schemas
-and generators expose legal fields and lowering, while SDC and UPF expose
-timing and power intent but remain coupled to names and current RTL. Graph and
-spatial forms preserve only the topology, features, or locations they encode. A
-learned vector exposes similarities useful to a later method but does not carry
-every exact property of its source. A more structured representation can reject
-malformed actions without proving semantic correctness or physical
-feasibility.
+HDL and typed IR expose logic, types, and connectivity while leaving semantic
+correctness and physical feasibility for other checks. Schemas and generators
+expose legal fields and lowering, while SDC and UPF expose timing and power
+intent but remain coupled to names and current RTL. Graph and spatial forms
+preserve only the topology, features, or locations they encode. A learned
+vector exposes similarities useful to a later method but does not carry every
+exact property of its source.
 
 An embedding is a learned vector that places artifacts with similar modeled
 features near one another. It can support retrieval, clustering, prediction,
@@ -792,6 +814,16 @@ generation, or adaptation [@BengioEtAl2013RepresentationLearning]. It is one
 learned representation among several, not a compressed replacement for the
 source artifact. The project must retain a link back to the exact source and to
 the properties that cannot safely be recovered from learned similarity.
+
+A learned representation also needs a task-specific fitness test. The project
+states the learning objective and training data, names changes that should
+leave the representation invariant, and names distinctions that must remain
+visible. It then probes neighbors and counterexamples on held-out design
+groups. If a representation drives artifact generation or mutation, proposed
+changes must round-trip to the native representation and pass the applicable
+legality and tool checks. An embedding that supports retrieval can still be
+unfit for prediction or design modification when its geometry collapses a
+topological, timing, or physical distinction needed by the later task.
 
 Native sources can therefore feed several derived forms without surrendering
 their original meaning. The useful question is which capability a derived form
