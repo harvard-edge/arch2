@@ -17,4 +17,8 @@ Moved to Chapter 5 with their owning method material:
 - `../../05-methods/images/F5c-macro-placement`: policy and reward loop for macro
   placement.
 
-The chapter contains no executable figures.
+Executable figure:
+
+- `fig-public-code-to-rtl`: the OpenRTLSet C/C++ collection path from
+  permissively licensed repositories through the authors' synthesizability
+  screen and successful Vitis HLS conversion.
