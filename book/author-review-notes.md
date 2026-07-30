@@ -267,6 +267,26 @@ before the final figure/table balance and continuous whole-book reading pass.
 Pilot the method on one known rough section in Chapter 1 and one later chapter
 before scaling it across the manuscript.
 
+### The First Numbered Section Must Provide a Clean Entry
+
+**Author direction.** A chapter can have a strong unnumbered opening and still
+lose the reader when Section x.1 begins. The first numbered section must not
+immediately unload a taxonomy, large table, framework, or long list of terms.
+
+**Book-wide test.** During the section-scale reader-flow audit, examine every
+Section x.1 separately. It should:
+
+1. begin with a concrete question, situation, or distinction that follows
+   naturally from the chapter opening;
+2. establish why the first concept is needed before naming its full structure;
+3. introduce distinctions in the order the reader needs them;
+4. delay comprehensive tables until the prose has given the reader a reason to
+   use them; and
+5. end with a clear result that creates the need for Section x.2.
+
+This is a conceptual-onboarding test, not a requirement that every first
+section use the same rhetorical template.
+
 ### Overuse of "Bounded Study"
 
 **Author observation.** The manuscript returns to "bounded study" too often and
@@ -1778,6 +1798,40 @@ The reader should leave able to answer:
   particular problem?
 
 The durable lesson is method fit, not a ranking of fashionable models.
+
+### Section 5.1 Starts Too Fast
+
+**Author observation.** Section 5.1 moves rapidly from the distinction among
+engineering roles, method families, techniques, and system composition into
+two dense tables and eight roles. The ideas may be individually useful, but
+the reader has not yet been given a sufficiently gradual reason for needing
+all of them.
+
+**Editorial assessment.** This is a reasoning-flow problem rather than a
+request for lighter wording. The section currently asks the reader to absorb
+the smallest-sufficient-approach principle, four decision layers, eight roles,
+their outputs and handoffs, conventional versus learned techniques, direct
+tool use, foundation models, retrieval, and agents before the method-selection
+problem has been made concrete.
+
+**Likely direction.** Rebuild the entry methodically:
+
+1. Begin with one familiar architecture task and show why "choose an AI model"
+   is the wrong first question.
+2. Establish the smallest-sufficient-approach principle through that example.
+3. Introduce the distinction between the engineering job and the method used
+   to perform it.
+4. Add technique and system composition only after the first distinction is
+   secure.
+5. Decide whether all eight roles are necessary at this point. If they are,
+   introduce them in meaningful groups and move the comprehensive handoff
+   table after the prose has established those groups.
+6. Preserve the useful claim that roles and method families form a
+   many-to-many relationship.
+
+The revision should not merely insert transition sentences between the two
+tables. It should determine the minimum conceptual sequence a reader needs
+before those tables become useful.
 
 ### Why the Current Opening Is Too Dependent on Earlier Chapters
 
