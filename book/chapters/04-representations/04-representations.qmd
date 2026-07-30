@@ -327,21 +327,21 @@ cycle-level simulator, RTL simulation, formal analysis, FPGA platform, or
 fabricated silicon.
 These sources differ in cost, speed, abstraction, and observability
 (@fig-observation-source-choice, @tbl-observation-source-limits). They do not form one
-fidelity ranking for every property. Gate-level analysis may preserve target
+fidelity ranking for every property. Post-layout timing analysis may preserve target
 timing detail that an FPGA mapping does not, while an FPGA platform may execute
 far more workload than that analysis can cover. Silicon can reveal behavior of
 the fabricated design but cannot recover a counterfactual configuration that
 was never built.
 
 ![**Choose observation sources for the property and decision.** Analytical,
-trace-driven, cycle-level, RTL or gate-level, FPGA or emulation, and silicon
-sources offer different coverage, costs, conditions, and blind spots. A study
+trace-driven, cycle-level, RTL and gate-level simulation, FPGA or emulation,
+and silicon sources offer different coverage, costs, conditions, and blind spots. A study
 may combine them, and each recorded observation retains that
 context.](images/F4-data-pyramid){#fig-observation-source-choice
 fig-alt="A study starts with the architecture property it must observe, then
 compares six observation sources shown without a universal ranking:
-analytical models, trace-driven models, cycle-level simulation, RTL or
-gate-level analysis, FPGA or emulation, and fabricated silicon. Each obtained
+analytical models, trace-driven models, cycle-level simulation, RTL and
+gate-level simulation, FPGA or emulation, and fabricated silicon. Each obtained
 observation retains its source and version, property coverage, acquisition
 cost, conditions, and blind spots." width="100%"}
 
@@ -364,9 +364,10 @@ of results.
 | Analytical model | Fast sensitivity studies and early bounds. | Simplifying equations, calibration range, and omitted interactions. |
 | Trace-driven model | Repeatable study of behavior contained in a captured instruction or event stream. | No behavior that depends on timing feedback absent from the trace. |
 | Cycle-level simulator | Detailed modeled microarchitectural behavior. | Simulator abstractions, unsupported states, calibration, and execution cost. |
-| RTL simulation | Logic, interface, and microarchitectural behavior over the exercised testbench and observed properties. | Stimulus and testbench identity, functional and code coverage, unknown-value handling, simulator version, and timing abstractions. |
+| RTL and gate-level simulation | Logic, interface, and microarchitectural behavior over the exercised testbench and observed properties, including netlist behavior when timing is modeled. | Stimulus and testbench identity, functional and code coverage, unknown-value handling, simulator version, delay annotation, and timing abstractions. |
 | Formal analysis | Proof, counterexample, bounded-only, or inconclusive status for a stated property, model, and assumptions. | Exact property and assumptions, abstraction, proof method, bound or completeness argument, vacuity checks, and returned status. |
-| Synthesis or gate-level implementation flow | Logic transformation and implementation-facing timing, area, power, or rule checks within the executed flow. | Libraries, modes, corners, constraints, waivers, tool versions, and physical effects outside the flow. |
+| Synthesis and static timing or power analysis | Logic transformation and timing, area, or power estimates within the executed netlist and constraint flow. | Libraries, modes, corners, constraints, tool versions, physical approximations, and effects outside the analyzed stage. |
+| Place-and-route and physical verification | Placement, routing, extraction, timing, power-integrity, and physical-rule results for the implemented database. | Floorplan and routing state, extraction and signoff models, modes, corners, waivers, tool versions, and unmodeled manufacturing or operating conditions. |
 | FPGA or emulation platform | High-throughput functional or timing-model execution after mapping. | Mapping differences, compile cost, debug visibility, and non-transferable ASIC power or timing. |
 | Fabricated silicon | Behavior of a physical implementation under measured conditions. | Limited design variants, observability, stepping, test conditions, and inability to answer every counterfactual question. |
 
@@ -376,9 +377,10 @@ tool path for the actual question.
 {#tbl-observation-source-limits tbl-colwidths="[20,34,36]"}
 
 Analytical and trace-driven sources provide fast or repeatable results but omit
-interactions or timing feedback. RTL simulation observes exercised behavior,
-formal analysis returns a scoped logical status, and synthesis or gate-level
-flows add implementation assumptions and constraints. FPGA, emulation, and
+interactions or timing feedback. RTL and gate-level simulation observe
+exercised behavior, formal analysis returns a scoped logical status, synthesis
+and static analysis add netlist and constraint assumptions, and physical flows
+add placement, routing, extraction, and signoff conditions. FPGA, emulation, and
 silicon extend throughput or physical observation while retaining limits in
 mapping, observability, and the ability to examine unbuilt alternatives. The
 rows do not order the sources. The property under study determines which
@@ -463,7 +465,10 @@ describes the region that the selection policy visited; it does not, without a
 separate sampling argument, represent the legal design space uniformly. This
 book therefore recommends retaining the selection rule, its version, the
 available candidate set, and the observations available when each run was
-chosen.
+chosen. Observations selected by the method are policy-conditioned evidence.
+They may update the method under that declared policy. Independent evaluation
+should use predeclared design or workload groups that the selector never
+observed, unless the study supplies a valid off-policy identification argument.
 
 The acquisition process must retain attempted points, failures, and censored
 returns, and it must reserve design or workload groups that the selector cannot
@@ -530,6 +535,11 @@ encountered the design. Randomly splitting rows is also weak when nearby rows
 share a repository, generator, workload trace, or time period. A useful split
 must expose the transfer the project cares about, such as a new design family,
 workload, or later project revision [@KapoorNarayanan2023Leakage].
+Group at the coarsest relevant shared ancestor whose separation would leak
+information about the claimed transfer. For example, keep a generator family
+together rather than splitting its generated variants, and keep a trace
+capture together rather than splitting sampled intervals across training,
+tuning, and evaluation.
 
 Successful designs can present a biased view of the space. When a project
 retains the winning configuration while deleting failed synthesis runs,
@@ -810,12 +820,13 @@ preserve only the topology, features, or locations they encode. A learned
 vector exposes similarities useful to a later method but does not carry every
 exact property of its source.
 
-An embedding is a learned vector that places artifacts with similar modeled
-features near one another. It can support retrieval, clustering, prediction,
-generation, or adaptation [@BengioEtAl2013RepresentationLearning]. It is one
-learned representation among several, not a compressed replacement for the
-source artifact. The project must retain a link back to the exact source and to
-the properties that cannot safely be recovered from learned similarity.
+An embedding is a learned vector representation whose training objective may
+make selected similarities or directions useful to a downstream task. It can
+support retrieval, clustering, prediction, generation, or adaptation
+[@BengioEtAl2013RepresentationLearning]. It is one learned representation
+among several, not a compressed replacement for the source artifact. The
+project must retain a link back to the exact source and to the properties that
+cannot safely be recovered from learned similarity.
 
 A learned representation also needs a task-specific fitness test. The project
 states the learning objective and training data, names changes that should
@@ -844,6 +855,11 @@ facts stay connected to their sources.** Text, graphs, sequences, spatial
 forms, and embeddings expose different properties, so the project retains the
 native artifact and the conditions that make each derived view meaningful.
 {#tbl-source-representation-capability tbl-colwidths="[20,28,24,28]"}
+
+For a physical design, a graph, tensor, embedding, or image-like view is not
+itself an authoritative database edit. A proposed change must write back
+through the authoritative database or a reproducible tool command, then repeat
+legalization and the implementation checks that the change can affect.
 
 Read each row from the native source through a useful derived form to the
 capability it supports. The last column is deliberately not another learned
@@ -896,6 +912,11 @@ vector without its units and tool conditions cannot be traced back to the fact
 it is supposed to represent. The choice is therefore not one universal format.
 It is a set of linked views chosen for the downstream capability and checked
 against the properties each view must preserve.
+
+The default is deliberately conservative. Retain the authoritative native
+artifact, add the minimum explicit structure needed to expose legal actions,
+constraints, and dependencies, and add a learned representation only when it
+enables a named capability that justifies its validation and maintenance cost.
 
 ### Permitted Changes and Invariants
 
