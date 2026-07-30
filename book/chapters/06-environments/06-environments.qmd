@@ -61,18 +61,15 @@ and judging the claim require additional checks beyond the environment.
 After reading this chapter, you can:
 
 - Distinguish a tool, simulator, wrapper, harness, and complete environment.
-- Specify environment state, legal actions, observations, transitions, costs,
+- Specify pinned state, legal actions, observations, transitions, costs,
   stopping conditions, and failure behavior.
-- Establish a pinned starting state and control or report nondeterministic tool
-  behavior.
-- Design typed interfaces that preserve parameters, units, permissions,
-  errors, raw output, and tool-specific meaning.
+- Design typed interfaces that preserve parameters, units, permissions, raw
+  output, errors, and tool-specific meaning.
 - Coordinate asynchronous and dependent runs within authority, security, time,
-  compute, model, tool, and license limits.
-- Recover from failed work without confusing process failure with a measured
-  design violation or reusing stale state.
-- Report enough identity, status, artifacts, warnings, versions, and cost to
-  support replay, repeatability analysis, and independent reproduction.
+  compute, tool, and license limits.
+- Recover from failed work without confusing process failure with a design
+  violation or reusing stale state, and report enough identity, artifacts,
+  versions, warnings, and cost for replay and reproduction.
 - Carry one candidate through several tool and fidelity paths without granting
   the environment architecture decision authority.
 
@@ -125,6 +122,11 @@ and harness schedule, isolate, budget, cancel, retry, and record the work.
 Finally, the return path preserves execution state, artifacts, parsed results,
 warnings, cost, and lineage. The four parts exist whether a learned method, a
 conventional search, or an architect issues the request.
+
+The environment returns typed observations, artifacts, execution status, and
+cost. It does not need to return a scalar reward. A method may derive a reward
+or objective from qualified returns, but that derived value remains separate
+from the raw observations and cannot replace them.
 
 The interface has three paths. The read path supplies the represented
 candidate, fixed state, tool identities, available resources, and prior
@@ -365,8 +367,10 @@ each observation contains.
 
 The familiar reinforcement-learning interface calls `step()` and receives an
 observation, reward, termination flags, and auxiliary information through a
-standard synchronous API [@TowersEtAl2023Gymnasium]. That interface does not
-imply that an architecture step is cheap. A cycle simulation may run for hours.
+standard synchronous API [@TowersEtAl2023Gymnasium]. An architecture
+environment instead preserves the typed return from the tool and lets the
+method derive a reward when one is needed. Neither interface implies that an
+architecture step is cheap. A cycle simulation may run for hours.
 A physical-design job may wait in a queue, hold a scarce license, produce
 intermediate databases, and fail after substantial work. Tool state persists
 in working directories, caches, checkpoints, license servers, random seeds,
@@ -385,9 +389,10 @@ filesystem paths, network destinations, credentials, secrets, licensed
 features, and intellectual property needed for its declared action. Generated
 scripts, constraints, RTL, and compiler inputs are untrusted until validated
 and confined. Each attempt uses an isolated working area, resource limits, and
-a process boundary. Cancellation must terminate descendants, release licenses,
-quarantine uncertain outputs, and preserve enough partial state to explain
-what happened.
+a process boundary. Cancellation handling must request termination of
+descendants, then confirm termination and license release. Until confirmation,
+the harness quarantines uncertain outputs, keeps the status unconfirmed, and
+preserves enough partial state to explain what happened.
 
 Budgets apply independently to model calls, tool submissions, elapsed time,
 CPU and accelerator use, memory, storage, and license occupancy. Admission
@@ -880,7 +885,7 @@ throughout the chapter in one place (@tbl-environment-contract).
 
 | **Run Field** | **`XR-L2-CAP-A` Run Specification** |
 | --- | --- |
-| **Study and request identity** | Study `XR-L2-CAP-A`, request definition `CONTRACT-A`, design revision `XR-COMPUTE-A`, and the selected approach. |
+| **Study and request identity** | Study `XR-L2-CAP-A`, request definition `RUN-SPEC-A`, design revision `XR-COMPUTE-A`, and the selected approach. |
 | **Candidates and fixed state** | `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`; cache policy `CACHE-POLICY-A`; NoC `NOC-A`; memory system `MEMSYS-A`; compiler `COMPILER-A`; runtime `RUNTIME-A`; software image `SW-BASE-A`; and workload snapshot `XR-TRACE-A` with stable frame identifiers. |
 | **Permitted translation** | Serialize only `l2.capacity` values `2MB`, `3MB`, and `4MB` into declared `SRAM-A` and `SIM-A` inputs. A wrapper may change syntax and file layout but may not change architecture meaning. |
 | **Tool and condition identities** | `SRAM-A` under `PVT-A`, followed by `SIM-A` with `CACHE-A` and `PM-A`. The record retains exact versions or hashes, relevant flags, host or container identity, seeds, and reset state. |
@@ -913,6 +918,11 @@ a new request.
 
 ### The Lighthouse Run Report
 
+The run specification above states what is intended to execute. The attempt
+record below states what actually happened. Comparing them reveals missing
+outputs, unexpected state, failures, retries, and budget use without treating
+an execution record as an architecture verdict.
+
 To make run reporting concrete, this chapter introduces a constructed trace for
 the prospective cache study. It is an author-created teaching example, not live
 project history or measurements from tools run for this book. It contains
@@ -927,10 +937,10 @@ unreported.
 | `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.2\ mm^2^` and access time `2.1\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
 | `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.4\ mm^2^` and access time `2.4\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
 | `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.7\ mm^2^` and access time `2.8\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The trace includes no `SIM-A` request and places area and access time above the dispatch limits. Parser status and the exact dispatch event remain unreported. This is a constructed scheduling outcome, not a design verdict. |
-| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Constructed clean execution included; record intentionally incomplete. | Matched baseline frame data and subsystem dynamic plus leakage power `2.90\ W` are included. Attempt-level artifact and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
+| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Constructed clean execution included; record intentionally incomplete. | A baseline frame summary and subsystem dynamic plus leakage power `2.90\ W` are included. Underlying matched frame records, artifact identity, and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
 | `SIM-3-A1` | `L2-3M-A` with stale constraint state. | The trace includes a stale-state setup failure. | No candidate return. Diagnostic and partial-artifact identities are unreported. | Cycle attempt 2 of 4. A later clean attempt is included, but retry parent, reset mechanism, and reset-state identity are unreported. |
-| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | Aggregate frame, cache, and power results span both clean 3\ MB attempts rather than this attempt alone. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
-| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | Aggregate frame, cache, and power results span both clean 3\ MB attempts rather than this attempt alone. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean 3\ MB attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean 3\ MB attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
 
 : **An execution record preserves missing information as carefully as returned
 values.** The constructed cache chronology retains candidate state, failure,
@@ -945,25 +955,14 @@ share aggregate values without attempt-level attribution. The table therefore
 supports a teaching chronology and budget account, not a complete measurement
 record or candidate decision.
 
-The trace includes three aggregate values across the clean 3\ MB returns.
-Capacity misses fall `12%` relative to baseline, cache leakage rises `2\ mW`,
-and modeled subsystem dynamic plus leakage power rises from `2.90\ W` to
-`2.94\ W`. The teaching scenario also declares that matched frame sequences
-were used to produce an illustrative `0.3\ ms` tail-latency reduction with a
-95 percent interval from `-0.1\ ms` to `0.7\ ms`. The record does not retain
-those sequences or their identifiers. It also does not assign the aggregate
-values to one clean attempt or identify which tool supplied the cache-leakage
-difference. The constructed record therefore binds them to the two-attempt
-clean-return set rather than to `SIM-3-A2`, `SIM-3-A3`, or `SRAM-3-A1`
-individually.
-
-The missing fields extend beyond cost. Exact translated-input hashes, tool and
-model versions, host or container identity, seeds, job identifiers and
-timestamps, parser status, expected-artifact checks, raw artifact identifiers
-and hashes, frame identifiers, checkpoint identity, and the reset action are
-all unreported. Wall-clock, queue, license, storage, and other resource costs
-are also unreported. These absences make the constructed record incomplete
-under @tbl-environment-contract.
+The grouped summaries are deliberately insufficient for interpretation. Their
+values are absent, they are not assigned to one clean attempt, and the
+underlying matched frame sequences are missing. Exact
+translated-input hashes, versions, host identity, seeds, job timestamps,
+parser status, artifact hashes, frame identifiers, reset action, and resource
+costs are also unreported. These absences make the constructed record
+incomplete under @tbl-environment-contract even though it still demonstrates
+attempt identity, stale-state recovery, and budget consumption.
 
 The trace supplies three SRAM calls, four cycle-level attempts, one stale-state
 setup failure, two later clean 3\ MB attempts, and total call-budget
@@ -972,10 +971,9 @@ consumption. It does not supply the complete execution record defined in
 fields at submission and completion rather than ask an architect to reconstruct
 them later.
 
-The record includes but cannot recompute the illustrative paired
-block-resampling interval. It does not label the 4\ MB candidate invalid, call
-the 3\ MB result unresolved, or recommend an architecture action. Those
-statements require measurement qualification and comparison.
+The record does not label the 4\ MB candidate invalid, call the 3\ MB result
+unresolved, or recommend an architecture action. Those statements require
+measurement qualification and comparison.
 
 ## Open Research Questions
 
