@@ -3,13 +3,19 @@
 ## Status
 
 This document records the next content milestone for *Architecture 2.0*. The
-working baseline is commit `e9bb837e`. The manuscript remains unchanged while
-the read-only audits run. Proposed structural or substantive changes return to
-the author for review before they enter a chapter.
+current clean checkpoint is commit `285a3f70`, which closes the eleven-chapter
+semantic citation audit and its source corrections. The approved chapter and
+section architecture is the working contract. The next milestone should
+improve the current manuscript rather than rebuild it from a clean slate.
+Proposed structural or substantive changes return to the author for review
+before they enter a chapter.
 
 The milestone focuses on content, technical grounding, narrative flow,
 research questions, and explanatory visuals. It does not begin a page-budget,
 layout, slide-deck, or production-polish pass.
+
+The next execution goal has not started. This plan records its scope and order
+so the author can review them first.
 
 ## North Star
 
@@ -469,7 +475,7 @@ unresolved.
 | 1. Moonshot | Establish the ambitious capability and expand the Lighthouse request into a full-stack architecture problem | Opening pace, prompt versus specification, foundation-model figure, terminology, broad research agenda |
 | 2. Why assistance | Explain the compounding pressures and where assistance might help | Historical build-up, technology scaling, evaluation and verification scarcity, qualitative capacity mismatch, transition to AI assistance |
 | 3. Life cycle | Explain how to organize AI-assisted design and why each stage exists | Tacit knowledge, progressive introduction of the stages, iteration and stopping, avoiding process bureaucracy |
-| 4. Data, knowledge, and representation | Explain how architecture data is collected and represented and why it is distinctive | Data as intervention, sample cost, failures and censoring, exact and learned representations, embeddings, current project state |
+| 4. Data, knowledge, and representation | Explain what an AI-assisted architecture process must know, why architectural data is difficult to produce, and how that data becomes usable knowledge and representations | Architecture-specific sources and interventions, sample cost, failures and censoring, exact and learned representations, embeddings, current project state |
 | 5. Methods | Teach when and how to use prediction, generation, optimization, conventional methods, or combinations | Concrete methods, roles versus families, candidate-to-decision capacity model, bottleneck-driven decision guide, feedback cost, no fixed ordering |
 | 6. Environments | Define what a tool-connected design environment must provide | Tool versus wrapper versus harness versus environment, state, interfaces, runtime, failures, cost, reproducibility |
 | 7. Feedback | Explain how tool returns become qualified feedback and how checks change the work | Formal and empirical scope, uncertainty, proxy failure, independent checks, allocation of check capacity |
@@ -535,7 +541,8 @@ Each chapter receives fresh, independent reviews from:
 
 Chapter-specific secondary lenses should be added where needed:
 
-- data engineering and representation learning for Chapter 4;
+- architecture measurement, data systems, and representation learning for
+  Chapter 4;
 - optimization and experimental design for Chapter 5;
 - systems infrastructure for Chapter 6;
 - formal methods, reliability, and safety for Chapter 7;
@@ -557,6 +564,60 @@ finding must state:
 
 Major findings receive an independent skeptical review. A recommendation does
 not enter the manuscript merely because one reviewer proposed it.
+
+### Chapter 4 Boundary
+
+Chapter 4 should not teach a generic data-engineering curriculum. Its
+organizing question is:
+
+> What makes architectural data difficult, and what must an architect do so
+> that an AI-assisted design process can learn from it and act on it?
+
+The chapter should begin with the properties of architecture work that create
+the data problem:
+
+- measurements are produced by deliberate tool runs and interventions rather
+  than found as abundant independent examples;
+- one sample may consume substantial simulator time, implementation time,
+  licenses, machines, or engineer attention;
+- workloads, tool versions, process assumptions, configurations, and design
+  hierarchies give every observation a specific scope;
+- failed, timed-out, censored, and rejected runs carry architectural
+  information and cannot disappear from the record;
+- related designs and workload derivatives create leakage that random
+  train/test splits do not expose;
+- fidelity varies from analytical estimates and learned surrogates to
+  cycle-level simulation, implementation, formal checks, and silicon; and
+- exact design meaning often lives in structured artifacts and relationships
+  that a learned embedding alone does not preserve.
+
+Data acquisition, cleaning, provenance, splitting, versioning, and
+representation belong only where they answer one of those architecture
+problems. Explain the minimum adjacent-field idea needed for an architecture
+reader, apply it immediately to an architecture artifact or measurement, and
+state the engineering consequence. Do not reproduce a general lesson on ETL
+pipelines, data frames, storage systems, or generic model training.
+
+An architecture student should leave with enough background to reason about
+the problem, not with the impression that this chapter replaces a course in
+data engineering or machine learning. When a standard technique needs fuller
+treatment, use a brief explanation and point to an authoritative source such
+as the relevant MLSysBook.ai chapter. The main text must remain understandable
+without following the link.
+
+The Chapter 4 review should therefore include two complementary readers:
+
+1. an architect who tests whether every data concept is motivated by an
+   architecture decision, tool, cost, or failure mode; and
+2. an ML or data-systems reader who checks that the condensed explanation is
+   technically sound and does not omit a prerequisite needed to understand the
+   architecture consequence.
+
+The chapter fails this boundary if it reads like a generic data-engineering
+chapter with architecture examples substituted for ordinary datasets. It also
+fails if it assumes that architecture readers already understand acquisition
+bias, leakage, censored observations, learned representations, and embedding
+limits.
 
 ## Research-Question Audit
 
@@ -606,7 +667,7 @@ budget...?** Explanation of why the question remains open.
 information...?** Explanation of why the question remains open.
 ```
 
-Aim for two to four themes and roughly five to eight questions per chapter.
+Aim for two or three themes and three to five questions per chapter.
 If a theme supports only one strong question, merge it with another theme or
 remove it rather than manufacture a weak second question.
 
@@ -876,6 +937,167 @@ narrative flow, manuscript-artifact balance, chapter development, and prose
 editing. Overlapping implementations should route to that owner. Duplicate
 instructions should be merged, and stale variants should be retired only after
 confirming that no unique guardrail would be lost.
+
+### Senior-to-Student Review Spiral
+
+Review should progressively narrow its unit of attention. Each layer has a
+different job and should receive only the context needed for that job.
+
+1. **Book-level senior review.** Senior architecture, ML-systems, EDA and
+   verification, systems, and pedagogy readers judge the thesis, chapter
+   sequence, omissions, duplication, and whether the lecture establishes a
+   useful perspective for the field.
+2. **Chapter-level senior review.** Chapter-specific experts judge the
+   chapter's technical substance, boundaries, reader capability, and place in
+   the cumulative argument.
+3. **Chapter-level fresh-reader review.** A graduate student or practitioner
+   reads the complete chapter without seeing prior findings and reports what
+   claim, method, and capability they actually derived.
+4. **Section-level reader review.** A reader receives the section plus the end
+   of the preceding section and beginning of the following section. The review
+   tests orientation, teaching sequence, examples, transitions, and whether
+   the section performs its assigned job.
+5. **Paragraph-window review.** A reader examines contextual windows of two or
+   three paragraphs and identifies missing reasoning steps, topic jumps,
+   undefined terms, unsupported conclusions, and prose that merely announces
+   an outline.
+6. **Continuous student read.** After accepted repairs, a fresh student reads
+   the chapter continuously and marks every point where they become confused,
+   infer the wrong relationship, or must reread to recover the argument.
+
+The spiral moves inward only after the broader layer is accepted. Paragraph
+polish cannot repair a chapter with the wrong job, and a smooth section cannot
+compensate for a missing technical concept.
+
+Each review cycle follows one controlled path:
+
+1. independent readers produce findings without editing manuscript files;
+2. the book-level editor consolidates and adjudicates the findings against the
+   approved chapter and section jobs;
+3. one editor applies the accepted changes to a chapter;
+4. a fresh reader checks the revised result without seeing the diagnosis;
+5. the book-level editor inspects the diff and the chapter seams; and
+6. the coherent milestone is committed before another layer begins.
+
+Parallel agents are appropriate for independent reading, local `dev`
+comparison, literature packets, artifact audits, and skeptical review. They
+should not edit the same chapter concurrently. This division protects the
+book-level editor's context and keeps independent reviewers fresh while
+leaving one accountable editor for terminology, cross-chapter boundaries, and
+narrative continuity.
+
+The spiral is iterative rather than a one-time cascade. A section-level review
+may reveal a chapter-level omission, and a continuous student read may expose
+a book-level promise that was never paid. Such findings move back to the
+appropriate broader layer before local polishing resumes.
+
+## Tonight's Proposed Execution Plan
+
+Tonight's goal should produce a content-lock candidate, not a final laid-out
+book. The work proceeds in the following order.
+
+### Stage 1. Freeze the Review Contract
+
+- Update the compact chapter and section job packets from the approved plan.
+- Record protected material, settled terminology, open author decisions, and
+  explicit non-goals.
+- Give every reviewer the same acceptance criteria without giving them prior
+  diagnoses.
+
+**Checkpoint:** The packets are internally consistent and do not reopen the
+approved eleven-chapter sequence.
+
+### Stage 2. Recover Before Rewriting
+
+- Compare every current chapter with local `Arch2`/`dev` at the idea and
+  explanatory-artifact level.
+- Classify earlier material as retained, intentionally replaced, valuable and
+  missing, redundant, or requiring author judgment.
+- Pay special attention to explanations around figures and tables, historical
+  framing, sample cost and data acquisition, concrete method descriptions,
+  environment components, verification, and the technical depth of Chapters
+  7 through 11.
+
+**Checkpoint:** Produce one compact recovery matrix. Do not restore material
+solely because it existed before.
+
+### Stage 3. Review the Highest-Risk Chapters First
+
+- Run independent chapter-level reviews for Chapters 4, 7, 8, 9, 10, and 11.
+- Use Chapter 4's architecture-first boundary.
+- Resolve Chapter 7's scope among feedback, verification, learning, drift, and
+  supervision.
+- Confirm that Chapter 8 is the detailed XR Lighthouse integration chapter.
+- Test Chapters 9 through 11 for the late-book loss of technical depth.
+- Adjudicate and implement accepted changes with one editor per chapter.
+
+**Checkpoint:** Commit each coherent chapter revision separately, especially
+Chapters 4, 7, and 8.
+
+### Stage 4. Review and Repair the Remaining Chapters
+
+- Apply the same review standard to Chapters 1, 2, 3, 5, and 6.
+- Begin Chapter 5 with the three parked senior-review reports, adjudicating
+  rather than automatically accepting them.
+- Repair rushed openings, duplicated previews, and cross-chapter boundary
+  problems without rebuilding chapters that already land.
+
+**Checkpoint:** Every chapter performs its approved job and preserves valuable
+existing material.
+
+### Stage 5. Run the Reader Spiral
+
+- Run complete-chapter fresh-reader reviews.
+- Run section-level reviews with neighboring boundaries.
+- Repair reasoning and teaching order before sentence rhythm.
+- Run paragraph-window reviews only on sections that remain rough.
+- Finish with continuous student reads of the revised chapters.
+
+**Checkpoint:** Fresh readers recover each chapter's intended claim and reader
+capability without seeing its outline or prior review reports.
+
+### Stage 6. Audit Supporting Structures
+
+- Revise research questions under two or three themes with three to five
+  serious questions per chapter.
+- Audit every figure, table, listing, equation, callout, war story, and
+  Lighthouse use for explanatory value and pacing.
+- Remove gratuitous eye-movement instructions.
+- Identify quantitative figure opportunities, but do not invent data or begin
+  a major visual redesign.
+- Audit design principles and retain only principles earned by the chapter.
+
+**Checkpoint:** Supporting structures advance the argument rather than
+interrupting or decorating it.
+
+### Stage 7. Whole-Book and Prose Pass
+
+- Read chapter openings, conclusions, and boundaries as one sequence.
+- Check that chapters stand alone while building naturally.
+- Check learning objectives, terminology, acronyms, preambles, and repeated
+  phrases.
+- Run an anti-template prose pass only after content and flow are stable.
+- Give Chapters 7 through 11 extra scrutiny rather than spending the strongest
+  attention only on the opening chapters.
+
+**Checkpoint:** The book has one recognizable technical voice without sounding
+mechanically uniform.
+
+### Stage 8. Content-Lock Report
+
+- Produce a chapter-by-chapter matrix for chapter jobs, section jobs,
+  technical grounding, flow, research questions, media, citations,
+  Lighthouse use, war stories, and design principles.
+- Mark each item complete, acceptable but improvable, blocking, or not
+  applicable.
+- Separate remaining quantitative, visual, layout, and production work into a
+  later milestone.
+
+**Checkpoint:** No unresolved chapter-level blocker, accidental deletion,
+unsupported quantitative claim, or unexplained artifact remains.
+
+The PDF build, page-level visual QA, slide deck, and major quantitative-plot
+milestone begin only after this content-lock assessment.
 
 ## Milestones and Approval Gates
 
