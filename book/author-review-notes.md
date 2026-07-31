@@ -3516,6 +3516,51 @@ composition, support, cost, and checks. It should not restate the chapter's
 taxonomy in dense language. Apply the book-wide theme-and-bullets format and
 test each question with a fresh reader.
 
+### Chapter 6 Continuous-Read Notes
+
+**The chapter is too table-heavy in places.** Chapter 6 currently uses tables
+for attempt accounting, failure and recovery classes, returns from EDA stages,
+tool classes, the Lighthouse run specification, and the Lighthouse run report.
+Several are individually defensible, but their cumulative weight makes parts of
+the chapter feel like a sequence of schemas rather than a developing
+engineering argument.
+
+**Section 6.8 is a positive internal benchmark.** “Multi-Tool and
+Multi-Fidelity Environments” gives the reader enough narrative to understand
+why the comparison matters, then uses a table to compare genuinely parallel
+tool classes, and returns to prose to interpret the result. Preserve that
+pattern.
+
+**Required table audit.** For every Chapter 6 table, determine:
+
+1. which comparison or retrieval task requires rows and columns;
+2. what the reader must understand before encountering it;
+3. whether the prose explains the governing distinction before the table;
+4. whether every row is necessary to the main argument;
+5. whether some fields belong in a compact list, example, appendix, or
+   downloadable artifact instead;
+6. what conclusion the prose draws after the table; and
+7. whether two nearby tables are encoding related information that should be
+   taught through one narrative sequence.
+
+Do not convert tables mechanically into paragraphs. Keep a table when readers
+need to compare several items across stable dimensions. Replace or reduce it
+when the material is sequential, causal, illustrative, or better explained
+through one concrete run.
+
+**Likely pressure points.** The large failure-class table, the detailed
+Lighthouse run specification, and the attempt-level run report deserve special
+review because each contains substantial prose inside cells. The short
+EDA-stage table may be teachable in prose or a smaller figure. The multi-tool
+table is more naturally tabular because its rows share a stable comparison
+schema.
+
+**Narrative standard.** A table should arrive only after the reader understands
+the question it answers. The paragraph following it should explain the
+architectural consequence rather than restate the rows. Maintain enough prose
+between tables that the chapter advances as an argument about environments,
+not as a catalog of record formats.
+
 ### Dedicated Chapter-Prose Workflow
 
 **Author direction.** Later chapters should receive the same writing attention
