@@ -3226,6 +3226,71 @@ to preview the whole book.
 causal progression. Preserve its strengths without forcing every chapter into
 the same paragraph template.
 
+**Sections 2.1 and 2.2.** The prose in Section 2.1 is individually strong, but
+the destination of the section is not yet clear to the reader. Sections 2.1 and
+2.2 operate at a macro level, while Section 2.3 begins the detailed diagnosis.
+Make that progression explicit. Section 2.1 should establish how architecture
+has historically absorbed complexity through abstractions, interfaces,
+benchmarks, tools, and shared checks. Section 2.2 should then show why the
+technology conditions that supported earlier progress have changed. Together
+they should create the need for the hardware, software, physical, evaluation,
+and verification pressures that follow.
+
+This does not necessarily require moving the sections. A clearer section title,
+a sharper opening claim, and a closing bridge may be enough. The repair should
+make the two macro sections feel like the premise of the detailed argument
+rather than a separate history essay.
+
+**Wafer-scale and warehouse-scale systems.** These two topics feel rushed
+relative to the size of the systems and the importance of the boundary change
+they represent. Consider whether the current “Hardware Scale, Specialization,
+and Composition” section is carrying two different arguments:
+
+1. complexity grows within a chip and package through microarchitecture,
+   specialization, SoCs, and chiplets; and
+2. the boundary of the computer expands beyond the package through wafer-scale
+   fabrics and warehouse-scale systems.
+
+One candidate structure would let “Scale Creates Large Search Spaces” conclude
+the first argument after SoC and chiplet composition, then introduce a new H2
+for the expansion beyond the package, with wafer-scale and warehouse-scale
+systems as its two H3 subsections. This is preferable to promoting each topic to
+an isolated H2 unless each earns enough material to carry a complete section.
+The revision must remain a synthesis of why these scales change architecture
+work, not become a short survey of two large fields.
+
+**Wafer-scale memory.** Investigate whether distributed SRAM capacity,
+bandwidth, placement, repair, and communication provide a useful concrete
+example of why wafer-scale architecture cannot be understood from peak compute
+alone. Add it only if primary literature supports a durable architectural
+lesson and it connects to the section's argument.
+
+**Dangling short paragraphs.** The two short paragraphs before the Bulldozer
+war story look detached from the surrounding argument. The first observation
+about inexpensive energy proxies likely belongs with the preceding
+multifidelity paragraph. The observation about optimizing the wrong term should
+either become the bridge into the Bulldozer example or join that example's
+setup. Run a book-wide audit for one- and two-sentence paragraphs that are
+visually and logically orphaned. Short paragraphs are valuable when they land a
+deliberate point; they should not result from incomplete paragraph stitching.
+
+**Positive presentation signal.** Preserve the Bulldozer treatment. Its
+claim-gap-lesson progression is concrete, technically legible, and shows why an
+easy-to-count specification may fail to predict workload value.
+
+**Evaluation-capacity plot.** Compare Section 2.5.2 against the local `dev`
+version and earlier history to identify the semiconductor-data plot the author
+remembers. Determine whether it was removed, replaced by the current
+verification-demand or design-cost plots, or still exists but renders poorly.
+Restore it only after confirming its source, unique teaching job, and
+relationship to the surrounding plots.
+
+**Design-cost label rendering.** The 7 nm bar currently renders
+“$249M\ncomposition not stated” as a single malformed label in at least one
+output. Correct the line-break handling and inspect both PDF and HTML. Also
+verify that the bar has sufficient height and label space at final publication
+size.
+
 **Figure defects.** Fix and verify the newline rendering in Figure 2.10. Revise
 Figure 2.13 so the conceptual crossing that creates the “scissors” is visible.
 
