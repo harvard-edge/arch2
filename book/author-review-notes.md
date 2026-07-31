@@ -3758,6 +3758,80 @@ and failure mode should answer at least one architecture question:
 - Could the system be induced to produce or accept an architecturally invalid
   result?
 
+**The research agenda currently drifts outward.** The question about comparing
+total workflow cost across organizations is defensible, but it leads with an
+organizational accounting problem rather than the chapter's central research
+problem. Chapter 10 should first ask how to build and measure an AI agent or
+AI-assisted workflow for architecture. Cross-organization comparability is a
+secondary challenge once the measured objects and metrics are clear.
+
+**Core evaluation dimensions for architecture agents.** The chapter and its
+open questions should teach students and researchers to measure:
+
+- architecture-result quality, including correctness, constraints,
+  implementation feasibility, objectives, and stated nonclaims;
+- decision quality, including candidate selection, escalation, stopping, and
+  whether the chosen next action improved the study;
+- complete efficiency, including model calls, tool calls, simulation and EDA
+  runs, fidelity, tokens, compute, licenses, elapsed time, queueing, failed
+  attempts, and human setup, intervention, repair, and review;
+- sample and tool-call efficiency, especially improvement per expensive
+  architecture evaluation rather than only per model query;
+- reliability across repeated runs, seeds, prompts, failures, and recovery;
+- generalization across designs, workloads, software, tools, process
+  assumptions, and task families;
+- calibration and deferral, including whether the system recognizes unsupported
+  conditions and asks for a stronger check or human decision;
+- contribution, including whether the learned component improves on serious
+  conventional tools and matched complete-workflow baselines; and
+- robustness and safety under corrupted inputs, incomplete checkers, metric
+  gaming, unauthorized actions, backdoors, and operational failures.
+
+Efficiency should not collapse to latency or token count. An architecture agent
+that uses fewer model calls but doubles expensive simulation runs may be less
+efficient. A useful comparison should report the tradeoff between supported
+architecture quality and complete work, ideally at matched budgets or as a
+quality-cost frontier.
+
+**Candidate paper-sized question themes.**
+
+**Measuring useful architecture work.**
+
+- How should an architecture agent be scored when task completion, design
+  quality, verification status, and implementation feasibility disagree?
+- Which intermediate decision metrics predict whether an agent will eventually
+  produce a supported architecture result?
+
+**Efficiency under expensive feedback.**
+
+- How should agents be compared at matched budgets when model queries,
+  simulation, implementation, verification, licenses, and human review have
+  different costs?
+- How does architecture-result quality scale with the number, fidelity, and
+  allocation of tool calls?
+- Which policies minimize total cost per supported architecture decision rather
+  than cost per generated candidate?
+
+**Reliability, generalization, and deferral.**
+
+- Which variations across designs, workloads, software, and toolchains best
+  predict failure on a new architecture task?
+- How should an agent expose uncertainty and defer when its representation,
+  predictor, generator, or checker leaves its supported region?
+- What recovery behavior distinguishes a robust architecture agent from one
+  that succeeds only on clean benchmark runs?
+
+**Attribution and adversarial evaluation.**
+
+- Which ablations or matched component replacements can identify the AI
+  contribution without requiring every combination of a large workflow?
+- Which hidden checks and red-team attacks best expose agents that game metrics,
+  weaken constraints, or exploit incomplete verification?
+
+These are candidate directions, not an approved final question set. Each final
+question should be narrow enough to support a credible experiment and broad
+enough to matter beyond one model or benchmark.
+
 ### Dedicated Chapter-Prose Workflow
 
 **Author direction.** Later chapters should receive the same writing attention
@@ -3788,6 +3862,44 @@ Parallelize chapter diagnosis and source research where outputs do not touch
 the same files. Apply prose changes sequentially or in isolated worktrees so
 that section transitions and chapter consistency remain under central review.
 Subagents supply fresh attention; they do not replace editorial judgment.
+
+### Preventing Quality Loss During Long Runs
+
+**Author observation.** Quality falls in later chapters when one long run keeps
+too much book context active and moves from diagnosis into extensive drafting.
+The drift is visible in abstract titles, dense entries, outward-moving research
+questions, and weaker paragraph transitions.
+
+**Revised unit of work.** Complete one chapter before revising the next. Within
+that chapter, work one section at a time. Parallelism should supply independent
+attention, not simultaneous edits to the same prose.
+
+For each chapter:
+
+1. Freeze the chapter contract and section jobs.
+2. Give separate fresh agents the chapter source and only the relevant
+   north-star, goals, author feedback, and literature packet.
+3. Run independent architecture, adjacent-field, and reader-flow audits.
+4. Have the main editor synthesize one change brief and reject suggestions that
+   violate the chapter contract.
+5. Revise one section at a time with a focused writer.
+6. Give the revised section to a fresh reader who did not see the intended
+   argument.
+7. Accept or revise it only when the reader recovers the intended claim,
+   capability, and connection to the next section.
+8. Stitch the complete chapter, audit titles, objectives, research questions,
+   figures, tables, and citations, then render and inspect it.
+9. Commit the completed chapter milestone before moving to the next chapter.
+
+The root editor should retain only the book north star, chapter contracts,
+cross-chapter boundaries, accepted decisions, and short agent findings.
+Detailed source reading, paragraph maps, and first-pass prose alternatives
+belong in chapter agents so the central context remains stable.
+
+For the current manuscript, prioritize Chapters 5, 7, and 10 as pilots because
+the author identified a clear quality drop there. Do not let those pilots
+become radical rewrites. Their purpose is to prove the workflow on technically
+sound material whose explanation and focus need repair.
 
 ### Verification Required After Editorial Changes
 
