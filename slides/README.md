@@ -11,5 +11,5 @@ make
 
 The deck reuses the book's tracked PDF figures and builds its teaching plots
 directly in LaTeX. Quantitative slides name their source and limits on the
-slide. The main talk contains 42 slides and follows one cumulative argument
+slide. The main talk contains 47 slides and follows one cumulative argument
 rather than summarizing the book chapter by chapter.
