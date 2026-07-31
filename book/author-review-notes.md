@@ -3324,6 +3324,85 @@ argument. Use this example in the book-wide opening-structure decision.
 rectangular style elsewhere. Include it in the full SVG shape and geometry
 audit.
 
+**Dataset quality needs an ML literature foundation.** Chapter 4 should draw
+on established machine-learning research showing how dataset errors,
+contamination, duplication, label noise, selection bias, and distribution
+shift can destabilize an evaluation or create a misleading result. Examples
+should include test-set contamination or leakage and empirical audits that
+found substantial errors in widely used datasets. Locate and read the primary
+papers before selecting examples; do not rely on remembered paper names or
+secondhand summaries.
+
+The chapter should translate those findings into architecture-specific failure
+modes rather than teach a generic data-engineering unit. Candidate translations
+to investigate include:
+
+- train and evaluation sets that contain revisions or derivatives of the same
+  RTL, IP block, workload, or design family;
+- many simulator rows that look like independent samples but share one model,
+  configuration, workload phase, or generation procedure;
+- failed, partial, or invalid tool runs parsed as legitimate measurements;
+- stale workloads, software, process assumptions, libraries, or tool versions;
+- mismatched units, configurations, baselines, or fidelity levels;
+- hidden selection effects caused by recording successful runs more reliably
+  than rejected or failed runs; and
+- benchmark leakage through public design artifacts, documentation, or prior
+  generated solutions.
+
+The durable lesson should be that architecture data inherit the assumptions and
+failure modes of the process that produced them. Dataset size does not repair
+correlated samples, invalid measurements, hidden provenance, or a contaminated
+evaluation.
+
+**Representation needs a precise vocabulary.** Define *representation* before
+using it as a chapter-wide organizing term. Machine-learning literature uses
+the word for several related but distinct objects:
+
+1. the explicit encoding supplied to a method;
+2. features selected or constructed from the source;
+3. a learned internal or latent representation, including an embedding; and
+4. a representation whose geometry or structure supports a downstream task.
+
+Architecture uses explicit representations of its own, including
+specifications, ISAs, graphs, netlists, RTL, traces, parameter vectors,
+analytical models, and tool reports. These are not automatically learned
+representations, and converting them into tokens or vectors does not guarantee
+that the relationships needed for an architecture decision remain visible.
+
+The chapter should distinguish:
+
+- the architecture object or source artifact;
+- its machine-readable encoding;
+- any selected features or learned embedding;
+- the project knowledge or state connected to it; and
+- the downstream task and check for which the representation is adequate.
+
+Use modifiers such as *architectural representation*, *input encoding*,
+*feature representation*, and *learned representation* whenever the unmodified
+word would be ambiguous. Do not force the chapter to use “representation”
+exactly as one ML subfield does; build a precise bridge between architecture and
+ML usage.
+
+**Preserve blind spots and unknowns.** A useful representation should not only
+make selected properties convenient for a model. It should also preserve or
+expose validity conditions, missing information, provenance, and known blind
+spots so that a downstream user can tell what the representation cannot
+support.
+
+**Positive presentation signal.** Preserve the teaching job of Table 4.5,
+“Knowledge Objects Preserve Different Facts.” It helps readers see that
+different objects retain different kinds of information rather than implying
+that one universal representation is sufficient.
+
+**Research packet required before revision.** Assemble a focused Chapter 4
+packet covering dataset documentation, dataset audits and errors, leakage and
+contamination, distribution shift, representation learning, graph and
+multimodal representations, and architecture-specific datasets. For each
+source, record the precise lesson that transfers to architecture, the
+conditions under which it transfers, and the architecture example that would
+make the lesson concrete. The result should remain an architecture chapter,
+not a summary of ML data practice.
+
 ### Chapter 5 Continuous-Read Note
 
 **Section 5.1.** The section moves too abruptly from roles and feedback budgets
