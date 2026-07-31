@@ -548,6 +548,7 @@ resource use attached to that same attempt.
 
 ```{.text #lst-environment-execution lst-cap="**Execution preserves operational state:** Queueing, cancellation, timeout, termination, and resource use remain connected to the admitted attempt."}
 job_id = submission.job_id
+termination_confirmation_deadline = NOT_SET
 record scheduling_state=current_scheduler_state(job_id)
 
 while job is queued or running:
@@ -555,20 +556,30 @@ while job is queued or running:
     if cancellation is authorized:
         request termination
         record cancellation_status=REQUESTED
+        termination_confirmation_deadline = now() + termination_confirmation_limit
         break
     if timeout is reached:
         request termination
         record cancellation_status=TIMEOUT_REQUESTED
+        termination_confirmation_deadline = now() + termination_confirmation_limit
         break
 
-wait until scheduler and process report a terminal state
-if termination cannot be confirmed:
+if termination_confirmation_deadline is set:
+    wait until scheduler and process report a terminal state
+               or termination_confirmation_deadline is reached
+else:
+    wait until scheduler and process report a terminal state
+
+if scheduler or process terminal state is not confirmed:
     return open_attempt_record(
+        attempt_id=attempt.attempt_id,
+        job_id=job_id,
         scheduling_state=UNKNOWN or last_observed_state,
         cancellation_status,
         termination_status=UNCONFIRMED,
         retry_eligibility=NO,
-        uncertain_outputs=QUARANTINED
+        uncertain_outputs=QUARANTINED,
+        resource_record=resources_observed_to_date(job_id)
     )
 record final scheduler state
 record queue_time, run_time, cpu_time, gpu_time,
@@ -1010,15 +1021,31 @@ throughout the chapter in one place (@tbl-environment-contract).
 
 The capacities and dispatch thresholds in this specification are
 author-selected illustrative inputs, not empirical limits or measurements.
+The constructed trace later in this section places the 2\ MiB and 3\ MiB
+candidates within both thresholds and the 4\ MiB candidate outside both, but it
+does not report the SRAM parse statuses or exact dispatch events. Those values
+therefore do not establish that the complete dispatch condition was applied.
+The condition authorizes a cycle-level attempt. It neither validates a
+measurement nor rejects a candidate.
 
 | **Run Field** | **`XR-L2-CAP-A` Run Specification** |
 | --- | --- |
-| **Setup and identity** | Bind `RUN-SPEC-A` and design revision `XR-COMPUTE-A` to candidates `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. The illustrative request schema defines `l2.capacity` as an integer count of mebibytes (MiB), where 1\ MiB is $2^{20}$ bytes, and permits only 2, 3, or 4. Give each candidate a complete `SRAM-A` organization record with every required request-schema field, including capacity, geometry, banking, ports, modeled periphery, and exact SRAM model and technology identity. Only `l2.capacity` may vary. Keep cache policy, NoC, memory system, compiler, runtime, software image `SW-BASE-A`, and workload snapshot `XR-TRACE-A` fixed. |
-| **Interface and tool path** | Serialize the declared `l2.capacity` value and its MiB unit exactly into `SRAM-A` under `PVT-A` and eligible `SIM-A` requests with `CACHE-A` and `PM-A`. A wrapper may change syntax and file layout but not architecture meaning. Retain behavior-affecting wrapper, request-schema, return-schema, parser, tool, and model versions, plus flags, host or container identity, seeds, and reset state. |
-| **Order, budget, and stop** | Run one SRAM evaluation per capacity. The cycle-level `SIM-A` dispatch condition is `(return_complete == true) && (schema_valid == true) && (area_mm2 <= 1.5) && (access_time_ns <= 2.5)`. All four Boolean clauses must be true. The constructed numeric values below place the 2\ MiB and 3\ MiB candidates within both illustrative thresholds and the 4\ MiB candidate outside both thresholds. The trace does not report the SRAM parse statuses or exact dispatch events, so those values do not establish that the complete condition was applied. A missing, partial, or schema-invalid return cannot authorize dispatch. This operational dispatch check is not measurement validation or candidate rejection. Run the shared 2\ MiB baseline and eligible alternatives under matched conditions. Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. Stop an attempt when its queue-wait or run-time deadline expires. Stop the study when authorized work completes, no alternative qualifies for dispatch, the cycle-level budget is exhausted, or the absolute deadline expires. |
-| **Failure, reset, and containment** | Refuse invalid requests before invocation and keep timeouts, cancellations, infrastructure failures, stale state, missing output, and parser failure distinct. Each retry links to its parent, consumes budget, and regenerates a clean work directory from the fixed state. Grant only declared tools, paths, credentials, network access, and resources; quarantine uncertain output after unconfirmed termination. |
+| **Scope and identity** | Bind `RUN-SPEC-A` and design revision `XR-COMPUTE-A` to candidates `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. |
+| **Candidate state** | The illustrative request schema defines `l2.capacity` as an integer count of mebibytes (MiB), where 1\ MiB is $2^{20}$ bytes, and permits only 2, 3, or 4. Give each candidate a complete `SRAM-A` organization record with every required request-schema field, including capacity, geometry, banking, ports, modeled periphery, and exact SRAM model and technology identity. Only `l2.capacity` may vary. Keep cache policy, NoC, memory system, compiler, runtime, software image `SW-BASE-A`, and workload snapshot `XR-TRACE-A` fixed. |
+| **Translation** | Serialize the declared `l2.capacity` value and its MiB unit exactly into `SRAM-A` under `PVT-A` and into eligible `SIM-A` requests with `CACHE-A` and `PM-A`. A wrapper may change syntax and file layout but not architecture meaning. |
+| **Execution identity** | Retain behavior-affecting wrapper, request-schema, return-schema, parser, tool, and model versions, plus flags, host or container identity, seeds, and reset state. |
+| **SRAM order** | Run one SRAM evaluation per capacity before any dependent cycle-level attempt. |
+| **Dispatch** | Dispatch `SIM-A` only when `(return_complete == true) && (schema_valid == true) && (area_mm2 <= 1.5) && (access_time_ns <= 2.5)`. All four Boolean clauses must be true. A missing, partial, or schema-invalid return cannot authorize dispatch. |
+| **Matched cycle-level runs** | Run the shared 2\ MiB baseline and every eligible alternative under matched conditions. |
+| **Attempt budgets** | Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. |
+| **Attempt deadlines** | Stop an attempt when its queue-wait or run-time deadline expires. |
+| **Study stopping** | Stop the study when authorized work completes, no alternative qualifies for dispatch, the cycle-level budget is exhausted, or the absolute deadline expires. |
+| **Failure states** | Refuse invalid requests before invocation. Keep timeouts, cancellations, infrastructure failures, stale state, missing output, and parser failure distinct. |
+| **Recovery** | Link each retry to its parent, charge it against the budget, and regenerate a clean work directory from the fixed state. |
+| **Authority and containment** | Grant only declared tools, paths, credentials, network access, and resources. Quarantine uncertain output after unconfirmed termination. |
 | **Cache reuse** | Reuse a completed return only when request, candidate, conditions, translated inputs, tool and model, wrapper and parser, and retained artifact identities all match. Failed or partial outputs are not completed cache hits. |
-| **Returns and retention** | Retain area, access time, cache-local energy and leakage, matched frame records, frame-time inputs, capacity misses, subsystem power, warnings, translated inputs, commands, raw logs, parsed fields, unclassified output, hashes, cost, and parent-child lineage. |
+| **Returned values** | Retain area, access time, cache-local energy and leakage, matched frame records, frame-time inputs, capacity misses, subsystem power, and warnings. |
+| **Execution record** | Retain translated inputs, commands, raw logs, parsed fields, unclassified output, hashes, cost, and parent-child lineage. |
 | **Decisions left outside** | The environment does not decide whether a field is a valid measurement, two returns form a valid comparison, a reported limit establishes rejection, or a candidate should advance. |
 
 : **A run specification prevents tool mechanics from rewriting the study.**
@@ -1026,12 +1053,12 @@ The request, translation, state, expected outputs, failure behavior, cost, and
 limits are fixed before invocation.
 {#tbl-environment-contract tbl-colwidths="[24,76]"}
 
-The first two rows preserve the complete candidate and fixed state through
-exact translation. The order row admits a simulator attempt only after a
-complete SRAM return satisfies the schema and both numeric thresholds.
-The cache row makes reuse depend on exact identity rather than a similar-looking
-request. The final rows preserve failure behavior, authority, returned
-artifacts, and the decisions that remain outside the environment.
+Exact identity remains connected across candidate state, translation,
+execution, reuse, and return. Separating dispatch, budgets, deadlines, and study
+stopping prevents an eligible candidate from becoming authority for unlimited
+work. Recovery consumes budget and preserves its parent, while containment and
+retention keep failed or uncertain work reviewable without admitting it as a
+completed return.
 
 This specification must still be written before the first tool call. Filled
 afterward, it cannot refuse a bad translation or require a missing output. It
