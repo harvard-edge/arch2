@@ -34,8 +34,8 @@ warning meant, or whether a retry repeated the same work. AI-assisted methods
 make this gap harder to ignore because they can issue requests faster than a
 person can inspect the state around every invocation.
 
-Consider a scoped cache study. It compares a rerun 2\ MB L2 baseline with
-3\ MB and 4\ MB alternatives, and only `l2.capacity` may change. A quick static
+Consider a scoped cache study. It compares a rerun 2\ MiB L2 baseline with
+3\ MiB and 4\ MiB alternatives, and only `l2.capacity` may change. A quick static
 random-access memory (SRAM) evaluation screens each capacity before the
 eligible candidates enter a small budget of cycle-level runs. The tools must
 return physical estimates, matched
@@ -79,7 +79,7 @@ After reading this chapter, you can:
 
 Giving a method permission to run a shell command does not create an
 architecture environment. A shell can launch the declared simulator, but it
-does not prove that the `3MB` configuration reached that simulator, that the
+does not prove that the `3MiB` configuration reached that simulator, that the
 declared workload trace was used, that the cache and power models match the
 study, or that the expected output files exist. A zero exit status reports a
 process outcome. It does not identify what the process evaluated.
@@ -101,6 +101,12 @@ Five terms divide the work:
   defines the state a method may observe, the requests it may issue, the tools
   it may reach, and the returns it may receive.
 
+This chapter uses *adapter* for a stable caller-facing mapping between the
+harness and a scheduler or execution backend. It is not a synonym for a tool
+wrapper or a sixth component category. A wrapper owns tool-specific request
+validation, translation, invocation, and parsing. A scheduler adapter maps
+harness operations such as submit, inspect status, and cancel onto one backend.
+
 One environment may contain wrappers for an SRAM model, a cycle-level
 simulator, a cache model, and a power model. One harness keeps their outputs
 tied to the same candidate and conditions.
@@ -119,6 +125,11 @@ information includes execution status, artifacts, parsed results, warnings,
 cost, and lineage. These jobs remain the same whether a learned method, a
 conventional search, or an architect issues the request.
 
+A broader design workflow uses the environment but does not belong to it. The
+workflow owns the ordering of design work, method decisions, interpretation of
+returned results, and human review. The environment executes authorized
+requests and exposes identifiable returns to that workflow.
+
 A caller must be able to inspect the candidate, fixed state, supported tool
 operations, resources, and prior attempts before submitting work. The
 environment then accepts only declared requests and returns execution status,
@@ -128,7 +139,7 @@ inspectable (@fig-environment-tool-interface).
 
 ![**A tool interface keeps request checking, execution, parsing, and recording
 separate.** The wrapper validates and translates one request, while the harness
-records the attempt and preserves each return status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question, action schema, constraints, and metric definitions enter an environment as a typed request. A wrapper separates invalid requests from tool execution. The tool path can fail, return partial output, or complete; the parser retains raw and structured output, and the harness records every outcome with cost, provenance, and execution status."}
+records the attempt and preserves each return status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question, action schema, constraints, and metric definitions enter an environment as a typed request. The wrapper validates and translates the request before calling the tool. The tool path can fail, return partial output, or complete; the parser retains raw and structured output, and the harness records every outcome with cost, provenance, and execution status."}
 
 The represented question and state enter the interface as a typed request. The
 wrapper either refuses an invalid request or translates it to the declared tool
@@ -178,18 +189,20 @@ behavioral model while retaining an older Liberty or LEF view lets different
 tool stages evaluate different versions of what the study treats as one macro.
 The environment must bind compatible views to one identity or refuse the run.
 
-Translation must be exact or refused. If the study asks for `l2.capacity=3MB`,
+Translation must be exact or refused. If the study asks for `l2.capacity=3MiB`,
 the wrapper may serialize that value into an SRAM configuration file and a
 simulator parameter. It may not silently round the value to the nearest
 supported capacity, change associativity to make the configuration legal, or
 substitute another simulator because it is idle. Each of those choices changes
 the meaning of the request. A syntax-preserving repair may create a new request
-artifact or execution attempt while retaining the candidate identity. A repair
-that changes architecture meaning creates a new candidate and returns to method
-selection.
+artifact or execution attempt while retaining the candidate identity. The
+wrapper refuses a repair that would change architecture meaning and returns the
+validation failure to the candidate-producing caller. That caller, under the
+enclosing lifecycle, may create a new candidate. Method selection reopens only
+if the failure invalidates the chosen approach or its supported action space.
 
 ::: {.callout-lighthouse title="One cache request, several exact translations"}
-The `3MB` candidate becomes one `SRAM-A` input under the process, voltage, and
+The `3MiB` candidate becomes one `SRAM-A` input under the process, voltage, and
 temperature condition `PVT-A` and, if the
 predeclared routing condition permits, one `SIM-A` configuration linked to
 `CACHE-A`, `PM-A`, `XR-TRACE-A`, and `SW-BASE-A`. The wrapper may change file
@@ -250,14 +263,15 @@ Each transformation record names:
 - input identifiers and content hashes where useful;
 - fixed conditions inherited from the study;
 - the output artifact and its hash;
-- whether the transformation may change architecture meaning; and
+- whether the transformation preserved architecture meaning; and
 - the next authorized consumer.
 
-Serialization that changes only syntax keeps the candidate identity. An edit
-that changes architecture meaning creates another candidate. This distinction
-matters when a wrapper repairs a malformed file. Adding a missing quote around
-`3MB` may preserve meaning. Reducing the cache to `2MB` so the parser accepts
-it does not.
+Serialization that changes only syntax keeps the candidate identity. This
+distinction matters when a wrapper repairs a malformed file. Adding a missing
+quote around `3MiB` may preserve meaning. Reducing the cache to `2MiB` so the
+parser accepts it does not. The wrapper refuses the capacity change and returns
+the failure to the candidate-producing caller rather than creating another
+candidate itself.
 
 Content hashes make exact artifacts distinguishable. They do not prove that
 two artifacts are functionally equivalent or represent the same architecture.
@@ -337,8 +351,9 @@ which fields it may change. A cache-sizing wrapper can expose capacity while
 keeping associativity, policy, interconnect, compiler, runtime, and workload
 read-only. The wrapper refuses a request outside that action set. It does not
 silently project the request to the nearest supported design. Exact translation
-preserves the requested architecture meaning; a meaning-changing repair creates
-a new candidate.
+preserves the requested architecture meaning. The wrapper refuses a
+meaning-changing repair and returns the failure to the candidate-producing
+caller.
 
 Standardization should remove accidental interface differences without hiding
 tool meaning. Interfaces can use the same fields for request identity, allowed
@@ -454,6 +469,14 @@ parts. @lst-environment-interface retains one attempt, validates its
 translation, seals the translated artifacts, and then performs setup and
 admission without silently changing the request's meaning. The listing shows
 the common case in which one attempt produces one scheduler job.
+
+`candidate_id` names the architecture candidate across tool paths.
+`configuration_id` names that candidate's declared tool-specific configuration
+record for the requested path, not the translated files. Those files receive
+separate artifact identifiers and hashes after validation. Both identities are
+retained because one candidate may require several tool-specific
+configurations, while several attempts may execute the same candidate and
+configuration.
 
 ```{.text #lst-environment-interface lst-cap="**Admission preserves request identity:** One attempt retains the request before validated translated artifacts are sealed and any job is submitted."}
 attempt, created = create_attempt_once(
@@ -597,9 +620,10 @@ environment cannot observe remain explicitly unreported. Human work may attach
 to a group of attempts when one setup or diagnosis supports several
 invocations.
 
-The decisive distinction is between one unique configuration and the attempts
-used to execute it. A retry increases realized cost but does not create another
-candidate or another independent observation. The recorded setup and cost must
+The decisive distinction is between one identified candidate-configuration
+pair and the attempts used to execute it. A retry of the same pair increases
+realized cost but does not create another candidate, tool-specific
+configuration, or independent observation. The recorded setup and cost must
 travel with any returned value that later becomes data. A later study can then
 compare time, compute, storage, and license use without treating a cycle
 simulation, a physical-design run, and a model call as equivalent samples.
@@ -620,7 +644,7 @@ it hands forward, so they describe execution rather than architecture judgment
 
 | **Execution outcome** | **How it appears** | **What the harness preserves** | **Runtime response** |
 | --- | --- | --- | --- |
-| Invalid request | An illegal value, missing identity, or meaning-changing translation is found before invocation. | Request, validation rule, and refusal reason. | Repair syntax only when meaning is preserved; otherwise create a new candidate. |
+| Invalid request | An illegal value, missing identity, or meaning-changing translation is found before invocation. | Request, validation rule, and refusal reason. | Repair syntax only when meaning is preserved; otherwise refuse the request and return it to the candidate-producing caller. Reopen method selection only if the failure invalidates the chosen approach or its supported action space. |
 | Setup or dependency failure | The top level, clock, library, constraint, checkpoint, or generated input is missing or stale. | Setup check, diagnostics, partial artifacts, and realized cost. | Restore or regenerate the declared state. The candidate remains unevaluated. |
 | Infrastructure failure | A license, host, scheduler, or storage service is unavailable. | Attempt, failure source, partial artifacts, cost, and retry eligibility. | Retry only under the declared policy. The candidate remains unevaluated. |
 | Tool failure | The tool crashes, reports an internal error, or exhausts a local resource. | Tool status, diagnostics, partial artifacts, conditions, cost, and retry history. | Retry, reset, resume a valid checkpoint, or stop. Repetition does not prove physical infeasibility. |
@@ -910,18 +934,20 @@ project environments need additional state. Jobs wait in queues, hold licenses,
 resume checkpoints, and return at different times. A common interface should
 make those differences visible rather than hide them behind one `step()` call.
 
-Chipyard provides a concrete multi-tool example. One configuration can drive
+Chipyard provides a concrete multi-tool example. The simplified view here
+follows the cited framework's documented paths from one configuration through
 Chisel generation and Flexible Intermediate Representation for RTL (FIRRTL)
-compiler passes, followed by branch-specific transformations and tools for RTL
-simulation, very-large-scale integration (VLSI) implementation, and
-FPGA-accelerated simulation [@chipyard]. The common configuration supplies the
-shared lineage; the branches produce different artifacts and examine different
-properties (@fig-chipyard-framework).
+compiler passes to branch-specific tools for RTL simulation, very-large-scale
+integration (VLSI) implementation, and FPGA-accelerated simulation [@chipyard].
+It is not a definitive map of every Chipyard component or version. The common
+configuration supplies the shared lineage; the branches produce different
+artifacts and examine different properties (@fig-chipyard-framework).
 
-![**A common configuration links distinct authorized tool paths.** Chipyard
-retains configuration lineage while branch-specific transformations and tools
-produce artifacts for RTL simulation, VLSI implementation, and FPGA-accelerated
-simulation.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
+![**A common configuration links distinct authorized tool paths.** This
+simplified view of the cited Chipyard framework retains configuration lineage
+while branch-specific transformations and tools produce artifacts for RTL
+simulation, VLSI implementation, and FPGA-accelerated
+simulation.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
 
 The common configuration and generated hardware description provide a shared
 parent, but branch-specific compiler and backend work determines the artifact
@@ -932,9 +958,13 @@ A dependency graph identifies which branches can run concurrently and which
 must wait for an input. Workflow systems such as Nextflow and Snakemake show how
 workflow logic can remain separate from execution on local machines or
 computing clusters [@DiTommasoEtAl2017Nextflow;
-@KosterEtAl2012Snakemake]. The run specification remains in charge. The
-scheduler may plan authorized work, but it may not add a tool, skip a required
-branch, or change fidelity without a new request.
+@KosterEtAl2012Snakemake]. Within the broader design workflow, the run
+specification fixes authorized work, the harness coordinates it through a
+scheduler adapter and backend, and Nextflow- or Snakemake-style workflow logic
+expresses execution dependencies rather than owning design ordering, method
+decisions, interpretation, or human review. The scheduler may plan authorized
+work, but it may not add a tool, skip a required branch, or change fidelity
+without a new request.
 
 Applicable inexpensive prerequisite checks should run before expensive
 dependent work. If a declared syntax, interface, functional, or equivalence
@@ -948,7 +978,7 @@ passing or failing check establishes.
 ## The Lighthouse Environment
 
 For `XR-L2-CAP-A`, the graph stays small. Three independent `SRAM-A` calls
-precede the cycle-level branch. The shared 2\ MB baseline and each eligible
+precede the cycle-level branch. The shared 2\ MiB baseline and each eligible
 alternative use the same `SIM-A`, `CACHE-A`, `PM-A`, workload, software, and
 condition identities. An authorized retry creates a retry edge. It does not
 create another candidate.
@@ -956,11 +986,14 @@ create another candidate.
 The complete run specification can now collect the responsibilities developed
 throughout the chapter in one place (@tbl-environment-contract).
 
+The capacities and dispatch thresholds in this specification are
+author-selected illustrative inputs, not empirical limits or measurements.
+
 | **Run Field** | **`XR-L2-CAP-A` Run Specification** |
 | --- | --- |
-| **Setup and identity** | Bind `RUN-SPEC-A` and design revision `XR-COMPUTE-A` to candidates `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. Give each candidate a complete `SRAM-A` organization record with every required request-schema field, including capacity, geometry, banking, ports, modeled periphery, and exact SRAM model and technology identity. Only `l2.capacity` may vary. Keep cache policy, NoC, memory system, compiler, runtime, software image `SW-BASE-A`, and workload snapshot `XR-TRACE-A` fixed. |
-| **Interface and tool path** | Serialize only the three declared `l2.capacity` values into `SRAM-A` under `PVT-A` and eligible `SIM-A` requests with `CACHE-A` and `PM-A`. A wrapper may change syntax and file layout but not architecture meaning. Retain behavior-affecting wrapper, request-schema, return-schema, parser, tool, and model versions, plus flags, host or container identity, seeds, and reset state. |
-| **Order, budget, and stop** | Run one SRAM evaluation per capacity. Apply the area and access-time predicate only to a complete, schema-valid SRAM return with declared units. A missing, partial, or schema-invalid return cannot authorize cycle-level dispatch. The predicate is an operational dispatch gate, not measurement validation or candidate rejection. Run the shared 2\ MB baseline and eligible alternatives under matched conditions. Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. Stop an attempt when its queue-wait or run-time deadline expires. Stop the study when authorized work completes, no alternative qualifies for dispatch, the cycle-level budget is exhausted, or the absolute deadline expires. |
+| **Setup and identity** | Bind `RUN-SPEC-A` and design revision `XR-COMPUTE-A` to candidates `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. The illustrative request schema defines `l2.capacity` as an integer count of mebibytes (MiB), where 1\ MiB is $2^{20}$ bytes, and permits only 2, 3, or 4. Give each candidate a complete `SRAM-A` organization record with every required request-schema field, including capacity, geometry, banking, ports, modeled periphery, and exact SRAM model and technology identity. Only `l2.capacity` may vary. Keep cache policy, NoC, memory system, compiler, runtime, software image `SW-BASE-A`, and workload snapshot `XR-TRACE-A` fixed. |
+| **Interface and tool path** | Serialize the declared `l2.capacity` value and its MiB unit exactly into `SRAM-A` under `PVT-A` and eligible `SIM-A` requests with `CACHE-A` and `PM-A`. A wrapper may change syntax and file layout but not architecture meaning. Retain behavior-affecting wrapper, request-schema, return-schema, parser, tool, and model versions, plus flags, host or container identity, seeds, and reset state. |
+| **Order, budget, and stop** | Run one SRAM evaluation per capacity. The cycle-level `SIM-A` dispatch condition is `(return_complete == true) && (schema_valid == true) && (area_mm2 <= 1.5) && (access_time_ns <= 2.5)`. All four Boolean clauses must be true. The constructed numeric values below place the 2\ MiB and 3\ MiB candidates within both illustrative thresholds and the 4\ MiB candidate outside both thresholds. The trace does not report the SRAM parse statuses or exact dispatch events, so those values do not establish that the complete condition was applied. A missing, partial, or schema-invalid return cannot authorize dispatch. This operational dispatch check is not measurement validation or candidate rejection. Run the shared 2\ MiB baseline and eligible alternatives under matched conditions. Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. Stop an attempt when its queue-wait or run-time deadline expires. Stop the study when authorized work completes, no alternative qualifies for dispatch, the cycle-level budget is exhausted, or the absolute deadline expires. |
 | **Failure, reset, and containment** | Refuse invalid requests before invocation and keep timeouts, cancellations, infrastructure failures, stale state, missing output, and parser failure distinct. Each retry links to its parent, consumes budget, and regenerates a clean work directory from the fixed state. Grant only declared tools, paths, credentials, network access, and resources; quarantine uncertain output after unconfirmed termination. |
 | **Cache reuse** | Reuse a completed return only when request, candidate, conditions, translated inputs, tool and model, wrapper and parser, and retained artifact identities all match. Failed or partial outputs are not completed cache hits. |
 | **Returns and retention** | Retain area, access time, cache-local energy and leakage, matched frame records, frame-time inputs, capacity misses, subsystem power, warnings, translated inputs, commands, raw logs, parsed fields, unclassified output, hashes, cost, and parent-child lineage. |
@@ -973,10 +1006,10 @@ limits are fixed before invocation.
 
 The first two rows preserve the complete candidate and fixed state through
 exact translation. The order row admits a simulator attempt only after a
-complete SRAM return passes schema and dispatch checks. The cache row makes
-reuse depend on exact identity rather than a similar-looking request. The final
-rows preserve failure behavior, authority, returned artifacts, and the
-decisions that remain outside the environment.
+complete SRAM return satisfies the schema and both numeric thresholds.
+The cache row makes reuse depend on exact identity rather than a similar-looking
+request. The final rows preserve failure behavior, authority, returned
+artifacts, and the decisions that remain outside the environment.
 
 This specification must still be written before the first tool call. Filled
 afterward, it cannot refuse a bad translation or require a missing output. It
@@ -1017,7 +1050,7 @@ measurements, attempt-level attribution, or completeness.
 The trace supports a narrow chronology and budget account. It contains three
 SRAM calls, four cycle-level attempts, one stale-state setup failure, a
 post-reset attempt, a planned repeat, and a separate summary derived from the
-last two attempts. The 4\ MB row records no simulator request, but the missing
+last two attempts. The 4\ MiB row records no simulator request, but the missing
 parse status and dispatch event prevent the trace from showing why.
 
 Exact translated inputs and hashes, behavior-affecting versions, starting and
@@ -1035,16 +1068,14 @@ comparison, or that any candidate should advance.
 
 - **How can an automated method verify that a tool translation preserves the
 architecture change it requested?** Syntax and type checks miss defaults,
-rounding, generated collateral, and unsupported combinations. A benchmark
-spanning simulators and implementation flows could test whether a proposed
-check detects meaning changes without rejecting valid translations.
+rounding, generated collateral, and unsupported combinations. The resulting
+tool input may evaluate the wrong candidate.
 
-- **Which interface rules let automated methods use several architecture tools
-without making their returns look comparable?** The challenge is to share
-request identity, execution status, cost, cancellation, and lineage while
-preserving property-specific assumptions and semantics. A useful system must be
-tested across heterogeneous tools and method roles, not only wrappers for one
-simulator.
+- **How can an automated interface share operational fields across heterogeneous
+architecture tools without treating their semantics as equivalent?** Request
+identity, execution status, cost, cancellation, and lineage can be common. The
+decisive failure is accepting returns as comparable when their properties,
+assumptions, units, stages, or fidelities differ.
 
 **Keeping long-running work valid.**
 

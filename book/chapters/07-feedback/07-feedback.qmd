@@ -99,6 +99,16 @@ stated conditions? Which requirement or check does it satisfy or contradict,
 and what remains uncovered? What architecture conclusion or revision, if any,
 does it support? A yes to any one question never answers those that follow.
 
+Consider a generated RTL block. Its invocation may complete and return RTL,
+logs, and a timing report. The RTL may parse yet fail elaboration or library
+binding, or it may fail a downstream interface or semantic check. The artifact
+is then invalid for its intended tool path. For an artifact that does elaborate,
+a timing report may still leave endpoints unconstrained or use the wrong mode
+or corner, which makes that result invalid for the timing claim. Even a
+qualified timing result supports only the named timing requirement. Power,
+functional correctness, and security remain uncovered, and the timing result
+alone does not select the architecture.
+
 Returned feedback gains meaning only as it passes distinct, claim-specific
 qualifications (@fig-evidence-flow). Each completed step adds something the
 preceding step did not establish. Result qualification begins by asking whether
@@ -206,8 +216,9 @@ Dense, immediate feedback is easier for a method to learn from, but it is often
 a proxy. Feedback that observes a decision-relevant property may be slower,
 more expensive, or less frequent. Fast proxy signals can guide search only
 inside their validated range. Slower or less frequent checks can test
-properties the proxy omits. A feedback budget therefore records latency,
-granularity, execution cost, uncertainty, interpretation time, and review cost.
+properties the proxy omits. Each signal should therefore be qualified by its
+latency, granularity, execution cost, uncertainty, interpretation time, and
+review cost.
 
 ## Qualifying Empirical Measurements
 
@@ -256,15 +267,38 @@ measurement. Missing execution fields require an environment repair.
 Inadequate observations or an invalid comparison require a change to the
 study.
 
-The author-constructed Lighthouse record makes the interpretation problem
-concrete. It shows an execution chronology, including a stale-state setup
-failure, later attempts with returns indicated, and no 4\ MB cycle-level request.
-It also shows what is missing. Frame and cache values, parser and dispatch
-evidence, starting and reset-state identities, artifact lineage, and realized
-costs are unreported. The trace can therefore establish neither the returned
-artifacts' validity nor a project measurement, sound comparison, or candidate
-disposition. A future fully retained run could supply the missing evidence, but
-it would create a new execution record rather than repair this constructed one.
+Only the execution facts needed for feedback qualification appear in the
+compact Lighthouse record below (@tbl-lighthouse-feedback-record). This is an
+author-created teaching artifact, not a tool log or a measured cache study. It
+preserves the constructed chronology while leaving absent evidence visibly
+unreported.
+
+| **Record and chronology** | **Candidate and requested work** | **Execution status and indicated return** | **Missing evidence and dispatch state** |
+| --- | --- | --- | --- |
+| `SRAM-2-A1`, `SRAM-3-A1`, and `SRAM-4-A1`, before the cycle attempts | `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`; one SRAM area and access-time screen per candidate under the declared process, voltage, and temperature conditions. | A return is indicated for each. Illustrative area and access-time pairs are $1.2\,\mathrm{mm}^2$ and $2.1\,\mathrm{ns}$, $1.4\,\mathrm{mm}^2$ and $2.4\,\mathrm{ns}$, and $1.7\,\mathrm{mm}^2$ and $2.8\,\mathrm{ns}$. | Exact terminal status, serialized inputs, raw and parsed artifacts, parser status, energy, leakage, and most realized cost are unreported. Cycle-level simulator requests appear for the 2\ MB and 3\ MB candidates. No 4\ MB simulator request appears, but the exact dispatch event and reason are unreported. |
+| `SIM-2-A1`, cycle attempt 1 of 4 | `L2-2M-A`; one cycle-level baseline simulation with the fixed workload and software. | A baseline frame summary and an illustrative subsystem power value of $2.90\,\mathrm{W}$ are indicated. Exact terminal status is unreported. | Matched frame records, clean-state and artifact identities, parser fields, output lineage, and realized cost are unreported. |
+| `SIM-3-A1`, cycle attempt 2 of 4 | `L2-3M-A`; one cycle-level candidate simulation. | The dispatched attempt reports a stale-constraint-state setup failure and no candidate return. | Diagnostics, partial artifacts, retry parent, reset action, output lineage, and realized cost are unreported. |
+| `SIM-3-A2` and `SIM-3-A3`, cycle attempts 3 and 4 of 4 | `L2-3M-A`; a post-reset cycle-level simulation followed by a planned repeat. | Frame, cache, and power returns are indicated for both attempts. Exact terminal status is unreported. Attempt 4 exhausts the cycle-attempt budget. | The returned values, starting and reset-state identities, raw and parsed artifacts, parser status, repeat lineage, and realized cost are unreported. |
+| `SIM-3-SUMMARY-A`, after attempts 3 and 4 | `L2-3M-A`; derive a grouped frame, cache, and power summary. | A derived summary is indicated, with no new tool dispatch. | Values, per-attempt attribution, input artifact identities, derivation version, and processing cost are unreported. |
+
+: **The constructed Lighthouse record preserves chronology but not measurement
+evidence**: It is an author-created teaching artifact rather than measured
+project data, and every numerical value is illustrative. Missing artifacts and
+fields remain unreported, so the record does not establish a candidate result
+or disposition.
+{#tbl-lighthouse-feedback-record tbl-colwidths="[20,20,25,35]"}
+
+The decisive contrast is between recorded execution status and qualified
+measurement status. `SIM-3-A1` establishes a setup failure, not a negative
+candidate result. The later 3\ MB attempts indicate returns, but the values,
+artifacts, state identities, parser status, and lineage needed to qualify them
+are missing. The 4\ MB SRAM row contains illustrative values and shows no
+simulator request, but it lacks the parser and dispatch evidence needed to
+explain that absence. The record can therefore support its narrow chronology
+and known missingness, but not artifact validity, a project measurement, a
+sound comparison, or a candidate disposition. A future fully retained run
+could supply the missing evidence, but it would create a new execution record
+rather than repair this constructed one.
 
 This distinction prevents two common errors. An infrastructure failure cannot
 become negative training data about a design. A favorable value with unknown
@@ -282,7 +316,9 @@ structure, model error, and decision margin. A formal result is not a narrow
 empirical interval and has no sampling confidence level. It reports a logical
 outcome for a stated property, model, and assumptions. Solver time, proof
 depth, and memory limit its scope or completion, not its statistical
-confidence.
+confidence. Before the chapter resumes comparison, formal returns must pass a
+parallel qualification path over the stated property, model, assumptions, and
+proof scope.
 
 ## Formal Verification and Its Scope
 
@@ -367,12 +403,12 @@ the RTL and assertions inherit the same missing requirement, a clean proof
 still says nothing about the omitted behavior.
 
 Equivalence checking asks whether two artifacts preserve a declared relation.
-Combinational equivalence compares functions without architectural state.
-Sequential equivalence relates state and behavior across time. Retiming,
-latency changes, additional state, or a changed reset mapping can make
-sequential correspondence much harder than synthesis-oriented comparison.
-Neither form establishes that the reference artifact expresses the intended
-architecture [@Kropf1999FormalVerification].
+Combinational equivalence can pair state elements as cut points and compare the
+combinational logic between them. Sequential equivalence is needed when
+transformations such as retiming, latency changes, additional state, or a
+changed reset mapping alter correspondence across state or time. Neither form
+establishes that the reference artifact expresses the intended architecture
+[@Kropf1999FormalVerification].
 
 Equivalence is also too strong when an implementation intentionally adds
 detail or permits fewer behaviors than an abstract specification. A refinement
@@ -422,7 +458,10 @@ Another check is needed when the property demands one.
 :::
 
 Formal verification later became the primary validation method for the
-execution cluster in Intel's Core i7 flow [@KaivolaEtAl2009Corei7Formal].
+execution cluster in Intel's Core i7 flow [@KaivolaEtAl2009Corei7Formal]. With
+that parallel qualification path established, the chapter returns to matched
+empirical comparison, where the claim depends on a declared comparator,
+conditions, and uncertainty rather than formal proof scope.
 
 ## Making Measurements Comparable {#sec-evidence-specific-to-claim-and-scope}
 
@@ -537,6 +576,8 @@ bear on the claim being made.
 
 ## Testing Explanations and Proxies {#sec-proxy-mismatch-metric-gaming-and-calibration}
 
+### Qualifying a Proxy for the Decision
+
 An architecture proxy is useful because it is cheaper or earlier than the
 quantity that ultimately matters. Estimated instructions per cycle (IPC),
 analytical energy, wirelength, congestion, utilization, and cycle counts can
@@ -553,11 +594,12 @@ loopholes.
 
 Observed qualification cases and held-out agreement answer separate questions
 (@fig-trust-calibration). The conceptual schematic uses normalized quantities
-rather than measured data. Its shading is a schematic envelope around matched
-qualification cases, not evidence that every intervening point is covered.
-Finite cases establish only the sampled points or strata in named workload,
-candidate, tool, and condition dimensions. The shading does not qualify
-unsampled holes or dimensions.
+rather than measured data. Three green bands mark distinct strata where the
+proxy and stronger reference were both observed, while the dashed white band
+marks an unsampled gap inside the left-hand range. Finite cases directly
+establish only the sampled points or strata in named workload, candidate, tool,
+and condition dimensions. Neither the curves nor the spaces between observed
+strata qualify unsampled cases or dimensions.
 
 Here, *proxy qualification* is the umbrella term. Calibration refers only to a
 declared numerical or probabilistic relationship between the proxy and a
@@ -565,25 +607,34 @@ reference. Observed qualification coverage records the sampled dimensions,
 strata or cases, and gaps. Held-out error, ranking stability, uncertainty, and
 fitness for the architecture decision remain separate tests.
 
-![**Observed qualification cases do not establish safe interpolation between
-them**: The normalized curves illustrate one case where a proxy tracks a
-stronger reference around sampled cases and may diverge under continued search.
-A real study must record the dimensions, sampled strata or cases, gaps, and
-held-out agreement.](images/F9-trust-calibration){#fig-trust-calibration width="100%"
-fig-alt="Conceptual normalized plot. A proxy and stronger reference track near
-observed qualification cases inside a shaded schematic envelope, then may
-diverge as optimization continues. The shading does not qualify unsampled holes
-or dimensions."}
+![**Discrete qualification cases leave visible gaps**: The conceptual,
+normalized curves show paired proxy and stronger-reference observations in
+three sampled strata, an unsampled gap between them, and possible divergence as
+search continues beyond those strata. A real study must record the dimensions,
+sampled cases or strata, gaps, and held-out agreement; these curves are not
+measured data.](images/F9-trust-calibration){#fig-trust-calibration width="100%"
+fig-alt="Conceptual normalized plot with three separate green qualification
+strata in the left-hand range. Paired proxy and stronger-reference markers
+appear in each stratum, while a dashed white band marks an unsampled gap between
+the first two. The curves may diverge as search continues into an unqualified
+right-hand range; no plotted curve is measured data."}
 
-The shaded area is only a schematic envelope around observed qualification
-cases. At those cases, matched records establish that the proxy and reference
-were both observed; held-out comparisons must still show whether error and
-candidate ordering are adequate for the decision. Movement outside the sampled
-cases or into an unqualified gap requires additional justification or new
-reference checks. A point is not automatically safe for interpolation merely
-because it lies inside the drawn boundary. The widening gap illustrates why the
-available evidence does not support treating a higher proxy score as a stronger
-result without new reference checks.
+The three green bands and paired markers show where both the proxy and stronger
+reference were observed. The dashed band between the first two remains
+unqualified even though both smooth curves pass through it. Held-out
+comparisons must still show whether error and candidate ordering are adequate
+for the decision at the sampled strata. Movement into the internal gap or
+beyond the sampled strata requires additional justification or new reference
+checks. The widening separation on the right illustrates why the available
+evidence does not support treating a higher proxy score as a stronger result
+without those checks.
+
+Representative held-out samples can support more than claims about the exact
+sampled points. When the target population, sampling design, assumptions, and
+uncertainty are declared, they can support a bounded population-level claim.
+That statistical inference does not qualify arbitrary unobserved workload,
+candidate, tool, or condition regions outside the population and sampling
+design.
 
 Numerical calibration and ranking fidelity answer different questions. A
 calibrated scalar mapping or predictive interval relates proxy outputs to
@@ -752,18 +803,22 @@ replayable comparison.
 
 ### Connecting Requirements to Checks
 
-Requirement satisfaction does not mean that all performed checks passed. Every
-material requirement or hard constraint must map to a named artifact and
-conditions, an acceptance criterion, a check path suited to the property,
+Requirement satisfaction does not mean that all performed checks passed. Each
+declared material requirement or hard constraint must map to a named artifact
+and conditions, an acceptance criterion, a check path suited to the property,
 empirical uncertainty or formal status, shared assumptions, and the uncovered
 remainder. A missing or unqualified mapping leaves that requirement unresolved,
-even when every other performed check passes.
+even when every other performed check passes. Passing the mapped checks does
+not establish that the requirement set is complete.
 
-A point estimate below a hard one-sided limit is not necessarily a qualified
-pass. The bound or uncertainty region used for the decision must remain on the
-acceptable side under the declared conditions, or a justified conservative
-analysis must establish that direction. Otherwise, the requirement remains
-unresolved.
+A confidence interval can support a statistical performance requirement when
+the target population, sampling assumptions, and decision margin are declared.
+A non-negotiable timing, power, reliability, or design-rule limit instead
+requires the project's designated conservative analysis or qualified signoff
+method under named modes and corners. A favorable point estimate is not a
+hard-limit pass. The designated analysis must establish the acceptable side of
+the limit, or qualified signoff must report compliance under the declared
+conditions. Otherwise, the requirement remains unresolved.
 
 The unexecuted Lighthouse cache study makes the mappings concrete without
 inventing a candidate result.
@@ -950,12 +1005,13 @@ for tested inputs without settling performance, while a cycle estimate may
 rank candidates without establishing timing closure. The remaining question
 is how far the cheaper observation can carry the stronger claim.
 
-A technical conclusion can be supported only when all material requirements
-are mapped, the supporting artifacts and results are qualified, uncertainty is
-resolved relative to the acceptance margins, and a sufficiently different
-failure path is used where the consequence warrants it. Residual unknowns and
-explicit nonclaims remain part of that conclusion. This technical support does
-not authorize architecture commitment.
+A technical conclusion can be supported only when the identified material
+requirements are mapped, the supporting artifacts and results are qualified,
+uncertainty is resolved relative to the acceptance margins, and a sufficiently
+different failure path is used where the consequence warrants it. Completeness
+of the requirement set remains unresolved, and residual unknowns and explicit
+nonclaims remain part of the conclusion. This technical support does not
+authorize architecture commitment.
 
 ## Feedback That Changes the Work
 
@@ -968,17 +1024,30 @@ comparisons should not become simple pass or fail labels.
 
 An updated model or proxy is a new component version within the design system
 [@SculleyEtAl2015Hidden]. This chapter therefore recommends the following
-acceptance rule. Before the component reenters the design process, the project
-records the update data and the acquisition policy that selected them. It then
-tests failure-relevant cases and previously qualified cases or strata that were
-not used for the update, repeats the decision-relevant error, ranking, or proxy-qualification
-checks, and looks for regressions over the previously supported region. The
-cases chosen by the previous component or search policy are
-policy-conditioned, so the record preserves that selection path and keeps
-held-out acceptance cases outside both selection and updating. The updated
-component remains outside the active process when it fails these checks. When
-it passes, it reenters with revised support and reopening conditions rather
+acceptance rule. Architecture search chooses which candidates receive expensive
+labels, so the labeled outcomes are policy-selected and the missing outcomes
+are not random. Learning only from returned labels can reinforce the regions
+the current search already favors and preserve its blind spots.
+
+Before the component reenters the design process, the project records the
+update data, the acquisition policy, and the retained selection decisions,
+including candidates that did not receive labels. It tests failure-relevant
+cases and previously qualified cases or strata that were not used for the
+update, repeats the decision-relevant error, ranking, or proxy-qualification
+checks, and looks for regressions. Randomized or stratified audit evaluations
+should probe cases outside the policy's choices where practical. Repeated use
+turns acceptance cases into development data, so the project must keep
+acceptance cases untouched or refresh them. The updated component remains
+outside the active process until it passes a shadow evaluation that does not
+steer candidate selection or a sufficiently independent acceptance path. It
+then reenters with revised qualification scope and reopening conditions rather
 than inheriting the previous version's scope.
+
+A reviewer's observation is feedback. Approval is a separate, authorized
+project action. Neither makes an unsupported result valid. Approval may accept
+bounded residual risk, but it cannot supply a missing measurement or check.
+Final architecture commitment remains separate and belongs to
+@sec-what-architect-owns.
 
 Some failed checks can remain open under a bounded waiver accepted by an
 authorized owner. The waiver does not turn the failed result into a pass. It
@@ -1026,6 +1095,12 @@ plan. A waiver preserves a failed check as a scoped exception rather than
 relabeling it.
 No route turns a tool failure or unresolved comparison into a training label
 automatically.
+
+The cumulative study record indexes mechanisms architects already use. These
+include verification plans, requirements traceability, regression and coverage
+databases, signoff reports, waiver records, and change-impact tracking. The
+record links them to the claims and decisions they support; it does not replace
+them with a parallel workflow or another bureaucracy.
 
 When two feedback sources appear to conflict, first align the candidate,
 property, conditions, versions, and aggregation. The signals may concern
@@ -1091,19 +1166,20 @@ independent support the checks actually provide.
 
 **Strengthening verification.**
 
-- **How can AI-authored tests and properties be checked for semantic omissions?**
-Generated verification collateral may be syntactically valid and exercise the
-design while omitting the behavior that matters. New mutation and coverage
-methods are needed to target missing protocol, timing, reset, security, and
-interaction requirements rather than only familiar implementation faults.
+- **How can AI-authored tests and properties be checked for semantic omissions
+  or insufficient strength?** Generated verification collateral may be
+  syntactically valid and nonvacuous while omitting required protocol, timing,
+  reset, security, ordering, exclusivity, progress, or environmental behavior.
+  The check must return to the requirement source rather than treating either
+  the implementation or the generated property as the complete specification.
 
-- **How can a formal campaign detect AI-authored properties that pass but are
-  too weak?** A property may be nonvacuous and still omit a required ordering, exclusivity,
-progress, or environmental condition. The challenge is to identify missing
-strength without treating either the implementation or the generated property
-as the complete specification.
+**Learning and requalifying feedback.**
 
-**Requalifying prior feedback.**
+- **How can an AI-assisted architecture system learn from policy-selected,
+  censored, delayed, and expensive outcomes without amplifying blind spots or
+  inheriting unsupported scope?** Evaluation should vary selection policies and
+  label delay or cost, then use fresh acceptance cases to measure missed
+  failures, qualification coverage, calibration, and total checking cost.
 
 - **How can an AI-assisted design system select the minimum adequate checks to
   rerun after a within-study change?** The system must trace claims and checks

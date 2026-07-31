@@ -49,6 +49,14 @@ part of an architecture problem. None preserves everything. The choice
 determines which relationships remain visible, which designs can be expressed,
 and which mistakes a later method may fail to notice.
 
+Architects often use *representation* to mean a semantic design abstraction or
+level together with its legal objects and transformations. In machine learning,
+the same word often means an encoding or learned feature space fit for a task.
+Their shared test is which semantics and distinctions survive for the intended
+operation and check. RTL, an intermediate representation, a constraint set, a
+graph, and an embedding therefore have different contracts and are not
+interchangeable.
+
 Raw sources become useful data only after the project identifies them, aligns
 their versions and units, records the conditions under which they were
 obtained, and checks that their labels or tool returns mean what the dataset
@@ -141,11 +149,24 @@ rejected candidate preserves a boundary only while its recorded conditions
 still apply. More source volume cannot make one structure authoritative for
 fields it does not own.
 
+Expert judgment is also conditioned data. Reusable judgment records the
+evidence shown to the expert, the criteria applied, the expertise and role
+relevant to the question, the expert's confidence, and any disagreement or
+limiting context. A schedule-driven choice, local convention, or estimate
+remains labeled as such rather than becoming an architecture fact. Whether that
+judgment supports a later claim belongs to @sec-feedback-verification-trust.
+
 The responsible source may also be private, licensed, or access-restricted.
 That boundary does not make a convenient public substitute authoritative. The
 representation should retain the source identity, version, responsible owner,
 access limit, and conditions under which it applies, with a link that an
 authorized reviewer can resolve.
+
+Artifact-level license and permitted-use fields distinguish access from
+permission to use a source for training or retrieval, transform it,
+redistribute it, or publish derivatives. Applicable constraints remain attached
+to derived datasets, retrieval indexes, learned representations, and model
+weights rather than disappearing after transformation.
 
 Field and fleet observations need further acquisition context. Record the
 deployed hardware and software versions, workload population, sampling policy,
@@ -392,6 +413,63 @@ workloads, tools, and conditions can support a direct comparison. A large
 collection of incompatible reports does not become a dense dataset for the
 current study.
 
+The following assumptions are illustrative, not a universal simulator model.
+Assume a 1\ GHz target, a 1\ s measured interval, 0.2\ s of target-time warmup
+per run, a cycle-level simulator rate of 100,000 target cycles per wall-clock
+second, three repetitions, four workloads, and no queue or setup overhead.
+
+```{python}
+#| echo: false
+import csv
+from pathlib import Path
+
+import _python.plots as _ap
+
+# Receipt: data/source-receipts/chapter4-simulation-time-explosion.csv
+_root = Path(_ap.__file__).resolve().parents[2]
+with open(
+    _root / "data" / "source-receipts" / "chapter4-simulation-time-explosion.csv",
+    encoding="utf-8",
+) as fh:
+    _simulation_cost_rows = list(csv.DictReader(fh))
+
+_one_second_row = next(
+    row
+    for row in _simulation_cost_rows
+    if row["target_workload_duration"] == "1 s"
+)
+measurement_cycles = int(_one_second_row["target_cycles_at_1ghz"])
+warmup_cycles = measurement_cycles // 5
+simulator_rate = 100_000
+repetitions = 3
+workloads = 4
+single_measurement_hours = measurement_cycles / simulator_rate / 3_600
+total_target_cycles = (
+    (warmup_cycles + measurement_cycles) * repetitions * workloads
+)
+total_serial_hours = total_target_cycles / simulator_rate / 3_600
+assert _one_second_row["wall_time_at_100kcycle_s"] == "2.8 h"
+```
+
+For one measured interval, the target executes
+`{python} f"{measurement_cycles:,}"` cycles. At the assumed simulator
+rate, those cycles alone require about
+`{python} f"{single_measurement_hours:.1f}"` hours. The full serial cost is
+
+$$
+T_{\text{serial}} =
+\frac{(C_{\text{warmup}} + C_{\text{measure}}) \times R \times W}
+{v_{\text{sim}}}.
+$$
+
+With the illustrative assumptions, the suite executes
+`{python} f"{total_target_cycles / 1e9:.1f}"` billion target cycles and requires
+`{python} f"{total_serial_hours:.0f}"` serial simulator hours. A different target
+clock, simulator, warmup policy, repetition count, or workload set changes the
+result. Target cycles and simulator rate determine time per attempt, while
+warmup, repetitions, and workload coverage multiply the cost of obtaining the
+conditioned results.
+
 BOOM-Explorer makes the acquisition cost concrete. Each high-fidelity
 VLSI-flow evaluation for its dataset of 994 legal microarchitectures took about
 six hours at the low end and more than fourteen hours at the high end
@@ -468,7 +546,9 @@ available candidate set, and the observations available when each run was
 chosen. Observations selected by the method are policy-conditioned evidence.
 They may update the method under that declared policy. Independent evaluation
 should use predeclared design or workload groups that the selector never
-observed, unless the study supplies a valid off-policy identification argument.
+observed. Claims beyond those policy-conditioned observations require
+separately held-out design or workload groups, or a stated correction whose
+assumptions are justified for the acquisition policy.
 
 The acquisition process must retain attempted points, failures, and censored
 returns, and it must reserve design or workload groups that the selector cannot
@@ -557,32 +637,43 @@ beyond a threshold without measuring the value itself. A timing violation, for
 example, may establish that a frequency target was not met without identifying
 the highest frequency the design could sustain.
 
-An execution history keeps those outcomes connected to the data rather than
-discarding them after cleaning. It links each candidate to the prior state,
-proposed change, conditions, tool return, run status, candidate status, and
-design decision (@fig-execution-history). A completed run may be followed by
-adoption, rejection, or an unresolved comparison. An infrastructure failure
-supports none of those candidate outcomes and instead calls for repair or
-rerun. Only an explicit decision to adopt a change creates a new design
-version.
+An execution history gives the dataset schema separate meanings for three
+fields. Attempt status records whether a tool invocation completed, failed,
+timed out, or was retried. Candidate outcome records whether the resulting
+evidence supports advancing the candidate, rejecting it, or leaving the
+comparison unresolved. Project update records whether an authorized decision
+changed the accepted design
+state. Keeping these fields separate prevents dataset cleaning from turning a
+tool failure into design evidence or a completed measurement into a state
+change (@fig-execution-history). The lifecycle mechanics for advancing work and
+changing accepted project state remain in @sec-architecture-20-ontology.
 
-![**A versioned execution history separates run status, candidate outcome,
-and design change.** A completed execution may be followed by adoption,
-rejection, or an unresolved comparison. An infrastructure failure leads to
-repair rather than a candidate verdict, and only explicit adoption creates a new design
-state.](images/F5a-trajectory-record){#fig-execution-history width="85%"
-fig-alt="Project history showing a valid result followed by an explicit
-adoption and new state, a valid result that remains rejected or unresolved, and
-an infrastructure failure that leads to repair while the design state remains
-unchanged."}
+![**Execution history preserves three separate fields:** Attempt
+status records actual tool completion or failure, candidate outcome records
+what the result supports for the current comparison, and project update records
+whether accepted design state changed. Stale inputs can yield a completed
+attempt with no usable candidate outcome and no project
+update.](images/F5a-trajectory-record){#fig-execution-history width="85%"
+fig-alt="Versioned execution history with separate attempt status, candidate
+outcome, and project update fields. One completed attempt advances a candidate
+and creates a new project version. A second completed attempt leaves the
+candidate rejected or unresolved and makes no project update. A third attempt
+completes on stale inputs, which yields no usable candidate outcome for the
+current comparison and leaves project state unchanged."}
 
-The branches in @fig-execution-history are general history categories, not live
-outcomes for the prospective Lighthouse cache study. An attempt that used stale
-state would be an infrastructure failure. A valid 4\ MB result beyond a declared
-physical limit could reject that candidate, while a completed 3\ MB comparison
-could remain unresolved. The adoption branch lies outside this study, which may
-recommend at most one candidate for later RTL evaluation but cannot create a
-new design version. A prior result becomes a comparable sample only when its
+The branches in @fig-execution-history illustrate schema values, not live
+outcomes or lifecycle instructions for the prospective Lighthouse cache study.
+An invocation on stale state may complete successfully, so attempt status
+records that completion rather than reclassifying it as a failure. The stale
+identity yields no usable candidate outcome for the current comparison, and
+project update remains unchanged. If the invocation itself fails, attempt
+status records that failure separately. A valid 4\ MB result beyond a declared
+physical limit could carry a completed attempt status and rejected candidate
+outcome, while a valid 3\ MB comparison could carry a completed attempt status
+and unresolved candidate outcome. Project update remains
+unchanged because this study may recommend at most one candidate for later RTL
+evaluation but cannot create a new design version. A prior result becomes a
+comparable sample only when its
 declared-comparison status and recorded design, candidate, hardware, software,
 workload, simulator, cache, power, SRAM, and PVT identifiers satisfy the
 matching rule in @tbl-represented-problem. Other records can remain visible as
@@ -873,7 +964,12 @@ shifter. The code passes syntax checks, but the represented design omitted the
 power-domain relationship that made the connection illegal. This composite
 example captures the real lesson. Better prose would not fix the problem. The
 design state must carry the domains and the required crossing rule in a form
-the tool path can check.
+the tool path can check. If the omission survives into downstream
+implementation, the team must regenerate affected collateral, repeat
+regressions, reopen timing closure, and rerun physical verification. If the
+illegal crossing escapes into silicon, recovery may require a respin rather
+than a cheap rollback. The missing relationship therefore changes both the
+correctness risk and the cost of discovering the error.
 :::
 
 Hardware is concurrent and relational. A netlist is a graph, a memory hierarchy
@@ -1075,41 +1171,42 @@ The chapter's distinctions now come together in one problem description.
 
 | **Part of the Problem** | **Representation for the Lighthouse Cache Study** |
 | --- | --- |
-| Study identity and question | Illustrative study `XR-L2-CAP-A`, comparison definition revision `CONTRACT-A`, and current design revision `XR-COMPUTE-A`. The decision is which, if either, of the 3\ MB and 4\ MB candidates should advance to RTL evaluation against the rerun 2\ MB baseline. These identifiers instantiate the declared study in @sec-architecture-20-ontology. |
-| Current hardware | Baseline artifact `L2-2M-A` is the checked-in 2\ MB design generated from revision `XR-COMPUTE-A`. The hardware owner is responsible for the configuration, generator revision, generated cache instance, and linked implementation collateral. |
-| Verification dependencies | Each candidate retains the versioned reference behavior, testbench or properties, coverage intent, interface and reset assumptions, and required checks named by the declared study. The representation records these dependencies without claiming that they are adequate. |
-| Fixed hardware and software state | Cache policy `CACHE-POLICY-A`, NoC `NOC-A`, memory-system configuration `MEMSYS-A`, 2\ GHz microarchitecture, compiler `COMPILER-A`, runtime `RUNTIME-A`, and RISC-V software image `SW-BASE-A`. Their responsible hardware or software owner controls each identifier. |
-| Workload state | Workload snapshot `XR-TRACE-A`, including stable frame identifiers and boundaries, collection policy, and workload owner. |
-| Candidate set and mapping | The field `l2.capacity` admits exactly `2MB`, `3MB`, and `4MB`, which lower to candidate artifacts `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. The 2\ MB artifact is the rerun baseline. |
+| Study identity and question | Illustrative study `XR-L2-CAP-A`, its scoped comparison definition, and declared design revision identity `XR-COMPUTE-A`. The decision is which, if either, of the 3\ MB and 4\ MB settings should advance to RTL evaluation against a rerun 2\ MB baseline. These identifiers instantiate the declared study in @sec-architecture-20-ontology. |
+| Specified hardware state | The plan names `L2-2M-A` as the specified 2\ MB baseline and `XR-COMPUTE-A` as the intended design revision. A future execution would have to retain the baseline configuration, generator revision, generated cache instance, linked implementation collateral, and responsible hardware owner. None of those artifacts is retained for this cache study. |
+| Verification dependencies | The plan requires each proposed cache configuration to identify versioned reference behavior, a testbench or properties, coverage intent, interface and reset assumptions, and the required checks. A future execution would have to retain those dependencies and assess their adequacy. |
+| Fixed hardware and software state | The plan names cache policy `CACHE-POLICY-A`, NoC `NOC-A`, memory-system configuration `MEMSYS-A`, a 2\ GHz microarchitecture, compiler `COMPILER-A`, runtime `RUNTIME-A`, and RISC-V software image `SW-BASE-A` as fixed specification identities. A future execution would have to bind each identity to a retained version and responsible owner. |
+| Workload specification | The plan names `XR-TRACE-A` as the workload specification identity. A future execution would have to retain the actual workload snapshot, stable frame identifiers and boundaries, collection policy, and workload owner. |
+| Candidate set and mapping | The field `l2.capacity` admits exactly `2MB`, `3MB`, and `4MB`, which map in the plan to proposed configurations `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. The 2\ MB setting is the specified rerun baseline. |
 | Permitted change | Only `l2.capacity` may change. Cache policy, associativity, NoC topology, compiler, runtime, memory system, and all other architecture choices remain fixed. |
-| Constraints and required checks | This study checks modeled subsystem dynamic plus leakage power at or below 3\ W, cache macro area at or below 1.5\ mm^2^, and modeled access time at or below 2.5\ ns. Thermal and IR-drop reviews remain independent later requirements. |
+| Constraints and required checks | A future execution must check modeled subsystem dynamic plus leakage power at or below 3\ W, cache macro area at or below 1.5\ mm^2^, and modeled access time at or below 2.5\ ns. Thermal and IR-drop reviews remain independent later requirements. |
 | Relationships to preserve | Capacity may change miss behavior, which may change the frame-time distribution. It also changes macro organization and may change power, area, access time, and later physical integration. Workload, software, cache policy, and memory-system conditions must remain tied to every comparison. |
-| Source identity | Comparison definition `CONTRACT-A`; design `XR-COMPUTE-A`; hardware, software, and workload identifiers above; cycle-level simulator `SIM-A`; cache model `CACHE-A`; power model `PM-A`; SRAM model `SRAM-A`; and process, voltage, and temperature assumptions `PVT-A`. The study record names the owner of each source. |
+| Source identity | The plan names the scoped comparison definition; design `XR-COMPUTE-A`; the hardware, software, and workload identities above; cycle-level simulator `SIM-A`; cache model `CACHE-A`; power model `PM-A`; SRAM model `SRAM-A`; and process, voltage, and temperature assumptions `PVT-A`. These are specification identities. A future execution must bind each one to an exact source, version or hash, and owner. No such source package is retained for this cache study. |
 | History | The initial live history is empty. A prior result enters comparable history only when the declared study permits reuse and its design, candidate, hardware, software, workload, simulator, cache, power, SRAM, and PVT identities match. A nonmatching result may remain linked as advisory context but is not a sample for this study. Because the study in @sec-architecture-20-ontology is prospective, its definition and planned checks constrain the represented problem but create no entry in execution history. |
-| Freshness checks | Recorded versions or hashes, named owners, timestamps where needed, and a successful regeneration or consistency check between represented state and the checked-in artifact. |
-| Blind spots | No detailed floorplan or congestion result, no completed thermal or IR-drop review, incomplete workload coverage beyond `XR-TRACE-A`, and any hardware effect not modeled by the declared tools. |
+| Freshness checks | A future execution must record versions or hashes, named owners, timestamps where needed, and a successful regeneration or consistency check between represented state and retained artifacts. |
+| Blind spots | No retained floorplan, congestion result, workload snapshot, thermal or IR-drop review, or evidence that the specified `XR-TRACE-A` coverage reaches every deployed condition. A future run may also miss hardware effects outside the declared tools. |
 | Known unknowns | Whether either larger cache improves 99th-percentile frame time enough to advance, and whether later physical review will uncover an effect absent from the current representation. |
-| Study boundary | Four cycle-level executions including infrastructure reruns, one SRAM evaluation per capacity, and a decision to recommend at most one candidate for later RTL study. No implementation or product commitment is authorized. |
+| Planned study boundary | Four cycle-level executions including infrastructure reruns, one SRAM evaluation per capacity, and a decision to recommend at most one candidate for later RTL study. No implementation or product commitment is authorized. |
 | Exclusions and useful scope | Cache-policy, prefetching, coherence, NoC, compiler, software-scheduling, floorplanning, thermal-signoff, IR-drop-signoff, security, reliability, and product-cost changes are excluded. The representation supports only the declared cache-capacity comparison, not a complete model of the XR subsystem or product. |
 
 : **The represented problem makes the declared study inspectable.** It connects
-the current design, workload, legal changes, verification dependencies,
+the declared design and workload identities, legal changes, verification dependencies,
 history, freshness, and limits without selecting a method or claiming a
 result.
 {#tbl-represented-problem tbl-colwidths="[24,66]"}
 
-Identity and current state anchor the legal change and the relationships it
+The declared identities and fixed state anchor the legal change and the relationships it
 must preserve; provenance, freshness, limits, and useful scope bound its later
 use. The decisive link connects candidate
-mapping to constraints. `l2.capacity` changes one generated cache artifact
+mapping to constraints. `l2.capacity` selects one proposed cache configuration
 while the workload, software, cache policy, and memory system remain tied to
 every comparison. The blind-spot, boundary, and exclusion rows explain why this
 representation cannot support implementation or product commitment.
 
-The fields may live in several project systems. What matters is that every
-artifact refers to the same study, design version, workload version, and
-candidate. A directory full of individually valid files is not a represented
-problem if no one can tell which files describe the same comparison.
+In a future execution, the fields may live in several project systems. What
+matters is that every retained artifact refers to the same study, design
+version, workload version, and candidate. A directory full of individually
+valid files is not a represented problem if no one can tell which files
+describe the same comparison.
 
 ### Inputs to Method Choice
 

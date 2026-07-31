@@ -2,13 +2,15 @@
 
 Active hand-authored figures:
 
-- `F8-evidence-flow`: the sequence from tool return through measurement,
-  comparison, scoped interpretation, and a recorded next step, with early
-  repair paths for incomplete measurements and invalid comparisons.
+- `F8-evidence-flow`: the sequence from tool return through typed result
+  qualification, a comparison or property check, scoped interpretation, and a
+  recorded next step, with early repair paths for incomplete returns and
+  invalid checks.
 - `F7-claim-frame`: candidate, comparator, measured difference, conditions,
   uncertainty, and check limits.
-- `F9-trust-calibration`: a conceptual normalized schematic of a proxy inside
-  and outside its observed support region, while keeping support coverage
+- `F9-trust-calibration`: a conceptual normalized schematic with discrete
+  observed qualification strata, a visible unsampled gap, and possible proxy
+  divergence beyond the sampled strata, while keeping qualification coverage
   separate from held-out agreement.
 - `ch7_independent_checks`: shared failure assumptions versus a
   claim-specific checking path.

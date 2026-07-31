@@ -4,8 +4,8 @@ Active hand-authored figures:
 
 - `F6-environment-tool-interface`: request checking, invocation, parsing, and
   run recording.
-- `F6b-chipyard-framework`: one configuration feeding several authorized tool
-  paths.
+- `F6b-chipyard-framework`: framework fan-out from one configuration to several
+  tool paths; it does not depict a complete environment.
 - `F5-artifact-lineage`: parent-child identity across software, hardware, and
   evaluated artifacts.
 
