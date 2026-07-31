@@ -1,9 +1,10 @@
 # Architecture 2.0 Author Review Notes
 
-**Review date:** July 29, 2026
-**Current scope:** Front matter, preface, and Chapters 1 through 6
-**Editorial status:** Feedback collection. Except for the title-page build date,
-none of the observations below have been applied to the manuscript.
+**Review dates:** July 29–31, 2026
+**Current scope:** Front matter, preface, and Chapters 1 through 11
+**Editorial status:** Master feedback record. Some focused corrections have
+already been made on the working branch, but observations in this document are
+not automatically approved manuscript changes.
 
 This document preserves feedback from the author's first continuous skim of the
 revised book. It separates observations from proposed editorial directions so
@@ -2964,3 +2965,317 @@ delegated in the earlier chapters:
 
 Chapter 11 should synthesize these responsibilities rather than introduce a
 new framework at the end of the book.
+
+## July 30–31 Continuous-Read Feedback
+
+This section records feedback from the continuous review of the rebuilt PDF and
+HTML edition. It supplements the chapter notes above. Repeated observations are
+kept here when the later reading sharpened the general lesson or identified a
+specific rendered defect.
+
+### Editorial Judgment, Not Mechanical Agreement
+
+**Author direction.** The editor should continue to push back when a suggested
+change would weaken the book, repeat material, overfit one local example, or
+make the lecture age quickly. Author comments are observations and seeds for
+reasoning, not instructions to accept without review.
+
+**Editorial implication.** For every material proposal:
+
+1. restate the reader problem that prompted it;
+2. test it against the chapter's unique job and the book-wide argument;
+3. compare it with the smallest repair that would solve the problem;
+4. identify any repetition, scope expansion, or durability risk; and
+5. record whether the proposal is accepted, modified, deferred, or rejected,
+   with a brief reason.
+
+### Chapter Openings and the Unnumbered Preamble
+
+**Author observation.** The prose after the guiding question functions like a
+spoken introduction to the chapter. Some openings, especially Chapter 1, feel
+rushed. Chapter 2 is a useful positive example because it takes several
+paragraphs to establish the problem, connect the pressures, and create the need
+for the first numbered section.
+
+**Author observation.** Chapter 4 makes the structural question especially
+visible. Its unnumbered opening provides a useful introduction, while Section
+4.1 begins directly with the technical material. This raises three possible
+forms:
+
+1. keep the introduction unnumbered after the guiding question;
+2. merge it into Section x.1; or
+3. make it an explicit numbered overview section.
+
+**Open decision.** Do not change this book-wide structure piecemeal. Compare
+the three forms across all chapters first.
+
+**Current editorial recommendation.** Keep the opening unnumbered. It is the
+chapter's abstract-like spoken introduction, while Section x.1 begins the
+argument. Making every opening an “Overview” section would add mechanical
+headings and renumber the chapter without adding intellectual structure.
+Merging it into Section x.1 would often blur the distinction between orienting
+the reader and developing the first technical claim. The opening should be
+long enough to perform its job, but three or four paragraphs are a useful
+diagnostic rather than a quota.
+
+Each chapter opening should:
+
+1. orient a reader who enters the chapter directly;
+2. state the practical or intellectual pressure;
+3. explain the chapter's governing distinction;
+4. establish why the first numbered section is the necessary next move; and
+5. avoid revealing the chapter's entire taxonomy or worked result.
+
+The opening should not depend strongly on the previous chapter. The book should
+build naturally, but every chapter needs enough local context to stand on its
+own.
+
+### Section Hierarchy and Singleton Subsections
+
+**Author observation.** An H2 section that contains only one H3 subsection
+often looks structurally artificial. Section 3.8.1, “A Record Another Architect
+Can Review,” is one example.
+
+**Likely direction.** Audit the full heading tree. When an H2 contains only one
+H3:
+
+- promote the H3 to H2 if it carries an independent teaching job;
+- fold the H3 into its parent when it is merely the parent's continuation; or
+- retain it only when the heading provides genuine navigation, is referenced
+  elsewhere, or preserves a parallel structure that readers use.
+
+This should be a structural judgment, not a blanket linter rule. A singleton
+subsection is a warning signal, not automatically an error.
+
+### Cross-Chapter Development Without Dependency
+
+**Author thought.** Chapter 3 may need to say that later chapters develop
+different parts of the life cycle. The chapter should still deliver the full
+high-level picture so a reader who stops there understands the approach.
+
+**Likely direction.** Add one restrained statement in the Chapter 3 opening or
+conclusion that the life cycle is the organizing structure that later chapters
+develop. Avoid attaching a chapter number to every stage or inserting uneven
+phrases such as “Chapter 4 explains this” throughout the body. If explicit
+navigation is useful, place one balanced map in a single location.
+
+### New Artifacts Must Respect Existing Architecture Practice
+
+**Author observation.** Terms such as *study record* and *design-loop card* can
+make experienced architects skeptical. They may sound like new administrative
+objects even though existing teams already keep related information in issue
+trackers, experiment dashboards, design documents, version-control systems,
+review packets, and tool databases.
+
+**Book-wide lesson.** Whenever the lecture introduces a named artifact,
+framework, role, or record:
+
+1. acknowledge the existing practice it builds on;
+2. explain the gap that existing practice does not reliably close;
+3. state whether the proposed object is a new artifact, a common view over
+   existing artifacts, or only a teaching abstraction;
+4. avoid implying that every organization needs another form or database; and
+5. give a concrete example of how it could map onto tools architects already
+   use.
+
+For Chapter 3, the likely framing is that the card is a compact index or review
+view over existing project artifacts. It should not become the life cycle
+itself or prescribe a universal project-management format.
+
+### Research-Question Structure
+
+**Author observation.** The current open-research-question sections make the
+theme labels and the questions visually difficult to distinguish. The
+questions can also become long and convoluted.
+
+**Author direction.** A reader should be able to identify a question quickly,
+understand why it matters, and see a credible path toward a top-tier systems,
+architecture, EDA, or ML paper. Chapter 1 should open broad field questions.
+The middle chapters should become more technical and precise. Chapter 11
+should widen again to the implications for the field.
+
+**Likely presentation.**
+
+- Keep each theme as a short bold lead followed by one framing sentence.
+- Present the questions as bullets beneath the theme.
+- Begin each bullet with the question in bold.
+- Keep the explanation in regular text. It should name the technical tension,
+  possible experimental handle, or condition that makes the problem
+  nontrivial.
+- Use more than one question only when the theme genuinely contains distinct,
+  paper-sized problems.
+
+Bullets provide the hierarchy, so italics are probably unnecessary. The
+formatting can be refined later; the intellectual quality and readability of
+the questions come first.
+
+**Open naming question.** “Open Questions” may be cleaner than “Open Research
+Questions.” Decide once for the whole book after checking whether the shorter
+heading still signals the intended research level.
+
+### Figures and Tables Must Carry an Argument
+
+**Author direction.** A figure or table should never be dropped into the
+chapter and left for the reader to decode. The surrounding prose should explain
+the comparison, relationship, or trend that matters and state what the reader
+should take away. Avoid formulaic instructions such as “read the table from
+left to right” unless the reading order itself is genuinely important.
+
+**Book-wide audit.** For every figure and table, check:
+
+1. why it appears at that point in the argument;
+2. what visual relationship the reader should notice;
+3. whether the prose interprets that relationship without narrating every
+   decorative detail;
+4. whether the caption states the main claim rather than merely naming the
+   contents;
+5. whether the visual duplicates nearby prose or another visual; and
+6. whether its visual weight is appropriate for the section.
+
+### Figure Geometry and Visual Consistency
+
+**Confirmed defects and author observations.**
+
+- Connectors must not run through boxes, labels, or other connectors.
+- Arrowheads should meet box edges cleanly rather than stop short or sit inside
+  a box.
+- A figure should not repeat a large internal title when the caption and
+  surrounding section already supply the title. Figure 1.4's “Reusable learning
+  supports a larger architecture design system” is one example.
+- Some generated figures use strongly rounded boxes while the established
+  diagrams use clean rectangles. Figure 4.2 exposes the inconsistency.
+- All generated SVGs need a complete audit, not isolated repairs to the figures
+  noticed during skimming.
+
+**Current editorial recommendation.** Use clean rectangular architectural
+blocks as the default. A small, consistent corner radius may distinguish a
+secondary callout or state, but large rounded “application card” shapes should
+not become a competing visual language. Preserve semantic group boundaries and
+accessibility metadata even when visible titles are removed.
+
+### Figure 2.10 Newline Defect
+
+**Confirmed defect.** A literal `/n` or escaped newline appears in the rendered
+Chapter 2 figure label. Check both source strings and the rendered PDF and HTML
+output after correction.
+
+### Figure 2.13 Scissors
+
+**Author observation.** The figure says that design work can outpace the
+capacity to examine it, but the current lines begin after they have already
+diverged. The prose calls the relationship “the scissors,” while the visual
+does not clearly show the blades crossing.
+
+**Likely direction.** Extend the curves far enough back to show an initial
+regime in which evaluation capacity can absorb the arriving work, the
+crossover, and the widening post-crossover gap. Do this only as a conceptual
+model, not as a claim that an uncited historical crossing occurred at a
+particular date.
+
+### Chapter 1 Continuous-Read Notes
+
+**Chapter purpose.** Chapter 1 must open the space and establish the moonshot.
+It should invite the field into the broad problem rather than begin at the
+technical specificity expected in the middle chapters.
+
+**Learning objectives.** The current objectives do not consistently read as
+capabilities the reader will gain. Rewrite them from the reader's point of view
+and avoid dense inventories of internal vocabulary.
+
+**Section 1.1 micro-flow.** The opening paragraphs move too quickly among the
+fact that the field is starting to apply AI, architecture data scarcity, AI
+cost, and the Lighthouse prompt. The reader must infer the connection among
+these claims. Rebuild the paragraph sequence so each paragraph creates the need
+for the next.
+
+**Wording correction.** Prefer “The field is starting to apply AI to the design
+processes...” over “The field is now applying AI...” The stronger formulation
+overstates the maturity and prevalence of the transition.
+
+**Data paragraph.** The contrast with software data and the implications for
+architecture arrive too abruptly. Explain why architecture data is scarce,
+costly, heterogeneous, or closely held before drawing consequences for learned
+methods.
+
+**AI cost paragraph.** Connect inference cost, simulation cost, and evaluation
+capacity to the moonshot rather than presenting them as an independent warning.
+
+**Prompt qualification.** Replace the abrupt opening “The prompt does not imply
+a single...” with a smoother signpost such as “It is important to note that the
+prompt does not imply a single...” or an equally natural sentence.
+
+**Section 1.6.** The transition into efficiency is rough. Explain why the XR
+example makes efficiency part of the architecture problem and why any
+AI-assisted process must justify its own cost. Do not begin with an awkward
+assumption that the AI process can proceed.
+
+**Book organization.** “The rest of the book is ordered by what each chapter
+equips the design loop with...” arrives abruptly. Either give book organization
+its own short, deliberate passage or remove the sentence.
+
+**Overused terminology.** Continue the book-wide audit of “bounded study.”
+Use *study* unless the boundary itself is the point.
+
+**Chapter opening.** The unnumbered introduction feels rushed compared with
+Chapter 2. Expand it only to perform the opening functions described above, not
+to preview the whole book.
+
+### Chapter 2 Continuous-Read Notes
+
+**Positive model.** The Chapter 2 opening is a useful model for pacing and
+causal progression. Preserve its strengths without forcing every chapter into
+the same paragraph template.
+
+**Figure defects.** Fix and verify the newline rendering in Figure 2.10. Revise
+Figure 2.13 so the conceptual crossing that creates the “scissors” is visible.
+
+**Research-question presentation.** The Chapter 2 page makes the hierarchy
+problem especially clear. Theme labels, questions, and explanations need
+distinct visual roles.
+
+### Chapter 3 Continuous-Read Notes
+
+**Life cycle as book structure.** Chapter 3 should say, at a high level, that
+the life cycle supplies a structure that later chapters develop. It must still
+explain the complete high-level life cycle and why a systematic approach is
+needed.
+
+**Cards and records.** The discussion around Section 3.8.1 needs to anticipate
+the architect's objection that teams already maintain records in established
+tools. Explain what the proposed view adds and whether it indexes rather than
+replaces those artifacts.
+
+**Heading hierarchy.** Decide whether Section 3.8.1 should become its own H2 or
+be folded into Section 3.8. Do not preserve a lone H3 merely because the
+current draft created one.
+
+### Chapter 4 Continuous-Read Notes
+
+**Opening structure.** Chapter 4 demonstrates why the unnumbered preamble may
+be valuable. It introduces the chapter before Section 4.1 enters the technical
+argument. Use this example in the book-wide opening-structure decision.
+
+**Figure style.** Figure 4.2 uses rounded boxes that do not match the clean
+rectangular style elsewhere. Include it in the full SVG shape and geometry
+audit.
+
+### Chapter 5 Continuous-Read Note
+
+**Section 5.1.** The section moves too abruptly from roles and feedback budgets
+to “eight fundamental roles.” Rebuild the conceptual entry so the reader first
+understands why roles are a separate axis from prediction, generation, and
+optimization. This observation should inform the audit of every Section x.1,
+not only Chapter 5.
+
+### Verification Required After Editorial Changes
+
+After the feedback is resolved into approved edits:
+
+1. rebuild both PDF and HTML;
+2. inspect the affected pages and representative neighboring pages;
+3. verify heading hierarchy and cross-references;
+4. inspect all changed SVGs at their final rendered size;
+5. confirm that mathematical notation and escaped characters render correctly;
+6. run the strict manuscript checks; and
+7. commit coherent milestones separately so structural, prose, and visual
+   changes can be reviewed or rolled back independently.
