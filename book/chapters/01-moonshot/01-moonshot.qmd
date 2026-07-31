@@ -10,7 +10,7 @@ format:
 \fi
 ```
 
-# The Architecture 2.0 Moonshot {#sec-moonshot}
+# The Moonshot {#sec-moonshot}
 
 ::: {.epigraph}
 > *"The purpose of computing is insight, not numbers."*
@@ -27,346 +27,306 @@ candidates is useful only when it improves that work.
 :::
 
 ::: {.callout-crux}
-What should computer architecture set as its moonshot for AI-assisted design,
-what would a defensible answer have to establish, and what would show that the
-bet behind the target has failed?
+Computer architecture needs more than faster artifact generation. The
+moonshot is a coordinated AI-assisted design capability that can turn a
+compact system goal into a supported hardware-and-software architecture
+result. What would such a result have to establish, and how would we know
+whether AI improved the work?
 :::
 
-For roughly fifty years, processor generations improved through a familiar progression where device scaling regularly delivered faster, cheaper, and more energy-efficient transistors. Quantitative analysis gave architects a way to compare the resulting design choices. As scaling slowed, microarchitecture, parallelism, and eventually domain specialization provided the remaining gains [@HennessyPatterson2017QuantitativeApproach; @HennessyPatterson2019GoldenAge]. This shift is visible in fifty years of frontier microprocessor data. Clock frequency plateaued in the mid-2000s and never recovered, while transistor counts continued to rise, core counts turned upward, and frontier power resumed climbing toward 500\ W (@fig-microprocessor-trends).
+Computer architecture has repeatedly expanded what engineers could design by
+changing its methods as well as its devices. The durable changes did more than
+automate a local step. They gave engineers a better abstraction, a repeatable
+way to turn it into design artifacts, and checks that exposed bad results.
+That history gives us a standard for judging whether AI changes design practice
+or merely makes existing work arrive faster.
 
-```{python}
-#| label: fig-microprocessor-trends
-#| fig-cap: |
-#|   **Frequency stalls while power keeps climbing:** the end of Dennard scaling closed one road and opened the modern design problem. Data from Karl Rupp's public microprocessor dataset are summarized as the highest value in each four-year interval [@Rupp2022MicroprocessorTrendData]. Clock frequency plateaus in the mid-2000s as Dennard scaling ends, while transistor counts continue to rise, core counts turn upward, and frontier power resumes climbing to 500\ W [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon]. The figure shows frontier values rather than every processor; the era boundaries are approximate [@HennessyPatterson2019GoldenAge].
-#| out-width: "100%"
-#| fig-alt: "Log-scale line chart of frontier microprocessor trends from 1971 to 2021 with five series. Transistors per chip rise from a few thousand to tens of billions by 2021. Single-thread performance rises steeply until the mid-2000s and then slows. Clock frequency plateaus near 3 to 5 GHz after about 2005, while frontier power keeps climbing toward 500 W and logical core counts climb from one to the hundreds. Dashed vertical lines mark the approximate end of Dennard scaling around 2005 and the specialization turn around 2016. A dotted boundary past 2025 marks AI-assisted compositional design as a prospective era rather than a measured trend."
+AI is another possible design-method change, not an assumed necessity or a
+guarantee of better architecture. Its ability to work with less structured
+information, propose and screen alternatives, and coordinate actions across
+tools makes the possibility worth testing. Those abilities do not make the
+resulting artifacts correct, physically realizable, or architecturally useful.
+The question is what complete capability would justify the added complexity
+and cost.
 
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, add_note_box, apply_style
+Calling that capability a moonshot makes the ambition testable. It does not
+mean autonomous prompt-to-chip generation. It means carrying compact system
+intent through alternatives, tools, measurements, and checks until an architect
+can review a supported hardware-and-software result. A deliberate method
+matters because AI can accelerate incomplete specifications, stale project
+state, and weak verification just as readily as it can accelerate useful work.
 
-apply_style()
-
-# Fifty-year microprocessor trend data; per-series frontier points
-# (per-4-year-bucket maxima) transcribed from the public dataset
-# github.com/karlrupp/microprocessor-trend-data (50yrs/*.dat, CC-BY 4.0),
-# which compiles the Horowitz/Labonte/Shacham/Olukotun/Hammond/Batten
-# collection through 2010 plus Rupp's additions through 2021. Values are
-# dataset-transcribed, not recomputed; fractional years as in the dataset;
-# transistors in thousands, single-thread performance in SpecINT x 1000.
-# Era-boundary annotations (~2005 Dennard end, ~2016 specialization turn)
-# are approximate: [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon; # @HennessyPatterson2019GoldenAge]. Accessed 2026-07-14.
-# Receipt: data/source-receipts/chapter1-micro-trend.csv
-series = [
-    {
-        "label": "Transistors\n(thousands)",
-        "color": COLORS["purple"],
-        "points": [(1974.3, 6.1), (1982.3, 136), (1985.9, 274), (1989.5, 1210),
-                   (1992.7, 3110), (1998.9, 15300), (2002.9, 221000),
-                   (2007.0, 583000), (2009.7, 2.31e6), (2014.8, 5.7e6),
-                   (2018.5, 2.11e7), (2021.9, 5.82e7)],
-        "label_y": 5.82e7,
-    },
-    {
-        "label": "Single-thread perf\n(SpecINT x 1000)",
-        "color": COLORS["blue"],
-        "points": [(1988.7, 83.5), (1994.8, 599), (1998.9, 3550),
-                   (2002.4, 9390), (2007.0, 35200), (2010.3, 42000),
-                   (2014.8, 66000), (2017.6, 83600), (2021.3, 105000)],
-        "label_y": 1.05e5,
-    },
-    {
-        "label": "Frequency (MHz)",
-        "color": COLORS["orange"],
-        "points": [(1974.3, 2.02), (1982.3, 6.1), (1985.9, 16.1),
-                   (1988.7, 40.3), (1994.7, 297), (1997.5, 538),
-                   (2002.4, 2250), (2004.9, 3650), (2007.7, 4660),
-                   (2012.7, 3700), (2016.7, 4000), (2020.9, 3200)],
-        "label_y": 3.2e3,
-    },
-    {
-        "label": "Typical power (W)",
-        "color": COLORS["red"],
-        "points": [(1974.3, 0.922), (1982.3, 3.02), (1986.2, 3.02),
-                   (1988.7, 3.96), (1993.0, 35.2), (1998.9, 90.6),
-                   (2001.7, 98.2), (2003.4, 155), (2010.4, 168),
-                   (2013.4, 300), (2018.5, 250), (2021.9, 500)],
-        "label_y": 7.5e2,
-    },
-    {
-        "label": "Logical cores",
-        "color": COLORS["green"],
-        "points": [(1971.9, 1), (1979.6, 1), (1985.9, 1), (1988.7, 1),
-                   (1992.4, 1), (1995.4, 1), (1999.2, 1), (2006.0, 8),
-                   (2010.2, 16), (2013.4, 240), (2016.5, 272), (2021.9, 208)],
-        "label_y": 1.1e2,
-    },
-]
-
-fig, ax = plt.subplots(figsize=(6.4, 3.6))
-fig.subplots_adjust(left=0.075, right=0.775, top=0.90, bottom=0.225)
-
-ax.set_yscale("log")
-ax.set_xlim(1970, 2032.5)
-ax.set_ylim(0.4, 3e9)
-
-for x in (2005, 2016):
-    ax.axvline(x, color=COLORS["muted"], linewidth=0.8,
-               linestyle=(0, (4, 3)), zorder=1)
-
-era_labels = [
-    (1987.5, "Device-scaling era"),
-    (2010.5, "Parallelism era"),
-    (2020.5, "Specialization\nera"),
-]
-for x, text in era_labels:
-    ax.text(x, 6.5e8, text, ha="center", va="center", fontsize=6.2,
-            fontweight="bold", color=COLORS["ink"])
-
-# Prospective era: annotation only, no data points and no band fill, styled
-# like the other era boundaries but dotted to mark a prospective argument.
-ax.axvline(2025, color=COLORS["muted"], linewidth=0.8,
-           linestyle=(0, (1.5, 2.5)), zorder=1)
-ax.text(2028.9, 6.5e8, "AI-assisted\ncompositional\ndesign?", ha="center",
-        va="center", fontsize=5.4, fontweight="bold",
-        color=COLORS["workload_ink"], linespacing=1.2)
-ax.text(2028.9, 2.5e7, "(prospective,\nnot measured\ndata)", ha="center",
-        va="top", fontsize=5.4, color=COLORS["muted"], linespacing=1.25)
-
-ax.text(2004.3, 4e7, "Dennard scaling\nends", ha="right", va="center",
-        fontsize=5.6, color=COLORS["muted"], linespacing=1.15)
-ax.text(2016.4, 1.6e6, "specialization\nturn", ha="left", va="center",
-        fontsize=5.6, color=COLORS["muted"], linespacing=1.15)
-
-for s in series:
-    xs = [p[0] for p in s["points"]]
-    ys = [p[1] for p in s["points"]]
-    ax.plot(xs, ys, color=s["color"], linewidth=1.6, zorder=2)
-    ax.scatter(xs, ys, s=13, color=s["color"], zorder=3)
-    ax.text(1.015, s["label_y"], s["label"], ha="left", va="center",
-            fontsize=6.0, fontweight="bold", color=s["color"],
-            clip_on=False, linespacing=1.15,
-            transform=ax.get_yaxis_transform())
-
-ax.set_xticks([1970, 1980, 1990, 2000, 2010, 2020])
-ax.set_yticks([1, 1e2, 1e4, 1e6, 1e8])
-ax.set_yticklabels([r"$10^0$", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^8$"])
-ax.tick_params(axis="both", labelsize=6.5, length=2.5, width=0.6, pad=2)
-ax.grid(axis="y", color=COLORS["grid"], linewidth=0.6)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-add_note_box(
-    fig,
-    "Four-year frontier maxima from Rupp's 50-year dataset; "
-    "era boundaries are approximate.",
-    xywh=(0.075, 0.03, 0.70, 0.075),
-    fontsize=5.6,
-)
-
-plt.show()
-plt.close(fig)
-```
-
-@fig-microprocessor-trends marks the end of a free lunch [@Sutter2005FreeLunch], exposing the harsh economics of the power/performance wall. Transistor counts kept climbing, but once Dennard scaling ended around 2005, the single-thread gains that had arrived automatically each generation slowed from roughly 50 percent a year to a few percent [@HennessyPatterson2017QuantitativeApproach], and every further gain now had to be bought with power the package could barely dissipate. Dennard scaling ended for a specific physical reason. Supply voltage stopped falling with feature size because threshold voltage had reached the floor set by leakage, and pushing it lower leaves transistors that never fully switch off, so static power climbs sharply. With voltage pinned, each additional transistor clocked at full frequency adds net power, the arithmetic behind both the frequency plateau in @fig-microprocessor-trends and the dark-silicon fraction that followed (the share of the chip that must stay powered off to fit its thermal budget). The field recovered the lost gains first through parallelism and then through specialization. Each turn handed architects more of the machine to manage rather than inheriting it from the next process node. The end of Dennard scaling demands a structural shift, not just faster versions of old tools. The figure's dotted rightmost era marks a prospective next turn: one where AI helps architects co-design across those layers rather than tune each in isolation.
-
-The end of Dennard scaling is not the only pressure, and the second one is economic rather than physical. What remains of Moore's law [@Moore1965Cramming] still delivers more transistors at each node, but the cost to design and verify them keeps climbing, and leading-node design has passed the hundreds-of-millions-of-dollars mark (@sec-design-loop-no-longer-scales, @fig-design-cost-composition). Human design effort, not transistor count, has become the binding constraint on what a team can actually ship.
-
-The turn to specialization multiplied the architectures, software interfaces, and physical constraints the architect must hold in view. New dataflows, memory systems, and programming interfaces appeared in quick succession [@HennessyPatterson2019GoldenAge]. Yet much of the coordination among workloads, compilers, simulators, RTL, and physical design still falls directly to architects.
-
-Specialization also made architecture decisions tightly coupled. A new dataflow can simultaneously change memory traffic, compiler mapping, verification effort, and physical feasibility. As these cross-layer dependencies multiply, the resulting design space becomes a massive, rugged, high-dimensional discrete space[^fn-rugged-search-c01] that human intuition can no longer navigate reliably. In one open benchmarking framework, the DRAM memory controller subproblem alone defines a search space of roughly 19 million configurations, while its accelerator and SoC[^fn-soc-c01] design spaces reach $10^{14}$ to $10^{17}$ [@KrishnanEtAl2023ArchGym].
-
-Worse, navigating this space carries severe economic stakes. In software engineering, an AI hallucination can be hotfixed in seconds. In hardware, an AI hallucination that slips a functional or electrical bug past verification, one that surfaces only in fabricated silicon, can force a mask respin, which at an advanced node costs tens of millions of dollars and months of requalification. The cost of a mistake forces an architect to coordinate far more models, tools, and evidence just to defend a single choice.
-
-[^fn-rugged-search-c01]: **Rugged search space**: A discrete search space riddled with local optima, where stepwise improvement can strand a search far from the best design. Convexity is not even defined on such a space, so greedy and gradient-style methods carry no optimality guarantee, which is why scale defeats both exhaustive sweeps and human intuition.
-
-[^fn-soc-c01]: **SoC (system-on-chip)**: A single chip that integrates CPU cores, accelerators, memory controllers, and I/O blocks on one die, tied together by an on-chip interconnect. The design space is combinatorial because every block competes with the others for the same power, area, and memory bandwidth, so a local choice rarely stays local.
-
-This pressure does not make AI strictly necessary, but it explains the turn toward exploring agentic AI assistance. The golden age established that specialization is now where the major gains live. The prize has a measured size. Hameed and colleagues found that a general-purpose core spends well over 90 percent of its energy on instruction fetch, decode, and data movement rather than on the arithmetic itself. Stripping that overhead alone buys about an order of magnitude; the rest of the gap they measured comes from what specialization does beyond removing overhead, namely wider parallelism, cheaper data staging, and operations fused into single hardware steps. So a fixed-function application-specific integrated circuit (ASIC) running the same kernel is roughly 500 times more energy efficient [@HameedEtAl2010Inefficiency]. That gap is what specialization chases, and every part of it handed back for programmability is a decision the architect must defend. It also bounds the moonshot, since no search can beat the workload's own overhead structure.
-
-Architecture 2.0 asks whether AI can help architects design those specialized systems under tight cross-layer constraints. Answering that question puts the study that produced an artifact alongside the artifact itself as something an architect designs, because the study is what decides whether the artifact's claims can be believed. The human architect remains the final judge. This chapter states the ambition as a moonshot, fixes one design request as the target the rest of the book is measured against, and works out what an answer would have to establish before an architect could defend it. A target stated with no way to lose is a slogan rather than a moonshot, so this one also carries the result that would show the bet failed. Whether the help is real, and why the need for it is now pressing, is the subject of @sec-design-loop-no-longer-scales.
+The Lighthouse request makes this ambition concrete through a low-power mobile
+XR subsystem whose short statement hides a full-stack architecture study.
+Before judging whether AI can help with that study, we need a standard for what
+counts as a consequential change in design method. Earlier shifts in
+architecture provide that standard, and the rest of the chapter uses it to
+separate a generated artifact from a supported result and to state the two
+comparisons that would show whether the moonshot succeeded.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- State an architecture moonshot as a target that names its grand challenge, the change in practice it seeks, and the enabling breakthrough it depends on, and separate the leg that can be asserted from the leg that has to hold in practice.
-- Attach a stop condition to a long-range AI-assisted program, naming the result that would show its enabling breakthrough never arrived.
-- Deconstruct a one-paragraph design request into the architectural decisions each fragment binds and the coverage or intensity check that could disqualify an answer before any simulator hour is spent.
-- Distinguish Architecture 2.0 from 1.0 by explicitness rather than machine competence, and judge an automation step by whether an independent check can expose its bad output.
-- Scope an efficiency claim to the design, the workload, and the resource that is actually scarce.
-- Read a published AI-for-architecture result by the feedback that graded it, and locate the limit it exposes in the available feedback rather than in the model.
+- Explain why AI assistance could represent a change in design method and what
+  evidence would falsify that claim.
+- Expand compact system intent into a cross-stack architecture problem spanning
+  workload, software, hardware, implementation, physical limits, and
+  verification.
+- Distinguish a generated artifact from a supported architecture result and
+  from the design decision an architect may take.
+- Apply separate tests to the quality of the architecture result and the
+  contribution made by AI.
 
 :::
 
-## The AI-Assisted Proposition
+## When New Methods Changed What Engineers Could Design
 
-The field is now applying AI to the design processes that produced those accelerators, targeting tasks from design-space exploration to physical placement [@WangEtAl2026AgentDSE; @MirhoseiniEtAl2021GraphPlacement]. In this book, *AI* serves as an umbrella term. It spans traditional machine learning for fast screening, smaller language models (SLMs) for tactical generation, and large language models (LLMs) for broader reasoning.
-
-However, applying these methods to architecture runs into a data scarcity problem that software engineering never faced, because the high-fidelity hardware data a model would need to learn from stays proprietary and closely held; @sec-data-scarcity-verification-load develops this constraint and its verification consequences.
-
-This assistance is not free. Large language models add computational overhead, latency, and financial cost. Orchestrating an AI-assisted design loop therefore requires weighing inference costs against the simulator time saved, while ensuring every generated claim is physically grounded. @sec-efficiency-claims-need-rejectable-loops treats that budget as one of the resources an efficiency claim is judged against.
-
-Consider entering the following design brief into an AI system.
-
-> **Lighthouse prompt.** Design a low-power, 64-bit RISC-V-based compute subsystem for an
-> XRBench-class real-time mobile XR workload. Realize it as a vector-capable CPU, accelerator, or SoC block under a 3\ W TDP target in a 3\ nm-class LP mobile process, and return a design-space report with evidence and rejected alternatives.
-
-We call this the *Lighthouse prompt*. No public result reviewed for this book establishes an end-to-end answer. Its scale deliberately exposes the architecture work that a smaller generation task would hide, providing a long-term target for judging partial progress. The prompt targets mobile XR specifically because it forces simultaneous extreme constraints on latency, thermal limits, and energy efficiency. Furthermore, it forces compositional design. An accelerator block in an industrial SoC is not a clean-sheet island; it must interface with legacy, black-box IP over rigid standard protocols (like AMBA AXI)[^fn-axi-c01]. A proposed design is dead on arrival if it optimizes PPA but drops an AXI handshake.
-
-[^fn-axi-c01]: **AMBA AXI**: The ARM-defined on-chip bus protocol most SoC blocks use to talk to one another. Its handshake is a strict per-channel valid and ready contract, so a block that violates the protocol cannot be dropped into an existing chip no matter how good its power and performance numbers look in isolation.
-
-This compact prompt is not yet enough to guide real architecture work. The architect must still define the workload and baseline, choose meaningful alternatives, connect them to executable tools, and decide what evidence could support or overturn a recommendation. While AI may assist with each step, it can also propose candidate designs, scripts, and summaries far faster than the architect can evaluate them.
-
-The prompt does not imply a single model, single invocation, or uninterrupted agent. Answering it takes an XRBench trace, a compiler that can target whatever the proposal invents, a simulator, a synthesis run against a low-power library, and a reviewer who can say which of those results the recommendation actually rests on. What this book studies is that whole assembly and the decision it supports, not the fluency of any single generated response.
-
-Two words in those sentences, *AI* and *agent*, carry weight for the rest of the book, so it is worth fixing them now rather than letting each chapter mean something slightly different.
-
-> **AI** names a field and a set of techniques, not a component. Nothing in this book is an "AI verifier" or an "AI method" when a more precise word exists. When the text needs to say which part is doing the work, it names the role: a **generator** proposes candidates, a **surrogate** predicts what a candidate would score, an **optimizer** chooses what to try next, a **critic** looks for reasons to reject, and a **verifier** establishes a property against an independent instrument.
-
-> An **agent** is narrower still. It is a software entity that takes actions in an environment, reads what comes back, and decides its next action from that feedback, in a loop, without a person in between each step. A model that answers one prompt is not an agent. A script that runs a fixed sequence of tools is not an agent either, because nothing in it changes course on what the tools returned. The word is used in this book only where all three hold, and where an argument turns on which role is acting rather than on autonomy, the role name is used instead.
-
-If a method proposes a thousand accelerators but a reviewer cannot test why they differ, explain why most should be rejected, or state what would overturn the apparent winner, the extra proposals have not advanced the design. A fast analytical model could still help by screening out thermal-budget violations before they consume scarce simulator or physical-design time. But the value lies in reducing expensive engineering work, not in the raw proposal count.
-
-We use this same Lighthouse prompt throughout the book. This lets later chapters change the method or the target stack layer without quietly shifting the workload, constraints, or standard of evidence.
-
-## A Short History of AI in Architecture
-
-Pursuing this prompt builds on a deep existing foundation. AI has a long history inside computer architecture, where researchers have applied it to branch predictors, prefetchers, surrogate models, reinforcement-learning[^fn-reinforcement-learning-c01] controllers, design-space exploration, and autotuning. Chen, Penney, and Jiménez survey this progress in *AI for Computer Architecture: Principles, Practice, and Prospects* [@ChenPenneyJimenez2020AIArchitecture]. Predictive design-space exploration and tensor-program autotuning offer early examples of this integration [@IpekEtAl2006PredictiveDSE; @ChenEtAl2018AutoTVM]. In most of this prior work, learning operates either inside an artifact or performs a specific tactical job within a human-defined architecture workflow. @sec-appendix-b-ai-for-architecture-map groups this prior work into families and maps each to the chapters that develop it.
-
-[^fn-reinforcement-learning-c01]: **Reinforcement learning (RL)**: A machine-learning method in which an agent learns to choose actions that maximize a cumulative reward signal from its environment [@SuttonBarto2018ReinforcementLearning]. In an architecture study it is one search method among several, and its proposals need the same evidence and checks as any other candidate generator.
-
-Recent generative systems are now tackling bounded parts of that workflow, such as proposing architecture configurations, invoking tools, and revising searches based on returned results [@WangEtAl2026AgentDSE; @HeEtAl2024ChatEDA]. Domain-adapted language models like ChipNeMo, tuned on internal design data for chip-design assistant tasks, are a concrete instance of this trend [@LiuEtAl2023ChipNeMo]. While these systems can generate text and scripts, those artifacts represent only a fraction of the effort required to connect an architecture question to a final decision. This book's scope includes both learned components embedded within a design and AI systems used to conduct the broader engineering work. In either context, the central question remains: how does the method change the evidence supporting an architectural conclusion?
-
-Architecture work has always moved through repeated cycles of analysis and revision. The architect frames a problem, chooses abstractions, constructs models, selects workloads, explores alternatives, evaluates results, rejects weak candidates, and revises the underlying assumptions. This progression moves from intent and workload characterization to architecture decomposition, construction, evaluation, explanation, and finally decision.
-
-Consider weighing a larger L2 cache for a stated workload mix. An architect might use gem5, a cycle-level architectural simulator, or FireSim, an FPGA-accelerated full-system RTL platform, to sweep cache sizes across representative workloads [@BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim]. The architect compares miss behavior, execution time, and energy estimates before explaining whether locality, contention, or latency hiding drove the outcome. Throughout this process, simulators, compilers, synthesis tools, and design reviews mediate the architect's judgment of whether the evidence justifies a design change.
-
-For generative and tool-using systems, describing each method by the architecture job it performs is clearer than categorizing it by model family. These jobs rarely occur in a fixed order. Generation might expose a missing constraint, while prediction could reveal that the available evidence fails to separate two candidates. Optimization can efficiently allocate scarce simulator or EDA runs, while critique and verification can disqualify an apparent winner. Because repair modifies the artifact, it may invalidate earlier measurements.
-
-To evaluate any of these AI contributions, we must be able to see exactly what the system inspected and changed, how it obtained feedback, which observations counted as evidence, and which checks could reject its result.
-
-This changes what the architect spends time on. In Architecture 1.0 the architect was primarily a *creator*, writing RTL and scripts by hand. In Architecture 2.0 a generator can emit thousands of candidates in a day, so the architect's work shifts toward *interrogation*: designing the rejection checks, demanding that a reported gain be traced to a mechanism, and anticipating that an optimizer will reward hack whatever scores it. An optimizer told to minimize power will share hardware resources that were isolated for a reason, reintroducing microarchitectural contention channels such as shared-cache timing leaks or simultaneous multithreading (SMT) port contention, because nothing in the objective priced them. The degree of automation can vary, and automating a step never transfers responsibility for the final architectural conclusion.
-
-While embedded ML optimizes run-time behavior by living inside the artifact, the chapters ahead focus on AI as an agent of design automation, steering the engineering workflow itself. AI-assisted architecture extends a long history of design automation, but it begins from a broader statement of intent than earlier tools.
-
-Design automation has climbed four stages of ever-broader intent, with AI-assisted architecture as a prospective fifth (@fig-automation-ladder). The dates are approximate, as each stage accepts a broader statement of intent and produces a larger artifact.
-
-1. **1980s--1990s (Logic Synthesis):** Logic synthesis translated Boolean and RTL descriptions into gate-level structure under library, physical, and timing constraints [@DeMicheli1994SynthesisOptimization].
-2. **1990s--2000s (High-Level Synthesis):** High-level synthesis, with behavioral-synthesis roots in 1980s research and commercial adoption reaching into the 2010s, generated RTL candidates from algorithmic descriptions and moved part of the tactical microarchitecture search into tools [@CoussyMorawiec2008HighLevelSynthesis].
-3. **2000s--2010s (Domain-Specific Synthesis):** Building on deductive program synthesis from the 1970s, domain-specific synthesis generated executable code from specifications constrained by domain-specific languages [@GulwaniPolozovSingh2017ProgramSynthesis].
-4. **2010s--2020s (Agile Hardware Generation):** Agile hardware generation used parameterized templates, such as Chisel and its FIRRTL intermediate representation, to create specialized SoC instances from reusable IP [@chipyard].
-5. **Prospective direction (AI-Assisted Architecture):** AI may help connect workload intent, software contracts, architectural alternatives, executable tools, experiments, and physical constraints inside a scoped study. The research question is whether the result can become a finding or decision supported by evidence, even when much of the study remains under human control.
-
-![**Each automation stage accepts broader intent and produces a larger artifact:** AI-assisted architecture is shown as a research direction toward a scoped study that yields a finding or decision supported by evidence, not as an inevitable next stage. Era spans are approximate and follow the literature cited above.](images/F2b-automation-ladder-timeline){#fig-automation-ladder width="85%" fig-alt="Staircase diagram with four historical design-automation stages and a prospective AI-assisted architecture direction. From bottom to top: logic synthesis, high-level synthesis, domain-specific synthesis, agile hardware generation, and AI-assisted architecture. A horizontal arrow marks approximate time order and a vertical arrow marks the widening unit of intent and artifact."}
-
-These earlier stages remain essential. Logic synthesis became dependable only because static timing analysis and equivalence checking could reliably expose bad netlists. AI-assisted architecture draws on these established tools while connecting decisions made across stages. The evidence must identify which tool produced each result and which assumptions limit how that result can be used.
-
-Reviewable evidence from iterative work should include the proposals
-considered, the results obtained, the candidates rejected or revised, and the
-decisions that followed. Different readers use this information for different
-reasons.
-
-- **Researcher:** Describe an AI-for-architecture paper by naming the
-  architecture question, the role AI played, the artifact or finding produced,
-  and the evidence and limits behind it.
-- **Tool builder:** Ask whether a harness keeps the inputs, settings,
-  results, and failures that another method or engineer would need.
-- **Author or reviewer:** Ask what would reject the claim, why the measured
-  mechanism supports it, and which decision it can justify.
-
-## Transitioning from Architecture 1.0 to 2.0 {#sec-from-architecture-10-to-architecture-20}
-
-These review questions apply whether the architect orchestrates every step or AI participates in part of the work. Architecture 1.0 is shorthand for familiar, human-orchestrated design: we define the problem, choose models, run tools, interpret feedback, and decide what to build. Architecture 2.0 retains that accountability but lets AI shoulder more of the execution burden [@ReddiYazdanbakhsh2025Architecture20]. It asserts that the architect's true value lies in orchestration, not manual implementation, as summarized in @tbl-arch1-vs-arch2.
-
-| **Feature** | **Architecture 1.0** | **Architecture 2.0** |
-| --- | --- | --- |
-| **Orchestration** | Fully human-driven | AI-assisted and mixed-initiative |
-| **Exploration** | Manual sweeps over small parameter spaces | Generative methods that draw on represented architectural knowledge to propose novel designs |
-| **Tool Execution** | Scripts and manual toolchain invocation | A tool harness that drives brittle EDA and simulation flows through typed interfaces and reads back structured feedback, including the failures a reviewer must see |
-| **Decision Making** | Solely human insight | AI rationale paired with human final judgment |
-
-: **What separates the two eras is what the process makes explicit, not what the machine is capable of:** the four rows move orchestration, exploration, tool execution, and decision-making into declared interfaces and recorded feedback, without moving final judgment off the architect. {#tbl-arch1-vs-arch2}
-
-Reading the table by who does the work gets the distinction backward, because the machine's competence is not what makes a step dependable. What makes it dependable is whether an independent check can expose its bad output. Logic synthesis is the precedent: it became something architects would sign off on not when the tools got good, but when static timing analysis and equivalence checking could reliably catch a netlist that was wrong. Apply that test to any row above. A generative method proposing designs is only as safe as the legality and evidence checks that can refuse its proposals, and a step whose output nothing independent can contradict has not been automated so much as removed from review.
-
-AI may help the architect interpret an initial request, characterize workload distributions, propose an architecture decomposition, construct artifacts, select evaluations, diagnose results, and prepare a recommendation. These represent possible forms of assistance across several methods, not a claim that any single public system performs the complete workflow today. We organize this participation into six activities: formulate, explore, implement, evaluate, explain, and defend computer architecture decisions. While producing a plausible artifact helps, it does not replace the hard work of intent framing, workload characterization, evaluation, and decision-making.
-
-As AI takes on more of this load, the architect's evidence must explicitly identify the inputs and artifact versions available to the system, the actions it took, the feedback it received, and the candidates it rejected. Documenting this trail lets other architects reconstruct what happened and determine exactly what the result supports.
-
-During the XR subsystem exploration, for example, a method might propose vector-lane configurations, a surrogate[^fn-surrogate-model-c01] could screen them for 3\ W thermal violations, and a critic could flag unsupported compiler intrinsics. The final contribution might be a novel cache design, an architectural finding, a reusable method, or a decision supported by the available evidence.
-
-[^fn-surrogate-model-c01]: **Surrogate model**: A cheap, data-driven stand-in for an expensive simulator that lets a method screen many candidates quickly. Its score is only a proxy, so a promising candidate still needs a higher-fidelity check before it can support a design decision.
-
-@fig-design-loop-breaks shows the practical difference. Both sides iterate, and both depend on architectural judgment. The AI-assisted side makes the inputs, artifact versions, permitted actions, tool feedback, evidence, rejected candidates, and decision authority explicit enough for a system and its reviewers to use.
-
-![**AI participation makes design state explicit.** Both loops iterate and both rest on architectural judgment, but the human-orchestrated study on the left keeps most of that state in the experts' heads, while the AI-assisted study on the right represents it where a system and its reviewers can inspect it.](images/F2a-design-loop-breaks){#fig-design-loop-breaks width="85%" fig-alt="Two side-by-side loop diagrams compare human-orchestrated architecture work, where experts carry much of the study state, with an AI-assisted project that represents inputs, actions, evidence, rejection, and decision authority explicitly."}
-
-An AI system that calls a simulator, writes RTL, or summarizes papers still depends on sound systems engineering. The machine learning field has long grappled with the "Sim-to-Real gap," where agents that succeed in simulation fail in the real world [@TobinEtAl2017DomainRandomization]. In ML-driven hardware design, this manifests as the "Proxy-to-Signoff gap," where fast ML surrogate models (like GNNs for congestion prediction) diverge from ground-truth EDA signoff tools. In hardware, this also appears as the physical emulation bottleneck: the gap between generating syntax and proving physical realizability. While software simulation is too slow for full-system functional and performance validation at RTL fidelity, hardware emulation is extremely costly and complex to set up. This often leaves agents stranded between inaccurate software proxies and inaccessible physical ground truth.
-
-A generator might propose a mathematically elegant instruction extension that passes behavioral simulation as valid text, only to fail Logic Equivalence Checking (LEC), violate DRC rules, miss PPA targets, or create a large thermal hotspot in the physical silicon. The architect must identify these physical limits, account for memory movement, compare tradeoffs numerically, and decide what evidence justifies moving an AI's proposed candidate out of simulation and into the physical design flow.
-
-When AI participates, it should present a concise rationale connecting its proposals, tool results, and rejected alternatives to its final recommendation. This rationale is not evidence by itself, as @sec-feedback-verification-trust details the criteria making an observation relevant to a bounded claim. Instead, a rationale gives the reviewer a structured account to inspect for missing assumptions, contradictions, or conclusions unsupported by the measurements.
-
-Safety engineering offers a useful precedent: later decisions are checked against the assumptions, hazards, and evidence on which they originally depended [@Leveson2012EngineeringSaferWorld]. If a subsequent workload shift changes the locality behavior, the architect can trace the rationale to see exactly why the earlier conclusion may no longer apply.
-
-None of this scales by reading faster. A generator that emits thousands of plausible candidates a day defeats per-candidate review, so what the architect inspects is the rejection policy and the evidence the study retained, not each proposal that policy discarded. Judging the policy is a different and smaller job than judging its output, and it is the only one that stays fixed as volume grows. The same limit applies to the record. An inspectable trail survives only when the harness writes it as a byproduct of running the loop, because a record kept by discipline is the first thing volume erodes.
-
-While these practices make individual projects easier to review, the larger question is whether they can support AI across a much greater share of architecture design. Achieving that structural shift requires a target beyond incremental tool upgrades.
-
-## The Lighthouse Prompt and the Architecture Moonshot {#sec-intent-vs-spec}
-
-Engineers use the term *moonshot* for an ambitious goal requiring more than incremental improvement. X, the Moonshot Factory, describes a moonshot as the intersection of a massive problem, a radical solution, and a technological breakthrough making progress plausible [@XCompanyMoonshotBlueprint]. To organize our investigation, we introduce the *Lighthouse prompt*, an ambitious target that spans the entire stack.
-
-![**A compact prompt hides a full architecture study:** the prompt implies architecture requirements and engineering work that must be completed before an architect can formulate, explore, implement, evaluate, explain, and defend an answer.](images/F1-moonshot-stack){#fig-moonshot-prompt width="85%" fig-alt="Stacked diagram with the full Lighthouse prompt at the top, architecture requirements in the middle, and the execution and analysis requirements needed to support an answer at the bottom."}
-
-While the full solution to the moonshot may remain distant, the target must be specific enough to organize the field's experiments and highlight which advances actually matter.
-
-Computer architecture has comparable precedents. The Mead and Conway VLSI methodology[^fn-vlsi-complexity-c01] joined abstractions and design rules to tools, fabrication access, and pedagogy [@MeadConway1980VLSI]. The reduced-instruction-set program later reshaped the hardware and software contract around quantitative evidence [@PattersonDitzel1980RISC]. Because both efforts produced new methods and sharable artifacts rather than single designs, other groups could build on and teach them rather than starting from scratch.
+The most consequential advances in computing have not come only from better
+components. They have also come from better ways to express, divide, check,
+and reuse design work. The Mead--Conway VLSI methodology[^fn-vlsi-complexity-c01] joined abstractions
+and design rules to tools, fabrication access, and teaching
+[@MeadConway1980VLSI]. Reduced-instruction-set computing reshaped the
+hardware--software contract around a small set of principles that architects
+could test quantitatively [@PattersonDitzel1980RISC]. Logic synthesis made it
+practical to transform register-transfer-level descriptions into gate-level
+implementations, while timing analysis and equivalence checking exposed bad
+outputs [@DeMicheli1994SynthesisOptimization; @Formality]. Each change expanded what
+engineers could design because it combined an idea with a method that other
+people could apply, inspect, and improve.
 
 [^fn-vlsi-complexity-c01]: **VLSI complexity (origin)**: Early-1980s frontier microprocessors held about $10^4$ to $10^5$ transistors, and by 2021 frontier chips held tens of billions [@Rupp2022MicroprocessorTrendData]. Mead and Conway answered that outgrowth of transistor-level practice with higher-level abstractions, design rules, and fabrication access that a course could teach and a community could share.
 
-> **Architecture moonshot.** An architecture moonshot is a difficult,
-> long-term target that existing tools and design practice cannot yet
-> address end to end. It seeks a major improvement in how architects
-> use AI to formulate problems, explore and implement alternatives, evaluate
-> and explain results, and defend decisions. Advances in AI, data, or tools
-> must make at least part of the target practical to investigate without
-> implying that the whole problem has been solved.
+These transformations used different technical mechanisms, but each widened
+the unit of design that engineers could express and made the resulting object
+checkable through shared rules, tools, or measurements
+(@fig-design-method-progression).
 
-An architecture moonshot needs all three conditions at once, combining a grand challenge, a radical practice target, and an enabling breakthrough (@fig-moonshot-venn). The grand challenge represents complex architecture work that current ad hoc coordination cannot handle effectively. The radical target envisions a rigorous AI-assisted practice changing how architects formulate, explore, implement, evaluate, explain, and defend designs. The enabling breakthrough is the convergence of AI, data, and tools making part of that target practical to investigate today. Because none of the three conditions is sufficient alone, their intersection identifies a problem worth solving, a novel approach, and a practical starting point for testing, even if the complete goal remains out of reach.
+![**New design methods widened what engineers could express and check.** Established advances joined an input abstraction to a larger design object and to the checks or infrastructure that made the transformation dependable. AI-assisted architecture is shown separately as a prospective system for carrying system intent and current project state to a supported architecture result through existing tools and checks.](images/F1d-design-method-progression){#fig-design-method-progression width="100%" fig-alt="Historical progression through Mead-Conway design rules and abstractions, the RISC hardware-software contract, RTL logic synthesis, and reusable hardware generators. Each established method connects an input abstraction to a design object and a dependable check or infrastructure. A separate prospective panel shows an AI-assisted design system connecting system intent and current project state through existing tools and checks to a supported architecture result."}
+
+The established examples make the same relationship concrete. Mead--Conway connected
+scalable abstractions and design rules to layout and fabrication access. RISC
+made a simpler hardware--software contract testable through quantitative
+evaluation. Logic synthesis connected RTL and constraints to gate-level
+implementation through timing and equivalence checks. Reusable hardware
+generators widened the design object from one implementation to a parameterized
+family while retaining downstream simulation and implementation checks
+[@Izraelevitz2017Chisel]. The prospective panel is deliberately separate. It
+is not an inevitable next stage or a
+prompt-to-chip pipeline. It asks whether a design system can connect broader
+intent and current project state to a supported architecture result while
+continuing to rely on established tools and checks.
+
+That is the standard for the present moment. Generating more code, RTL, or
+design proposals would be useful, but it would not by itself constitute a new
+design method. The stronger opportunity is to help architects carry intent
+across workloads, software, hardware, and physical implementation while
+reducing the human effort required to explore and check alternatives. We call
+that long-range target an *architecture moonshot*.
+
+> **Architecture moonshot.** An architecture moonshot is a difficult,
+> long-term target that existing tools and design practice cannot yet address
+> end to end. It seeks a major improvement in how architects turn system and
+> chip design questions into supported results and decisions. Advances in AI,
+> data, or tools must make at least part of the target practical to investigate
+> without implying that the whole problem has been solved.
+
+An architecture moonshot joins three conditions: an important architecture
+problem, a substantial change in design practice, and an enabling advance that
+makes meaningful progress possible. @fig-moonshot-venn places the target at
+their overlap.
 
 ![**The moonshot sits where all three conditions meet:** it combines a major architecture challenge, a substantial change in AI-assisted design work, and an advance in AI, data, or tools that makes part of the problem practical to study.](images/F1c-moonshot-venn){#fig-moonshot-venn width="85%" fig-alt="Three-circle Venn diagram showing an architecture moonshot at the intersection of a grand challenge, a radical practice target, and an enabling breakthrough."}
-
 
 ```{=latex}
 \FloatBarrier
 ```
 
-The three conditions do not carry equal risk. An architect can state a grand challenge and a radical target at the outset, but the enabling breakthrough is a claim about capability that has to hold in practice. A program that assumes that breakthrough rather than demonstrating it, and that names no result that would show the assumption wrong, can pursue the target for years on a premise that never arrives.
+The two upper circles state the problem and the proposed change in practice.
+The lower circle supplies the AI, data, or tool advance that makes part of the
+target testable. The moonshot lies only at their intersection. A difficult problem without
+a new method remains an unsolved problem. A new method without a demonstrated
+enabling capability remains an aspiration. The enabling advance is therefore
+not something a program may simply assume.
 
-::: {.callout-war-story title="The compiler breakthrough EPIC assumed never arrived"}
-**The claim.** In the 1990s, Intel and HP bet a processor generation on Explicitly Parallel Instruction Computing (EPIC), the architecture behind Itanium. EPIC moved the work of scheduling instructions from the hardware to the compiler, exposing parallelism at compile time and promising a step-change in performance over the out-of-order designs of the day [@SchlanskerRau2000EPIC].
+Explicitly Parallel Instruction Computing (EPIC), the basis of Itanium, offers
+a useful warning. It moved instruction scheduling from hardware to the
+compiler and depended on static compilation exposing enough parallelism to
+produce a general-purpose advantage [@SchlanskerRau2000EPIC].
 
-**The gap.** That payoff depended on a sufficiently smart compiler able to find and schedule the parallelism statically. For behavior known only at run time, such as memory latency and branch outcomes, that compiler never arrived. Out-of-order superscalar processors and the AMD64 extension, announced in 1999, specified in 2000, and shipping around 2003, delivered the gains on existing software instead, and the first Itanium silicon reached the market as Merced only in 2001 [@AMD64History].
+::: {.callout-war-story title="The compiler breakthrough EPIC needed did not close the gap"}
+**The claim.** EPIC promised a step change by exposing instruction-level
+parallelism at compile time.
 
-**The lesson.** A moonshot's three conditions are not equally safe to assume. The grand challenge and the radical target were sound; the program failed on the enabling breakthrough, which it assumed rather than demonstrated and paired with no result that would have shown the assumption wrong. An enabling breakthrough taken on faith, with nothing that could falsify it, is the trap. Current AI-assisted architecture risks a similar trap if it assumes LLMs can generate physically realizable microarchitectures without a closed-loop EDA toolchain to objectively verify them. An evaluation loop can catch errors, but if the generator fundamentally cannot learn physical constraints, the closed loop will simply reject every proposal without ever converging on a working design.
+**The gap.** Memory latency, branches, aliasing, and other run-time behavior
+limited how much parallelism a compiler could schedule statically.
+Out-of-order superscalar processors improved while preserving the established
+software path.
+
+**The lesson.** A moonshot can fail when it depends on a capability whose
+limits become clear only after large commitments. AI-assisted architecture
+faces the same risk if it assumes that plausible generation will become
+physically valid system design without demonstrating the required knowledge,
+tool use, and checks.
 :::
 
-The Lighthouse prompt, asking for a low-power 64-bit RISC-V compute subsystem for mobile XR, fits all three conditions. Today, architects manually coordinate decisions across workloads, software, hardware, tools, and physical design. The long-term aim is for AI to take on more of that search, while the architect stays answerable for the claim. Advances in models, data, and tools make bounded parts of this approach practical now.
+The lesson is not to avoid ambitious targets. It is to state what capability
+the target depends on and what result would challenge that assumption. The
+Lighthouse request introduced below gives this book a concrete architecture
+problem on which to do both.
 
-Tool-using design-space agents already propose configurations, invoke simulators, and revise searches on the returned results, and learning-based placement already turns a netlist into a macro layout, each making one bounded slice of the loop tractable to study rather than the whole. This enabling leg is nonetheless the one most easily assumed rather than demonstrated. The Lighthouse target therefore carries an explicit stop condition. It is failing if, under matched baselines and budgets, AI carries no step of this work that conventional methods could not already do as well and more cheaply. It succeeds when an AI-assisted loop produces a design-space report for the XR subsystem whose recommendation an independent architect can verify through an evaluation harness at a lower total cost than a human-orchestrated baseline.
+## AI as Design Automation
 
-Neither half of that condition can be settled with the instruments this chapter has. Deciding it takes a baseline matched on budget, a null baseline that says what random search would have found for the same money, and a way to score the search that produced the result rather than the result alone. @sec-evaluating-agentic-architect builds those instruments, and it is where a verdict on this bet would have to be argued. Nothing published so far returns one either way.
+The field is now applying AI to the design processes that produce modern
+processors and accelerators, targeting tasks from design-space exploration to
+physical placement
+[@WangEtAl2026AgentDSE; @MirhoseiniEtAl2021GraphPlacement]. In this book,
+*AI* serves as an umbrella term. It includes learned methods for prediction,
+generation, optimization, and other task-specific uses, as well as systems
+that combine those methods with conventional analysis and design tools.
 
-A target stated this way needs *architecture* and *architect* defined, since the stop condition turns on who owns the claim and on how much of a system the target covers. Architecture is more than a microarchitecture, block diagram, or chip artifact.
+A *learned model* fits part of its behavior from examples rather than having
+every rule written explicitly. A *predictor* estimates a property that is
+expensive or unavailable to measure directly. A *generator* proposes an
+artifact or design candidate. An *optimizer* chooses among alternatives to
+improve a stated objective. *Retrieval* finds relevant information in an
+identified body of material. An *agent* takes actions in an environment,
+observes what the environment returns, and can change its next action from
+that feedback. A model that answers one prompt is not necessarily an agent,
+and a fixed script is not an agent simply because it calls several tools.
 
-> **Architecture.** Architecture is the hardware and software contract and system organization turning workload intent and technology constraints into a defensible system design. It includes the instruction set architecture (ISA), microarchitecture, memory, interconnects, accelerators, chiplets, compiler interfaces, physical-design constraints, verification plans, deployment models, and the evidence used to justify choices.
+These names describe capabilities, not authority. Generation, prediction, and
+optimization are method families; proposing a candidate, estimating a
+consequence, selecting an experiment, repairing an artifact, and checking a
+property are roles. One method can perform several roles, and a role can be
+filled by a learned method, a conventional algorithm, a design tool, or an
+architect. A later methods chapter develops how to choose and combine these
+families.
 
-> **Architect.** The architect is the owner of the decision. The architect frames the problem, chooses abstractions, sets the evidence standard, defines what disqualifies a candidate, and remains answerable for the committed design. While one person may hold this role or a team may divide the work, the division must explicitly state who holds decision and approval authority. Methods can contribute candidates and analysis, but the architect remains responsible for synthesizing the results into a recommendation and defending the ultimate architectural claim.
+AI in architecture also has a longer history than recent generative systems.
+Researchers have used learned predictors, surrogate models, reinforcement
+learning, and autotuning for branch prediction, prefetching, controllers, and
+design-space exploration [@ChenPenneyJimenez2020AIArchitecture;
+@IpekEtAl2006PredictiveDSE; @ChenEtAl2018AutoTVM]. Recent language and
+generative models broaden the kinds of information and artifacts that methods
+can work with [@LiuEtAl2023ChipNeMo; @HeEtAl2024ChatEDA]. The continuity
+matters. Some learned mechanisms, such as branch predictors, operate inside the
+systems being designed. Other learned methods, such as surrogate models and
+autotuners, help conduct the design work. This book focuses on the second use.
+Architecture already combines human judgment with models, scripts, generators,
+simulators, compilers, synthesis, optimization, and verification. The new
+question is where learned methods improve that complete practice.
 
-## Unpacking Lighthouse Architecture Questions {#sec-why-the-prompt-spans-the-stack}
+Applying these methods to architecture runs into two immediate limits. Much of
+the high-fidelity hardware data stays proprietary, and model use adds
+computational overhead, latency, and financial cost. Any claimed benefit must
+therefore account for both the simulator or engineering work saved and the work
+needed to check that a generated claim holds for the physical design.
+
+## The Lighthouse Request
+
+The opportunity and the difficulty become concrete when a short product
+request expands into work across the full design stack. The data and cost
+limits above remain part of that work, but the first challenge is to determine
+what the request actually requires. Consider the following design brief.
+
+> **Lighthouse prompt.** Design a low-power, 64-bit RISC-V-based compute subsystem for an
+> XRBench-class real-time mobile XR workload. Realize it as a vector-capable CPU, accelerator, or SoC block under a 3\ W TDP target in a 3\ nm-class LP mobile process, and return a design-space report with evidence and rejected alternatives.
+
+We call this the *Lighthouse prompt*. Here XR means extended reality, TDP means
+thermal design power, and LP identifies a low-power process. XRBench is a public
+suite of mobile XR workloads rather than a complete product specification
+[@KwonEtAl2023XRBench]. Among the public systems reviewed for this edition, none
+establishes an end-to-end answer. The prompt's scale deliberately exposes
+the architecture work that a smaller generation task would hide. It provides a
+long-term target for judging progress toward the full challenge.
+
+Mobile XR makes that target useful because it combines tight latency, thermal,
+and energy constraints with cross-layer behavior. A design cannot optimize one
+kernel or block while ignoring the software pipeline, memory system, or
+user-visible frame deadline.
+
+Industrial integration raises the standard again. An accelerator in a
+system-on-chip (SoC) is not a clean-sheet island. It must connect to existing
+intellectual property through protocols such as AMBA AXI.[^fn-axi-c01] A
+candidate that improves power, performance, and area (PPA) but violates an AXI
+handshake is not an integrable design.
+
+[^fn-axi-c01]: **AMBA AXI**: An Arm-defined on-chip interface protocol with separate channels and strict valid-ready handshake requirements [@Arm2020AXI]. A block that violates the protocol cannot be integrated into a system that depends on that interface, no matter how good its isolated power and performance numbers look.
+
+The word *prompt* is intentionally modest. A request or prompt expresses
+compact intent. Requirements interpret its obligations and identify choices
+that remain open. A specification fixes enough behavior, interfaces,
+workloads, software semantics, constraints, and acceptance checks to make
+implementation testable. A study plan then fixes the reference design,
+alternatives, tools, budget, and stopping conditions for a particular
+comparison. The Lighthouse request is not yet a specification.
+"XRBench-class," "3\ W," "3\ nm-class," and the permitted compute organizations
+still require versioned workloads, software paths, reference designs, process
+assumptions, and checks.
+
+The architect must make those choices explicit before the request can guide
+real design work. AI may help interpret documents, retrieve relevant
+information, propose requirements, or expose ambiguities. The architect still
+decides which interpretation becomes part of the specification and what result
+would satisfy it.
+
+It is important to note that the prompt does not imply a single model or
+invocation. Answering it takes an XRBench trace, a compiler that can target the
+proposed organization, a simulator, a synthesis run against a low-power
+library, and a reviewer who can say which results support the recommendation.
+This book studies that whole assembly and the decision it supports, not the
+fluency of one generated response.
+
+That system boundary requires *architecture* and *architect* to be explicit.
+Architecture is more than a microarchitecture, block diagram, or chip artifact.
+
+> **Architecture.** Architecture is the hardware and software contract and system organization turning workload intent and technology constraints into a defensible system design. It includes the instruction set architecture (ISA), microarchitecture, memory, interconnects, accelerators, chiplets, compiler and runtime interfaces, and deployment model.
+
+> **Architect.** The architect owns the architecture recommendation and
+> commitment within the declared governance. The architect frames the problem,
+> chooses abstractions, sets the evidence standard, defines what disqualifies a
+> candidate, and remains answerable for the committed architecture. One person
+> may hold this role or a team may divide the work, but the division must state
+> who holds each technical decision and approval right. Methods can contribute
+> candidates and analysis, while product and release approval may remain with
+> other authorized roles.
+
+An architecture study must also state the implementation constraints,
+verification obligations, and measurements needed to justify its result. Those
+items qualify the study and recommendation; they are not themselves the
+architecture.
+
+These definitions set the scope of the Lighthouse answer. It must cover the
+hardware and software system, and an architect must be able to defend the
+resulting recommendation.
+
+The Lighthouse request fixes the workload class, 64-bit RISC-V basis, permitted
+compute organizations, 3\ W envelope, 3\ nm-class low-power process, and the
+required comparative report. A particular investigation must still fix the
+workload version and deadline, architecture and software path, reference
+design, process libraries, operating assumptions, tools, budget, and stopping
+conditions. Changing a fixed condition changes the challenge; resolving an
+open choice makes the challenge executable.
+
+## From a Few Lines to a Full-Stack Problem {#sec-intent-vs-spec}
+
+The Lighthouse request spans the entire stack because its compact wording
+conceals two levels of work. Its phrases must first become architecture
+requirements and then a tool-connected comparison that can support a decision
+(@fig-moonshot-prompt).
+
+![**A compact prompt hides a full architecture study.** The prompt implies architecture requirements and engineering work that must be completed before an architect can turn it into a supported result and decision.](images/F1-moonshot-stack){#fig-moonshot-prompt width="85%" fig-alt="Stacked diagram with the full Lighthouse prompt at the top, architecture requirements in the middle, and the execution and analysis requirements needed to support an answer at the bottom."}
+
+The compact prompt at the top of @fig-moonshot-prompt names the
+workload, ISA basis, compute alternatives, power and process envelope, and
+requested report. The middle layer expands those phrases into workload,
+software, hardware, memory, physical, reliability, and verification
+requirements. The lower layer turns those requirements into represented study
+state, methods and tools, evidence, and decision support. Architect
+judgment can redirect the study at each layer. The figure therefore describes
+the hidden work behind the prompt, not a prompt-to-chip automation pipeline.
+
+### Expanding the Lighthouse Requirements {#sec-why-the-prompt-spans-the-stack}
 
 The prompt occupies only a few lines, but answering it requires choices about the workload, software contract, compute organization, memory, power, compiler, runtime, physical design, reliability, and verification (@fig-moonshot-prompt). The bottom panel of the figure shows the work required to connect those choices to tools, evidence, and an architectural decision.
 
@@ -374,21 +334,30 @@ The prompt occupies only a few lines, but answering it requires choices about th
 \FloatBarrier
 ```
 
-Start with the prompt itself. High-level intent first becomes questions and coupled design choices, not a generated chip artifact. The prompt tasks the architect with comparing several compute organizations for a real-time mobile extended-reality (XR) workload, all while respecting a 3\ W thermal-design-power (TDP)[^fn-tdp-c01] budget and the limits of a low-power (LP) process. Individual phrases bound different parts of the study.
+Start with the prompt itself. High-level intent first becomes questions and coupled design choices, not a generated chip artifact. The prompt tasks the architect with comparing several compute organizations for a real-time mobile XR workload, all while respecting a 3\ W TDP[^fn-tdp-c01] budget and the limits of an LP process. Individual phrases bound different parts of the study.
 
-[^fn-tdp-c01]: **TDP (thermal design power)**: The sustained power a part is expected to dissipate and the cooling solution is designed to remove, rather than a peak instantaneous draw. A headset has no fan, so the 3\ W figure is really a statement about how much heat the enclosure can shed before its surface becomes too hot to wear.
+[^fn-tdp-c01]: **TDP (thermal design power)**: Vendors use this term in different ways. This book treats the Lighthouse target as a 3\ W sustained thermal envelope that the declared form factor and cooling assumptions must be able to remove, rather than as a peak instantaneous draw.
 
-The phrase "64-bit RISC-V-based compute subsystem" establishes the ISA, ABI[^fn-abi-c01], and software contract. The "XRBench-class real-time mobile XR workload" specification sets the target environment. The "accelerator block" provision leaves several compute organizations open for comparison. Finally, the 3\ W target and 3\ nm-class LP process supply hard physical limits that can rule out an unfeasible proposal. A 3\ W TDP in a mobile XR form factor forces passive cooling, strict skin-temperature limits, dense advanced packaging, and high-bandwidth signaling under a tight power budget.
+The phrase "64-bit RISC-V-based compute subsystem" fixes the word length and
+ISA family. Each study must still choose the exact ISA extensions,
+ABI[^fn-abi-c01], compiler, runtime, and software contract. The "XRBench-class
+real-time mobile XR workload" specification sets the target environment. The
+"accelerator block" provision leaves several compute organizations open for
+comparison. Finally, the 3\ W target and 3\ nm-class LP process supply hard
+physical limits that can rule out an unfeasible proposal. A 3\ W TDP in a
+mobile XR form factor requires the study to state its cooling and
+skin-temperature assumptions, packaging, signaling, and the share of the power
+budget available to the proposed compute subsystem.
 
 [^fn-abi-c01]: **ABI (application binary interface)**: The binary-level agreement on register usage, calling conventions, stack layout, and data alignment that lets separately compiled code interoperate. Adding a custom instruction changes the ISA, but shipping it means the compiler, libraries, and operating system have to agree on the ABI as well, which is why an ISA extension is a software project rather than a hardware edit.
 
 While the prompt asks for a design-space report, the study may also produce software, models, RTL, layouts, prototypes, or a physical chip, depending on the ambition of the claim. The report connects those artifacts and measurements to the proposed design and explains precisely why alternatives were rejected. To test the architect's judgment, the prompt deliberately leaves the accelerator microarchitecture, memory system, software integration, and evaluation tools open.
 
-Before the prompt can be broken into those decision clusters, the high-level intent has to become formal constraints. Architecture 2.0 reaches the very first steps of the design loop, early ideation and requirement translation, which earlier tools left entirely to the architect. Historically, translating a product requirement ("we need a low-power AR headset") into a formal architectural specification ("3\ W TDP, 64-bit RISC-V, 128-bit vector extensions, 4\ MB shared L2") required weeks of manual profiling, spreadsheet modeling, and expert intuition.
+Turning those choices into a study requires formal constraints. Requirement translation already combines profiling, analytical models, prior designs, design tools, and expert judgment. A product request such as "we need a low-power AR headset" does not determine a 3\ W TDP, a particular RISC-V extension, or an L2 capacity on its own. The architect must derive those study parameters from workload and system evidence.
 
-AI assists in this translation by rapidly bridging the gap between natural language intent and formal constraints. An LLM can ingest product requirements, cross-reference them against historical designs and public benchmarks, and propose a parameterized design space. More importantly, it can help the architect formalize ambiguity. When a prompt asks for a "real-time" workload, the model can query the architect to bound that term: *Does real-time mean a strict 11 millisecond frame deadline at 90\ Hz, a 20 millisecond motion-to-photon bound, or a 99th-percentile tail-latency target?*
+Learned methods can assist by extracting candidate constraints from requirement documents, relating them to prior designs and public benchmarks, and identifying ambiguities for the architect to resolve. When a prompt asks for a "real-time" workload, a language model might ask whether that means a strict 11 millisecond frame deadline at 90\ Hz, a 20 millisecond motion-to-photon bound, or a 99th-percentile tail-latency target.
 
-This early assistance shifts the architect's focus from writing boilerplate specifications to critiquing the proposed bounds. Formalizing the constraints early ensures that downstream generation and evaluation tools are searching a mathematically well-defined space, rather than one built on unstated assumptions. The output of this phase must be a machine-readable specification, such as a parameterized Chisel generator template or a sweeping configuration file, rather than a prose document.
+This assistance does not remove the architect's formulation work. It may reduce the time spent assembling candidate specifications, while the architect still decides whether the proposed bounds are complete and supported. Before search begins, the accepted constraints should be represented in a form the relevant tools can use, such as a parameterized generator configuration or a sweep specification. Prose alone cannot define the legal design space.
 
 Each fragment of the Lighthouse prompt implies a cluster of architectural
 decisions and the checks that could disqualify an answer
@@ -400,67 +369,208 @@ or rejects that proposed scope and its coupled interfaces.
 | --- | --- | --- |
 | **XRBench mobile XR** | Workload slice, input distribution, quality-of-service target, latency deadline, memory traffic, software pipeline, and drift assumptions. | Trace source, benchmark version, documented workload-phase selection, and rejection when results over-optimize a single hot loop or miss real-time behavior. |
 | **64-bit RISC-V with vector or accelerator option** | ISA boundary, custom extension policy, programming model, compiler/runtime path, library support, and software compatibility. | Correctness, toolchain support, generated-code evidence, portability checks, and rejection of unsupported software semantics. |
-| **Compute subsystem** | CPU, fixed-function accelerator, reconfigurable spatial array (e.g., CGRA or Reconfigurable Dataflow Architecture/RDA), or Processing-in-Memory (PIM) data-centric block; memory hierarchy (SRAM/DRAM sizing), Network-on-Chip (NoC) routing, SoC integration, interface compatibility, and relevant reliability or isolation assumptions. | Design-space comparison and rejection of candidates that only win by moving cost, bandwidth, energy, complexity, or risk elsewhere. |
-| **3\ W, 3\ nm-class low-power envelope** | Power, voltage/frequency, thermal, area, EDA constraints, and dynamic power management interfaces (e.g., Dynamic Voltage and Frequency Scaling or DVFS, power domains, thermal sensors) for the OS/firmware. | Source, version, and calibration of the power model; physical-design limits (IR drop, electromigration, timing closure); sensitivity analysis; and rejection criteria for runtime throttling or reliability failures within the scoped workload. |
+| **Compute subsystem** | CPU, vector, or accelerator organization; memory hierarchy and interconnect; system integration; interface compatibility; and relevant reliability or isolation assumptions. | Design-space comparison and rejection of candidates that only win by moving cost, bandwidth, energy, complexity, or risk elsewhere. |
+| **3\ W, 3\ nm-class low-power envelope** | Power, voltage and frequency, thermal and area limits, implementation constraints, and the hardware and software interfaces used for power management. | Source, version, and calibration of the power model; physical-design limits such as voltage drop, wire reliability, and timing closure; sensitivity analysis; and rejection criteria for throttling or reliability failures. |
 | **Design-space report with evidence and rejected alternatives** | Alternatives, the Pareto frontier (the set of objective outcomes of feasible designs for which no alternative is at least as good on every objective and strictly better on at least one) [@Deb2001MultiObjective], assumptions, uncertainty, verification plan, rejected or failed candidates, and points at which the responsible architect decides whether to continue. | Measurements linked to assumptions and checks, rejected candidates, coverage, reproducible artifacts, and a named person responsible for the recommendation. |
 
 : **What each prompt fragment requires.** The Lighthouse prompt maps to decisions about workload definition, software and ISA contracts, hardware organization, physical feasibility, and evidence. {#tbl-moonshot-decomposition tbl-colwidths="[18,34,35]"}
 
-The table is a first-pass checklist rather than the final review form. An
-answer is incomplete if it cannot identify its workload slice, software
-contract, physical assumptions, supporting observations, or decision owner.
-The rest of the book develops these requirements and turns them into a compact
-review form.
+Each row connects one prompt fragment to the design choices it leaves open and
+the checks that can disqualify an answer. The rows must also remain consistent
+with one another because a workload, software, hardware, or physical choice can
+change the validity of the others. The table is a requirements expansion rather
+than a complete specification. An answer is incomplete if it cannot identify
+its workload slice, software contract, physical assumptions, supporting
+observations, or decision owner.
 
-Each row points to engineering depth that the short prompt leaves unstated. To verify whether a candidate actually fits the "3\ W, 3\ nm-class" constraint, the architect needs results from RTL, synthesis, floorplanning, timing, IR drop, leakage, thermal analysis, and final signoff. Comparing the RISC-V vector and accelerator alternatives requires checking the compiler, runtime, libraries, generated code, and software portability. Crucially, the hardest bottleneck is often the software stack: a novel spatial accelerator is dead silicon if the compiler cannot be co-adapted to target it. The Lighthouse prompt is therefore a computer architecture problem rather than a prompt engineering exercise, demanding an answer that connects decisions and evidence across the stack.
+Each row points to engineering depth that the short prompt leaves unstated. To verify whether a candidate actually fits the "3\ W, 3\ nm-class" constraint, the architect needs results from RTL, synthesis, floorplanning, timing, IR drop, leakage, thermal analysis, and final signoff. Comparing the RISC-V vector and accelerator alternatives requires checking the compiler, runtime, libraries, generated code, and software portability. Crucially, the hardest bottleneck is often the software stack. A novel spatial accelerator is dead silicon if the compiler cannot be co-adapted to target it. The Lighthouse prompt is therefore a computer architecture problem rather than a prompt engineering exercise, demanding an answer that connects decisions and evidence across the stack.
 
-The workload and process phrases require more detail than the compact prompt provides. XRBench, a benchmark suite for mobile XR workloads, supplies a concrete workload anchor rather than a vague application label [@KwonEtAl2023XRBench]. End-to-end XR research shows how tightly perception and display stages are coupled, making mobile XR a system-level architecture target rather than a single kernel to optimize [@HuzaifaEtAl2021ILLIXR]. AI can help here by analyzing dataset distributions to find coverage gaps, complementing profiling, trace analysis, and expert workload judgment. For instance, a model could ingest the XRBench memory trace and automatically cluster access patterns to recommend specific cache hierarchies or local scratchpads before any simulation begins.
+The workload and process phrases require more detail than the compact prompt provides. The XRBench suite supplies a concrete workload anchor rather than a vague application label. End-to-end XR research shows how tightly perception and display stages are coupled, making mobile XR a system-level architecture target rather than a single kernel to optimize [@HuzaifaEtAl2021ILLIXR]. AI can help here by analyzing dataset distributions to find coverage gaps, complementing profiling, trace analysis, and expert workload judgment. For instance, a model could ingest the XRBench memory trace and automatically cluster access patterns to recommend specific cache hierarchies or local scratchpads before any simulation begins.
 
-The selected benchmark must strictly represent the system claim. Similarly, the process node is stated as a broad class rather than a named foundry process design kit (PDK)[^fn-pdk-c01]. Even though current mobile SoCs are publicly described in 3\ nm-class technology, the study must explicitly name the process, libraries, voltage assumptions, and signoff path [@Apple2024A18Pro; @Apple2024M4]. Each surviving candidate is then evaluated in a physical harness that applies PPA and static timing limits.
+The selected benchmark must strictly represent the system claim. Similarly, the process node is stated as a broad class rather than a named foundry process design kit (PDK)[^fn-pdk-c01]. Even though 2024 mobile SoCs were publicly described in 3\ nm-class technology, the study must explicitly name the process, libraries, voltage assumptions, and signoff path [@Apple2024A18Pro; @Apple2024M4]. Each surviving candidate is then evaluated in a physical harness that applies PPA and static timing limits.
 
-[^fn-pdk-c01]: **PDK (process design kit)**: The package a foundry supplies for one manufacturing process, holding the device models, standard-cell libraries, design-rule decks, and calibration data that let a tool predict whether a layout will actually work in silicon. PDKs are licensed under nondisclosure, so the physical behavior of an advanced node is largely absent from any public corpus a model could learn from.
+[^fn-pdk-c01]: **PDK (process design kit)**: The package for one manufacturing process that supplies device models, design rules, and related data used by implementation tools. Open PDKs exist, but the authorized models and libraries for an advanced commercial process may be proprietary, so a public corpus cannot substitute for the project-specific process information used by the tool flow.
+
+The Lighthouse prompt fixes the workload class, 64-bit RISC-V basis, permitted
+compute organizations, 3\ W envelope, 3\ nm-class low-power process, and
+required design-space report. Each study must still specify the workload
+version, trace, slice, and deadline; the architecture and software path; the
+reference design; the process libraries and operating assumptions; and the
+tools, budget, stopping rules, and checks. Those study choices may vary.
+Changing the fixed conditions means answering a different challenge.
+
+Meeting those requirements calls for a coordinated technical system, not one
+model at the center of a prompt-to-chip pipeline. The system must maintain
+current project knowledge, combine learned and conventional methods, connect
+those methods to compilers, simulators, implementation tools, and verification,
+and return results that can be checked independently of the method that
+produced the candidate. The architect remains outside that technical boundary:
+framing the intent and constraints, choosing how the components are combined,
+reviewing what the checks establish, and making the consequential design
+decision.
+
+Following the general foundation-model framing of broad training followed by
+adaptation across downstream tasks [@BommasaniEtAl2021FoundationModels], this
+book uses *architecture foundation model* for one broadly pretrained learned
+component intended for adaptation across multiple architecture tasks.
+It may supply reusable prior knowledge, but it does not contain authoritative
+live project state and is not a complete design system. The *AI-assisted design
+system* is the coordinated technical ensemble of learned and conventional
+components, tools, maintained state, feedback, and checks. The complete design
+study also includes human work, budgets, review, and the architect's decision.
+A particular problem may use one foundation model, several specialized models,
+or no foundation model at all. The moonshot is the capability of the complete
+system and the architects who use it, not the name or scale of any one model.
+
+@fig-foundation-system shows how reusable learning fits without replacing the
+rest of the design system. Prior architecture artifacts and results can support
+one learned component that adapts to several tasks. The current workload,
+constraints, candidate, tool versions, and measurements remain separate in the
+current version-controlled project record. That record is authoritative for
+what the study used, but its contents still require qualification and can be
+wrong.
+
+![**A foundation model is one optional component of the design system.** Reusable architecture knowledge can support a learned component adapted to workload analysis, prediction, generation, or diagnosis. The current project record, conventional methods, compilers, simulators, EDA and formal tools, and independent checks remain part of the larger system. The architecture role supplies intent and constraints, reviews the supported result, and owns the architecture recommendation within the declared governance.](images/F1a-foundation-system){#fig-foundation-system width="100%" fig-alt="Reusable architecture knowledge feeds an optional architecture foundation model inside an AI-assisted design system. A separate version-controlled project record informs the active architecture tasks and conventional methods. Task outputs reach design tools and checks, which return evidence and update project state. A supported architecture result leaves the technical system for review by the architecture role."}
+
+For the Lighthouse, the reusable component might help analyze XR workloads,
+screen candidate organizations, draft software or RTL, or diagnose a failed
+check. The live study still supplies the current trace, 3\ W envelope,
+candidate identity, and tool and library versions. Simulators, implementation
+tools, and verification determine which proposals survive, while the architect
+decides what their evidence supports. The moonshot is this complete-system
+capability, not autonomous prompt-to-chip generation.
+
+## An Artifact Is Not an Architecture Result
 
 An architect might begin with an XRBench trace slice and software pipeline, propose vector-width or CPU and accelerator alternatives, and screen them with a cheap proxy. The architect can then reserve scarce compiler, simulator, RTL, or physical-design feedback for the candidates whose results could actually alter the final decision. That selection rule, along with what the resulting evidence may support, should be stated before the run.
 
-Before any simulator runs, Amdahl's law supplies a rejection check for free. An accelerator that covers 60 percent of the XR pipeline's cycles caps whole-system speedup at 2.5 times, no matter how fast the block itself becomes [@Amdahl1967ValiditySingleProcessor]. A generated candidate whose profiled coverage cannot support its claimed system gain is ruled out by arithmetic alone, before it consumes a single simulator hour. The first question to put to an AI-proposed design is therefore not how fast the block is but how much of the workload it actually touches.
+Architecture work moves through a sequence that should not be collapsed:
+request, requirements, specification, candidate artifacts, measurements and
+checks, comparative architecture result, and decision. An *artifact* is
+something produced during the work, such as code, RTL, a configuration, a
+model, a layout, a report, or a testbench. A *candidate* is a proposed design
+or configuration being compared. A *measurement* or *observation* is
+information obtained about a candidate under stated conditions. An
+*architecture result* is a supported comparison or finding whose assumptions,
+conditions, checks, alternatives, and limits are clear enough to inform a
+decision. An architecture result can reject every candidate, retain the
+current design, narrow the question, or conclude that the available
+measurements cannot decide.
+
+The distance between an artifact and a result is especially large in hardware.
+A generator might produce a mathematically elegant instruction extension that
+passes behavioral simulation and still fail logic equivalence checking,
+design-rule checks, timing, power, or thermal limits in implementation. A
+surrogate model[^fn-surrogate-model-c01] can cheaply screen candidates, but a
+candidate selected by the surrogate may fail when a more faithful tool exposes
+a property the surrogate did not represent. This is the architecture version
+of the simulation-to-real problem studied in machine learning
+[@TobinEtAl2017DomainRandomization].
+
+[^fn-surrogate-model-c01]: **Surrogate model**: A cheap, data-driven stand-in for an expensive simulator that lets a method screen many candidates quickly. Its score is only a proxy, so a promising candidate still needs a higher-fidelity check before it can support a design decision.
+
+A concise rationale should connect proposals, tool results, rejected
+alternatives, and the recommendation, but the rationale is not itself a
+measurement. Its purpose is to help a reviewer find missing assumptions,
+contradictions, or conclusions that the checks do not support.
+
+Before any simulator runs, Amdahl's law supplies a rejection check for free. An accelerator that covers 60 percent of the XR pipeline's cycles caps whole-system speedup at 2.5 times, no matter how fast the block itself becomes [@Amdahl1967ValiditySingleProcessor]. A generated candidate whose profiled coverage cannot support its claimed system gain is ruled out by arithmetic alone, before it consumes a single simulator hour. The first question to put to a generator-proposed design is therefore not how fast the block is but how much of the workload it actually touches.
+
+The roofline model supplies a second screening bound by relating arithmetic
+intensity to peak compute and memory bandwidth [@Williams2009Roofline].
 
 ::: {.callout-lighthouse title="The roofline rejects a candidate before the simulator sees it"}
-**Context.** Architects own a second free screen, and this one supplies a bound rather than a ceiling. The roofline model bounds a kernel's attainable performance by its arithmetic intensity, set against the machine's peak compute and memory bandwidth [@Williams2009Roofline].
+**Context.** Architects own a second free screen, and this one supplies a bound rather than a ceiling. The model bounds a kernel's attainable performance by its arithmetic intensity, set against the machine's peak compute and memory bandwidth.
 
 **In the XR pipeline.** One profile of the pipeline's flops per byte tells us which candidates are bandwidth-bound before a single line of RTL exists, so wider vector units on a starved kernel can be rejected on the back of an envelope. A proposal the roofline already rules out should never reach the simulator queue.
 :::
 
 Within that screening workflow, generation might produce legal vector configurations, prediction might estimate their data-movement risks, and optimization might choose which configurations merit expensive evaluation. A proxy may rank candidates one way, a simulator may overturn that ranking, and an EDA run may return timing paths and congestion rather than a single score.
 
-This active learning loop immediately hits the cost of evaluation. Unlike a software unit test that returns a reward in milliseconds, a cycle-accurate hardware simulator takes hours, and physical sign-off takes days. This reward latency makes brute-force reinforcement learning impractical, forcing a reliance on multi-fidelity escalation. Because of this latency, search can easily overfit[^fn-overfitting-c01] a convenient fast proxy.
+This work immediately hits the cost of evaluation. A cycle-accurate hardware
+simulation or physical implementation run can be substantially slower and more
+resource-intensive than a software unit test, and access may be limited by
+shared tool queues. Iterative search may require many trials before it can
+distinguish better actions. When each trial requires one of these checks, a
+brute-force approach quickly exceeds the available budget. Expensive checks
+must be reserved for candidates that merit them, but search can then
+overfit[^fn-overfitting-c01] the convenient fast proxy used for screening.
 
 [^fn-overfitting-c01]: **Overfitting**: The machine-learning failure of fitting the noise of a training sample so closely that performance does not generalize to new data. An optimizer can overfit a proxy the same way, raising the measured score by exploiting the proxy's quirks rather than improving the true objective.
 
-Search can also overfit a convenient proxy, or worse, commit *silicon overfitting*. Because software models evolve in weeks while a design started today ships on silicon two to three years out, an optimizer cannot simply hyperspecialize a 3\ nm-class accelerator for today's static trace. The architect must force the search to balance extreme specialization with enough programmability to survive the fabrication time lag.
+The same problem appears over a longer time horizon. Software models can
+change in weeks, while a design started today may not ship in silicon for
+years. An optimizer cannot safely specialize a 3\ nm-class accelerator to one
+static trace without considering how workloads and software may change before
+deployment. The architect must balance specialization with enough
+programmability to survive that delay.
 
 While these methods narrow the work, their output alone does not prove whether a compiler assumption holds, whether the measured behavior follows from the proposed mechanism, or whether the remaining tradeoff justifies a multimillion-dollar commitment. The final evidence should document the candidates, assumptions, measurements, and rejections that affect the claim without needing every internal model trace. The architect must resolve the remaining questions using this curated body of evidence.
 
-## Formulating Efficiency Claims {#sec-efficiency-claims-need-rejectable-loops}
+These distinctions set the threshold for a useful result. The measurements
+must support a comparison
+under stated conditions, the required checks were run and support the
+conclusion, important alternatives and failures are recorded, and the result
+can inform or close an architecture decision. Rejecting a candidate, retaining
+the current architecture, or choosing a conventional method can all be useful
+results.
 
-Even if an AI-assisted process can produce a candidate and report end to end, the efficiency claim still requires a scoped system comparison. The difference between a plausible candidate and a defensible design is especially clear in an efficiency claim, because the Lighthouse subsystem cannot be judged from one score. Workload behavior, software support, data movement, physical limits, verification effort, and deployment conditions can all change which design is preferable. AI may help the architect coordinate those choices, but the resulting claim still demands evidence for the stated workload and constraints.
+Useful results do not need to cover the whole Lighthouse challenge. Progress
+can close one clearly stated part without claiming an end-to-end answer. A
+full-scope result addresses the complete challenge and may still conclude that
+no candidate works. Full Lighthouse success requires a supported design that
+meets the fixed conditions and the complete design-space report promised by the
+prompt, including the software path, physical constraints, rejected
+alternatives, checks, and a recommendation an independent architect can
+examine.
+
+These judgments also require two different comparisons. A reference design
+shows whether one architecture is preferable to another. A credible
+conventional or human-directed process shows whether AI improved the work used
+to reach the result. The two comparisons are not interchangeable.
+
+### A System Result Needs More Than One Score {#sec-efficiency-claims-need-rejectable-loops}
+
+Even if an AI-assisted process can produce a candidate and a polished report,
+a system claim still requires a scoped comparison. The difference
+between a plausible candidate and a defensible design is especially clear
+here, because the Lighthouse subsystem cannot be judged from one score.
+Workload behavior, software support, data movement, physical limits,
+verification effort, and deployment conditions can all change which design is
+preferable.
 
 Efficiency is a strict claim about how well a particular architecture performs useful work with limited resources. The claim must name the exact design, workload, and resource budget it covers. A faster design fails to solve the problem if it exceeds the power budget, cannot be verified, or depends on fragile software assumptions.
 
-Efficiency now spans far more than performance and power. Classical computer architecture made performance quantitative while treating cost and power as first-class constraints [@HennessyPatterson2017QuantitativeApproach]. Dennard-style scaling once made it easier to improve performance while keeping power density manageable [@DennardEtAl1974Scaling]. When that scaling regime weakened, dark silicon and the limits of multicore scaling pushed the field toward specialization [@BorkarChien2011FutureMicroprocessors; @EsmaeilzadehEtAl2011DarkSilicon; @HennessyPatterson2019GoldenAge].
+A complete system result spans more than efficiency alone. Classical computer architecture made performance quantitative while treating cost and power as first-class constraints [@HennessyPatterson2017QuantitativeApproach]. Dennard-style scaling once made it easier to improve performance while keeping power density manageable [@DennardEtAl1974Scaling]. When that scaling regime weakened, dark silicon and the limits of multicore scaling pushed the field toward specialization [@BorkarChien2011FutureMicroprocessors; @EsmaeilzadehEtAl2011DarkSilicon; @HennessyPatterson2019GoldenAge].
 
-The energy cost of data movement soon made arithmetic alone an incomplete measure. The underlying numbers are worth memorizing. In a 45\ nm process a 32-bit integer add costs about 0.1\ pJ and an on-chip SRAM access a few pJ, while a DRAM access costs one to two nJ, roughly a thousand times a typical on-chip operation [@Horowitz2014Energy]. Under the Lighthouse 3\ W budget that ratio means the memory system, not the compute array, decides whether a candidate is feasible, and a proposed accelerator that doubles compute while adding DRAM round trips has already lost on energy before any layout exists.
+The energy cost of data movement soon made arithmetic alone an incomplete
+measure. In the cited 45\ nm data, a 32-bit integer add costs about 0.1\ pJ,
+the SRAM examples range from 10 to 100\ pJ, and a DRAM access costs 1.3 to
+2.6\ nJ [@Horowitz2014Energy]. These values do not determine the Lighthouse
+result at a newer process node. They show why data movement can dominate and
+why any accelerator that adds DRAM traffic needs an explicit system energy
+comparison rather than a compute-only claim.
 
-Warehouse-scale operation expanded the boundary to include power delivery, utilization, networking, operations, and total cost of ownership [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Today, sustainability adds operational and embodied carbon to the comparison, factors that depend heavily on energy use, hardware manufacturing, utilization, geography, and system lifetime [@GuptaEtAl2021ChasingCarbon]. An AI-assisted comparison must clearly state the assumptions and evidence relevant to each efficiency dimension and explicitly name the violations, such as DRC failures or thermal limits, that would immediately rule out a candidate during the evaluation harness review.
+Warehouse-scale operation expanded the boundary to include power delivery,
+utilization, networking, operations, and total cost of ownership
+[@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Today, sustainability
+adds operational and embodied carbon to the comparison, factors that depend
+heavily on energy use, hardware manufacturing, utilization, geography, and
+system lifetime [@GuptaEtAl2021ChasingCarbon]. An AI-assisted comparison must
+state the assumptions and measurements relevant to each efficiency dimension
+and name the violations, such as design-rule-check (DRC) failures or thermal
+limits, that immediately rule out a candidate.
 
 A valid comparison must also account for failed and rejected alternatives, not
 only the winners. Keeping those results prevents later architects from
 reevaluating candidates that earlier evidence ruled out. It also shows
 which parts of the design space the claim actually covers.
 
-Modern benchmark suites already reflect this broader view. MLPerf, a community
-effort to make machine-learning performance claims reproducible across
-systems, includes deployment scenario, latency, throughput, and accuracy in its
-comparisons [@MattsonEtAl2020MLPerf]. Useful work must be evaluated
+Modern benchmark suites already reflect this broader view. MLPerf Inference,
+part of a community effort to make machine-learning performance claims
+reproducible across systems, includes deployment scenario, latency, throughput,
+and accuracy in its comparisons
+[@MattsonEtAl2020MLPerf; @ReddiEtAl2020MLPerfInference]. Useful work must be evaluated
 against the resource that is scarce in the stated setting, whether that is
 latency, throughput, energy, power, area, cost, carbon, reliability,
 verification effort, engineering time, or risk.
@@ -472,29 +582,43 @@ the 3\ W envelope under sustained load, or adds verification work that the
 project cannot absorb. Changing any of those conditions changes the claim and
 the evidence needed to support it.
 
-Efficiency splits along six dimensions an architect must price separately
-(@tbl-efficiency-dimensions). The architect should select the dimensions that define the claim.
-Reading the rows together also shows where a gain may shift cost or risk
-elsewhere.
+The comparison separates five dimensions of the architecture result from the
+cost of the study used to reach it (@tbl-efficiency-dimensions). An architect
+should select the dimensions that define the claim and check where a gain
+shifts cost or risk elsewhere.
 
-| **Dimension** | **Efficiency question** | **Why it complicates the comparison** |
+| **Dimension** | **Question** | **Why it complicates the comparison** |
 | --- | --- | --- |
 | **Performance** | How much useful work is delivered per unit time, latency budget, or service-level target? | The answer depends on workload selection, scenario, software stack, and whether the measured behavior matches the deployment claim. |
 | **Power and energy** | How much useful work is delivered per watt, joule, thermal budget, or battery envelope? | A credible comparison must account for activity, data movement, voltage/frequency choices, thermal constraints, and fidelity gaps between estimates and signoff. |
-| **Reliability and correctness** | How much useful work survives faults, corner cases, nondeterminism, and validation? | A faster candidate is not efficient if it spends its savings on fragility, security side-channels, debug burden, or invalid software and hardware assumptions. |
+| **Reliability and correctness** | Which required behaviors hold across faults, corner cases, nondeterminism, and the declared operating conditions? | A faster candidate is not acceptable if it spends its savings on fragility, security side-channels, debug burden, or invalid software and hardware assumptions. |
 | **Scalability and cost** | How much useful work is delivered per dollar, rack, network hop, operator action, or unit of capacity? | Local wins can shift cost to memory, network, power delivery, utilization, operations, or total cost of ownership. |
 | **Sustainability** | How much useful work is delivered per unit of operational and embodied environmental footprint? | Carbon depends on hardware lifetime, manufacturing, energy mix, utilization, and where and when computation runs. |
 | **Evidence and engineering effort** | How much decision-relevant evidence is obtained per simulation, experiment, verification run, or engineer-hour? | Generating more candidates can still be inefficient if evaluation consumes scarce feedback, hides failures, or cannot reject weak outputs. |
 
-: **Efficiency is six coupled dimensions, not one score:** performance, power, reliability, scalability, sustainability, and evidence cost are increasingly coupled, so a valid comparison must show when an apparent improvement shifts cost or changes the scope. {#tbl-efficiency-dimensions tbl-colwidths="[22,32,34]"}
+: **A system result and the work needed to establish it require different measures.** Five dimensions describe the proposed system, while evidence and engineering effort describe the study. A valid comparison must show when an apparent improvement shifts cost or changes the scope. {#tbl-efficiency-dimensions tbl-colwidths="[22,32,34]"}
 
-Two kinds of efficiency operate in this comparison. The proposed hardware system must perform useful work within its resource limits, and the study itself must allocate simulator runs, physical-design experiments, verification effort, and expert review carefully enough to reach a reliable conclusion. Reducing the cost of the study is valuable only when the remaining observations can still distinguish the alternatives and expose the failures that matter to the decision.
+The comparison contains two related concerns. The proposed hardware system must perform useful work within its resource limits, and the study itself must allocate simulator runs, physical-design experiments, verification effort, and expert review carefully enough to reach a reliable conclusion. Reducing the cost of the study is valuable only when the remaining observations can still distinguish the alternatives and expose the failures that matter to the decision.
 
-These efficiency dimensions interact. In the mobile XR setting anchored by XRBench and ILLIXR, frame latency, energy, sustained power, and data movement are so tightly coupled that a gain in one can violate a deadline or thermal limit in another. Better simulated performance can be offset by added verification work, and lower energy may depend on fragile software assumptions. A candidate that wins under a proxy may fail on a more faithful workload. The architect must explain which tradeoffs are acceptable for the stated constraints, defining the scope of the efficiency claim instead of relying on a single attractive artifact or score.
+These dimensions interact. In the mobile XR setting anchored by XRBench and ILLIXR, frame latency, energy, sustained power, and data movement are so tightly coupled that a gain in one can violate a deadline or thermal limit in another. Better simulated performance can be offset by added verification work, and lower energy may depend on fragile software assumptions. A candidate that wins under a proxy may fail on a more faithful workload. The architect must explain which tradeoffs are acceptable for the stated constraints, defining the scope of the system claim instead of relying on a single attractive artifact or score.
 
-These coupled requirements do not imply that every architecture project needs AI. Traditional architecture methods remain effective when the workload, abstraction, feedback path, and proposed change are clearly bounded. We should first identify what familiar models, scripts, simulators, and expert reviews already handle well before stating exactly what we expect AI to improve. The test is whether the assistance leads to a better system or a more reliable conclusion, rather than simply generating more artifacts.
+These coupled requirements do not imply that every architecture project needs
+AI. Conventional architecture methods may remain preferable when the design
+question and permitted change are narrow enough to evaluate directly and the
+required feedback is cheap and dependable. We should first identify what
+familiar models, scripts, simulators, and expert reviews already handle well
+before stating exactly what we expect AI to improve. The test is whether the
+assistance leads to a better system or a more reliable conclusion, rather than
+simply generating more artifacts.
 
-A common objection is that today's models hallucinate and cannot be trusted to produce correct hardware, so an AI-assisted architecture program is premature. The objection is right about reliability and wrong about what the program needs. Nothing here asks a model to be trustworthy on its own. It asks that every generated proposal pass the same rejection checks, matched baselines, and evidence standard as any other candidate, so that an unreliable generator is bounded by the loop rather than believed. The open question is not whether models are reliable enough to trust, but whether the loop around them can catch their errors cheaply enough to be worth running. If every hallucinatory proposal requires a multi-hour synthesis run to reject, the computational cost of the evaluation loop will rapidly eclipse the human engineering time it was meant to save. @sec-data-scarcity-verification-load takes up that condition directly, where the verification load and the rising cost of a late escape decide whether cheap rejection is reachable at all.
+A common objection is that today's models hallucinate and cannot be trusted to
+produce correct hardware, so an AI-assisted architecture program is premature.
+The reliability concern is valid, but no architecture method should be trusted
+without checks. The practical question is whether the method and its required
+checks improve the architecture result, lower the total cost of reaching a
+result of comparable quality, or both, relative to competent conventional
+work. If every bad proposal requires a multi-hour synthesis run, evaluation can
+consume more engineering time and computation than the method saves.
 
 The Lighthouse prompt makes this friction concrete. The requested subsystem must support a workload class, meet a strict power envelope, fit a technology assumption, interact correctly with software, and produce reviewable evidence. The final comparison must weigh energy, latency, memory traffic, programmability, verification, and deployment risk. While a single scalar objective may help an automated search navigate the space, it cannot substitute for architectural judgment.
 
@@ -502,49 +626,70 @@ The Lighthouse prompt makes this friction concrete. The requested subsystem must
 \Needspace{11\baselineskip}
 ```
 
-## Evaluating Existing Systems
+### What Current Systems Establish
 
-Applying this judgment to today's tools reveals both rapid progress and persistent gaps. This section does not survey the field, and @sec-appendix-b-ai-for-architecture-map carries the map. What follows is a curated set of flagship results, chosen because their successes and their limits are the most diagnostic of where AI-assisted architecture actually stands. Each is read the same way, by what it establishes and by the telltale limit it exposes.
+Reading today's tools by what they establish and what remains untested reveals
+both rapid progress and persistent gaps. This section does not survey the
+field. What follows is a curated set of flagship results, chosen because their successes
+and limits are especially diagnostic of where AI-assisted architecture stands.
 
-Begin outside architecture, with the result that sets the frame. AlphaTensor searched the space of matrix-multiplication algorithms and found one that multiplies 4 by 4 matrices in 47 scalar multiplications, improving on the 49 of Strassen's two-level method for the first time in half a century [@FawziEtAl2022AlphaTensor]. Two qualifications travel with that number, and neither is a footnote. The record holds in modular arithmetic over the field of two elements rather than over the reals, and the standard-arithmetic improvements arrived at other matrix shapes. Much of the press coverage dropped both, which is a compact demonstration of the problem this book takes up. What made the search possible is a property architecture does not have. Every candidate decomposition could be checked for exact correctness instantly and algebraically, and a single scalar counted the multiplications, so a wrong candidate cost nothing and the search could afford to be wrong millions of times. Read the rest of this section against that condition, because nearly every limit that follows restates what happens when feedback stops being exact, instant, and free.
+Different readers can apply that comparison through their own work.
 
-Inside architecture, the closest approach to that regime is tensor-program autotuning. Predictive design-space exploration uses simulated performance to train surrogate models that estimate behavior across a specified design space [@IpekEtAl2006PredictiveDSE]. AutoTVM closes the loop further, using measured hardware execution to guide a statistical search for tensor-program schedules [@ChenEtAl2018AutoTVM]. In each case, the input, architecture job, feedback source, and bounded result remain clear. AutoTVM's scope is also its limit, since tensor-program schedules are the one layer of the stack where a candidate runs on real hardware in seconds and where running a bad one is harmless.
+- **Researcher:** Name the architecture question, the role AI played, the
+  artifact or finding produced, and the evidence and limits behind it.
+- **Tool builder:** Ask whether the harness keeps the inputs, settings,
+  results, failures, and costs that another method or engineer would need.
+- **Author or reviewer:** Ask what would reject the claim, why the measured
+  mechanism supports it, and which decision it can justify.
 
-AlphaChip, a learning-based macro-placement method, is a prominent physical-design example. Its inputs are a netlist and macro descriptions, its job is macro placement, and its feedback comes from proxy rewards such as wirelength and congestion [@MirhoseiniEtAl2021GraphPlacement]. Its reported placement speed established how fast the method produces a candidate, not that it beats strong classical baselines, and its reported deployment across several TPU generations [@GoogleDeepMind2024AlphaChip; @GoldieEtAl2024AlphaChipAddendum] is relevant evidence without settling that matched comparison. @sec-feedback-verification-trust examines the proxy-metric and baseline dispute in full.
+An example outside architecture sets the frame. AlphaTensor searched the space of matrix-multiplication algorithms and found one that multiplies 4 by 4 matrices in 47 scalar multiplications, improving on the 49 of Strassen's two-level method for the first time in half a century [@FawziEtAl2022AlphaTensor]. Two qualifications travel with that number, and neither is a footnote. The record holds in modular arithmetic over the field of two elements rather than over the reals, and the standard-arithmetic improvements arrived at other matrix shapes. Those qualifications determine where the algorithm applies, so dropping them changes the claim rather than merely simplifying it. Every candidate decomposition admitted an exact algebraic check, and a single scalar counted the multiplications, so invalid candidates were inexpensive to discard relative to a physical design study. Complete architecture claims rarely have one check with the same scope, cost, and decisiveness. Evaluation cost, fidelity, task scope, and access to evidence therefore limit what each result in this section establishes.
 
-Where the feedback is a simulator rather than silicon, the harness starts to matter more than the searcher. ArchGym placed a family of architecture simulators behind one interface and gave competing search algorithms equal sample budgets, finding that no algorithm dominates across design spaces [@KrishnanEtAl2023ArchGym]. That is a finding about experimental design rather than about any optimizer, and it inherits every fidelity limit of the simulators sitting behind it. Two learned design-space explorations bracket what such evidence can be made to carry. Apollo showed that transfer across related accelerator design spaces makes learned search sample-efficient in industrial practice, evaluated against fast proxies and staying inside one company's accelerator template [@yazdanbakhsh2021apollo]. BOOM-Explorer found efficient microarchitectures of an open-source RISC-V core through a real VLSI flow, where hours per sample cap the space it can afford to see [@BaiEtAl2021BOOMExplorer]. The pair is worth holding together, because the industrial result is the one an outsider cannot reproduce and the reproducible result is the one that had to buy its evidence by the hour.
+Inside architecture, tensor-program autotuning approaches that regime. Predictive design-space exploration uses simulated performance to train surrogate models that estimate behavior across a specified design space [@IpekEtAl2006PredictiveDSE]. AutoTVM uses measured hardware execution to guide a statistical search for tensor-program schedules [@ChenEtAl2018AutoTVM]. In each case, the input, architecture job, feedback source, and result scope remain clear. AutoTVM operates in a setting where many candidate schedules can run on real hardware quickly and most failures remain contained within the tuning run. That property makes the search practical, but it also limits what the result says about the rest of the system.
 
-Generation methods have begun to reach real hardware in narrow settings. In a conversational study, a language model drafted the Verilog for a small 8-bit processor that reached tapeout, though a human guided the model through many revisions [@BlockloveEtAl2023ChipChat]. A separate method that learns a CPU's logic from input-output examples produced a RISC-V core, Enlightenment-1, that was fabricated and runs Linux, reaching that result through a non-agentic search rather than a tool-using loop [@ChengEtAl2024AutomatedCPU]. Each reaches silicon on a narrow slice of the problem, and no autonomous loop has yet carried a full architecture study from intent to fabricated hardware. Measuring that generation ability has itself become standard practice, with VerilogEval and RTLLM scoring models on shared RTL tasks [@VerilogEval; @RTLLM], and scores have climbed fast enough that a revisit of the benchmark reports saturation and contamination pressure worth taking seriously [@PinckneyEtAl2024RevisitingVerilogEval]. What those benchmarks certify is that generated code passes a small functional testbench, which is several signoff stages short of a design.
+AlphaChip, a learning-based macro-placement method, is a prominent
+physical-design example. Its inputs are a netlist and macro descriptions, its
+job is macro placement, and its feedback comes from proxy rewards such as
+wirelength and congestion [@MirhoseiniEtAl2021GraphPlacement]. Its reported
+placement speed established how fast the method produces a candidate, not that
+it beats strong classical baselines, and its reported deployment across
+several TPU generations [@GoogleDeepMind2024AlphaChip;
+@GoldieEtAl2024AlphaChipAddendum] is relevant evidence without settling that
+matched comparison. The later treatment of feedback and verification examines
+the proxy-metric and baseline dispute in full.
 
-Industrial deployment tells a different story from the academic record, and it is harder to read. Domain-adapted models trained on proprietary design data outperform much larger general models at internal assistance work such as EDA scripting, bug triage, and engineering question answering, which suggests the near-term industrial shape is an assistant beside the flow rather than an agent inside it [@LiuEtAl2023ChipNeMo]. A language-model agent can also plan and drive a real synthesis-to-layout tool flow from natural-language intent, though it orchestrates existing tools on small designs and its correctness rides entirely on the tools it calls [@HeEtAl2024ChatEDA]. Learned search over flow parameters has crossed into routine commercial use, with vendor-reported production tapeouts in the hundreds [@Synopsys2023DSOai]. That last claim is the one to sit with. Its evidence standard is a press release, with no public methodology, no baseline, and no matched comparison, and it is nonetheless among the most widely repeated evidence that this technology works at scale.
+Where the feedback is a simulator rather than silicon, the harness starts to matter more than the searcher. ArchGym placed a family of architecture simulators behind one interface and gave competing search algorithms equal sample budgets, finding that no algorithm dominates across design spaces [@KrishnanEtAl2023ArchGym]. That is a finding about experimental design rather than about any optimizer, and it inherits every fidelity limit of the simulators sitting behind it. Two learned design-space explorations bracket what such evidence can be made to carry. Apollo transferred knowledge across related accelerator design spaces to reduce the number of expensive target evaluations inside one company's accelerator template [@yazdanbakhsh2021apollo]. BOOM-Explorer found efficient microarchitectures of an open-source RISC-V core through a documented 7\ nm VLSI flow, where hours per sample cap the space it can afford to see [@BaiEtAl2021BOOMExplorer]. The pair is worth holding together because both show the value of costly, domain-specific evidence while neither supplies a completely public, independently reproducible industrial study.
 
-The pattern across all of them is easier to see side by side (@tbl-existing-systems). Reading down the limits column, the results sort into four regimes: feedback that is exact and free, feedback that is measured but confined to one cheap layer, feedback that is a proxy for the thing that matters, and evidence that no outsider can inspect at all.
+Generation methods have begun to reach real hardware in narrow settings. In a conversational study, a language model drafted the Verilog for a small 8-bit processor that reached tapeout, though a human guided the model through many revisions [@BlockloveEtAl2023ChipChat]. A separate method that learns a CPU's logic from input-output examples produced a RISC-V core, Enlightenment-1, that was fabricated and runs Linux, reaching that result through a non-agentic search rather than a tool-using loop [@ChengEtAl2024AutomatedCPU]. Each reaches silicon on a narrow slice of the problem. Among the public systems reviewed here, none carries a full architecture study autonomously from intent to fabricated hardware. Measuring generation ability has itself become standard practice. VerilogEval primarily checks functional behavior on shared RTL tasks, while RTLLM adds post-synthesis design-quality metrics without reaching placed-and-routed physical signoff [@VerilogEval; @RTLLM]. A later VerilogEval study reports rapid model progress, prompt sensitivity, benchmark revisions, and a more detailed failure classification [@PinckneyEtAl2024RevisitingVerilogEval].
+
+Industrial deployment tells a different story from the academic record, and it is harder to read. ChipNeMo reported task-specific benefits from domain adaptation on internal engineering question answering and EDA script generation, while a general model remained stronger on several bug-analysis subtasks [@LiuEtAl2023ChipNeMo]. Its evidence combines expert ratings, task-specific measures, and functional checks on simple scripts, which suggests a near-term industrial shape of an assistant beside the flow rather than an agent inside it. A language-model agent can also decompose a request and drive a synthesis-to-layout tool flow from natural-language intent [@HeEtAl2024ChatEDA]. In ChatEDA, successful tool execution and human-rated request fulfillment test useful parts of the interaction, but they do not establish independent functional correctness or complete physical signoff. Learned search over flow parameters has crossed into commercial use, with 100 vendor-reported commercial tapeouts [@Synopsys2023DSOai]. That last claim is the one to sit with. Its evidence standard is a press release, with no public methodology, no baseline, and no matched comparison, and it is nonetheless among the most widely repeated evidence that this technology works at scale.
+
+The pattern across all of them is easier to see side by side (@tbl-existing-systems). Reading down the limits column reveals several different constraints on the claim, including check cost and fidelity, task scope, baseline quality, workflow coverage, and whether an outside reviewer can inspect the evidence.
 
 | **System** | **What it establishes** | **The telltale limit** |
 | --- | --- | --- |
-| AlphaTensor [@FawziEtAl2022AlphaTensor] | Learned search can pass a fifty-year human frontier and prove the result correct | The check is exact, instant, and algebraic, and one scalar scores it |
-| AutoTVM [@ChenEtAl2018AutoTVM] | A closed measured loop works when every candidate runs on real hardware in seconds | Schedules are the one layer where measurement is that cheap and a bad candidate is harmless |
-| AlphaChip [@MirhoseiniEtAl2021GraphPlacement] | A learned policy produces macro placements a production flow accepts | The reward is proxy wirelength and congestion, and the matched baseline is disputed |
-| ArchGym [@KrishnanEtAl2023ArchGym] | At equal sample budgets no search algorithm dominates, so the harness outweighs the searcher | Every candidate is graded by a simulator, so the harness inherits its fidelity limits |
-| Apollo and BOOM-Explorer [@yazdanbakhsh2021apollo; @BaiEtAl2021BOOMExplorer] | Learned design-space exploration works in industry and through a public VLSI flow | Apollo scores fast proxies inside one firm's template; BOOM-Explorer is reproducible but pays hours per sample |
-| VerilogEval and RTLLM [@VerilogEval; @RTLLM] | RTL generation is measurable on shared tasks, and scores climb fast | Passing means clearing a small testbench, with no synthesis, timing, or physical constraints |
+| AlphaTensor [@FawziEtAl2022AlphaTensor] | Learned search improved a fifty-year-old matrix-multiplication count for 4 by 4 matrices over the field of two elements | The finite-field construction admits an exact algebraic check, and one scalar scores it |
+| AutoTVM [@ChenEtAl2018AutoTVM] | Measured search can improve schedules when many candidates run quickly on real hardware | The result covers tensor-program schedules, where failures are usually contained within the tuning run |
+| AlphaChip [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2026UpdatedAssessment] | A learned policy produces macro placements a production flow accepts | The reward is proxy wirelength and congestion, and the matched baseline is disputed |
+| ArchGym [@KrishnanEtAl2023ArchGym] | At equal sample budgets no search algorithm dominates, so the harness and budget shape the result | Every candidate is graded by a simulator, so the result inherits its fidelity limits |
+| Apollo and BOOM-Explorer [@yazdanbakhsh2021apollo; @BaiEtAl2021BOOMExplorer] | Learned design-space exploration can exploit domain-specific evidence | Apollo transfers across related accelerator spaces to reduce costly target evaluations; BOOM-Explorer uses an open-source core but depends on commercial tools and pays hours per sample |
+| VerilogEval and RTLLM [@VerilogEval; @RTLLM] | RTL generation is measurable on shared tasks | VerilogEval emphasizes functional simulation; RTLLM adds post-synthesis quality metrics; neither reaches physical signoff |
 | Chip-Chat and Enlightenment-1 [@BlockloveEtAl2023ChipChat; @ChengEtAl2024AutomatedCPU] | Generated logic has reached silicon, in one case a core that boots Linux | A human drove one and a non-agentic search the other, so no autonomous loop reached silicon |
-| ChatEDA [@HeEtAl2024ChatEDA] | An agent can plan and invoke a real tool flow from stated intent | It drives existing tools on small designs, so correctness rides on the tools it calls |
-| ChipNeMo [@LiuEtAl2023ChipNeMo] | Domain-adapted models beat far larger general models at internal design assistance | The metric is rated helpfulness on assistive tasks, and none of it is externally reproducible |
-| DSO.ai [@Synopsys2023DSOai] | Learned flow-parameter search is in routine commercial use at reported production scale | The evidence standard is a press release, with no public methodology or matched baseline |
+| ChatEDA [@HeEtAl2024ChatEDA] | An agent can plan and invoke a real tool flow from stated intent | The benchmark checks tool execution and human-rated request fulfillment on small designs, not independent functional correctness or complete signoff |
+| ChipNeMo [@LiuEtAl2023ChipNeMo] | Domain adaptation can improve selected internal engineering tasks | The gains are task-specific, general models remain stronger on some subtasks, and the proprietary evaluation is not externally reproducible |
+| DSO.ai [@Synopsys2023DSOai] | Learned flow-parameter search has reached 100 vendor-reported commercial tapeouts | The evidence standard is a press release, with no public methodology or matched baseline |
 
-: **Every limit in the right column is a limit on feedback:** the one result that passed a human frontier had a check that was exact, instant, and free, and each step away from that regime buys a weaker claim. {#tbl-existing-systems tbl-colwidths="[20,37,43]"}
+: **The strength of each result depends on its scope and how it was evaluated:** Exact, inexpensive checks support strong scoped claims, while narrow measurements, proxies, weak baselines, and supporting data, methods, or artifacts that outsiders cannot inspect each limit what an architect can conclude. {#tbl-existing-systems tbl-colwidths="[20,37,43]"}
 
 These tools succeed at their individual tasks while exposing the integration problem that a whole architecture study must solve. Adjacent fields faced a version of it and moved forward by adopting shared baselines, standardized datasets, and common evaluation. ImageNet [@RussakovskyEtAl2015ImageNet] gave computer vision a common benchmark, and CASP (Critical Assessment of Structure Prediction) [@MoultEtAl1995CASP] let AlphaFold's [@JumperEtAl2021AlphaFold] structure predictions be measured against community-held standards. Computer architecture needs the same shared tasks, public datasets, and open evaluation protocols to turn narrow tool use into a reviewable AI-assisted practice.
 
-Progress toward the moonshot will require more than isolated demonstrations. In software engineering, benchmarks like SWE-bench, a benchmark of real GitHub-issue fixes, provide immediate, exact correctness checks via unit tests, and agents have advanced quickly on it (@fig-swebench-progress) [@JimenezEtAl2024SWEBench]. Hardware benchmarking differs because evaluation is delayed and physical limits are non-linear. A generator might output structurally valid RTL, but that code must eventually satisfy coupled physical silicon constraints like timing closure, design rules, and thermal budgets. Correctness requires passing through many siloed EDA tools.
+Progress toward the moonshot will require more than isolated demonstrations. Software engineering offers a useful contrast because it can often obtain a task-level result much faster than hardware design can obtain physical evidence. SWE-bench turns real GitHub-issue fixes into a shared task graded by automated repository tests, giving coding agents a relatively quick and repeatable signal (@fig-swebench-progress) [@JimenezEtAl2024SWEBench]. Passing those tests does not prove complete software correctness, but it supports a specific claim about resolving the issue under the benchmark conditions. Hardware also has fast checks for specific properties. A complete system-and-chip claim, however, must connect functional verification with synthesis, timing, power, physical-design, and thermal evidence whose cost and fidelity differ.
 
 ```{python}
 #| label: fig-swebench-progress
 #| fig-cap: |
-#|   **Coding agents now resolve most of SWE-bench Verified.** Best reported SWE-bench Verified score [@JimenezEtAl2024SWEBench], one point per released model, tracked through Epoch AI's benchmarking hub [@EpochAI2025AIModels]; the line traces the best result to date. Scores climbed from roughly a third of this human-filtered 500-task subset to over four-fifths in about seventeen months. Hardware has no comparably fast, exact feedback loop, which is why architecture cannot simply copy this trajectory.
+#|   **Standardized task-level checks support rapid iteration on SWE-bench Verified.** Best reported SWE-bench Verified score [@JimenezEtAl2024SWEBench] for each model name in a dated snapshot of Epoch AI's benchmarking hub [@EpochAI2025AIModels]; the line traces the best result to date. Reported configurations and test harnesses can differ, so the plot shows the pace of benchmark progress rather than a controlled comparison among models. Scores climbed from roughly a third of this human-filtered 500-task subset to over four-fifths in about seventeen months. Repository tests provide a quick, repeatable signal for the defined task, while a complete architecture claim must combine functional and physical evidence from several tools.
 #| out-width: "88%"
-#| fig-alt: "Scatter of SWE-bench Verified resolved percentage versus model release date from late 2024 to 2026. Points climb from about 31 percent to about 84 percent, with a line tracing the best-to-date frontier through GPT-4o, Claude 3.7 Sonnet, Claude Opus 4, GPT-5, and Claude Opus 4.7."
+#| fig-alt: "Scatter of the best reported SWE-bench Verified resolved percentage for each model name versus model release date from late 2024 to 2026. Points climb from about 31 percent to about 84 percent, with a solid line tracing the best-to-date frontier."
 
 import csv
 import datetime
@@ -553,13 +698,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import _python.plots as _ap
 from _python.plots import COLORS, apply_style
-from _python.labels import place_labels
 
 apply_style()
 
 # Data: SWE-bench Verified results [@JimenezEtAl2024SWEBench] tracked in Epoch
-# AI's benchmarking hub [@EpochAI2025AIModels]; best score per released model.
-# Values dataset-transcribed. Accessed 2026-07-19.
+# AI's benchmarking hub [@EpochAI2025AIModels]; best score per model name in
+# the dated snapshot. Values dataset-transcribed. Accessed 2026-07-19.
 # Receipt: data/source-receipts/chapter1-swebench-verified.csv
 _root = Path(_ap.__file__).resolve().parents[2]
 
@@ -583,6 +727,16 @@ with open(_root / "data" / "source-receipts" / "chapter1-swebench-verified.csv",
         if x is None:
             continue
         pts.append({"model": row["model"], "score": score * 100 if score <= 1 else score, "x": x})
+
+# The snapshot can contain several configurations under the same model name.
+# Retain only the best reported score for each name rather than presenting
+# those configurations as distinct model releases.
+best_by_name = {}
+for p in pts:
+    name = (p["model"] or "").strip()
+    if name not in best_by_name or p["score"] > best_by_name[name]["score"]:
+        best_by_name[name] = p
+pts = list(best_by_name.values())
 pts.sort(key=lambda p: p["x"])
 best = -1.0
 frontier = []
@@ -593,7 +747,7 @@ for p in pts:
 
 fig, ax = plt.subplots(figsize=(5.4, 3.2))
 ax.scatter([p["x"] for p in pts], [p["score"] for p in pts], s=16, marker="o",
-           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.7, zorder=2, label="Model releases")
+           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.7, zorder=2, label="Named models")
 ax.plot([p["x"] for p in frontier], [p["score"] for p in frontier], color=COLORS["evidence"], lw=1.6, zorder=3)
 ax.scatter([p["x"] for p in frontier], [p["score"] for p in frontier], s=22, marker="o",
            facecolor=COLORS["evidence"], edgecolor=COLORS["evidence_ink"], linewidth=0.5, zorder=4, label="Best to date")
@@ -608,92 +762,270 @@ for _sp in ("top", "right"):
     ax.spines[_sp].set_visible(False)
 ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
 ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
-want = ["GPT-4o", "Claude 3.7 Sonnet", "Claude Opus 4", "GPT-5", "Claude Opus 4.7"]
-by_name = {}
-for p in frontier:
-    key = (p["model"] or "").strip()
-    if key in want and key not in by_name:
-        by_name[key] = p
-items = [(by_name[w]["x"], by_name[w]["score"], w) for w in want if w in by_name]
-place_labels(ax, fig, items, fontsize=5.0, color=COLORS["ink"])
 fig.subplots_adjust(left=0.10, right=0.97, top=0.98, bottom=0.12)
 ```
 
-The climb is what a fast, exact feedback loop buys. Best reported scores rose from roughly a third of real issues to over four-fifths in about seventeen months, because every attempt is graded in seconds against unit tests. Architecture has no equivalent loop because timing closure, design rules, power targets, and thermal budgets each require heavy, slow EDA runs. This is why its own progress has instead depended on shared tasks, inspectable tools, and the human architect carefully structuring the evaluation harness. To achieve SWE-bench-like iteration speeds, the architecture community must develop intermediate proxies (graph-based structural checkers or fast static analysis, for example) that can reject obvious failures in seconds without requiring full synthesis.
+The horizontal axis covers roughly seventeen months of model releases, while
+the vertical axis reports the share of SWE-bench Verified issues resolved. Each
+hollow point is the best result associated with one model name in the dated
+snapshot, and the solid line retains only results that set a new reported best.
+Because the submitted configurations and test harnesses can differ, the points do
+not isolate model quality. The rising frontier instead shows the pace at which
+a standardized, automated task-level check can support iteration across models
+and engineering systems. Best reported scores rose from roughly a third of the
+benchmark issues to over four-fifths. Architecture also uses fast analytical,
+structural, and functional checks, but no single one closes a complete
+system-and-chip claim. Timing closure, design rules, power targets, and thermal
+limits require later and more expensive evidence. Fast static analysis and
+calibrated proxies can reduce that cost by screening candidates, but they do
+not replace the implementation checks on which a physical claim depends.
 
-SPEC-style benchmarks made performance claims more comparable by specifying workloads, run rules, and reporting standards, and a benchmark that becomes standard also steers which improvements a community goes after [@Patterson2012Benchmarks]. Shared simulators such as gem5 made architecture experiments easier to inspect across labs. FPGA-accelerated simulation platforms such as FireSim, community benchmark suites such as MLPerf, artifact-evaluation practices, and open tool flows succeeded because they let researchers understand, rerun, challenge, and safely build on reported results [@SPEC2017CPU; @BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim; @MattsonEtAl2020MLPerf]. AI-assisted results will need the same shared tasks, tool interfaces, and evidence standards to matter beyond a single study.
+SPEC-style benchmarks made performance claims more comparable by specifying workloads, run rules, and reporting standards, and a benchmark that becomes standard also steers which improvements a community goes after [@Patterson2012Benchmarks]. SPEC CPU defines common workloads and reporting rules [@SPEC2017CPU]. gem5 supplies a shared simulation platform [@BinkertEtAl2011Gem5], FireSim supplies an FPGA-accelerated simulation platform [@KarandikarEtAl2018FireSim], and MLPerf defines benchmark suites and submission rules for machine-learning systems [@MattsonEtAl2020MLPerf]. These resources do not make results automatically correct, but they give other researchers common objects with which to rerun, compare, and challenge a claim. AI-assisted results will need the same shared tasks, tool interfaces, and evidence standards to matter beyond a single study.
 
-## Data Scarcity and the Verification Load {#sec-data-scarcity-verification-load}
+### Data Scarcity and the Verification Load {#sec-data-scarcity-verification-load}
 
-If these components are so promising, why is AI-assisted architecture not a solved problem? Two forces hold it back, and both trace to how little hardware design data reaches the open world and how much of the remaining work is verification. The first force has a name, *dark data*, design knowledge that exists in volume inside companies but never reaches any public corpus.
+If these systems and tools are so promising, why is AI-assisted architecture not a solved problem? Two forces hold it back, and both trace to how little hardware design data reaches the open world and how much of the remaining work is verification. The first force has a name, *dark data*, design knowledge that exists in volume inside companies but never reaches any public corpus.
 
-Software and hardware diverge sharply on the data axis. A coding agent can observe millions of open-source pull requests, Stack Overflow discussions, and unit tests to learn idiomatic Python or C++. In contrast, high-fidelity hardware IP, process design kits (PDKs), and production silicon design data are proprietary, closely held, and rarely published. With little open RTL, cycle-accurate memory traces, or production floorplans available in its pretraining corpus, a foundation model cannot magically acquire an understanding of power-delivery routing or 3\ nm timing constraints. When it attempts to generate hardware structures zero-shot, it relies on superficial textual patterns rather than physical invariants, often proposing designs that look correct but are fundamentally unroutable or physically impossible to cool.
+Software and hardware differ in what public repositories expose. Software
+corpora can draw on source changes, technical discussions, and tests from
+public projects. Architecture corpora cannot include proprietary hardware IP,
+advanced commercial process models, or production silicon data without
+authorization. The public record therefore leaves important gaps between RTL
+or architecture choices and outcomes such as power-delivery routing or
+advanced-node timing. A generator trained largely on public text may reproduce
+plausible syntax without representing project-specific constraints, so its
+outputs still require constraint-aware representations and appropriate tool
+checks.
 
-Because the model lacks this latent knowledge, it must learn these constraints interactively during the design loop. It submits a candidate to a toolchain, encounters a DRC error or timing violation, and attempts to revise the design [@TsaiEtAl2024RTLFixer]. However, this feedback loop is orders of magnitude slower than a software unit test. This structural data deficit explains why open hardware ecosystems like RISC-V and OpenROAD [@AjayiEtAl2019OpenROAD] are so critical. They provide the accessible bootstrap data needed to train architecture models, serving as the only viable bridge into the synthesis and physical-design loops that Architecture 2.0 must demonstrate. However, even these open ecosystems currently offer only hundreds of high-quality designs, orders of magnitude fewer than the millions of software repositories used to train coding agents. That gap requires researchers to develop fundamentally more sample-efficient learning methods.
+A method need not infer every physical constraint from training data. An
+architect can supply specifications and analytical models, encode formal
+constraints in the representation, retrieve current documentation, or use
+tool results to revise a candidate. Tool-guided repair after a syntax or
+compiler error is one route [@TsaiEtAl2024RTLFixer], but each route exposes
+different information and has different costs. Open hardware resources also
+help in different ways. Chipyard connects shareable RISC-V-based designs to
+simulation and implementation paths [@chipyard], while OpenROAD provides an
+open digital physical-design flow [@AjayiEtAl2019OpenROAD]. They complement
+proprietary data, domain adaptation, synthetic examples, and physics-based
+models rather than serving as the only route. Their restricted coverage raises
+the value of sample-efficient methods, better representations, and explicit
+constraints.
 
-Scarce data also raises the verification stakes. A model that cannot generate correct hardware zero-shot[^fn-zero-shot-c01] emits plausible but subtly flawed structures, and industry data shows that verification consumes roughly half of total project engineering effort, with design engineers spending about half their time in verification [@Foster2022WilsonVerificationStudy]. If an AI generates thousands of novel accelerators a day but humans must manually write UVM[^fn-uvm-c01] testbenches for them, it hasn't solved the bottleneck. It has just moved it to verification. Producing candidates faster than reviewers can check them deepens that backlog, so driving formal-verification tools and constrained-random testing is part of the work, not an afterthought. A generated cache controller that hides a coherence deadlock is worse than useless if the deadlock takes months to find. A working rule of thumb holds that a defect's cost grows by roughly an order of magnitude at each stage it escapes, from review to simulation to first silicon to the field, which is why a loop earns its keep by moving rejections toward the cheap end; @sec-feedback-verification-trust develops this escalation and the multi-fidelity discipline it motivates.
+Scarce data also raises the verification stakes. A model that cannot generate correct hardware zero-shot[^fn-zero-shot-c01] may emit plausible but subtly flawed structures, and the cited industry survey reports that verification consumes roughly half of total project engineering effort, with design engineers spending about half their time in verification [@Foster2022WilsonVerificationStudy]. If a generator produces thousands of novel accelerators a day but engineers must manually write UVM[^fn-uvm-c01] testbenches for them, it has moved the limiting work to verification. Producing candidates faster than reviewers can check them deepens that backlog, so formal-verification tools and constrained-random testing remain part of the work rather than an afterthought. A generated cache controller that hides a coherence deadlock is worse than useless if the deadlock takes months to find. The cost of a defect can rise sharply when it escapes into later validation stages or fabricated silicon. This escalation makes early analytical, functional, formal, and physical checks economically important.
 
-[^fn-zero-shot-c01]: **Zero-shot generation**: Producing a correct output for a task the model has seen no examples of, on the first attempt and without feedback. A model that cannot do this for RTL must learn through tool feedback instead, which places the slow EDA toolchain inside its training loop.
+[^fn-zero-shot-c01]: **Zero-shot generation**: Producing an output for a task without task-specific examples or iterative feedback. A first-pass RTL result still requires checks against the design specification and implementation constraints. Examples, retrieved knowledge, explicit constraints, domain adaptation, and tool-guided revision can all improve later attempts.
 
-[^fn-uvm-c01]: **UVM (Universal Verification Methodology)**: The standard SystemVerilog class library teams use to build constrained-random testbenches, supplying reusable stimulus drivers, monitors, scoreboards, and coverage collectors. The testbench is often larger than the design it checks, so generating hardware faster only helps if the verification collateral scales with it.
+[^fn-uvm-c01]: **UVM (Universal Verification Methodology)**: The standard SystemVerilog class library teams use to build constrained-random testbenches, supplying reusable stimulus drivers, monitors, scoreboards, and coverage collectors. Verification collateral can rival or exceed the design effort, so generating hardware faster only helps if that collateral scales with it.
 
-Verification must also reach past functional correctness to hardware security. After Spectre [@KocherEtAl2019Spectre], a loop that emits hardware has to check its own structures for microarchitectural side channels, isolation-boundary violations, and hardware Trojans, which means generating the SystemVerilog assertions, security properties, and testbenches those checks require.
+Verification must also reach past functional correctness when the design's threat model includes hardware security. Spectre showed that functionally correct processors can still expose microarchitectural side channels [@KocherEtAl2019Spectre]. An AI-assisted study that generates security-relevant hardware must apply independent checks appropriate to the design and threat model, which may include isolation properties, side-channel analysis, or checks for malicious modifications. Generation may help produce SystemVerilog assertions, security properties, and testbenches, but it does not establish its own correctness.
 
-The rest of the book is ordered by what each chapter equips the design loop with, and it closes on who owns what the loop produces.
+Even when the data exist, a design change stated in one sentence may require
+many files and long-running commands before the toolchain returns a result.
+The central problem is no longer how to obtain one plausible artifact. It is
+how to organize the complete design work so that each action advances a
+question and each consequential result can be checked.
 
-Two chapters finish framing the problem. @sec-design-loop-no-longer-scales shows why familiar architecture work is becoming harder to complete on its own terms, which is what makes assistance necessary rather than merely available, and @sec-architecture-20-ontology gives that work a shape by defining the bounded study that scopes one turn, the six stages a turn passes through, and the card that records what it produced.
+## What Changes and What Does Not {#sec-from-architecture-10-to-architecture-20}
 
-Two more supply what a loop needs before it can act at all. @sec-data-representations-world-models settles what an AI system has to know, and how design state, workloads, and predicted consequences get represented, because nothing downstream can be better than the representation it reads. @sec-methods-generation-prediction-optimization then asks which role reduces the work actually limiting a study, whether that means generating candidates, predicting their consequences, or optimizing over them.
+Architecture 1.0 is shorthand for established, human-directed architecture
+practice. It already includes analytical models, scripted flows, automated
+search, parameterized generators, simulators, synthesis, optimization, and
+verification. Architecture 2.0 retains that foundation while allowing learned
+methods to perform selected roles across more of the work
+[@ReddiYazdanbakhsh2025Architecture20]. The distinction is about the breadth
+and role of AI participation, not manual work versus automation
+(@tbl-arch1-vs-arch2).
 
-A method still needs somewhere to act and something to believe. @sec-architecture-environments-tool-interfaces builds the environment that sits between a design change stated in one sentence and a toolchain that wants a hundred files and runs for days. @sec-feedback-verification-trust then decides when what comes back counts as evidence at all, and why a second model agreeing with the first settles nothing.
+| **Feature** | **Established architecture practice (Architecture 1.0)** | **AI-assisted architecture practice (Architecture 2.0)** |
+| --- | --- | --- |
+| Problem framing | Architects define the question, abstractions, constraints, and tool tasks | Learned methods may help interpret broader intent or incomplete information and propose choices for architect review |
+| Exploration | Architects use analytical models, scripts, parameterized generators, sweeps, and conventional optimization | Prediction, generation, and learned optimization may propose, screen, or select alternatives alongside established methods |
+| Tool use | Architects and scripts invoke simulators and design tools, preserve results, and decide what to run next | Automated components may select later actions from tool returns, so state, cost, failures, and permitted actions must be usable by the component and inspectable by the reviewer |
+| Decision making | Architects integrate results and remain responsible for the design decision | Methods may organize analysis or prepare a recommendation, while architects retain responsibility for the design decision |
 
-With that machinery in place, @sec-running-the-loop runs one bounded study end to end and claims nothing stronger than its recorded results, and @sec-loop-patterns-across-stack shows what has to change as the next decision becomes slower to evaluate and harder to reverse.
+: **AI participation broadens what may be delegated without changing who owns the decision:** Architecture 2.0 adds learned prediction, generation, optimization, retrieval, or tool coordination to established analytical and automated practice while the architect retains scope, interpretation, and responsibility. {#tbl-arch1-vs-arch2}
 
-The last two chapters judge the result. @sec-evaluating-agentic-architect measures the AI architect rather than the artifact it produced, and @sec-what-architect-owns names what stays a person's to decide once a system can propose the design, run the tools, and report that every check passed.
+Each row changes who or what may perform the work without transferring
+architecture authority. The first two rows broaden assistance with problem
+framing and exploration. The tool-use row adds a practical requirement: an
+automated component must be able to use the relevant project state, and a
+reviewer must be able to inspect the inputs, actions, costs, and failures on
+which the result rests. The final row keeps the design decision with the
+architect.
 
-@sec-running-the-loop also shows how to bootstrap a new study, the design-loop card in @sec-architecture-20-ontology gives a compact way to inspect a completed one, and @sec-appendix-a-reviewer-checklist provides a reviewer's checklist.
+The relevant unit of comparison is therefore the complete design system, not a
+model in isolation. It includes the architecture question, represented project
+state, methods, conventional algorithms, tools, returned feedback, checks,
+human work, total cost, and resulting decision. A local improvement can make
+that system worse. A faster generator can enlarge simulator and review queues,
+and a cheaper predictor can discard the candidate that a later physical check
+would have favored.
+
+AI participation does not create good record keeping automatically.
+Conventional projects can and often do preserve inputs, artifact versions,
+tool results, rejected candidates, and decisions. Wider automated
+participation makes the relevant state necessary both for component action and
+for review (@fig-design-loop-breaks).
+
+![**AI participation requires usable design state.** Both studies can record inputs, actions, tool results, rejected candidates, and decisions. When automated components act on that information, it must also be represented where the components can use it and reviewers can inspect it.](images/F2a-design-loop-breaks){#fig-design-loop-breaks width="85%" fig-alt="Two side-by-side diagrams compare human-orchestrated and AI-assisted architecture studies. Both preserve design state and depend on architectural judgment. AI participation additionally requires the relevant inputs, actions, tool results, and decision responsibility to be usable by automated components and inspectable by reviewers."}
+
+The left panel shows familiar human-orchestrated work. Intent moves through
+models and scripts to a candidate, tool feedback, and expert review, while some
+state and rationale remain in expert practice. On the right, automated
+components also act on represented state and returned feedback. A failed check
+can revise the state and redirect the next action, while architect review
+remains between the returned information and any consequential commitment.
+Making state usable and inspectable does not make the result correct. It makes
+the basis of the action available for checking.
+
+## Why Coordination Must Be Deliberate
+
+A collection of capable models and tools is not yet a design method. A short
+request leaves requirements and acceptance checks unresolved. As work moves
+among documents, intermediate representations, generators, compilers,
+simulators, and implementation tools, cross-layer intent can be lost. Reusable
+models also have uneven support and stale knowledge, while live project state
+changes from one run to the next.
+
+The tools themselves impose another constraint. Simulator runs, synthesis,
+physical design, and verification consume time and computation, and they can
+fail in ways that plausible text does not reveal. A fast surrogate for timing
+or congestion may rank candidates differently from the tools used for
+signoff. An optimizer asked only to reduce power may share a resource that the
+system isolated for security or reliability. Producing candidates faster can
+therefore move the limiting work into checking and review, especially when
+the objective omitted a system obligation.
+
+Feedback also needs qualification. Several components may repeat the same
+wrong assumption because they share training data, a proxy, or an underlying
+model. An *independent check* is sufficiently separate from candidate
+production that the producing method cannot determine its result, and its
+decisive assumptions and implementation are not simply inherited from the
+generator. Complete independence is uncommon, but candidate production and
+the checks that decide acceptance must remain separate enough to expose
+failure.
+
+Deliberate coordination means organizing the work through a life cycle,
+maintaining the required data and current project knowledge, choosing and
+combining methods for their assigned roles, connecting them to real
+environments, qualifying feedback and verification, evaluating the complete
+configuration, and preserving architectural judgment. These are engineering
+responsibilities, not names for software modules. They are also the teaching
+obligations taken up by the rest of this book.
+
+## Two Independent Tests for the Moonshot
+
+The moonshot must pass two logically distinct comparisons. The first evaluates
+the architecture. The second evaluates the contribution made by AI.
+
+**Architecture result.** Does the proposed design meet the fixed Lighthouse
+conditions and justify itself against the architecture reference under the
+required workload, software, implementation, physical, and verification
+checks? The result may be a better design, a supported decision to retain the
+reference, or a finding that the available alternatives do not meet the
+conditions.
+
+**AI contribution.** Against the strongest practical conventional or
+human-directed process with matched starting information, tool access, total
+budget, human work accounting, and stopping conditions, did the AI-assisted
+approach improve the architecture result, reduce the total cost of reaching a
+result of comparable quality, or both?
+
+The distinction has several consequences. A good design does not prove that AI
+improved the work. A cheaper process does not justify an inferior design. A
+sound conventional result remains a success for the architecture question
+even if AI is not the better method. Random search may provide a useful floor,
+but it is not automatically the strongest practical conventional comparison.
+"Independent" here means that the two tests answer different questions, not
+that their measurements are statistically independent.
+
+A broader program assessment can aggregate repeated AI-contribution results
+across tasks, design stages, and conditions. It is not a third test equal to
+the two above. Under matched conditions, the AI bet has failed within the
+assessed program if it repeatedly improves neither the architecture result nor
+the total cost of reaching a defensible decision. The public evidence reviewed
+for this edition does not yet settle that verdict.
+
+One successful Lighthouse study would be an existence proof, not broad
+validation of a new design method. The same two tests must hold across declared
+tasks and conditions, and independent teams must be able to reproduce the
+relevant result or decision from the preserved inputs, tools, and checks.
 
 ## Open Research Questions
 
-Every chapter in this book ends here, with the questions its argument leaves open. These sections mark where the work runs out rather than summarizing what was settled, so a reader who wants to push further knows where the edges are.
+The moonshot leaves broad questions about what computer architecture must
+build, preserve, and evaluate. Every chapter closes with open research
+questions matched to its scope, so these questions begin an invitation that
+the rest of the book progressively makes more technical.
 
-These are the widest questions the book asks, and they name blockers rather than projects. One condition sits under all of them. Software methods improve quickly because every attempt is graded in seconds, and architecture has no comparably fast and exact check to learn from. None of what follows is a modeling problem, which is why none of it is answered by a better model.
+**From system intent to architecture work.** A compact request must become an
+executable design problem without losing the relationships that determine
+whether the resulting system is valuable.
 
-**Theme 1: Rejection Cheap Enough to Be Worth Running.** Amdahl's law and the roofline disqualify a candidate for the price of a profile, and almost nothing else in architecture is that cheap. A generator that produces proposals faster than they can be refuted turns rejection itself into the dominant cost of the work.
+- **How can broad system intent become an executable specification without
+losing the obligations that determine architecture value?** Workload behavior,
+software semantics, interfaces, physical limits, verification, and acceptance
+conditions must remain connected as the request moves into tools. It remains
+unclear which obligations must be explicit, which can be inferred, and who
+should resolve ambiguity.
 
-- What share of a generator's proposals can be disqualified from profile and bandwidth data alone, before any simulation or synthesis run is spent?
-- At what point does the cost of refuting a generator's bad proposals exceed the engineering work the generator was meant to save?
+- **What reusable architecture knowledge can support many design problems
+without overriding the current project state?** Prior designs and foundation
+models could reduce repeated work, but tools, constraints, software, and
+implementation conditions change across projects. Reuse needs limits that
+reveal when broad prior knowledge no longer applies.
 
-**Theme 2: Design Knowledge That Never Reaches the Open World.** Production silicon data and foundry-calibrated behavior stay inside companies, so the physical invariants a model would need are largely absent from anything it can read.
+**Establishing progress toward the moonshot.** Architecture 2.0 must improve
+the resulting architecture, reduce the total cost of reaching a comparable
+result, or do both.
 
-- How far can open ecosystems such as RISC-V and OpenROAD substitute for closed design data as a bootstrap corpus, and where does the gap to production silicon remain?
-- How can a model learn foundry-calibrated physical-design behavior, such as power-delivery routing or advanced-node timing limits, without access to the proprietary PDKs that encode it?
+- **Which architecture work benefits from AI assistance after its complete cost
+is counted?** Data preparation, tool integration, simulation, verification,
+failures, and expert review can outweigh a faster local step. Computer
+architecture needs ways to identify where assistance creates net value and
+where established methods remain better.
 
-**Theme 3: Claims Another Architect Can Read.** Efficiency now couples performance, energy, reliability, cost, carbon, and verification effort, so an apparent win can be a transfer of cost to a dimension nobody priced. Some of the strongest reported results come from parties who cannot publish what produced them.
-
-- How should two designs be compared when a gain in one efficiency dimension shifts cost into another, such as verification effort or embodied carbon, that the comparison never measured?
-- What would let an outside reviewer accept a reported result whose methodology, baseline, and design data cannot be published?
-
-**Theme 4: Betting on a Breakthrough.** A long-range target rests on a capability claim that has to hold in practice rather than one an architect can simply assert, and a program can pursue that claim for years on a premise that never arrives.
-
-- What early result would show that the enabling breakthrough a design program depends on is not arriving, at a point when the program can still be redirected?
-- What would let an autonomous run from workload characterization to timing-closed layout count as a real architecture study rather than an interpolation of known baselines?
+- **How can an outside reviewer distinguish a plausible artifact, a supported
+architecture result, and a demonstrated AI contribution?** Measurements may
+span tools with different fidelity, cost, and access, while some supporting
+design data cannot be published. A credible evaluation must still reveal what
+improved, what was checked, what remains uncertain, and where cost or risk
+moved.
 
 ## Conclusion
 
-::: {.callout-design-principle title="Delegating the search does not delegate the validation"}
-Automation can synthesize candidates, but structural integrity remains human work. The architect delineates boundaries, defines objectives, and holds ultimate accountability for physical invariants.
+::: {.callout-design-principle title="Keep the moonshot testable"}
+1. **Treat the request as the beginning, not the specification.** Expand intent
+   into the workload, software, hardware, physical, and verification
+   obligations that make comparison possible.
+2. **Treat artifacts as inputs to judgment, not as results.** A candidate
+   becomes an architecture result only when measurements and checks support a
+   comparison under stated conditions.
+3. **Evaluate the architecture and the AI contribution separately.** A good
+   design does not prove that AI improved the work, and a cheaper process does
+   not justify an inferior design.
 :::
 
+The Lighthouse request gives the moonshot a fixed system-and-chip target
+across workload, software, hardware, implementation, physical constraints,
+verification, and the final recommendation. A coordinated design system may
+use foundation or specialized models, prediction, generation, optimization,
+retrieval, conventional algorithms, and tool-connected environments. None of
+those components is the moonshot by itself. The capability lies in carrying
+the architecture question through the complete work while the architect
+frames, reviews, and commits.
 
-The Lighthouse prompt is the moonshot this chapter proposes, and it is a target rather than a result. It asks what it would take for AI to help an architect formulate, explore, implement, evaluate, explain, and defend a system design with evidence rather than settle for a plausible candidate. A defensible answer needs a clear question, meaningful alternatives, checkable artifacts, experiments, a mechanism-level explanation, and a recommendation. Readers should judge the whole body of work, not only the artifact a generator produced, and ask whether its evidence supports the architectural claim.
+The historical standard still applies. A useful new design method must make a
+larger design object expressible, executable, and checkable by people other
+than its creator.
 
-That standard rules candidates out more often than it lets them through, and its two cheapest rejections cost nothing at all. Amdahl's law caps whole-system speedup at what the accelerated fraction allows, so a block covering 60 percent of the pipeline's cycles cannot return more than 2.5 times however fast it becomes, and a candidate whose profiled coverage cannot support its claimed gain is disqualified by arithmetic. The roofline bounds attainable performance by arithmetic intensity, so wider vector units on a bandwidth-starved kernel fall on the back of an envelope. Neither screen needs a simulator hour. The first question to put to an AI-proposed design is therefore not how fast the block runs, but how much of the workload it touches and whether the machine can feed it.
+The two tests keep that ambition honest. The architecture comparison asks
+whether a supported design meets the Lighthouse conditions. The AI comparison
+asks whether assistance improves the result, lowers the total cost of reaching
+a comparable result, or both. Current systems show meaningful progress on
+individual tasks, but their evaluation cost, fidelity, scope, and access to
+supporting material limit what they establish about the complete challenge.
 
-Those screens matter more as everything behind them grows expensive. Efficiency now couples performance, energy, power delivery, reliability, sustainability, cost, verification effort, and the time needed to obtain useful evidence, so a candidate that clears one dimension can still fail on another nobody measured. When plausible artifacts are cheap, evaluation becomes the expensive part of the work, and search, tool feedback, interpretation, evidence, or review can each turn out to be the limiting resource.
-
-Two reading habits follow from the same standard. Judge an automation step by whether an independent check can expose its bad output rather than by how competent the model appears, since that, and not tool quality alone, is what made logic synthesis something an architect would sign. And read any published result by the feedback that graded it, because the limit a result exposes usually sits in the feedback available to it rather than in the model that produced it. The same discipline applies to the program as a whole, so a target set this far out should name now the result that would show the breakthrough it depends on never arrived. This one names it. Under matched baselines and budgets, a program in which AI carries no step that conventional methods could not already do as well and more cheaply has failed, whatever else it produced. Nothing published returns that verdict either way, and @sec-evaluating-agentic-architect builds the instruments that could.
-
-Models and tool interfaces are changing quickly, and nothing published today carries all six activities end to end on a problem of this scope. The chapter sets that bar rather than claiming anything currently clears it. What does not change is where responsibility sits. The architect frames the task, chooses abstractions, representations, and tools, sets the evidence standard, interprets the mechanisms, and remains answerable for the committed design. Keeping the inputs, results, rejections, and decisions lets others challenge the architect's work and improve it.
-
-What none of this yet explains is why the work became this hard. Specialization, software change, evaluation cost, and cross-layer coordination reinforce one another, and @sec-design-loop-no-longer-scales turns that compounding into a diagnostic: five ways a project stalls, and the measurements that say which one is binding yours.
+With the target and its tests in place, the next question is why present-day
+architecture work has become difficult enough that additional assistance is
+worth investigating.

@@ -1,15 +1,12 @@
-# Chapter 3 Figure Plan
+# Chapter 3 Figure Inventory
 
-Current figures:
+Active hand-authored figures:
 
-- `F4-ontology-chain`: task, representation, environment, method, evidence, decision.
 - `F4d-structured-layer-above-rtl`: missing structured layer between tacit
   architecture reasoning and executable implementation flows.
+- `ch3-ontology-loop`: six lifecycle responsibilities and their repair paths.
+- `F4-ontology-chain`: task, representation, environment, method, evidence, and
+  decision.
+- `F3-design-loop`: an iterative architecture study connected to its question
+  and decision.
 - `F4b-design-loop-card-example`: design-loop card example.
-
-Needed next:
-
-- Add rights diagrams only where they clarify an otherwise ambiguous assignment.
-- Keep human/agent glyphs large and rare; this is the right chapter for that
-  visual language.
-- Make the design-loop card visually reusable as a review artifact.

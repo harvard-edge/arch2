@@ -4,478 +4,1066 @@ format:
     output-file: index.html
 ---
 
-# Environments and Tool Interfaces {#sec-architecture-environments-tool-interfaces}
+# Tool-Connected Design Environments {#sec-architecture-environments-tool-interfaces}
 
 ::: {.epigraph}
 > *"We shape our tools and thereafter they shape us."*
 >
-> --- John Culkin, *Saturday Review* (1967) [@Culkin1967Schoolman]
+> — John Culkin, *Saturday Review* (1967) [@Culkin1967Schoolman]
 :::
 
 ::: {.column-margin}
-**Author's Note:** John Culkin, an American media scholar writing to explain Marshall McLuhan's ideas, observed that tools reshape how people work. The line is often credited to McLuhan, but it is Culkin's, a small provenance lesson of its own. An architecture tool also shapes what a method can change and what an architect can observe. Those limits must be explicit when the method acts through the tool.
+**Author's Note:** John Culkin, an American media scholar writing to explain
+Marshall McLuhan's ideas, observed that tools reshape how people work. The line
+is often credited to McLuhan, but it is Culkin's, a small provenance lesson of
+its own. An architecture tool also shapes what a method can change and what an
+architect can observe. Those limits must be explicit when the method acts
+through the tool.
 :::
 
 ::: {.callout-crux}
-What has to sit between an AI that proposes one design change and tools that run for days, can exit cleanly without having evaluated anything, and return a number that means nothing until it says what it was measured under?
+What must surround real architecture tools so an AI-assisted method can use
+them safely, reproducibly, and within declared limits?
 :::
 
-@sec-data-representations-world-models established how design state is represented to a method, and @sec-methods-generation-prediction-optimization introduced the search, generation, and optimization roles that act on it. However, a method's proposals are useless in a vacuum. Once a method proposes a design change (whether sizing a new cache hierarchy via Bayesian Optimization or proposing a new prefetcher via an LLM) it must actually execute that intent to gather evidence. One proposed change is rarely one tool call, and what comes back is rarely one number. This chapter builds the Implement stage's machinery, the execution environment.
+A tool command is not an environment. An architect can launch a simulator,
+compiler, formal engine, or physical-design flow and still be unable to say
+which candidate ran, which state the tool inherited, what an unfamiliar
+warning meant, or whether a retry repeated the same work. AI-assisted methods
+make this gap harder to ignore because they can issue requests faster than a
+person can inspect the state around every invocation.
 
-In a traditional workflow, the architect manually builds the design, launches a simulator like gem5, a cycle-level architectural simulator, or Ramulator, a main memory simulator. The architect then parses the console output and debugs any segmentation faults or license errors. Scaling AI-driven design requires replacing human-in-the-loop debugging with direct, programmatic agent-tool interactions. However, giving an AI permission to execute a shell script is not an environment.
+Consider a scoped cache study. It compares a rerun 2\ MB L2 baseline with
+3\ MB and 4\ MB alternatives, and only `l2.capacity` may change. One SRAM
+evaluation per capacity precedes at most four cycle-level attempts. The
+requested returns include area, access time, cache-local energy and leakage,
+matched frame data, capacity misses, and subsystem dynamic plus leakage power.
+The example is called `XR-L2-CAP-A`. It is detailed enough to expose the
+environment problem without requiring a particular method or orchestration
+strategy.
 
-This chapter connects that intent to the stateful reality of computer architecture and Electronic Design Automation (EDA) tools. We will define how to structure the read, action, and return paths, how to move a candidate between fidelity tiers whose cost climbs by orders of magnitude on the way to silicon, how to handle asynchronous execution, how to separate a tool crash from a design failure, and how to distill sprawling simulation logs into observations that carry the conditions they were measured under.
+The request is precise enough to select tools, but it is not executable yet.
+Each represented candidate must become the exact configuration each tool
+expects. Workload, software, libraries, process assumptions, and tool versions
+must travel with it. Long jobs enter queues and may wait for licenses. A tool
+may crash, time out, finish with a missing report, or exit successfully after
+running the wrong top-level design. Returned files may arrive hours later and
+out of order.
+
+The environment handles those mechanics. It establishes that requested work
+reached a named tool against a named state and records what the attempt
+produced. It does not establish that the resulting number is a valid
+measurement or that the candidate is good. This distinction separates a
+well-formed run from a supported architecture claim. Interpreting the return
+and judging the claim require additional checks beyond the environment.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Declare the read, action, and return contract in full before any candidate is measured, including what the environment may not decide, which is what separates an environment from a script.
-- Decide when a candidate has earned promotion to a costlier fidelity tier, from the measured rank correlation between the tiers rather than faith in the cheap one.
-- Classify a tool return so that a clean exit is never mistaken for an evaluation and a cluster crash never down-weights an architecture candidate.
-- Require every timing and power observation to carry the corner, mode, and library version it was measured under.
-- Preserve the log lines a parser cannot classify so an unfamiliar warning still reaches the architect.
+- Distinguish a tool, simulator, wrapper, harness, and complete environment.
+- Specify pinned state, legal actions, observations, transitions, costs,
+  stopping conditions, and failure behavior.
+- Design typed interfaces that preserve parameters, units, permissions, raw
+  output, errors, and tool-specific meaning.
+- Coordinate asynchronous and dependent runs within authority, security, time,
+  compute, tool, and license limits.
+- Recover from failed work without confusing process failure with a design
+  violation or reusing stale state, and report enough identity, artifacts,
+  versions, warnings, and cost for replay and reproduction.
+- Carry one candidate through several tool and fidelity paths without granting
+  the environment architecture decision authority.
 
 :::
 
-## The Human–API Mismatch
+## What Makes a Tool-Connected Environment?
 
-In modern machine learning, an agent interacts with an environment such as an OpenAI Gym[^fn-openai-gym-c06] simulation through a clean, synchronous loop. It takes an action, and the environment returns a new state and a dense scalar reward.
+Giving a method permission to run a shell command does not create an
+architecture environment. A shell can launch `SIM-A`, but it does not prove
+that the `3MB` configuration reached the simulator, that `XR-TRACE-A` was used,
+that the cache and power models match the study, or that the expected output
+files exist. A zero exit status reports a process outcome. It does not identify
+what the process evaluated.
 
-[^fn-openai-gym-c06]: **OpenAI Gym**: The de facto standard reinforcement-learning environment API, in which an agent calls a step function with an action and receives the next state and a scalar reward. Its successor library, Gymnasium, keeps the same interface contract.
+Five terms divide the work:
 
-Hardware tools were built for humans, not APIs. For decades, architecture tools such as CACTI [@MuralimanoharEtAl2009CACTI], DRAMSys [@WeisEtAl2021DRAMSys], McPAT [@McPAT], or gem5 were engineered around manual workflows, assuming an architect who can read dense log files, debug build errors interactively, and interpret color-coded waveforms. Modifying a real design means navigating a disconnected stack. Inserting a custom vector block into an XR subsystem requires modifying Chisel, changing linker scripts, and hacking a Device Tree Blob (DTB). Forcing these messy realities into a standard ML environment loop without exposing their low-level details prevents the human architect from verifying physical constraints like timing and power.
+- A *tool* transforms an artifact or analyzes a stated property under declared
+  inputs and conditions. Compilers, SRAM models, simulators, formal engines,
+  synthesis tools, and place-and-route flows are tools.
+- A *simulator* is one kind of tool. It executes a model of hardware and
+  software behavior and returns only the behavior that model exposes. It is not
+  the complete environment.
+- A *wrapper* surrounds one tool. It validates a request, translates the
+  request into tool-specific inputs, invokes the tool, and parses the returned
+  files.
+- A *harness* coordinates the wrappers and records attempts, state, costs,
+  failures, retries, resets, and produced artifacts.
+- The *environment* is the complete tool-connected surface available to the
+  study. It defines the state a method may observe, the requests it may issue,
+  the tools it may reach, and the returns it may receive.
 
-This legacy breaks the familiar ML environment paradigm, creating a *semantic gap*. That gap separates the high-level semantic intent of a design ("increase the cache size to improve hit rate") from the low-level, unstructured mechanics of the tool itself. Instead of returning a simple scalar reward, EDA tools return gigabytes of unparsed logs, crash silently, or hang for days. The mismatch grows as design moves down the stack. The EDA tools at the bottom rely heavily on the tacit knowledge of physical design engineers to interpret unroutable netlists, whereas an automated method requires fully explicit, programmatic interfaces.
+One environment may contain wrappers for an SRAM model, a cycle-level
+simulator, a cache model, and a power model. One harness keeps their outputs
+tied to the same candidate and conditions.
 
-What makes a foundation model reliable against external software is less the transport than the discipline around it. Validated arguments, a bounded action space, and an auditable record of every call matter more than whether the call is a typed API or a shell command. Constraining generation to a typed, retrieved API surface does sharply cut the argument hallucinations that unconstrained access invites [@PatilEtAl2024Gorilla]. Tool-use research points the same way. Toolformer trains a model to invoke typed APIs for subtasks it cannot perform reliably on its own [@SchickEtAl2023Toolformer], and ReAct interleaves reasoning with tool calls so the model consumes each observation before choosing its next action [@YaoEtAl2023ReAct]. This maps directly to the architectural domain. While "computer use" models can visually parse GUIs and move a mouse, relying on visual GUI automation for architecture design is brittle and computationally inefficient; on real desktop tasks the strongest such agents finish only a small fraction of what a human completes [@XieEtAl2024OSWorld]. Because of this, system intent, a GUI, and simple permission to call a tool are insufficient for real architecture work. The architect keeps control by declaring the legal actions before the loop spends cluster hours on unroutable silicon.
+A usable environment also distinguishes several related terms. *State* is the
+full relevant condition of the design, software, tools, runtime, resources,
+and outstanding work. An *observation* is the authorized portion of that state,
+or a returned result, exposed to the caller. An *action* is a permitted typed
+request with identity and preconditions. A *transition* records what changed
+when an action was accepted, completed, failed, cancelled, or reset. A tool
+*return* is the raw and structured output of one attempt. It is feedback about
+that attempt. Later qualification determines whether the return supports an
+update, a stopping decision, or no change.
 
-A second mismatch is the brownfield reality. Most AI research focuses on greenfield design, generating a brand new core or accelerator from a blank slate. In industry, however, most of an architect's job is brownfield work, as the Wilson Research Group's industry-wide verification study documents [@Foster2022WilsonVerificationStudy]. This involves integrating legacy IP blocks, wrangling proprietary vendor protocols, and navigating undocumented system buses. To bridge this gap, the environment must expose structured hardware description standards. However, not all standards are equal. IP-XACT[^fn-ip-xact-c06] is a notoriously bloated XML standard; feeding raw IP-XACT to a generative model will immediately exhaust its context window with boilerplate. The environment's "Read Path" must distill heavy XML standards into lightweight JSON or YAML representations, whereas denser formats like SystemRDL[^fn-systemrdl-c06] might be read natively. This distillation allows the agent to programmatically discover and memory-map legacy AXI or TileLink[^fn-tilelink-c06] interfaces without relying on unstructured text datasheets. If an agent cannot successfully wire up a black-box memory controller to a modern coherency fabric, it cannot design a real System-on-Chip. The environment must expose interfaces for both generating new IP and integrating messy, opaque legacy components.
+These responsibilities form four parts of an environment. Setup establishes
+the starting design, software, workload, tool, and resource state. Interfaces
+and wrappers define what may be requested and translate it exactly. The runtime
+and harness schedule, isolate, budget, cancel, retry, and record the work.
+Finally, the return path preserves execution state, artifacts, parsed results,
+warnings, cost, and lineage. The four parts exist whether a learned method, a
+conventional search, or an architect issues the request.
 
-[^fn-ip-xact-c06]: **IP-XACT**: An IEEE standard XML schema that describes an IP block's ports, parameters, bus interfaces, and memory map so an integration tool can wire the block up automatically instead of a human transcribing a datasheet. Its completeness is exactly what makes it verbose, since one mid-sized component expands into thousands of lines of markup.
+The environment returns typed observations, artifacts, execution status, and
+cost. It does not need to return a scalar reward. A method may derive a reward
+or objective from qualified returns, but that derived value remains separate
+from the raw observations and cannot replace them.
 
-[^fn-systemrdl-c06]: **SystemRDL**: An Accellera standard for describing only a design's control and status registers, giving each field its width, access rule, and reset value, from which tools generate the matching RTL, firmware headers, and documentation. It stays compact because it describes the register map rather than the whole component.
+The interface has three paths. The read path supplies the represented
+candidate, fixed state, tool identities, available resources, and prior
+attempts. The action path accepts only declared requests and translates them
+exactly. The return path carries execution status, raw artifacts, parsed
+fields, unclassified output, cost, and lineage. These paths make the
+environment inspectable from both sides (@fig-environment-tool-interface).
 
-[^fn-tilelink-c06]: **TileLink**: An open on-chip interconnect protocol used by RISC-V systems generated with Chisel, filling the role that ARM's AMBA AXI fills in commercial SoCs. Attaching a block means satisfying the protocol's handshake and cache-coherence rules, not merely connecting wires.
+![**A tool interface keeps request checking, execution, parsing, and recording
+separate.** The wrapper validates and translates one request, while the harness
+records the attempt and preserves each return status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question, action schema, constraints, and metric definitions enter an environment as a typed request. A wrapper separates invalid requests from tool execution. The tool path can fail, return partial output, or complete; the parser retains raw and structured output, and the harness records every outcome with cost, provenance, and execution status."}
 
-The stakes of that requirement are concrete. A vendor's PDF datasheet is not an interface. A timing diagram printed in one can disagree with the block's actual RTL behavior under specific burst conditions, and no automated check will notice, because nothing in the flow can read the document to compare the two. An interrogatable description turns that discrepancy into a query a tool can run, while a datasheet leaves it to be discovered after fabrication.
+The represented question and state enter the interface as a typed request. The
+wrapper either refuses an invalid request or translates it to the declared tool
+path. That path can fail, return only part of the expected output, or complete,
+and the parser keeps the raw output alongside the fields it recognizes. The
+harness places every outcome in the record for that attempt with its identity,
+cost, provenance, and status. Later work can then distinguish a request that
+never ran from a failed, partial, or complete return.
 
-Recall the *Lighthouse prompt* introduced in @sec-moonshot. The prompt asks to design a low-power, 64-bit RISC-V-based compute subsystem for an XR platform. To tackle a system of this complexity, an agent relies on an overarching generator framework like Chipyard [@chipyard], which serves as the logical engine to emit the RISC-V SoC.
+## Why Architecture Environments Are Hard
 
-::: {.callout-lighthouse title="Why the prompt is not one function call"}
-An agent working this prompt might formulate a high-level system intent to maximize spatial tracking throughput within the strict 3\ W TDP thermal envelope required for an untethered XR headset. The candidate change, inserting a custom vector-capable accelerator block into the Chipyard-generated RISC-V subsystem, is not executable as one simple function call, because instantiating the block is the only part of it that resembles one. The new accelerator contends with the high-bandwidth XR display controller for TileLink or AXI bandwidth, so the interconnect has to be resized or arbitrated. Its bursty point-cloud traffic thrashes the core's working set, so L2 capacity or a prefetcher comes into question. And the block stays invisible to the operating system until the memory-mapped IO (MMIO) and Device Tree Blob (DTB) describe it, so a change that stops at the RTL leaves the driver stack unable to reach what was built.
+Architecture environments connect tools that were not designed as one
+stateless service. They operate on large, versioned artifacts; preserve hidden
+state in working directories and databases; use incompatible formats and
+units; wait for shared machines and licenses; and produce partial files after
+long failures. A single candidate may require software construction,
+simulation, RTL, formal checks, synthesis, and physical implementation. No
+generic software sandbox supplies those architecture meanings automatically.
+
+Architecture and electronic design automation (EDA) tools often expose command
+shells or text interfaces rather than stateless APIs. OpenROAD and its OpenSTA
+timing engine, for example, provide Tcl command interfaces
+[@OpenROADDocs]. A wrapper for such a tool must establish or validate
+the declared state before each invocation, use the tool's error mechanism to
+return an explicit status, and serialize the recognized fields. It must also
+retain the raw transcript and any unclassified output. A clean structured
+record is useful, but it is not sufficient if an unfamiliar warning was
+discarded while the record was built.
+
+Real projects also inherit IP blocks, software, constraints, generated files,
+vendor models, and tool databases. The environment need not reveal protected
+contents beyond the study's authorization, but it must preserve the exact
+identity, version, permitted use, and dependent state carried into each
+invocation. Otherwise a repeated request can appear identical while running
+against a different design or model.
+
+One legacy SRAM macro, for example, may appear as a behavioral model in
+simulation, a Liberty timing and power view during synthesis and timing
+analysis, and a LEF physical view during placement and routing. Updating the
+behavioral model while retaining an older Liberty or LEF view lets different
+tool stages evaluate different versions of what the study treats as one macro.
+The environment must bind compatible views to one identity or refuse the run.
+
+Translation must be exact or refused. If the study asks for `l2.capacity=3MB`,
+the wrapper may serialize that value into an SRAM configuration file and a
+simulator parameter. It may not silently round the value to the nearest
+supported capacity, change associativity to make the configuration legal, or
+substitute another simulator because it is idle. Each of those choices changes
+the meaning of the request. A syntax-preserving repair may create a new request
+artifact or execution attempt while retaining the candidate identity. A repair
+that changes architecture meaning creates a new candidate and returns to method
+selection.
+
+::: {.callout-lighthouse title="One cache request, several exact translations"}
+The `3MB` candidate becomes one `SRAM-A` input under `PVT-A` and, if the
+predeclared routing condition permits, one `SIM-A` configuration linked to
+`CACHE-A`, `PM-A`, `XR-TRACE-A`, and `SW-BASE-A`. The wrapper may change file
+syntax, paths, and command-line spelling. It may not change cache policy,
+associativity, the NoC, compiler, runtime, workload, or another architecture
+field. An exact translation proceeds. Anything else is refused and recorded.
 :::
 
-A compiler must successfully emit the right memory mapping for the tensor instructions. The hardware configuration must instantiate the block. The RTL generator must pass simulation. Finally, the EDA flow must synthesize the design to check for routing congestion in the 3\ nm layout. Each tool call can return exit code 0 while the Lighthouse architecture proposal itself remains unevaluated or logically broken.
+This narrow rule prevents a common failure. An automated repair can make a
+tool call legal by changing the design that was supposed to be evaluated. The
+tool then runs cleanly, but the returned result belongs to a different
+candidate. Request validation should catch the mismatch before cluster time is
+spent.
 
-Tool meaning depends on fixed context, legal actions, software and hardware specifications, tool versions, permissions, execution conditions, and explicitly defined failure behaviors. Two studies can call the exact same Ramulator binary while operating in different environments because their actions, workloads, constraints, and observation meanings differ. A computational method cannot infer these context dependencies via intuition. It requires the environment to explicitly expose what actions are permitted, what the tool returns, which states are invalid, and which runs can be repeated. Basic tool permissions are not enough, and the tools themselves compound the problem.
+## Setup and a Known Starting State
 
-An AI method requires fast, deterministic APIs, but hardware design relies on slow, stateful, and expensive legacy software. The environment sits between them. It leaves the method enough freedom to search the design space at scale while enforcing strict rules through permissions, budgets, and interface schemas. These rules ensure the agent does not propose physically impossible designs or waste compute time on broken Electronic Design Automation (EDA) runs.
+Every requested run begins from a known state. Source and generated artifacts,
+workload inputs, tool and library versions, process design kit (PDK) views,
+constraints, environment variables, host resources, and baseline artifacts
+must be pinned or marked intentionally variable before the first tool starts.
+The run specification fixes the relationship among that state, the represented
+request, the tool path, and the returned artifacts. It says how the requested
+work will run without changing the architecture comparison.
 
-## Balancing Architecture Environments
+At this point, the run specification must identify the starting state,
+permitted translation, tool path, expected returns, budget, and stopping
+conditions. Later sections add the failure, retry, reset, containment, and
+retention rules needed for a complete environment. The complete Lighthouse
+specification appears in @tbl-environment-contract after those responsibilities
+have been developed.
 
-Hardware design is bound by tight time and compute constraints. Unlike software environments that can execute thousands of iterations per second, architecture tools are locked behind expensive licenses and days-long job queues. The compute required for a single physical design run is orders of magnitude slower and more expensive than a model's inference pass. As fidelity increases toward silicon, the sample budget shrinks by orders of magnitude, from millions of cheap functional checks to handfuls of expensive layout runs.
+### Immutable Inputs, Mutable Work State, and Lineage
 
-### The Multi-Fidelity Spectrum
+Immutable inputs are the versioned source, workload snapshot, constraints,
+libraries, PDK views, tool images, and baseline artifacts from which a run
+starts. Mutable work state is the run directory, generated files, tool
+database, checkpoint, scheduler state, and other state the requested action may
+change. The harness never patches the immutable inputs in place. It creates a
+new working state linked to them and records every permitted mutation.
 
-To navigate this economic reality, we can look to the robotics community's approach of sim-to-real transfer. Rather than training a robotic arm directly in the physical world, which is slow and risks damaging hardware, researchers train the agent in a fast physics simulator and transfer the learned policy to the real robot [@OpenAI2019Rubik]. Architecture benefits from a similar pipeline by working across a multi-fidelity spectrum (@tbl-multi-fidelity-spectrum). The simulator is not a single tool, but a spectrum.
+Reset means restoring a declared starting state, not merely calling a function
+named `reset`. A clean reset regenerates the working directory and tool state
+from pinned inputs. A checkpoint reset starts from an identified intermediate
+database whose parent inputs and validity conditions still match. Setup checks
+must confirm the expected top level, clocks, constraints, libraries, workload,
+tool version, and artifact set before scarce execution begins.
 
-At the cheap end are near-instant analytical models (spreadsheet and CACTI-class estimators) and functional ISA-level simulators that act as the "Sim", screening millions of candidates in seconds. In between are cycle-level C++ simulators, like gem5, that model detailed timing but abstract physics. At the expensive end are RTL synthesis and VLSI physical design tools, the "Real", that enforce true physical laws like power, timing, and routing congestion.
+Architecture tools rarely consume the representation in which the study was
+formulated. An SRAM model reads an organization and technology configuration.
+A cycle-level simulator reads a platform description, workload image, and
+microarchitecture and platform parameters. A power model may consume activity
+and event counts from another tool. The environment lowers one candidate into
+these forms while retaining the parent relationship.
 
-An architecture environment must allow an agent to move systematically between these tiers (@fig-simulator-tax). This requires managing significant mechanical friction. For instance, the environment must manage trace provenance: if a generator mutates a core's branch predictor, pre-recorded memory traces become structurally invalid because speculative execution paths change. The environment must be configured to determine when to regenerate functional traces versus when to safely replay them. Furthermore, the environment must abstract checkpointing and workload warm-up. An agent running full-system gem5 cannot afford to simulate Linux booting on every iteration, nor should it optimize a cache based on cold-misses during OS boot. The environment API must abstract Region of Interest (ROI) fast-forwarding so the agent is rewarded on steady-state behavior, not initialization noise. This fast-forwarding rests on established sampling methodology. SimPoint identifies a small set of representative program regions that stand in for a full run [@SherwoodEtAl2002SimPoint], while SMARTS derives statistical error bounds on the metrics recovered from sampled execution [@WunderlichEtAl2003SMARTS]. Because navigating this spectrum requires balancing conflicting physical limits, hardware specialization tightly couples the stack.
+Each transformation record names:
 
-| **Fidelity Level** | **Example Tools** | **Speed** | **Physical Laws Enforced** |
-| --- | --- | --- | --- |
-| Analytical | Spreadsheet, CACTI-class models | Near-instant (no execution) | None (closed-form estimates) |
-| Functional / ISA | Spike, QEMU | ~30x slowdown | None (execution only) |
-| Cycle-Approximate | ZSim [@ZSim], Sniper [@Sniper] | ~1,000x slowdown | Structural pipeline abstractions |
-| Cycle-Level | gem5 (O3) | ~15,000x slowdown | Detailed timing, abstract physics |
-| RTL Simulation | Verilator | ~30,000x slowdown | Two-state cycle logic (no timing, no X-propagation) |
-| FPGA Emulation | FireSim | ~20x slowdown | Full logic, mapped to FPGA fabric |
-| Physical Design | Yosys [@Yosys], OpenROAD [@AjayiEtAl2019OpenROAD] | Hours to Days | Power, Timing, Routing, DRC |
+- the parent candidate and request;
+- the transformation and tool version;
+- input identifiers and content hashes where useful;
+- fixed conditions inherited from the study;
+- the output artifact and its hash;
+- whether the transformation may change architecture meaning; and
+- the next authorized consumer.
 
-: **Fidelity trades against speed.** An agent escalates along this spectrum as design candidates mature, paying more per observation as fidelity rises, except where an FPGA buys the speed back at the cost of dedicated hardware. {#tbl-multi-fidelity-spectrum tbl-colwidths="[20,25,20,35]"}
+A semantics-preserving serialization keeps the candidate identity. A
+semantics-changing edit creates another candidate. This distinction matters
+when a wrapper repairs a malformed file. Adding a missing quote around `3MB`
+may preserve meaning. Reducing the cache to `2MB` so the parser accepts it does
+not.
 
-```{python}
-#| label: fig-simulator-tax
-#| fig-cap: |
-#|   **The simulator tax: fidelity costs orders of magnitude, unless you burn an FPGA.** Representative slowdown of each architecture-evaluation approach relative to a roughly 3 GHz core. Software simulation slows by four to five orders of magnitude as fidelity rises toward cycle-level and RTL detail; FPGA-accelerated emulation stays within about twenty times real time, at the cost of dedicated hardware. Figures are order-of-magnitude and workload- and configuration-dependent.
-#| out-width: "92%"
-#| fig-alt: "Horizontal log chart of simulation slowdown versus real hardware across six approaches. Native silicon is one times. FPGA emulation (FireSim) is about twenty times slower. Functional or ISA simulation is about thirty times. Cycle-approximate simulation (ZSim, Sniper) is about one thousand times. Cycle-level simulation (gem5) is about fifteen thousand times. RTL simulation (Verilator) is about thirty thousand times slower."
+Content hashes make exact artifacts distinguishable. They do not prove that
+two artifacts are functionally equivalent or represent the same architecture.
+Build systems such as Bazel illustrate how declared inputs and
+content-sensitive action caches can make transformations more inspectable
+[@Bazel]. Nondeterministic or undeclared tool state can still defeat
+reproducibility, so the harness records the execution conditions as well as the
+hash.
 
-import csv
-from pathlib import Path
+Seeds are only one source of variation. Thread counts, scheduler placement,
+parallel reduction order, host libraries, timing of concurrent jobs, and
+nondeterministic EDA heuristics can change a return even when source inputs
+match. The setup should pin these factors where the tool permits. Where it
+cannot, the run report states what varied and retains enough repeated attempts
+to characterize repeatability later. Controlled nondeterminism is a declared
+property of the setup; unrecorded variation is an unknown dependency.
 
-import matplotlib.pyplot as plt
-import _python.plots as _ap
-from _python.plots import COLORS, apply_style
+A larger hardware and software change makes the lineage problem visible
+(@fig-artifact-lineage). The same root intent may produce several software
+binaries and RTL artifacts. Changing one binary while holding the RTL fixed
+creates a new evaluation instance even when the root intent has not changed.
 
-apply_style()
+![**Every evaluated artifact needs an identifiable parent.** Software and
+hardware artifacts derived from one proposal retain their transformation
+history, and a changed input creates a new evaluation
+identity.](images/F5-artifact-lineage){#fig-artifact-lineage fig-alt="One Lighthouse intent branches into software variant S2 and hardware variant H3. S2 compiles into binary B2, H3 elaborates into RTL R3, and one evaluation instance binds the selected B2 and R3. Identifiers and hashes distinguish exact artifacts and paths but do not prove functional equivalence or reproducibility."}
 
-# Data: representative simulation throughput per fidelity rung, synthesized from
-# primary sources and expressed as slowdown versus a ~3 GHz core. CPU-sim rungs
-# count instructions, RTL/FPGA rungs count cycles (~comparable at IPC ~1). Anchors:
-# ZSim (Sanchez & Kozyrakis 2013), gem5-class ~200 KIPS ,
-# Verilator (Chipyard), FireSim. Order-of-magnitude,
-# workload/config/host dependent. Accessed 2026-07-19.
-# Receipt: data/source-receipts/chapter5-simulator-tax.csv
-_root = Path(_ap.__file__).resolve().parents[2]
-rungs = []
-with open(_root / "data" / "source-receipts" / "chapter5-simulator-tax.csv", encoding="utf-8") as fh:
-    for d in csv.DictReader(fh):
-        rungs.append({"rung": d["rung"], "example": d["example"], "slow": float(d["slowdown_vs_silicon"])})
+In the displayed branch, the Lighthouse intent produces software variant `S2`
+and hardware variant `H3`. `S2` compiles into binary `B2`, while `H3`
+elaborates into RTL `R3`; the selected pair becomes one evaluation instance.
+Replacing either child creates a different pair even when the root intent does
+not change. The identifiers and hashes distinguish the exact artifacts and
+their transformation path. They do not establish functional equivalence or
+reproducibility when relevant state remains undeclared.
 
-kind = {"Native silicon": COLORS["workload"], "FPGA emulation": COLORS["evidence"]}
-fig, ax = plt.subplots(figsize=(6.0, 3.3))
-n = len(rungs)
-for i, r in enumerate(rungs):
-    y = n - 1 - i
-    color = kind.get(r["rung"], COLORS["methods"])
-    slow = r["slow"]
-    ax.hlines(y, 1, max(slow, 1.02), color=color, lw=2.4, zorder=2)
-    ax.scatter([max(slow, 1.02)], [y], s=46, color=color, edgecolor=color, zorder=3)
-    tag = "1× (real time)" if slow < 1.5 else f"~{slow:,.0f}× slower"
-    ax.text(max(slow, 1.02) * 1.35, y + 0.02, tag, va="center", ha="left", fontsize=6.0, fontweight="bold", color=color)
-    ax.text(1.05, y + 0.34, r["rung"], va="center", ha="left", fontsize=7.0, fontweight="bold", color=COLORS["ink"])
-    ax.text(1.05, y - 0.30, r["example"], va="center", ha="left", fontsize=5.4, color=COLORS["muted"])
-ax.set_xscale("log")
-ax.set_xlim(1, 6e5)
-ax.set_ylim(-0.7, n - 0.2)
-ax.set_yticks([])
-ax.set_xlabel("Slowdown versus real hardware (log)", fontsize=7.2)
-ax.set_xticks([1, 1e1, 1e2, 1e3, 1e4, 1e5])
-ax.set_xticklabels(["1×", "10×", "100×", "1,000×", "10,000×", "100,000×"], fontsize=6.2)
-ax.tick_params(labelsize=6.2, length=2.5, width=0.6)
-for _sp in ("top", "right", "left"):
-    ax.spines[_sp].set_visible(False)
-ax.grid(axis="x", color=COLORS["row"], linewidth=0.4, zorder=0)
-fig.subplots_adjust(left=0.02, right=0.985, top=0.97, bottom=0.14)
-plt.show()
+Conditions need the same discipline. A return retains the conditions that
+apply to its tool and marks nonapplicable fields. `SRAM-A` carries circuit and
+technology assumptions under `PVT-A`; an implementation return carries its
+corner, mode, libraries, constraints, and flags; and `SIM-A`, `CACHE-A`, and
+`PM-A` carry workload, software, warm-up, region, seed, checkpoint, and model
+configuration. The environment preserves these fields without judging their
+sufficiency. A timing-slack return of $-12\,\mathrm{ps}$ at a slow process corner is not
+interchangeable with the same numeric return at a typical corner. The number
+travels with the condition that gives it meaning.
+
+The host environment can also change a result. Mytkowicz and colleagues showed
+that link order and UNIX environment size can perturb measured performance by
+more than many reported optimizations [@Mytkowicz2009WrongData]. An optimizer
+with many attempts can exploit such effects. Pinning and recording the binary,
+host, environment, and flags prevents an accidental host difference from
+masquerading as a candidate difference.
+
+## Interfaces and Wrappers
+
+A wrapper turns the known starting state into one narrow tool interface. Its
+request schema names every parameter, type, unit, required input, default, and
+legal combination. Its return schema names every structured field, unit,
+status, warning class, and raw artifact. A capacity field that means bytes must
+not accept an unqualified `3`; a timing result must not omit whether its unit
+is cycles, nanoseconds, or simulator ticks.
+
+The interface must also state which project state the caller may read and
+which fields it may change. A cache-sizing wrapper can expose capacity while
+keeping associativity, policy, interconnect, compiler, runtime, and workload
+read-only. The wrapper refuses a request outside that action set. It does not
+silently project the request to the nearest supported design. Exact translation
+preserves the requested architecture meaning; a meaning-changing repair creates
+a new candidate.
+
+Standardization should remove accidental interface differences without hiding
+tool meaning. A common core can standardize request identity, permitted
+actions, lifecycle status, errors, cost, cancellation, retry, and lineage.
+Each wrapper must still expose its supported operations, stages, properties,
+fidelities, units, assumptions, defaults, and warnings. This division lets
+another method use the harness and another architect interpret its return
+without depending on private glue knowledge.
+
+Capability and schema discovery make that division inspectable. Each request
+and return records the wrapper, request-schema, return-schema, parser, and tool
+versions. A caller can inspect supported actions and fields before submitting
+work. An unsupported request is refused rather than silently dropping a field,
+changing a default, or substituting another fidelity. A retained request is
+never reinterpreted under a newer schema. An explicit migration creates a new
+request artifact linked to the original.
+
+Errors are part of the interface. Validation errors, tool diagnostics, missing
+outputs, parse failures, and unclassified warnings remain distinct and retain
+their original text. A typed result makes routine fields easier to consume, but
+the wrapper must not discard output that its current schema does not recognize.
+The read, action, and return paths in @fig-environment-tool-interface make
+these responsibilities visible.
+
+Structured hardware representations can reduce ambiguity when they match the
+artifact. Circuit IR Compilers and Tools (CIRCT), built on the Multi-Level
+Intermediate Representation (MLIR) infrastructure, provides typed operations
+for hardware compilation rather than requiring every change to be a textual
+source edit [@CIRCT; @LattnerEtAl2020MLIR]. This is one useful interface
+mechanism, not the definition of an environment. A shared CIRCT operation,
+JSON schema, or simulator request also does not make two tools equal in
+fidelity. The tool model, setup, and returned property still determine what
+each observation contains.
+
+## Coordinating and Containing Tool Runs
+
+The familiar reinforcement-learning interface calls `step()` and receives an
+observation, reward, termination flags, and auxiliary information through a
+standard synchronous API [@TowersEtAl2023Gymnasium]. An architecture
+environment instead preserves the typed return from the tool and lets the
+method derive a reward when one is needed. Neither interface implies that an
+architecture step is cheap. A cycle simulation may run for hours.
+A physical-design job may wait in a queue, hold a scarce license, produce
+intermediate databases, and fail after substantial work. Tool state persists
+in working directories, caches, checkpoints, license servers, random seeds,
+and generated artifacts.
+
+The harness maintains shared state for pending, running, completed, and
+cancelled jobs. It attaches each job identifier to the candidate and conditions
+at submission rather than when a late result arrives. Dependencies are
+explicit. A compiler build may wait for a source artifact, RTL simulation may
+wait for elaboration, and physical implementation may wait for a mapped
+netlist. Independent jobs may run concurrently, but concurrency does not relax
+their identity or resource limits.
+
+Authorization follows least privilege. A wrapper receives only the executables,
+filesystem paths, network destinations, credentials, secrets, licensed
+features, and intellectual property needed for its declared action. Generated
+scripts, constraints, RTL, and compiler inputs are untrusted until validated
+and confined. Each attempt uses an isolated working area, resource limits, and
+a process boundary. Cancellation handling must request termination of
+descendants, then confirm termination and license release. Until confirmation,
+the harness quarantines uncertain outputs, keeps the status unconfirmed, and
+preserves enough partial state to explain what happened.
+
+Budgets apply independently to model calls, tool submissions, elapsed time,
+CPU and accelerator use, memory, storage, and license occupancy. Admission
+checks reserve scarce resources before dispatch. An accepted request may still
+be queued, cancelled, or fail. A completed run may still be missing an
+artifact. None of those process states is a valid architecture result by
+itself.
+
+Automated work also shares queues, machines, storage, and licenses with
+engineers and production flows. The environment applies the site's admission
+policy through in-flight limits, project quotas or priorities, reservations,
+and backpressure. It exposes pending work, accepted work, and remaining
+authorization so a method does not resubmit merely because a queued job is not
+yet visible.
+
+The harness therefore needs explicit states rather than one blocking call. A
+request is validated and admitted; each authorized attempt is then queued, run,
+and brought to a terminal process state. Terminal cause, artifact completeness,
+parser status, cancellation status, and retry eligibility are separate fields
+rather than additional scheduling states. A process can complete with partial
+artifacts, or time out after producing a parseable report. An infrastructure
+failure may be retryable, while a cancelled job may not be. None of these
+fields says what the candidate means until later measurement qualification.
+
+The execution interface keeps the request identifiable across three linked
+parts. @lst-environment-interface validates and admits one attempt without
+silently changing its meaning.
+
+```{.text #lst-environment-interface lst-cap="**Admission preserves request identity:** Validation, setup, and admission operate on one attempt whose immutable fields cannot be silently reused."}
+envelope, created = create_attempt_once(
+    submission_key,
+    attempt_id, request_id, candidate_id, condition_id,
+    tool_type, tool_stage, fidelity,
+    configuration_id, seed, translated_input_hashes,
+    retry_parent, reset_parent
+)
+
+if not created:
+    if immutable request fields differ from the retained attempt:
+        refuse reuse of the submission key
+    return current_record(envelope.attempt_id)
+
+if translation changes request meaning:
+    return envelope(
+        terminal_cause=INVALID_REQUEST,
+        artifact_status=NOT_CREATED,
+        parse_status=NOT_RUN
+    )
+
+setup_status = check_setup_and_dependencies(envelope)
+if setup_status is not PASSED:
+    return envelope(
+        terminal_cause=SETUP_FAILURE,
+        artifact_status=NOT_CREATED,
+        parse_status=NOT_RUN
+    )
+
+submission = admit_reserve_and_submit_once(envelope)
+if submission.status is REFUSED:
+    return envelope(
+        terminal_cause=ADMISSION_REFUSED,
+        artifact_status=NOT_CREATED,
+        parse_status=NOT_RUN
+    )
 ```
 
-The tiers are orders of magnitude apart. A cycle-level or RTL run is ten thousand to thirty thousand times slower than the silicon it models, so an agent that optimizes for high-fidelity evidence can afford only a handful of samples; FPGA emulation buys the speed back only by committing dedicated hardware. That order-of-magnitude cost turns each escalation to a costlier tier into a design decision in its own right.
+Once admitted, @lst-environment-execution keeps scheduling, termination, and
+resource use attached to that same attempt.
 
-A cycle-level simulator is a trend instrument, not a meter, which is why the gem5 maintainers avoid the phrase cycle-accurate. A validation study that tuned gem5 to match a real ARM development board reported mean absolute runtime errors of 13 percent on SPEC CPU2006 and 16 to 17 percent on PARSEC, with most microarchitectural statistics landing within 20 percent [@GutierrezEtAl2014SourcesOfError]. That is the residue left after the matching work rather than the error a team inherits by default. The same simulator's untuned x86 out-of-order model missed by 136 percent on average, and only configuration calibration and changes to the simulator itself brought it under 6 percent [@AkramSawalha2019Gem5X86]. An error bar therefore describes a simulator-and-target pair rather than a simulator, so a tier that reports one without naming the hardware it was validated against has reported nothing a rejection check can use. The number a tier returns is trustworthy for ranking two candidates under the same configuration, not for predicting what either will do in silicon. An environment that reports instructions per cycle (IPC) without recording that distinction invites the agent to chase differences smaller than the instrument's own error.
+```{.text #lst-environment-execution lst-cap="**Execution preserves operational state:** Queueing, cancellation, timeout, termination, and resource use remain connected to the admitted attempt."}
+job_id = submission.job_id
+record scheduling_state=current_scheduler_state(job_id)
 
-We are not the first to wrap architecture simulators in a standard reinforcement-learning environment. ArchGym exposes a family of simulators through a single Gymnasium-style interface and evaluates search methods against them under a fixed sampling budget [@KrishnanEtAl2023ArchGym]. Its central finding sharpens the economics of the spectrum. Which search algorithm ranks best is not a fixed property of the algorithm; it depends on how many samples the budget allows, so a method that wins at a cheap fidelity tier can lose at an expensive one. We build on that precedent and push past the point where the clean Gym abstraction stops holding. Real architecture tools carry cross-call state, sit behind licenses and job queues, and span the whole multi-fidelity spectrum, and an environment that hides those realities behind `env.step()` misrepresents the cost of the evidence it returns.
+while job is queued or running:
+    record scheduling_state, queue_time, and partial_artifact_ids
+    if cancellation is authorized:
+        request termination
+        record cancellation_status=REQUESTED
+        break
+    if timeout is reached:
+        request termination
+        record cancellation_status=TIMEOUT_REQUESTED
+        break
 
-The other thing the clean abstraction hides is coupling. Hardware specialization tightly couples the stack. Optimizing one parameter (like dataflow) cascades into breaking constraints across siloed simulation tools (thermal, synthesis, compilation). This coupled constraint problem is not unique to architecture. In aerospace engineering, designing an aircraft requires balancing aerodynamics, structures, and acoustics [@Sobieski1998BLISS]. Instead of building a single monolithic simulator, aerospace multidisciplinary design optimization (MDO) orchestrates fast *surrogate models* for broad exploration, reserving expensive physics simulators for final verification. AI in computer architecture should similarly orchestrate existing tools rather than replace them.
+wait until scheduler and process report a terminal state
+if termination cannot be confirmed:
+    return open_envelope(
+        scheduling_state=UNKNOWN or last_observed_state,
+        cancellation_status,
+        termination_status=UNCONFIRMED,
+        retry_eligibility=NO,
+        uncertain_outputs=QUARANTINED
+    )
+record final scheduler state
+record queue_time, run_time, cpu_time, gpu_time,
+       peak_memory, storage_written, license_occupancy
+```
 
-AI should act as an architectural control plane[^fn-control-plane-c06]. Rather than just generating scripts, it must take declarative intent, measure actual state from simulators and EDA tools, and issue compensating actions, such as shrinking a cache to fix a thermal violation. ChatEDA demonstrates one realization of this pattern, decomposing a natural-language design intent into subtasks that an autonomous agent then drives through a real EDA toolchain from RTL to GDSII [@HeEtAl2024ChatEDA].
+Recording candidate identity before submission prevents late returns from
+attaching to whichever candidate is current when a job finishes. Repeating
+submission with the same idempotency key returns the existing attempt or job
+identifier rather than launching duplicate work. An intentional retry receives
+a new attempt identifier, links to its parent, and consumes the declared retry
+budget.
 
-[^fn-control-plane-c06]: **Control plane**: In networking and cloud systems, the layer that decides what the system should do and issues the commands, held separate from the data plane that actually moves the traffic or runs the work. Casting an AI as the architectural control plane means it sets and revises intent while the simulators and EDA tools stay the machinery that executes it.
+Cancellation also remains a request until termination is confirmed. A process
+may report cancellation, terminate after producing partial artifacts, or
+complete before the cancellation takes effect. The environment retains any
+late return under its original attempt. It does not expose that return as a
+live observation until the current request revision and budget policy admit
+it.
 
-### The Silicon ADMET Funnel
+After the process stops, @lst-environment-return records what happened to the
+process, expected artifacts, and parser as separate outcomes.
 
-This is a constraint inversion. Historically, architecture flowed top-down from intent to RTL and RTL to physical design. Today, physical limitations like thermal envelopes, wire delay, and routing congestion constrain architectural choices bottom-up.
+```{.text #lst-environment-return lst-cap="**The return preserves distinct failure sources:** Process outcome, artifact status, parsing, retry eligibility, cost, and lineage do not collapse into one exit code."}
+if terminal state is CANCELLED or TIMED_OUT:
+    terminal_cause = CANCELLED or TIMED_OUT
+elif setup check fails before or during execution:
+    terminal_cause = SETUP_FAILURE
+elif process exits:
+    record process_outcome, exit_status, run_time, and resource_record
+    terminal_cause = COMPLETED or INFRA_FAILURE or TOOL_FAILURE
 
-Like drug discovery, finding a high-performance design is often easier than passing these inverted physical limits, what we might call silicon ADMET, borrowing the drug-discovery ADMET screen[^fn-admet-c06] that filters candidate compounds on downstream physical viability rather than potency alone. The multi-fidelity spectrum screens candidates by evaluation cost; the same filtering recurs along the physical axis, where data movement, thermal limits, and routing progressively reject high-scoring candidates that cannot survive signoff (@fig-silicon-admet-funnel). Architecture also faces a sim-to-silicon gap, so the search must favor designs that survive physical variation and tool noise rather than fragile peaks in a proxy score.
+artifact_status = inspect_expected_artifacts(
+    COMPLETE or PARTIAL or MISSING
+)
 
-[^fn-admet-c06]: **ADMET**: Absorption, distribution, metabolism, excretion, and toxicity, the five downstream viability properties a drug candidate must clear regardless of how potent it is.
+if artifacts can be parsed:
+    parse_status = COMPLETE or COMPLETE_WITH_RESIDUAL
+    retain typed_fields, unclassified_residual, raw_path, and raw_hash
+else:
+    parse_status = FAILED or NOT_RUN
 
-![**The "Silicon ADMET" funnel.** Drawing a parallel between the phased, rigorous filtering of drug discovery and the physical signoff funnel in computer architecture, both disciplines must weed out high-scoring "decoys" early using increasingly expensive and faithful evaluations.](images/F5-silicon-admet-funnel){#fig-silicon-admet-funnel fig-alt="Two parallel three-stage funnels. Drug discovery narrows from in-silico screening of ten thousand-plus candidates through in-vitro testing to clinical trials; silicon design narrows from fast ISA simulators through RTL and logic synthesis to physical signoff. An isomorphic-filters arrow links the two columns, and a bottom bar notes that both funnels weed out high-scoring decoys before the expensive high-fidelity stages."}
+return envelope(
+    scheduling_state, setup_status, process_outcome, terminal_cause,
+    cancellation_status, termination_status,
+    artifact_status, parse_status, retry_eligibility,
+    resource_record, retry_parent, reset_parent, lineage
+)
+```
 
-Different tools therefore return different observations, and the environment cannot afford to blur them together. Physical-design tools make this staged feedback particularly clear. Logic synthesis, placement, routing, and signoff expose different observations and failure modes. The interface must state the stage, raw output, and tool-level status for each return. From logic synthesis through signoff, each stage returns its own observation class, failure modes, and an outcome to preserve (@tbl-eda-stage-interface).
+The return separates process completion, expected artifacts, and parser status
+so later review can locate the failed work.
+
+The resource record is a typed vector rather than one opaque cost field
+(@tbl-attempt-resource-record). Fields that the environment cannot observe
+remain explicitly unreported. Human work is linked to the attempt or group of
+attempts it supported because setup, diagnosis, and repair can span more than
+one invocation.
+
+| **Record group** | **Fields to preserve for each attempt** |
+| --- | --- |
+| **Tool and work identity** | Tool type, stage, fidelity, version, candidate, conditions, unique configuration, and seed. |
+| **Attempt accounting** | Attempt identifier, scheduling state, cancellation status, termination status, terminal cause, artifact completeness, parse status, retry eligibility, retry parent, and reset parent. |
+| **Time** | Submission, queue, start, and completion times; queue duration, run duration, and elapsed time. |
+| **Compute and storage** | CPU and accelerator time, peak memory where available, intermediate and retained storage, and host or cluster identity when it affects comparability. |
+| **Scarce tool resources** | License or token occupancy, reserved capacity, and any admission-control wait. |
+| **Model and tool budget** | Model calls, tool submissions, retries, cancellations, and remaining limits for the enclosing request. |
+| **Linked human work** | Setup, intervention, diagnosis, review, and repair time, with the responsible activity or role when recorded. |
+
+: **An attempt record preserves resource use and execution status:** Unique
+configurations remain separate from invocation attempts, and retries remain
+linked rather than increasing apparent sample coverage.
+{#tbl-attempt-resource-record tbl-colwidths="[24,76]"}
+
+The first two rows preserve work identity and attempt accounting. The next four
+separate elapsed time, compute and storage, scarce resources, and the enclosing
+model and tool budget. The last retains the human work associated with setup,
+diagnosis, review, and repair. The decisive distinction is between one unique
+configuration and the attempts used to execute it. A retry increases realized
+cost but does not create another candidate or another independent observation.
+
+These acquisition conditions must travel with any architecture observation
+that later becomes data. Complete-system evaluation can then compare the
+resulting resource vectors without treating a cycle simulation, a
+physical-design run, and a model call as equivalent samples.
+
+## Failure, Recovery, and Reuse
+
+Retries also need identity. A retry is a new attempt linked to the failed
+attempt, not a continuation that erases what happened. The record states which
+inputs were reused, which state was reset, which checkpoint was resumed, and
+why another attempt was authorized. A scheduler pause that continues the same
+submitted job retains its identity; a new job from a checkpoint or a clean
+reset creates a linked attempt. Repeated failure under controlled conditions
+may expose a reproducible tool problem, but it does not prove physical
+infeasibility.
+
+Recovery follows the failure class. Invalid requests are repaired before a
+tool runs; setup and parser defects usually require a clean restart after the
+wrapper is fixed; and transient host or license failures may permit a retry.
+Long implementation runs may resume only from an identified, compatible
+checkpoint. If an upgrade caused the failure, reverting to the last pinned
+version creates a new attempt rather than rewriting the existing record.
+
+Safe caching follows the same identity rule. A complete return is reusable
+only when its inputs, transformations, tools, libraries, PDK views, flags,
+conditions, and relevant state all match the cache key. Partial and failed
+outputs may support diagnosis, but they are not served as completed
+observations. Unknown dependencies invalidate the entry. Reuse saves execution
+cost; it does not establish that the retained return answers the present
+architecture question.
+
+The 1996 Ariane 5 inquiry documented what happens when a reused component
+carries an operating assumption into a changed system [@LionsAriane1996].
 
 ::: {.callout-war-story title="Ariane 5 and the reused alignment module"}
-**The claim.** Ariane 5 reused the inertial-reference alignment software from Ariane 4 for its maiden flight [@LionsAriane1996]. The code was flight-proven, so the team carried it over as already validated.
+**The claim.** Flight-proven inertial-reference software from Ariane 4 was
+reused for Ariane 5.
 
-**The gap.** That module converted a 64-bit floating-point horizontal-velocity value into a 16-bit signed integer, a conversion that stayed in range only within Ariane 4's flight profile. Ariane 5 reached horizontal velocities roughly five times higher, the value overflowed, and the conversion raised an unhandled exception. The computation was dead code, needed only for Ariane 4's pre-launch alignment and useless once the vehicle had left the pad, yet it ran anyway and halted an otherwise-healthy inertial navigation system. The rocket self-destructed about 37 seconds after launch.
+**The gap.** A 64-bit floating-point horizontal-velocity value was converted to
+a 16-bit signed integer under a range assumption that held for Ariane 4.
+Ariane 5 exceeded that range. The conversion raised an unhandled exception,
+and the duplicated inertial systems shut down.
 
-**The lesson.** The fault lived in the environment, not the intent. The alignment module ran to completion and returned a value; nothing in the flight objective was wrong. What failed was an assumption frozen into a reused component, a numeric range that no longer held once the surrounding vehicle changed. Architecture environments hide the same trap. A tool version, a reused wrapper's operating range, or the meaning of a return can go unrevalidated when the tool or the workload changes, and a run that exits cleanly then propagates a wrong result. The interface has to expose those assumptions so each study rechecks them against its own conditions rather than inheriting them on faith.
+**The lesson.** A previously successful component can fail when its operating
+conditions change. An architecture harness must record the version, range,
+configuration, and surrounding state assumed by a wrapper or checkpoint, then
+recheck those assumptions for the current request.
 :::
 
-| **EDA stage** | **Observation returned** | **Problem it can reveal** | **Tool-level outcome to preserve** |
+The lesson is narrower than the accident. Reuse is safe only when the
+conditions that made the prior execution meaningful still hold.
+
+Tool isolation protects both the study and shared infrastructure. Each attempt
+needs its own filesystem view, process boundary, resource limits, and timeout.
+A malformed RTL candidate can otherwise corrupt a shared worktree, fill a
+disk, exhaust host memory, or wedge a license process. The harness traps the
+failure, retains partial artifacts, and returns control without treating the
+candidate as measured.
+
+### Failure Classes and Recovery
+
+Tool paths fail in several ways, and one `FAILED` value cannot represent them.
+Terminal cause, artifact completeness, parser status, and retry eligibility
+remain separate fields. The rows below show common combinations rather than
+one exclusive status value. They determine what the harness repairs and what
+it hands forward, so they describe execution rather than architecture judgment
+(@tbl-failure-taxonomy).
+
+| **Execution Outcome** | **Example** | **What the Harness Records** | **Next Execution Action** |
 | --- | --- | --- | --- |
-| **Logic synthesis** | Mapped gates, area estimates, timing estimates, constraint warnings, and early power estimates. | Nonsynthesizable RTL, impossible constraints, and early area or timing problems. | A completed report, including declared constraint failures, is a valid observation; failure to produce the report is a tool-path failure. |
-| **Floorplanning and placement** | Cell locations, utilization, congestion hints, timing pressure, and macro or memory placement effects. | Floorplans that create severe congestion, timing pressure, or integration problems. | Congestion or timing violations are valid observations from this stage, while an unsupported floorplan state remains out of scope. |
-| **Clock, routing, and power closure** | Routed timing, clock behavior, congestion, design-rule checks, power integrity, and closure failures. | Physical effects absent from earlier tool stages. | Preserve each reported violation and warning separately from a timeout, license failure, or broken run. |
-| **Signoff analysis** | Signoff reports, warning classes, violations tagged with the corner, mode, and library version they were measured under, and waived tool messages. | Conditions that remain unresolved at the end of the declared physical tool path. | Record the report and tool outcome without treating the tool status as an architecture decision. |
+| Invalid request | `l2.capacity=6MB`, missing required workload identity, or a translation that changes associativity. | Refusal reason, request identity, validation rule, and no tool invocation. | Repair syntax under a new request artifact only when meaning is preserved; otherwise create a new candidate and return to method selection. |
+| Setup or dependency failure | A stale constraint file, wrong top level, missing clock, corrupt checkpoint, unavailable library, or mismatched generated input reaches the tool path. | Setup identity, expected-state check, returned diagnostics, partial artifacts, and realized cost. | Restore or regenerate the declared state, repair the setup, or revert the affected version. The candidate remains unevaluated. |
+| Infrastructure failure | License checkout fails, cluster node dies, shared storage disappears, or a declared host resource is unavailable. | Attempt, failure class, partial artifacts, realized cost, and retry eligibility. | Retry only under the declared policy. The candidate remains unevaluated. |
+| Tool failure | A tool crashes, reports an internal error, or exhausts a tool-local resource. The same input may repeat the failure under controlled retries. | Tool status, diagnostics, partial artifacts, realized cost, retry history, and all recorded conditions. | Retry, restart cleanly, resume a valid checkpoint, or stop according to policy. Repetition alone does not prove physical infeasibility. |
+| Partial or incomplete return | A tool stops after synthesis but before placement, or exits zero with an expected report absent, stale, or partly written. | Completed and missing stages, expected-artifact check, produced files, raw output, parse status, and terminal cause. | Preserve the partial return; repair or rerun before treating it as complete, and do not convert it automatically into a design score. |
+| Parser failure | A retained report does not match the declared schema or contains units, fields, or warnings the parser cannot classify. | Parser version and status, raw report identity, parse diagnostics, recognized fields, and unclassified residual. | Repair or replace the parser and parse the retained raw artifact again when safe. Do not rerun the tool merely to hide a parser defect. |
+| Formal solver outcome | A formal engine reports a proof result, counterexample, bounded result, `unknown`, or a resource limit for a named property. | Property, model, assumptions, bound where applicable, solver and version, outcome, counterexample or a proof artifact when the tool emits one, and cost. | Preserve the solver outcome exactly and hand it forward. Do not turn one property result into a general correctness verdict. |
+| Reported design-limit violation | A completed timing, power, congestion, design-rule, or functional run reports a declared limit violation. | Typed value or violation, units, candidate and condition identity, warnings, raw artifact, and cost. | Record a complete return and hand it forward without the environment rejecting or penalizing the candidate. |
+| Complete tool return | Expected artifacts exist and parse under the declared schema, including reports that contain limit violations. | Typed fields, units, conditions, warnings, raw artifacts, cost, and lineage. | Retain the complete return for measurement qualification without deciding what it establishes. |
 
-: **EDA stages return different findings.** From logic synthesis through signoff, each physical-design stage can reveal different candidate problems. To keep a method from reading one stage's output as another's, the environment must strictly map the output of the specific stage to the appropriate semantic meaning, never conflating an early synthesis estimate with a final signoff violation. {#tbl-eda-stage-interface tbl-colwidths="[20,25,25,30]"}
+: **Execution status determines what ran, not what the architecture means.**
+Invalid requests, failed paths, partial returns, parser failures, and complete
+returns stay separate so the next repair targets the right problem.
+{#tbl-failure-taxonomy tbl-colwidths="[18,25,31,26]"}
 
-To balance determinism versus reproducibility, we must consider costs, operational fidelity, nondeterminism, and integrity. Two post-route attempts for the same hardware artifact may differ because of seed, thread count, host state, or tool heuristics. To manage nondeterminism and flakiness, distinguish three cases: expected statistical variation, declared tool nondeterminism, and flaky/unstable execution. Do not silently average contradictory returns from different stages, sources, or attempts.
+The retained record and next execution action depend on the observed execution
+condition. Invalid requests, setup failures, and infrastructure failures leave
+the candidate unevaluated. Tool, artifact, and parser failures identify
+different recovery owners. A formal solver outcome and a reported design-limit
+violation are completed returns, not process failures, but neither supplies a
+broad design verdict. Every completed result goes forward with its scope
+intact.
 
-Software engineering benchmarks like SWE-bench demonstrate that loosely connected scripts lead to unreproducible outcomes, so an agent needs explicit read, action, and return paths to avoid generating false positives. Architecture 2.0 must adopt the same discipline for tool execution, enforcing strict data provenance and reproducible environment snapshots. Much like modern cloud DevOps relies on immutable infrastructure, declaring a new state rather than manually patching a running server, architecture environments must enforce *immutable architecture states*.
+A clean exit becomes a complete tool return only after the expected-artifact
+check and parser succeed. Consider a synthesis script that selects no valid
+top-level module and omits the primary clock. The process may still exit zero
+and produce empty reports. The harness records a completed process together
+with missing artifacts and failed setup checks rather than substituting zeros
+for area, power, and timing.
 
-The environment itself can bias the measurement. A classic systems result showed that changing nothing but the link order of a binary or the size of the UNIX environment shifts measured performance by more than the gain a typical optimization delivers [@Mytkowicz2009WrongData]. An optimizer given thousands of samples will find and exploit exactly such artifacts. Pinning tool versions, host state, and flags in the provenance record is therefore not bookkeeping but the control that keeps the agent learning the design's merits instead of the host's quirks.
+Physical-design stages show why a complete return may still contain a reported
+limit violation. Synthesis, placement, routing, and signoff expose different
+artifacts and limitations (@tbl-eda-stage-interface).
 
-Mutating a source file in place often corrupts the working directory when an EDA tool crashes. Rather than have the AI patch the broken directory with `sed`, early exploration actions branch from a pristine, immutable snapshot. However, always restarting from pristine RTL source is economically unviable in the deeper stages of the Silicon ADMET funnel, where physical design runs take days and generate gigabytes of intermediate databases. Thus, the environment must support incremental physical checkpoints, allowing the agent to branch from intermediate physical states (e.g., post-placement databases) for local optimization.
+| **Tool Stage** | **Return to Preserve** | **What Is Still Missing** |
+| --- | --- | --- |
+| Logic synthesis | Mapped netlist, area and timing estimates, constraints, warnings, and process status. | Placement, routed interconnect, signoff timing, and power integrity. |
+| Floorplanning and placement | Cell and macro locations, utilization, congestion estimates, timing pressure, warnings, and databases. | Routed timing, final design-rule checks, and signoff analysis. |
+| Clocking, routing, and power analysis | Routed timing, clock reports, congestion, design-rule results, power estimates, warnings, and databases. | Any property, mode, corner, or system condition outside the declared run. |
+| Signoff analysis | Reports tagged with tool, library, corner, mode, constraints, warnings, and waivers. | Architecture interpretation, comparison validity, and authorization to proceed. |
 
-The fidelity pyramid of @sec-data-representations-world-models pairs cheap, abundant estimates with scarce ground truth, but the funnel filters correctly only if the cheap tier orders candidates the way the expensive tier would. That ordering is a measurable property rather than an article of faith. Before trusting an analytical model to screen a million candidates, promote a calibration batch through both tiers and compute the rank correlation between their scores. When the correlation decays, the cheap tier is manufacturing decoys instead of rejecting them. The correlation also sets the promotion count, because a weakly ranked tier must pass more survivors forward to keep the true winner in the pool. That calibration batch is a charge against the same evaluation budget it protects, so how much of the budget to spend proving the screen trustworthy is itself part of the design of the study.
+: **Each tool stage returns a different kind of result.** The harness records
+the stage and its conditions so an early estimate cannot be mistaken for a
+later report.
+{#tbl-eda-stage-interface tbl-colwidths="[23,42,35]"}
 
-## Beyond the Synchronous `env.step()` Loop
+Each successive stage exposes more implementation artifacts but remains
+limited to the modes, corners, and conditions run. Even signoff supplies
+neither architecture interpretation nor authorization to proceed.
 
-The standard machine learning loop assumes a synchronous `env.step()` function, where the agent takes a discrete action and the simulation instantly returns the new state and a reward. Because surviving the bottom of the Silicon ADMET funnel requires physical layout runs that take days to complete, this synchronous paradigm structurally fails. The Simulator Tax[^fn-simulator-tax-c06] shows up here in practice. An agent waiting for a synchronous `env.step()` could wait 8 hours for a physical routing failure in an EDA tool, compared to the 10 milliseconds it takes to receive a Python syntax error in a software environment. A physical synthesis flow cannot be driven through a blocking call, which will time out or hang when a placement job takes 40 hours or waits three days for an EDA license checkout.
+Raw logs remain part of the return. A commercial EDA tool or a detailed
+simulator may emit thousands of lines. Passing all of that text to a model is
+impractical, but discarding everything outside a fixed parser is unsafe. The
+wrapper should return structured fields for recognized metrics and failures,
+an explicitly marked residual of unclassified warnings and errors, and both a
+retrievable artifact identifier and integrity hash for the complete raw log.
 
-[^fn-simulator-tax-c06]: **Simulator Tax**: The compute, wall-clock time, and license capacity an agent spends to obtain a single observation from an architecture tool, and the reason a design loop cannot answer uncertainty by simply taking more samples. The evaluation chapter later turns the tax into a measured quantity, scoring an agent on how much evidence it buys per unit of tool cost rather than on its final design alone.
+::: {.callout-failure-mode title="The parser recognizes only yesterday's warnings"}
+**The trap.** A parser keeps only known warning classes and drops every line it
+cannot classify.
 
-Synchrony is only the most visible assumption this tutorial abstraction imports. Gym also assumes a cheap reset, yet an architecture environment has none; branching from a pristine snapshot is the closest equivalent, and every branch still pays real build and simulation cost. It assumes a Markov[^fn-markov-property-c06] step whose outcome depends only on the action, but EDA tools carry hidden cross-call state in caches, working directories, and license servers, which breaks the Markov assumption. It also expects a dense scalar reward after every step, whereas architectural feedback is sparse, arriving only at the end of a long chain of builds and checks, which leaves a poor final result hard to attribute to any single upstream action.
+**The mechanism.** A new warning about a downgraded timing constraint or
+changed clock definition appears after a tool upgrade. The parser produces a
+clean structured record because it was never taught the new class.
 
-[^fn-markov-property-c06]: **Markov property**: The assumption that an environment's next state depends only on the current state and the chosen action, never on the longer history of how the system arrived there. Hidden cross-call state violates it, which is why stateless-looking tool wrappers mislead learning methods.
+**The lesson.** Preserve unclassified warning and error lines with the raw log.
+A compact return should reduce reading cost without granting the parser
+permission to decide that unfamiliar output is irrelevant.
+:::
 
-Each of these gaps has to be engineered away in the harness rather than the learning algorithm. The harness, not the agent that acts against it, is the deliverable.
+The same rule applies to partial returns. A placement density map produced
+before a router crash may help later diagnosis, but it remains a partial
+artifact. The environment records what stage produced it and what never ran.
+Later measurement qualification determines whether that artifact bears on any
+claim.
 
-Real tool chains require asynchronous, scarce, and protected execution mechanics. Long simulations, FPGA builds, EDA stages, and signoff require explicit submit, poll, resume, cancel, timeout, retry, queue, license, permission, artifact-isolation, and partial-return behavior. These are architecture environment semantics because they determine which candidate ran, which stage completed, which artifacts are valid, and whether another attempt is comparable.
+## What Each Run Must Report
 
-Because returns arrive asynchronously and sometimes days late, omitting asynchronous state breaks the learning loop. From an ML-Sys perspective, the environment's "State" must dynamically include in-flight jobs and queue depth. If an agent dispatches 50 parallel multi-day EDA jobs and the environment hides this pending state, the agent's policy resubmits duplicate actions, spamming identical redundant work because it has no visibility into the queued jobs. Furthermore, the environment must stream intermediate surrogate rewards. The interface should emit partial observations as the job progresses (e.g., logic synthesis complete, initial timing estimates). This allows the RL agent to perform early trajectory pruning rather than waiting three days for a final binary routing failure.
+A run report joins the requested work to what actually happened. It preserves
+both raw output and a structured view, because neither is sufficient alone.
+Raw logs, reports, traces, databases, and counterexamples retain details that a
+current parser may miss. Structured fields make status, metrics, warnings,
+cost, and identity inspectable without rereading every file.
 
-In a commercial flow the binding resource is rarely a core. It is a license seat. A signoff-grade tool license is widely understood to cost on the order of an engineer's annual salary, and an installation owns only a handful, so the ceiling on parallel exploration is set by the license pool rather than the cluster. The harness must treat license tokens the way a scheduler treats GPUs, as admission-controlled capacity a job reserves before dispatch, and it must account for the human engineers sharing the same pool, because an agent that thrashes fifty checkouts starves the tapeout team down the hall.
+Each report carries seven groups:
 
-A critical requirement of this asynchronous system is explicitly distinguishing between an infrastructure failure and an architectural constraint violation. If an agent proposes an SRAM configuration and the simulator crashes due to a host Out-Of-Memory (OOM) error, or because a license server went offline, this is an infrastructure failure. If the agent is penalized for this attempt, its policy will spuriously down-weight the SRAM configuration, polluting the design space exploration with infrastructure noise.
+- **Identity:** Study, request, candidate, workload, software, conditions,
+  parent artifacts, and unique attempt identifiers.
+- **Setup:** Source revision, translated input, configuration, tool and model
+  versions, libraries, PDK views, modes, corners, constraints, waivers,
+  environment variables, host or container, reset parent, and checkpoint.
+- **Variation controls:** Seeds, thread counts, scheduler and parallelism
+  settings, declared nondeterministic behavior, and repetition index.
+- **Status:** Validation, setup, queue, process, cancellation, timeout,
+  expected-artifact, parser, and formal-solver outcomes as applicable.
+- **Returns:** Raw artifacts and logs, hashes, structured values with units,
+  warnings, unclassified residual output, and artifact completeness.
+- **Cost:** Model calls, tool calls, queue and run time, compute, memory,
+  storage, license occupancy, retries, and linked human work.
+- **Lineage:** Parent-child transformations, retry and reset links, cache
+  decision, and the next authorized consumer.
 
-| **Failure type** | **Symptom** | **Environment action** | **Architectural meaning** |
+The resource fields in @tbl-attempt-resource-record are one part of this
+report, not a substitute for the setup and return fields. Unknown or
+unobservable values remain explicitly unreported. A missing seed, library
+view, or raw report is not repaired by leaving its cell blank.
+
+Three reproducibility claims must remain distinct. *Exact replay* submits the
+same retained request, artifacts, versions, and recorded state again. It proves
+that the same inputs were requested, not that a nondeterministic tool must
+return the same bits. *Repeatability* asks whether repeated runs under the
+declared setup agree within the variation that the environment records.
+*Independent reproduction* rebuilds the run from the stated specification
+without depending on private working state, and may use a separate
+implementation or installation. It is stronger operational evidence than
+replay, but the returned agreement still must be interpreted against the
+property and conditions under study.
+
+Hashes establish the identity and integrity of exact bytes. They do not prove
+that two netlists are equivalent, two configurations express the same
+architecture, or two runs are semantically comparable. Those relations require
+the relevant transformation record and later check.
+
+## Multi-Tool and Multi-Fidelity Environments
+
+Architecture studies often use several tools because no one tool observes
+every relevant property. The tools differ in latency, modeled detail, and
+returned artifacts. These are not steps on a universal quality scale. An FPGA
+emulator may execute a target model much faster than RTL simulation without
+providing ASIC placement or timing signoff. A circuit model may estimate SRAM
+area and access time without executing the workload.
+
+The useful comparison is what each tool consumes and returns
+(@tbl-multi-fidelity-spectrum).
+
+| **Tool Class** | **Representative Use** | **What It Models or Checks** | **What the Environment Must Preserve** |
 | --- | --- | --- | --- |
-| Infrastructure failure | Host out of memory, EDA license checkout timeout, cluster node crash. | Flag as `RETRY_ELIGIBLE` or `TOOL_CRASH`. | None. The candidate remains untested and must not be penalized in the design space. |
-| Architectural constraint | Negative timing slack, unroutable netlist congestion, power-budget violation over 3\ W. | Flag as valid evaluation return. | Negative design feedback. The candidate is physically infeasible and should be rejected or penalized. |
+| Analytical or circuit model | Spreadsheet or CACTI-class SRAM estimate [@MuralimanoharEtAl2009CACTI]. | Encoded equations or circuit and technology assumptions, without workload execution. | Model version, organization, technology assumptions, units, and limits. |
+| Compiler and software build | Target compiler, lowering passes, assembler, linker, libraries, and runtime image. | Whether the declared source and mapping produce the expected executable artifacts; no hardware timing or physical result. | Source and intermediate representations, target features, flags, mapping, library and compiler versions, diagnostics, and binary identity. |
+| Functional ISA execution | ISA-level functional execution. | Instruction and software behavior under the implemented ISA model, without microarchitectural timing. | Binary, ISA options, input, termination state, and functional output. |
+| Cycle-level simulation | gem5-class processor and memory simulation [@BinkertEtAl2011Gem5]. | Modeled pipeline, cache, interconnect, and memory timing under a configuration. | Workload, software, warm-up, region, seed, configuration, event counts, and traces. |
+| RTL simulation | Verilator-class simulation [@Veripool2026Verilator]. | Cycle behavior under the supplied RTL and simulator semantics; no routed-delay result unless such timing is explicitly supplied. | RTL identity, testbench, compile flags, reset, waves, assertions, and logs. |
+| Formal property or equivalence tool | Property checking or equivalence for a named model and relation. | The stated property or equivalence relation within declared assumptions, abstraction, and bound where applicable; no general correctness result. | Property and model identities, assumptions, abstraction, bound, solver version and outcome, proof or counterexample artifact, and cost. |
+| FPGA-accelerated emulation | FireSim-class target execution [@KarandikarEtAl2018FireSim]. | Accelerated execution of a mapped target model. The FPGA implementation is not ASIC signoff. | Target model, FPGA image, host configuration, workload, and returned traces. |
+| Implementation flow | Synthesis, OpenROAD-class place and route, and stage-specific analysis checks [@Yosys; @AjayiEtAl2019OpenROAD]. | Properties exposed by the declared stage, libraries, constraints, modes, and corners. | Every intermediate artifact, tool condition, warning, waiver, and stage result. |
 
-: **Cluster flakiness must never penalize a candidate:** When a host crash or license timeout aborts a run, the candidate remains untested and must not be down-weighted in the design space. The environment harness must trap infrastructure failures and handle them separately from true physical design constraints. {#tbl-failure-taxonomy tbl-colwidths="[20,30,25,25]"}
+: **Tool class constrains the type of return.** The environment retains each
+tool's model, inputs, conditions, stage, latency, and artifacts instead of
+collapsing several returns into one generic score.
+{#tbl-multi-fidelity-spectrum tbl-colwidths="[19,22,29,30]"}
 
-The environment harness must catch infrastructure failures and flag them appropriately (@tbl-failure-taxonomy), preventing the agent from optimizing against false negative signals. Only true architectural failures, such as failing to meet a timing constraint in synthesis or exceeding the system's 3\ W power budget, should be passed back to the agent as negative design feedback.
+A compiler constructs an executable path but does not return hardware timing.
+Functional ISA execution returns instruction and software behavior without
+microarchitectural timing. Cycle-level and RTL simulation expose different
+timing and logic behavior, while a formal tool reports only the property and
+model it received. FPGA execution does not establish ASIC implementation
+results. An implementation flow remains limited to its declared stages,
+libraries, constraints, modes, and corners. The tool class therefore
+determines the type of return, not a universal quality rank.
 
-Some tool crashes, however, carry real architectural signal. A pathological candidate can exhaust host memory, prove unroutable, or fail synthesis because its own resource footprint is infeasible rather than because the cluster is at fault. The harness cannot always separate the two before running, so it needs a retry-with-fingerprint rule. If the same candidate crashes the same tool in the same way across repeated attempts, the harness reclassifies the outcome from `TOOL_CRASH` to an architectural infeasibility signal.
+For one prospective `L2-3M-A` environment, each row names a distinct branch
+from the same candidate. `SRAM-A` receives the exact cache organization and
+`PVT-A`. The compiler branch binds `SW-BASE-A`, target features, libraries,
+flags, and runtime to a hashed binary. The cycle-level branch binds that binary
+and candidate to `XR-TRACE-A`, `SIM-A`, `CACHE-A`, `PM-A`, warm-up, seed, and
+checkpoint. RTL simulation adds generated RTL, a testbench, compile flags, and
+reset. Formal checking adds one named property or equivalence relation,
+assumptions, abstraction, bound, and solver. Logic synthesis adds top-level
+constraints and libraries; physical implementation adds floorplan, PDK views,
+modes, corners, and waivers.
 
-However, merely returning a generic "failed" signal deprives the agent of architectural feedback. When a tool crashes (such as a router OOM due to an unroutable netlist), the environment wrapper should defensively parse *intermediate* or partial outputs, such as the last successful placement density map, to synthesize a negative architectural reward. That conversion turns an uninformative infrastructure crash back into actionable design feedback, so the agent reads the specific failure mode rather than a bare nonzero exit code. To navigate this sparse architectural feedback, the environment must also formulate rewards as multi-objective Pareto-dominance signals (explicitly balancing Power, Performance, and Area) rather than a single scalar, enabling the agent to learn the physical trade-off frontier.
+The branches are not interchangeable. The compiler reports an executable path,
+not hardware timing; the simulator reports only modeled workload behavior; RTL
+simulation has no routed delay unless explicitly annotated; and formal results
+cover only the submitted property and model. Synthesis is not a routed
+implementation, while physical results remain scoped to completed stages,
+views, modes, corners, and waivers. Only the SRAM and cycle-level branches
+belong to the constructed trace below. The environment preserves every
+branch's input, raw and structured return, cost, and limit without promoting or
+rejecting `L2-3M-A`.
 
-## The Three-Path Interface
+Throughput changes how many candidates and conditions a study can afford to
+examine. In one published configuration, ZSim ran a detailed Westmere-class
+out-of-order model at 20 million simulated instructions per second, about
+$200\times$ slower than the modeled core. The same study reported conventional
+detailed simulators at roughly 100 to 200 thousand simulated instructions per
+second [@ZSim]. FireSim reports a different regime. Individual
+FPGA-accelerated target nodes can run at tens to hundreds of megahertz, while
+one 1,024-node configuration ran at 3.4\ MHz for 3.2\ GHz targets, a slowdown
+of less than $1{,}000\times$ [@KarandikarEtAl2018FireSim].
 
-A tool returns raw, unstructured text, but an architecture study needs structured observations it can compare, check, and store. Turning one into the other is the job of the environment interface.
+Those rates are examples, not constants for a tool class. The modeled system,
+host or FPGA allocation, workload, instrumentation, accuracy, and simulation
+scale all change the rate. The environment should therefore record the
+observed throughput and its conditions, and a method should budget evaluations
+from that scoped rate rather than from a generic label such as *cycle-level* or
+*FPGA-accelerated*.
 
-Three words do distinct work in this chapter and are worth separating before they start appearing together. The environment is the whole connected surface a method acts against, covering every tool it may call and every observation it may receive. The wrapper is the layer around one tool that checks a request before it is issued, calls the tool, and parses what comes back. The harness is what records the run, its inputs, and its provenance so a later reader can tell what happened. One environment usually contains several wrappers and one harness.
+Sampling and checkpoint policy are part of that identity. SimPoint selects
+representative program regions, while SMARTS supplies a statistical basis for
+sampled simulation [@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. The
+environment records the chosen regions, weights, warm-up, fast-forward policy,
+and checkpoint parent. It does not decide whether those choices support the
+intended comparison.
 
-![**The architecture environment interface.** An architecture environment connects a system intent to legal actions and translates raw tool outputs into semantic observations. The wrapper checks the request, calls the tool, and parses the result, while the harness records the run and its provenance.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="A diagram showing how an architecture environment connects an architecture question and workload, an action schema, and declared constraints and metric definitions to a wrapper and harness."}
+ArchGym shows the value of exposing several architecture simulators through a
+shared interface under controlled budgets [@KrishnanEtAl2023ArchGym]. Real
+project environments need additional state. Jobs wait in queues, hold licenses,
+resume checkpoints, and return at different times. A common interface should
+make those differences visible rather than hide them behind one `step()` call.
 
-An architecture environment explicitly maps intent to actions and actions to observations (@fig-environment-tool-interface). The wrapper acts as a protective boundary, intercepting high-level requests, validating them via the read path, executing tool commands via the action path, and distilling logs into a semantic vector via the return path.
+Chipyard provides a concrete multi-tool example. Its Chisel generators and
+FIRRTL compiler, built around a hardware intermediate representation, can turn
+one configuration into RTL for simulation, VLSI implementation flows, and
+FPGA emulation [@chipyard]. The fan-out is useful because every branch retains
+the configuration that created it (@fig-chipyard-framework).
 
-### Defending Against Reward Hacking
+![**One configuration can feed several authorized tool paths.** Chipyard
+generates related artifacts for RTL simulation, VLSI work, and FPGA emulation
+while retaining a common configuration
+source.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard framework. A configuration system feeds Chisel generators and the FIRRTL compiler, then fans out to RTL simulation, a VLSI flow, and FPGA emulation."}
 
-The machine learning community has long warned of *reward hacking* [@AmodeiEtAl2016Concrete], a modern instance of Goodhart's Law, the observation that when a measure becomes an optimization target it stops being a good measure [@Strathern1997Goodhart; @Goodhart1975MonetaryManagement]. Given a simple scalar reward, an optimizer may exploit the objective function to maximize that number while violating physical constraints [@OpenAIClark2016FaultyRewards]. In architecture, reward hacking manifests as physically impossible designs. If an environment merely reports IPC without constraints, the optimizer might propose a 10-terabyte L1 cache or a 100-port SRAM to maximize the score. Either structure looks brilliant in functional simulation, posting an IPC no real machine reaches, and is rejected on sight by physical synthesis for routing congestion and area the functional model never represented. Nothing bounded the proxy by the physics, so the optimizer was free to leave the physics behind, which is what the downstream constraints of the Silicon ADMET funnel exist to prevent.
+The common configuration passes through the Chisel generators and FIRRTL
+compiler before it fans out to RTL simulation, the VLSI flow, and FPGA
+emulation. It preserves a shared parent for the three branches, but each branch
+produces a different artifact and examines different properties. The fan-out
+does not imply a fixed execution order or make the branch results
+interchangeable.
 
-Because physical design limits dictate architectural choices bottom-up, ground truth from traditional EDA tools is the environment's first defense against these AI exploits, indispensable for enforcing laws like timing closure and power limits. The full defense discipline, converting tool feedback into evidence that can reject a candidate, is @sec-feedback-verification-trust's subject; the environment's job is to keep the physical constraints in the loop at all.
+The environment may execute independent branches in parallel and dependent
+branches in order. Workflow systems such as Nextflow and Snakemake show how a
+dependency graph can separate workflow logic from execution on local machines
+or computing clusters [@DiTommasoEtAl2017Nextflow;
+@KosterEtAl2012Snakemake]. The run specification remains in charge. The
+scheduler may plan authorized work, but it may not add a tool, skip a required
+branch, or change fidelity without a new request.
 
-### Formalizing the Paths
+Applicable inexpensive prerequisite checks should run before expensive
+dependent work. If a declared syntax, interface, functional, or equivalence
+check reports that an artifact failed a predeclared prerequisite, the harness
+records the return and suppresses only the dependent dispatch before synthesis
+or physical implementation. It does not issue an architecture verdict. This is
+not one universal tool order. The requested run determines the prerequisites
+for each branch, and later measurement qualification determines what a passing
+or failing check establishes.
 
-To make this data usable, the environment establishes three distinct paths:
+For `XR-L2-CAP-A`, the graph stays small. Three independent `SRAM-A` calls
+precede the cycle-level branch. The shared 2\ MB baseline and each eligible
+alternative use the same `SIM-A`, `CACHE-A`, `PM-A`, workload, software, and
+condition identities. An authorized retry creates a retry edge. It does not
+create another candidate.
 
-1. **The Read Path:** This supplies state references, fixed context, permissions, and economic budgets *before* an action is proposed. Cluster hours are the obvious budget and usually not the binding one. Where a tool license pool limits parallel exploration, the read path has to expose seat availability too, because an agent shown only core-hours will plan an escalation the license queue will not admit. This allows the agent to balance the fidelity of its proposed action against the cost of execution. The environment must explicitly contrast the trivial compute cost of model inference against the much larger economic cost of the target EDA simulation.
-2. **The Action Path:** To prevent unsafe or nonsensical proposals, the Action Path exposes a *safe-by-construction* action space. However, architectural parameters are rarely independent (e.g., cache capacity, block size, and associativity dictate if the number of sets is valid; memory timings have strict inter-dependencies). The environment wrapper must act as a **constraint solver**, intercepting algebraically invalid combinations *before* invoking the simulator. Projecting the agent's independent mutations onto a strictly legal hardware manifold prevents physically impossible states from ever reaching the tool. This is also where a stated intent stops being a sentence. A proposal reaches a tool only after it has been reduced to a member of the declared action set, whether that set is a list of legal array shapes or a family of legal graph rewrites, and a proposal that cannot be reduced is refused rather than approximated.
-3. **The Return Path:** This carries typed tool returns, raw artifacts, cost, latency, provenance, and terminal outcomes. A single typed return is rarely one number. An architecture observation vector carries the performance and physical signals the downstream method compares, among them IPC and cache miss rates from the simulator, functional-unit and interconnect utilization, a power estimate, worst-case timing slack, design-rule check violation counts from the physical flow, and log-derived error classes for warnings the parser recognized but could not score. The scalar reward a method optimizes is a projection of this vector, not the vector itself, which is why the interface stores every component with its provenance rather than collapsing them early. To manage micro-architectural nondeterminism (like OS thread scheduling or asynchronous I/O noise in full-system simulators), the environment must orchestrate multiple statistical samples. Instead of returning a single noisy scalar IPC, the environment should return a *confidence interval*, forcing the optimizer toward robust architectural gains rather than statistical artifacts.
+The complete run specification can now collect the responsibilities developed
+throughout the chapter in one place (@tbl-environment-contract).
 
-### Conditions Travel With the Observation
-
-A slack number without its corner is not an observation. Minus twelve picoseconds at the slow corner, low voltage, high temperature is a different fact from minus twelve picoseconds at the typical corner, and signoff evaluates every mode and corner combination separately. Three terms fix the conditions a number was taken under. A *corner* is a named combination of process, voltage, and temperature the tools analyze at; a *mode* is an operating configuration such as functional, test, or a low-power state; and the *library version* fixes which characterized standard cells the numbers came from. The return path's schema must carry all three alongside every timing and power figure, or two runs that look identical in the record are not the same measurement. Why multi-corner closure exists is @sec-feedback-verification-trust's territory; the narrower requirement here is that the observation type preserve it.
-
-The test is mechanical, and it is worth running against a schema before a study depends on it. Take any timing or power field the environment can return and ask whether two runs could produce the same value under conditions that make them different facts. If they could, the field is missing a condition and the schema has to carry it. Applied to a slack field with no corner, the answer is immediately yes, which is why the field fails.
-
-### The Execution Loop as an Interface
-
-An agent's action space can range from simple parameter tuning to complex structural mutations (like rewriting an MLIR dataflow graph). A formalized read/action cycle encapsulates both extremes, which is what protects the physical infrastructure from rogue agent behaviors.
-
-::: {.content-visible when-format="html"}
-Rather than providing raw Python code, we can also formalize the overall execution loop as a standard algorithmic interface (@lst-environment-interface), drawing inspiration from frameworks like OpenAI Gym and its Farama-maintained successor Gymnasium, but tailored for the unique constraints of hardware design [@TowersEtAl2023Gymnasium].
-:::
-
-::: {.content-visible when-format="pdf"}
-Rather than providing raw Python code, we can also formalize the overall execution loop as a standard algorithmic interface (Algorithm~\ref{lst-environment-interface}), drawing inspiration from frameworks like OpenAI Gym and its Farama-maintained successor Gymnasium, but tailored for the unique constraints of hardware design [@TowersEtAl2023Gymnasium].
-:::
-
-::: {.content-visible when-format="pdf"}
-```{=latex}
-\begin{algorithm}[H]
-\caption{\textbf{One validated action becomes one recorded run:} the interface rejects illegal actions before touching a tool, submits work asynchronously, separates infrastructure crashes from architectural failures, and returns a typed observation with provenance.}\label{lst-environment-interface}
-\begin{algorithmic}[1]
-\Require \texttt{action\_request} (e.g., target L2 cache size, routing effort)
-\Ensure \texttt{observation\_vector}, \texttt{status\_flags}, \texttt{provenance\_metadata}
-\State \textbf{Validate Action (Read/Action Path):}
-\If{\texttt{action\_request} violates fixed constraints}
-    \State \Return \texttt{INVALID\_ACTION} immediately. Do not invoke tools.
-\EndIf
-\State \textbf{Translate to Tool Commands:}
-\State Lower \texttt{action\_request} into tool-specific configurations.
-\State \textbf{Asynchronous Execution (Return Path):}
-\State \texttt{job\_id} $\gets$ \text{Submit job to cluster/queue.}
-\State \Return \texttt{PENDING(job\_id)} immediately.
-\State \dots \textit{Later, upon polling \texttt{job\_id}:} \dots
-\If{infrastructure fails (timeout, missing license)}
-    \State \Return \texttt{TOOL\_CRASH}. Do not penalize the architecture candidate.
-\EndIf
-\State \textbf{Extract Observation:}
-\State Parse the tool stdout and trace files.
-\State Extract KPIs into \texttt{observation\_vector}.
-\State \textbf{Return State:}
-\State Package \texttt{observation\_vector}, \texttt{status\_flags}, and exact tool hashes.
-\end{algorithmic}
-\end{algorithm}
-```
-:::
-
-::: {.content-visible when-format="html"}
-::: {#lst-environment-interface .algorithm lst-cap="**One validated action becomes one recorded run:** the interface rejects illegal actions before touching a tool, submits work asynchronously, separates infrastructure crashes from architectural failures, and returns a typed observation with provenance."}
-**Require:** `action_request`
-**Ensure:** `observation_vector`, `status_flags`, `provenance_metadata`
-
-1. **Validate Action (Read/Action Path):**
-
-   - If `action_request` violates fixed constraints:
-     - **return** `INVALID_ACTION` immediately. Do not invoke tools.
-2. **Translate to Tool Commands:**
-
-   - Lower `action_request` into tool-specific configurations (e.g., CACTI `.cfg`).
-3. **Asynchronous Execution (Return Path):**
-
-   - Submit job to cluster/queue and obtain `job_id`.
-   - **return** `PENDING(job_id)` immediately.
-   - *... Later, the caller resumes by polling `job_id`, which returns `PENDING` until the job terminates and then yields the same observation vector a synchronous call would have produced. The `job_id` is the study's handle on that result, so it is recorded with the candidate at submission time rather than at completion, and a result whose handle was never recorded cannot be attached to the candidate that requested it ...*
-   - If infrastructure fails:
-     - **return** `TOOL_CRASH`. Do not penalize candidate.
-4. **Extract Observation:**
-
-   - Parse tool stdout and trace files.
-   - Extract KPIs into `observation_vector`.
-5. **Return State:**
-
-   - Package `observation_vector`, `status_flags`, and exact tool hashes.
-:::
-:::
-
-Distinct read, action, and return paths let an architecture environment carry architectural intent across domain boundaries, from the compiler's intermediate representation to the final physical design signoff. The environment stops short of making the architectural decision, which keeps it a trusted observation platform.
-
-If another method can act in the same harness and another architect can interpret its results without private knowledge, the environment is sound. Generative models and optimization algorithms can then operate on the environment independently.
-
-### The Environment Contract
-
-That test is only worth stating if a real environment can be written down against it. The study in @sec-running-the-loop ran inside a small one, and its contract fits in a table (@tbl-environment-contract). Nothing in it is elaborate. What makes it an environment rather than a script is that every row was fixed before a candidate was measured, and that the last row exists at all.
-
-| **Contract field** | **The array-study harness** |
+| **Run Field** | **`XR-L2-CAP-A` Run Specification** |
 | --- | --- |
-| **Fixed context** | SCALE-Sim at a pinned version, weight-stationary dataflow, and frozen SRAM capacity, interface bandwidth, layout, and workload matrices. |
-| **Legal actions** | Set the array height and width to one of fifteen declared shapes. Nothing else is mutable, so the search cannot widen its own space. |
-| **What the tool returns** | Cycle counts, per-layer utilization, and memory traffic, computed from an analytical dataflow model. |
-| **What the tool cannot tell you** | Nothing about timing closure, power, or physical design. The environment is silent on those axes rather than optimistic about them, and a claim on any of them needs a different tool. |
-| **Invalid-state behavior** | A candidate outside the declared shape set is refused before the simulator is invoked. A malformed model response triggers one repair call. Either way the attempt is recorded. |
-| **Cost of an observation** | An equal, predeclared simulator-call budget for both arms, so neither can buy its result with extra evaluations. |
-| **Repeatability** | Deterministic under the frozen configuration. Retained inputs and hashes let another architect rerun the same computation, which is replay and not independent validation. |
-| **What the environment may not decide** | Whether the workload is representative, whether the score is the right objective, or whether a result authorizes RTL work. The harness ranks candidates and owns none of those. |
+| **Study and request identity** | Study `XR-L2-CAP-A`, request definition `RUN-SPEC-A`, design revision `XR-COMPUTE-A`, and the selected approach. |
+| **Candidates and fixed state** | `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`; cache policy `CACHE-POLICY-A`; NoC `NOC-A`; memory system `MEMSYS-A`; compiler `COMPILER-A`; runtime `RUNTIME-A`; software image `SW-BASE-A`; and workload snapshot `XR-TRACE-A` with stable frame identifiers. |
+| **Permitted translation** | Serialize only `l2.capacity` values `2MB`, `3MB`, and `4MB` into declared `SRAM-A` and `SIM-A` inputs. A wrapper may change syntax and file layout but may not change architecture meaning. |
+| **Tool and condition identities** | `SRAM-A` under `PVT-A`, followed by `SIM-A` with `CACHE-A` and `PM-A`. The record retains exact versions or hashes, relevant flags, host or container identity, seeds, and reset state. |
+| **Execution order** | Run one SRAM evaluation per capacity. After the required area and access-time fields parse successfully, dispatch no `SIM-A` attempt for a capacity whose returned area exceeds $1.5\,\mathrm{mm}^2$ or whose returned access time exceeds $2.5\,\mathrm{ns}$. This predeclared predicate controls only the next tool call and does not label the candidate rejected. Run the shared $2\,\mathrm{MB}$ baseline and other authorized alternatives under matched workload and software conditions. |
+| **Expected returns** | Area, access time, cache-local energy and leakage, matched frame records, 99th-percentile frame-time inputs, capacity misses, subsystem dynamic and leakage power, warnings, reports, and raw logs. |
+| **Budget and stop** | Three SRAM evaluations and no more than four cycle-level attempts, including infrastructure reruns. Stop on budget exhaustion, missing required inputs or tools, no eligible alternative, or completion of all authorized work. |
+| **Failure and retry behavior** | Refuse invalid requests before invocation. Record timeouts, cancellations, license failures, host failures, stale-state failures, missing outputs, and parser failures separately. A retry creates a new attempt linked to its parent and consumes the declared run budget. |
+| **Reset, checkpoint, and cache behavior** | Build each SRAM input from the represented candidate. Start every clean `SIM-A` attempt in a new work directory generated from `XR-COMPUTE-A` and the fixed condition set. A retry regenerates that state rather than resuming the stale directory. The initial live history is empty, so no cached evaluation return may be reused. A generated build artifact may be reused only when the complete declared build action matches, including inputs, transformation and tool versions, flags, conditions, and relevant environment state. |
+| **Permissions and containment** | Allow only the declared executables, filesystem paths, network access, credentials, and resource limits. Treat generated scripts and RTL as untrusted inputs until their permitted actions are checked. Define interruption, revocation, quarantine, clean-state restoration, and which partial artifacts survive containment. |
+| **Artifact retention** | Retain translated inputs, commands, standard output and error, reports, matched frame records, parsed fields, unclassified warnings, output hashes, and parent-child lineage. |
+| **What the environment may not decide** | Whether a return is a valid measurement, whether two returns form a valid comparison, whether a physical limit establishes rejection, or whether a candidate should advance. |
 
-: **An environment contract is short, and the last row is the one that makes it an environment:** each field was fixed before any candidate was measured, and the harness ranks candidates without acquiring authority over what its ranking means. {#tbl-environment-contract tbl-colwidths="[26,74]"}
+: **A run specification prevents tool mechanics from rewriting the study.**
+The request, translation, state, expected outputs, failure behavior, cost, and
+limits are fixed before invocation.
+{#tbl-environment-contract tbl-colwidths="[24,76]"}
 
-Write this table before the first tool call, not after the last one. Filled afterward it is a description, and a description cannot refuse anything.
+The upper rows preserve the identities and fixed state through translation.
+The middle rows bind those identities to the tool order, expected returns,
+budget, and stopping conditions. The execution-order row is the hinge. Its
+SRAM predicate may suppress a later simulator call, but it does not reject the
+candidate. The lower rows define failure, retry, reset, permissions,
+containment, retention, and the decisions the environment cannot make.
 
-The Return Path is where a raw tool log becomes the observation the agent acts on. But capturing the return safely is only the first step; we must also ensure the AI can parse it.
+This specification must still be written before the first tool call. Filled
+afterward, it cannot refuse a bad translation or require a missing output. It
+may authorize host selection, license reservation, pause, and resume, but
+substituting a tool path, serving stale state, or skipping the baseline requires
+a new request.
 
-## Attention Bottlenecks and Distillation
+### The Lighthouse Run Report
 
-When interfacing models with traditional architecture tools, a mismatch occurs at the observation layer. A commercial EDA tool or a detailed simulator like gem5 generates exhaustive text output, often containing tens of thousands of lines. If an environment wrapper naively pipes raw stdout directly back to the agent, the relevant signals stay buried in the noise, making it harder to debug the actual hardware issue.
+The run specification above states what is intended to execute. The attempt
+record below states what actually happened. Comparing them reveals missing
+outputs, unexpected state, failures, retries, and budget use without treating
+an execution record as an architecture verdict.
 
-A critical requirement of the Return Path is reducing tool output to a usable observation. Because traditional architecture and EDA tools are verbose, the architect must build robust *log-to-semantic parsers* into the environment wrapper.
+To make run reporting concrete, @tbl-lighthouse-execution-record introduces a
+constructed trace for the prospective cache study. It is an author-created
+teaching example, not live
+project history or measurements from tools run for this book. It contains
+illustrative SRAM, power, and miss returns, one stale-state failure, and a
+four-attempt cycle-level chronology. The table carries the exact values and
+their record status. They exercise the record rather than predict the
+Lighthouse design, and fields absent from the construction remain marked
+unreported.
 
-This creates an asymmetry. We can bound the agent's *input* actions using compiler IRs like CIRCT, but the *output* from legacy EDA tools remains an unstructured stream of text. While modern tools offer clean Python APIs (like OpenROAD), legacy commercial flows rely on Tcl. Crucially, Tcl shells (like `dc_shell`[^fn-dc-shell-c06]) are stateful, side-effect-heavy REPLs, not clean APIs. The environment wrapper must therefore inject self-trapping scripts (e.g., using `catch`) that serialize their own structured JSON, shielding the agent from Tcl's fragility.
+| **Attempt** | **Candidate and Constructed State** | **Constructed Outcome and Record Status** | **Return Included in the Teaching Trace** | **Known Cost and Lineage** |
+| --- | --- | --- | --- | --- |
+| `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.2\,\mathrm{mm}^2$ and access time $2.1\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.4\,\mathrm{mm}^2$ and access time $2.4\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.7\,\mathrm{mm}^2$ and access time $2.8\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The trace includes no `SIM-A` request and places area and access time above the dispatch limits. Parser status and the exact dispatch event remain unreported. This is a constructed scheduling outcome, not a design verdict. |
+| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Constructed clean execution included; record intentionally incomplete. | A baseline frame summary and subsystem dynamic plus leakage power $2.90\,\mathrm{W}$ are included. Underlying matched frame records, artifact identity, and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
+| `SIM-3-A1` | `L2-3M-A` with stale constraint state. | The trace includes a stale-state setup failure. | No candidate return. Diagnostic and partial-artifact identities are unreported. | Cycle attempt 2 of 4. A later clean attempt is included, but retry parent, reset mechanism, and reset-state identity are unreported. |
+| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean $3\,\mathrm{MB}$ attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean $3\,\mathrm{MB}$ attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
 
-[^fn-dc-shell-c06]: **dc_shell**: The interactive command shell of a commercial logic synthesis tool, driven by Tcl scripts. Like any read-eval-print loop it accumulates state across commands, so what a command returns depends on every command issued before it, which is the opposite of the stateless request an API contract assumes.
+: **An execution record preserves missing information as carefully as returned
+values.** The constructed cache chronology retains candidate state, failure,
+successor attempts, and call counts without claiming real measurements,
+attempt-level provenance, or completeness.
+{#tbl-lighthouse-execution-record tbl-colwidths="[12,19,19,25,25]"}
 
-::: {.callout-failure-mode title="The swallowed synthesis warning"}
-**The trap.** A continuous integration (CI) script or parsing regex was tuned to known synthesis errors to catch design-rule violations.
+The SRAM rows establish the first three calls, and the simulator rows carry the
+four-attempt chronology. The 4\ MB row records no simulator request, the stale
+3\ MB attempt returns no candidate result, and the two later clean attempts
+share aggregate values without attempt-level attribution. The table therefore
+supports a teaching chronology and budget account, not a complete measurement
+record or candidate decision.
 
-**The mechanism.** The script silently swallowed a new, unclassified warning about a downgraded timing constraint and a miswired clock domain crossing buried deep in the log text. Because the regex only flagged what it knew, the warning never reached a human, and the defect it described survived into silicon.
+The grouped summaries are deliberately insufficient for interpretation. Their
+values are absent, they are not assigned to one clean attempt, and the
+underlying matched frame sequences are missing. Exact
+translated-input hashes, versions, host identity, seeds, job timestamps,
+parser status, artifact hashes, frame identifiers, reset action, and resource
+costs are also unreported. These absences make the constructed record
+incomplete under @tbl-environment-contract even though it still demonstrates
+attempt identity, stale-state recovery, and budget consumption.
 
-**The lesson.** Log parsers cannot afford to discard the unknown. This grounds the need to preserve "unclassified anomalies" alongside structured JSON, ensuring that critical but unfamiliar warnings are not filtered away from the agent's attention. This case is a composite of a recurring log-parsing failure pattern, not one documented incident.
-:::
+The trace supplies three SRAM calls, four cycle-level attempts, one stale-state
+setup failure, two later clean 3\ MB attempts, and total call-budget
+consumption. It does not supply the complete execution record defined in
+@sec-architecture-20-ontology. A production harness would capture the missing
+fields at submission and completion rather than ask an architect to reconstruct
+them later.
 
-Much like DevOps engineers use monitoring tools to distill millions of server logs into key metrics, architecture environments must translate sprawling outputs into structured summaries. Consider our Lighthouse XR prompt: if the vector accelerator exceeds its power budget, returning the raw 5,000-line power analysis log will immediately hit the LLM's "telemetry wall" and exhaust its context window. The environment wrapper must parse the EDA log, filter out irrelevant setup warnings, and distill the violation into a clean JSON observation (e.g., `{"violation": "power_budget", "peak_w": 3.4, "budget_w": 3.0}`). Furthermore, for unclassified anomalies that cannot be mapped to a simple schema, the parser must apply mechanical truncation and semantic filtering (e.g., extracting the last 50 lines before a FATAL tag). This preserves the actionable failure string without overflowing the context window.
-
-Distillation must preserve, not discard, unclassified anomalies. A parser tuned to known design-rule violations can silently drop the swapped library corner, downgraded constraint, or version-deprecation notice that a brownfield debug actually turns on. A safer wrapper returns two channels, a structured vector of the recognized metrics and violations alongside a flagged residual of the unparsed warning and error lines plus an integrity hash of the full log, so the agent gets a dense observation without the harness deciding on its own that a warning was irrelevant.
-
-Representing a tool like Yosys or OpenROAD for an agent involves defining its input schema (e.g., accepted flags, valid file formats, constraint objects), its execution bounds, and its structured outputs (e.g., JSON-formatted area and timing reports rather than raw text stdout). However, agents eventually hit a telemetry wall, because context windows restrict how much output they can observe. When an API serializes a large physical layout into text, it risks lossy serialization.
-
-Truncating a million-line timing trace to fit a context window creates a permanent verification blind spot for the AI, causing it to falsely predict success because the error was paginated away. Formalizing tools as typed APIs with explicit failure modes and hierarchical summarization lets the agent programmatically construct valid toolchain requests. It parses the resulting metrics directly into its internal state, executing deterministic recovery actions without hitting the telemetry wall. The architect ultimately reviews these structured summaries in the evaluation harness to confirm that thermal budgets hold and that static timing analysis reports no violation.
-
-## Hardware API Standardization
-
-While a robust three-path interface manages execution, the payloads traversing those paths must be mathematically and structurally unambiguous. Historically, hardware descriptions relied on languages such as SystemVerilog (IEEE 1800) built for human designers and proprietary logic synthesizers, not programmatic mutation. The fragmentation is real, but it lives in the subset of the standard each tool supports and in vendor Tcl and constraint dialects, not in the language's ownership.
-
-If an agent relies on text-based string-matching or shallow Abstract Syntax Tree (AST) parsing to modify a Verilog module, it will corrupt the design. Textual regex cannot safely resolve tangled macro expansions, evaluate parameterized `generate` blocks, or infer the unspoken module hierarchies that ultimately dictate physical placement and routing.
-
-This brittleness necessitates the *Standardization of Hardware APIs* through open, formally structured intermediary representations, most notably MLIR (Multi-Level Intermediate Representation) and its hardware-centric counterpart CIRCT (Circuit IR Compilers and Tools).
-
-CIRCT replaces unstructured text with a strict, queryable Static Single Assignment (SSA)[^fn-ssa-c06] form that explicitly models dataflow, concurrency, and structural dependencies.
-
-[^fn-ssa-c06]: **Static Single Assignment (SSA)**: A compiler intermediate form in which every value is defined exactly once and never reassigned, so a program's dataflow is explicit in its structure. For hardware, this is what makes an IR graph traversable and checkable in a way raw Verilog text is not. CIRCT captures hardware intent as a graph of progressive dialects, stepping down from high-level abstractions (`firrtl` or `handshake`) to structural nets (`hw` and `comb`), which gives AI agents a typed, deterministic interface.
-
-Instead of blind text mutation, an agent can programmatically walk the SSA graph to inject a pipeline register or re-balance a datapath, relying on the compiler framework to enforce semantic legality by construction.
-
-For the human architect, these standardized representations form an indispensable safety boundary. They ensure the AI's intent survives translation across the physical toolchain, and they rule out structurally illegal states by construction. Physical realizability is a separate question, and it still comes from the downstream tools that measure timing, power, and congestion.
-
-## Orchestrating Complex Toolchains
-
-When a candidate design successfully navigates the Three-Path Interface and its intent is safely encoded in a standardized IR like MLIR, it must be translated into actionable physical tool commands. However, a single high-level intent rarely maps to a single tool. A hardware configuration might need to fan out to multiple distinct evaluation backends. These include an RTL simulator for functional correctness, a VLSI flow for power and area estimates, and an FPGA emulation path for full-stack software booting.
-
-![**The Chipyard framework.** Chipyard, an open-source RISC-V SoC generator, routes a single configuration downward to three backend evaluation paths: RTL simulation, VLSI flow, and FPGA emulation. This fan-out ensures one configuration reaches every evaluation path consistently.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A flow diagram of the Chipyard SoC-generation framework. A configuration system feeds Chisel generators (Rocket, BOOM, Hwacha) into the FIRRTL compiler, which fans the single configuration out to three backend paths: RTL simulation, a VLSI flow, and FPGA emulation."}
-
-The environment framework routes one candidate architecture change downward into several legal tool actions without losing its connection to the system intent (@fig-chipyard-framework).
-
-### Declarative Execution Planning
-
-To manage this fan-out, we must look to adjacent domains that have solved this exact problem of decoupling *intent* from *messy execution mechanics*.
-
-In Database Query Optimization, a software engineer declares *what* data they want via a SQL query, never specifying *how* to read the disk or which B-tree to traverse. A query planner analyzes the request, checks its cached data, evaluates the compute budget, and builds an optimal execution plan dynamically. Similarly, an architecture environment can act as a query planner for evaluations. Instead of the AI imperatively calling a specific simulator script, it should issue a declarative hypothesis: `Evaluate(Candidate=Lighthouse_V2, Metric=IPC)`. The environment then determines whether to serve a cached result, query a fast analytical model, or provision a 24-hour RTL simulation based on the current budget constraints.
-
-In computational biology, executing a genomic pipeline previously required brittle bash scripts. Frameworks like Nextflow [@DiTommasoEtAl2017Nextflow] and Snakemake [@KosterEtAl2012Snakemake] emerged to formalize dataflow, isolating the *scientific logic* from the *execution mechanics* (cluster queues, retries, and tool crashes). In cloud computing, Kubernetes relies on desired-state reconciliation. The user declares the intent, and the orchestration engine handles the low-level failures. These frameworks abstract execution mechanics into a formal graph, letting the architect review high-level declarative goals instead of debugging why a synthesis job crashed on node 4.
-
-Architecture 2.0 environments must act as this orchestration layer. A semantic proposal may require several reads, transformations, builds, executions, and checks. Their dependencies form a graph rather than a single call or mandatory sequence.
-
-Fulfilling the Lighthouse prompt for a complex System-on-Chip (SoC) means orchestrating the design intent through the Chipyard generator framework as a directed acyclic graph (DAG) of dependencies. Integrating the low-power RISC-V compute subsystem with custom XR accelerators requires explicit lowering from MLIR to RTL, along with related compiler IR transformations. The dataflow moves through several precise stages. An agent's high-level intent first triggers an MLIR lowering to emit new spatial-tracking instructions, which then informs a hardware target feature declaration within the Chipyard configuration.
-
-That configuration fans out into multiple execution branches. It generates RTL, which in turn feeds both a rebuilt custom Linux binary for a functional correctness run in Verilator, an open-source RTL simulator, and a physical logic synthesis flow that checks routing congestion and verifies the power budget. The environment acts as the arbiter of this DAG, running some branches in parallel while others block until earlier artifacts exist, so the generator's edits are vetted against physical realities before they are presented back for review.
-
-One branch is missing from this fan-out, and in real projects it is the largest. The Wilson study cited earlier puts more than half of project effort into verifying that a design still computes the right answers, and an AI-mutated RTL block raises that burden rather than lowering it. The orchestrator must place the correctness checks (lint, equivalence checking, and regression suites) as the first and cheapest stages of the DAG, short-circuiting synthesis and layout when a candidate fails them, because an IPC number measured on functionally wrong RTL is not evidence of anything. The machinery of those checks belongs to @sec-feedback-verification-trust; their position at the front of the execution graph belongs here.
-
-### Sandbox Resilience
-
-EDA tools and cycle-level simulators are notoriously brittle, slow, and expensive to run. A generated RTL block can spin in an infinite elaboration loop, a router can segfault on a pathological netlist, and a synthesis script can wedge a license daemon. The architecture environment must act as a resilient sandbox so one bad candidate does not take down the host or corrupt a shared working tree. Process isolation keeps each tool invocation in its own address space and filesystem view, resource caps bound its memory and disk footprint, and a wall-clock timeout on every stage catches the elaboration that never terminates. When a tool panics or raises a segmentation fault, the harness traps the signal, records the partial outputs and exit status, and returns control to the loop rather than letting the failure unwind the whole study. This resilience is a systems property, distinct from safe exploration in the reinforcement-learning sense, which constrains which actions an agent may take while it is still learning.
-
-### Artifact Lineage and Provenance
-
-To illustrate this orchestration complexity, consider how a single architecture proposal formally splits into specific software and hardware instantiations (@fig-artifact-lineage).
-
-![**Artifact lineage and cryptographic provenance.** A single Lighthouse intent fans out into software binaries and hardware RTL, each hashed to ensure reproducible evaluations.](images/F5-artifact-lineage){#fig-artifact-lineage fig-alt="Artifact Lineage and Cryptographic Provenance. A single Lighthouse intent fans out into software binaries and hardware RTL, each hashed to ensure reproducible evaluations."}
-
-Software variant S2 may be an MLIR-derived lowering compiled into binary B2. Hardware variant H3 may be a Chipyard-derived configuration elaborated into RTL R3. Changing B2 while holding R3 fixed creates a new evaluation instance even if the root proposal is unchanged.
-
-An evaluation instance binds every layer relevant to that tool action. Each transformation records parent, tool and transformation version, input identifiers, output identifiers, content hashes where useful, and the intended semantic relation. A semantics-changing edit creates a child candidate. Google's Bazel [@Bazel] build system guarantees reproducibility by enforcing hermeticity, where every output is addressed by a cryptographic hash of its inputs. This matches the architectural need to track hardware candidate identity as it lowers from a C++ memory model to RTL to Layout. A hash proves artifact identity, not architectural or functional equivalence.
+The record does not label the 4\ MB candidate invalid, call the 3\ MB result
+unresolved, or recommend an architecture action. Those statements require
+measurement qualification and comparison.
 
 ## Open Research Questions
 
-An environment is a research object in its own right rather than a wrapper around whichever tools a project happens to own. What stays open is how far a cheap tier can be trusted to screen for an expensive one, what a return means when the tool carries state between calls and the capacity to run it is rationed, and what a simulation can establish about silicon.
+**Interfaces that preserve architecture meaning.**
 
-**Theme 1: Screening Cascades and Promotion.** A cheap fidelity tier earns its place only if it orders candidates the way the expensive tier would, and how well it does that is measurable rather than a matter of faith.
+- **How can a wrapper verify that a tool-specific request preserves the intended
+architecture change?** Syntax and type checks can reject malformed input, but
+defaults, rounding, generated collateral, and unsupported combinations can
+still change its meaning. The missing capability is a practical semantic check
+across the architecture request and the exact tool invocation.
 
-- How many candidates must a cheap tier promote to keep the true best design in the pool, given its measured rank correlation with the expensive tier?
-- What share of an evaluation budget should be spent measuring the correlation between two tiers rather than screening candidates with them?
-- What signal reveals that a cheap tier has begun manufacturing decoys, before an expensive tier is spent discovering it?
+- **How can a shared interface expose tool differences without erasing them?**
+Common schemas make orchestration easier, yet tools differ in fidelity,
+assumptions, status codes, and unfamiliar output. An interface must support
+portable control while preserving the distinctions needed to interpret each
+return.
 
-**Theme 2: Learning Against a Stateful and Rationed Environment.** Architecture tools hold state across calls, return days late and out of order, sometimes fail for reasons that belong to the cluster rather than to the candidate, and run only when a scarce license seat is free. A search that cannot tell these conditions apart learns the installation instead of the design space.
+**Controlling state and authority.**
 
-- What in a crashed run predicts, before repeated attempts are spent, whether the cluster or the candidate's own resource footprint is at fault?
-- How should a search assign credit when observations arrive days later, out of order, and preceded by partial results?
-- How should a design loop schedule its own exploration against a license pool that human engineers are drawing from at the same time?
+- **What constitutes a clean reset for a stateful architecture tool?** Working
+directories, databases, caches, checkpoints, seeds, host libraries, and license
+state survive different forms of restart. A reset protocol needs an observable
+criterion for when a later attempt is independent of the failed or canceled
+one.
 
-**Theme 3: Bridging the Sim-to-Silicon Gap.** A design can pass every simulation and still fail in silicon, and the dimensions a simulator cannot see are exactly the ones an optimizer is free to exploit.
+- **What is the least authority a tool-connected design system needs to complete
+useful work?** Generated scripts, RTL, constraints, and commands may need
+selected files, executables, licenses, and machines without needing
+unrestricted credentials or network access. The research challenge is to
+derive enforceable permissions from a typed design action and revoke them
+without corrupting shared state.
 
-- Which measurement conditions must an observation carry for a candidate ranking to survive a change of corner, mode, or library version?
-- How can an environment detect that an agent is exploiting a physical dimension its current fidelity cannot verify?
+**Long-running and reproducible execution.**
+
+- **When should a late result be accepted after the surrounding study has
+changed?** Long tool runs may finish after a newer candidate, checkpoint,
+budget, or requirement has taken effect. Identity alone is insufficient; the
+environment needs a principled test for whether the return still answers the
+current question or should remain only as historical evidence.
 
 ## Conclusion
 
-::: {.callout-design-principle title="The action space must not exceed what the tools can check"}
-Never allow an agent to propose architectural changes that the available simulator or formal tool cannot verify. If an agent mutates a thermal property but the EDA loop only runs logic simulation, it will silently exploit the unchecked dimension. The permitted action space should not reach past the physical dimensions some check in the budget can observe, and where it must, the unobserved dimension is declared rather than left for the optimizer to find.
+::: {.callout-design-principle title="A trustworthy run makes its state and limits visible"}
+Start from pinned inputs, grant only the authority the requested tools need,
+and retain the raw and structured return from every attempt. A wrapper may
+translate syntax, and a harness may schedule, isolate, retry, reset, or resume
+work. Neither may silently change the candidate, conditions, tool path, or
+requested meaning.
 :::
 
+A tool-connected environment defines state, legal actions, observations,
+transitions, costs, stopping conditions, and failure behavior around its tools.
+Its wrappers validate and translate typed requests. Its harness manages mutable
+state, dependencies, queues, retries, resets, containment, resources, and
+lineage under the run specification.
 
-An architecture environment turns opaque tool executions into an explicit interface that automated methods and human architects can both act against. It records which software artifact ran against which hardware artifact, which actions were refused, and the typed meaning of every return. What separates that from a script is timing. Every field is fixed before the first candidate is measured, because a contract written afterward describes what happened and can refuse nothing.
+Each attempt reports candidate, workload, conditions, constraints, waivers,
+versions, seeds, status, warnings, metrics, artifacts, and realized cost.
+Invalid requests, setup, infrastructure, tool, and parser failures, incomplete
+artifacts, formal outcomes, and measured violations remain distinct. So do
+exact replay, repeatability, and independent reproduction; hashes establish
+byte identity rather than semantic equivalence.
 
-One proposed change is rarely one tool call. Inserting a vector block into an XR subsystem moves the interconnect, the L2, and the device tree with it, and touches a compiler, an RTL run, and a synthesis flow before anything can be said about it. The action path reduces the proposal to a member of a declared set and refuses what it cannot reduce, and the orchestration layer runs the cheapest correctness checks first. Each of those calls is bought rather than looked up, and the price climbs by orders of magnitude on the way to silicon, so escalating to a costlier tier is a decision the study must justify.
+The Lighthouse teaching trace carries the constructed cache candidates and
+conditions through the named `SRAM-A`, `SIM-A`, `CACHE-A`, and `PM-A` path. It
+includes the stale-state setup failure, later clean attempts, illustrative
+returns, and consumed call budget. It also identifies the reset mechanism,
+exact artifacts, tool conditions, and realized resource costs as missing.
+Nothing is filled in simply because a complete-looking record would be easier
+to read.
 
-A tool that exits with status zero has reported that it ran, not that the candidate was evaluated, so the return path types the outcome instead of trusting the exit code. The split that matters most separates infrastructure failure from architectural failure. A host out of memory, a timed-out license checkout, and a dead cluster node say nothing about the design, and a search penalized for them learns the installation rather than the design space. Negative slack, an unroutable netlist, and a blown power budget are the design speaking, and they belong in the record as evidence. When repeated attempts crash the same tool the same way, the candidate's own footprint becomes the better explanation and the classification has to move.
+The prospective multi-tool path shows how that same candidate identity could
+feed a compiler, simulator, RTL simulation, formal check, synthesis, and
+physical implementation while every branch retains its own setup and limits.
+The environment reports what each branch did; it does not collapse the returns
+into a score, promote a candidate, or decide whether a claim is valid.
 
-What comes back carries three things beyond its value. The first is a price, the tool cost spent to obtain it. The second is an error bar, which describes a simulator-and-target pair rather than a simulator alone, so a tier that reports one without naming the hardware it was validated against has reported nothing a rejection check can use. The third is the conditions the number was taken under, because a slack figure without its corner, mode, and library version is not yet a fact, and two figures compare only when they name the same hashed evaluation instance. The environment also keeps what it could not classify, since the warning no parser recognized is the one that has to reach the architect.
-
-None of this establishes that a candidate is good. The environment does not confer validity. It does not decide whether the workload is representative, whether the score is the right objective, or whether a ranking authorizes RTL work, and on the axes its tools cannot measure it stays silent rather than optimistic. What it guarantees is narrower. The question reached an instrument able to answer it, and the answer came back with enough price, error, and provenance attached to be argued with, which is where @sec-feedback-verification-trust begins.
+The illustrative return values, call counts, setup failure, aggregate
+clean-return group, and explicit missing fields are therefore inputs to later
+measurement qualification. They do not yet establish which fields are valid
+measurements, which comparisons are sound, what the checks can see, or what
+the result supports. Measurement qualification is the next task, developed in
+@sec-feedback-verification-trust. It determines how the returned measurements
+can become useful feedback.

@@ -4,7 +4,7 @@ format:
     output-file: index.html
 ---
 
-# The Architecture 2.0 Lifecycle {#sec-architecture-20-ontology}
+# The AI-Assisted Design Life Cycle {#sec-architecture-20-ontology}
 
 ::: {.epigraph}
 > *"All models are wrong, but some are useful."*
@@ -13,416 +13,841 @@ format:
 :::
 
 ::: {.column-margin}
-**Author's Note:** George E. P. Box, a British statistician, coined this aphorism about statistical models. Every model simplifies, and the working question is whether the simplification still serves the decision at hand. His point applies to more than prediction models. A task description, benchmark, simulator, power model, or test suite always leaves something out. Each can still be useful when its scope and failure modes are clear and when the decision does not reach beyond the evidence it provides.
+**Author's Note:** George E. P. Box, a British statistician, coined this
+aphorism about statistical models. Every model simplifies, and the working
+question is whether the simplification still serves the decision at hand. A
+task description, benchmark, simulator, power model, or test suite always leaves
+something out. Each can still be useful when its scope and failure modes are
+clear and when the decision does not reach beyond the evidence it provides.
 :::
 
 ::: {.callout-crux}
-An AI-assisted study can run thousands of tool invocations and still leave nobody able to say which of them checked anything. Why cut that work into stages at all, and why do the cuts fall where they do?
+AI can generate more candidates and invoke more tools than an architect can
+inspect by hand. How should that work be organized so that promising outputs
+become defensible design decisions rather than a larger pile of plausible
+results?
 :::
 
-The preceding chapters left architecture work in an uncomfortable position. Design spaces have outgrown manual exploration, while an unguided search optimizes the proxy it was handed rather than the silicon that has to ship. No architect hands over a prompt and receives a taped-out chip. What comes back is a candidate and a number, and that pair is the difficulty this chapter starts from, because a number reports only that the run finished.
+Architecture design has always relied on a mixture of explicit artifacts and
+tacit knowledge. Requirements, traces, models, register-transfer-level (RTL)
+descriptions, floorplans, and review notes record part of the work. Experienced
+architects supply the rest from memory. They know which workload phases count,
+which model is stale, which constraint is provisional, which tool warning is
+harmless, and which favorable result contradicts physical experience.
 
-Consider what can sit behind a number that looks good. The architect may have asked a question that no achievable evidence could settle. The search may never have been able to express the configuration that would have won. A synthesis tool may have exited cleanly without analyzing anything. The reported margin may sit inside the simulator's own validated error. The gain may be real in the simulator and absent in silicon because the search found a hole in the harness rather than a mechanism. Or the result may be sound and still get read as permission for a decision nobody authorized. Six failures, six different repairs, and one aggregate score that separates none of them.
+AI assistance changes the volume and pace of this work without removing those
+judgments. A system can propose hundreds of candidates, write tool requests,
+summarize logs, and recommend the next experiment. It can also change the
+question without noticing, submit an illegal candidate, accept a clean tool
+exit that measured nothing, optimize a misleading proxy, or generalize a
+result beyond the conditions that produced it. A sequence of prompts and tool
+calls does not reveal where any of those failures occurred.
 
-A lifecycle is worth imposing only if it separates those failures, and naming stages is not what does the separating. A distinct check behind each stage is what does it, so that a study fails where the fault actually occurred and an architect knows which repair to make. Human engineers perform this separation informally, out of tacit knowledge that never reaches a document: implicit workload expectations, unstated thermal limits, and trusted tool combinations. An agent carries none of it. Whatever an experienced architect would have caught by looking has to become a check that something can fail.
+A life cycle provides that structure. It identifies the complete set of
+responsibilities needed to move from design intent to a reviewed decision,
+including formulation, exploration, implementation, evaluation,
+interpretation, and review. These responsibilities can repeat, overlap, and
+return to earlier work. They are not six agents, six software components, or a
+waterfall schedule. Their value is that each asks a different question and
+leaves a different result for the next architect to inspect.
 
-This chapter presents the Architecture 2.0 lifecycle on that basis. It establishes the bounded architecture study as the unit of work, so that every machine-generated proposal stays anchored to a claim something can falsify, and then derives six stages that carry such a claim from formulation to defense, arguing for each seam from the failure it exists to isolate.
-
-While this chapter gives the structural argument, the subsequent chapters develop the implementation details in greater depth, including how to build state representations, search algorithms, robust tool interfaces, verification techniques, and accountability structures.
+This chapter explains why those responsibilities are needed, what each must
+produce, and how they fit together. The running example is one cache-capacity
+decision from the mobile XR Lighthouse moonshot. The example is deliberately
+small enough to follow, but the structure applies to architecture work whether
+the assistance comes from one model, several agents, conventional optimization,
+or a combination of AI and established engineering tools.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Justify a lifecycle decomposition by naming what can reject the work at each stage, and fold any stage whose failures never occur independently of its neighbor's.
-- Bound an architecture study with a claim naming the mechanism, the metric, the baseline, and the corner at which each constraint is checked, then declare the analytic ceiling and the couplings a sweep will disturb before running it.
-- Separate a measurement that cleared its check from a mechanism that accounts for it, and name the ablation runs and retained telemetry that would tell the two apart.
-- Separate a study's fidelity from its authority, since a higher-fidelity result does not widen what the study may commit to.
-- Index a completed study on the twelve-field design-loop card, preserving each rejected candidate with the provenance a passing run carries and leaving visibly empty any field the study never declared.
+- Explain why ad hoc prompts and tool calls are insufficient for AI-assisted
+  architecture design.
+- Distinguish the complete design life cycle, an iterative design loop, one
+  scoped study, and the record retained for review.
+- Translate broad design intent into requirements, objectives, legal
+  alternatives, testable claims, and a decision the work is meant to inform.
+- Distinguish an infrastructure failure, a rejected candidate, an unresolved
+  comparison, a completed decision, and a budget stop.
+- Identify what each life-cycle responsibility contributes and explain why the
+  responsibilities iterate rather than form a waterfall or prescribed team
+  structure.
+- Preserve enough of a study for another architect to understand what was
+  tried, what failed, what the results support, and what remains unresolved.
 :::
 
-## The Big Picture: Translating Intent to Execution {#sec-arch2-ontology}
+## Why AI-Assisted Design Needs a Life Cycle {#sec-arch2-ontology}
 
-An AI-assisted architecture study needs a common structure connecting the stages of work that are often documented separately. It must preserve the original intent, define a bounded comparison, connect that comparison to an inspectable execution loop, and show who may act on the result.
+Ordinary architecture work is already difficult to reconstruct after the fact.
+A simulator configuration may live in one repository, the workload selection
+in another, the power assumptions in a spreadsheet, and the reason for a
+constraint in a reviewer's notes. Human teams bridge these gaps through shared
+history and repeated discussion. An AI system has no reliable access to that
+context unless the work makes it explicit.
 
-@fig-structured-layer-above-rtl places an architecture study between the architect's question and the tools used to investigate it. The figure's middle layer is the comparison and its review record. It connects reasoning that often stays in an engineer's head or working notes to executable implementation flows, giving architectural tools, agents, reviewers, and architects a shared question for interpreting each artifact and tool result.
+The need becomes more acute as assistance scales. More candidates do not
+automatically produce more knowledge. If ten thousand runs use the wrong
+baseline, they repeat one mistake ten thousand times. If a generated RTL block
+passes a narrow test but violates an unstated interface requirement, the test
+has certified the wrong thing. If an optimizer finds a simulator loophole, its
+best score may be the least credible candidate. Expensive simulation and EDA
+runs make these errors especially costly because a bad question can consume
+hours of compute before anyone discovers that the result cannot support a
+decision.
 
-![**An AI-assisted architecture study connects intent to implementation evidence.** The study contains the scope, architectural claim, execution and analysis process, and evidence needed for review. Iterative work uses a design loop.](images/F4d-structured-layer-above-rtl){#fig-structured-layer-above-rtl width="85%" fig-alt="Three-layer diagram showing architecture intent and judgment flowing into a structured architecture study, with tool results flowing back for evidence review."}
+Software engineering offers a useful comparison. SWE-bench gives a coding
+agent a bounded issue, a known repository state, and executable tests
+[@JimenezEtAl2024SWEBench]. Architecture needs comparable discipline, but no
+single test settles performance, power, area, timing, physical feasibility,
+software behavior, and the system-level decision together. The relevant
+feedback also arrives from tools with different costs and different limits.
 
-Read @fig-structured-layer-above-rtl from top to bottom:
+Consider two teams studying the same cache with established tools. One might
+use gem5, a cycle-level architecture simulator, while another uses FireSim, a
+field-programmable gate array (FPGA)-accelerated full-system RTL platform
+[@BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim]. Either can compare cache
+sizes, misses, and execution time. Energy estimates require an attached model
+or implementation flow whose assumptions must be stated separately. The tool
+choice alone does not say which workload phases count, whether the same
+baseline was rerun, which other settings stayed fixed, or whether the result is
+meant to select a design for RTL evaluation. Those declarations determine
+whether the teams performed the same study.
 
-* **The Upper Layer (System Intent)**: This contains the architecture models, requirements, and rationale that shape the question. For the RISC-V XR subsystem from the Lighthouse prompt, this includes the high-level goal of improving mobile XR efficiency and the initial models of the target workload.
-* **The Middle Layer (Bounded Comparison)**: This turns intent into a bounded comparison. Its scope names the specific question, such as deciding whether a particular cache configuration merits RTL evaluation. The architectural claim says what will be reviewed. It is not another architecture tool; rather, it connects design intent to tool execution.
-* **The Lower Layer (Executable Tool Path)**: Simulators, compilers, RTL generators, and EDA flows carry out different parts of the comparison to return measurements that enter the evidence record.
+What architects need is a common unit of work between a broad product goal and
+those tools. @fig-structured-layer-above-rtl places a scoped architecture study
+in that position. The study preserves the question, comparison, execution
+plan, and review scope that let architects interpret otherwise disconnected
+artifacts and tool results.
 
-In software engineering, coding agents rely on structured environments like SWE-bench [@JimenezEtAl2024SWEBench] to provide a bounded issue, a known repository state, and executable tests. Architecture requires a similar structure, but building it is much harder because feedback (power, area, timing) is delayed, ambiguous, and subject to physical constraints.
+![**A scoped architecture study connects intent to implementation evidence.** The study contains the scope, architectural claim, execution and analysis process, and records needed for review. Iterative work may use a design loop.](images/F4d-structured-layer-above-rtl){#fig-structured-layer-above-rtl width="85%" fig-alt="Three-layer diagram showing architecture intent and judgment above a scoped architecture study, implementation tools below it, measurements returning for review, and revision leading to a scoped finding or decision."}
 
-Because architecture state is scattered and tool feedback carries different costs and fidelity, an AI-assisted architecture study requires more than just an environment. It requires a bounded claim, evidence at the right fidelity, and a named person who owns the final decision.
+The upper layer of @fig-structured-layer-above-rtl contains
+the design intent, architecture models, requirements, and rationale that
+establish the goals, constraints, and stakes. These inputs shape the work, but
+they do not yet define a specific comparison.
 
-## The Six-Stage Execution Lifecycle
+The middle layer turns that intent into a piece of architecture work that can
+be reviewed. The study scope names the question and
+intended decision. The architectural claim states what is being investigated.
+Execution and analysis define how the comparison will be performed. Results
+and review record what the measurements support and connect that conclusion to
+the study's decision boundary. If the results expose a faulty assumption or an
+underspecified comparison, the question or claim can be revised.
 
-To execute the work within that structure, the lifecycle has to say where one kind of work ends and the next begins. Experienced architects already move through these stages informally, carrying project context from a spreadsheet to a simulator to a design review without ever naming a boundary they crossed.
+The lower layer contains the tool path. Simulators and models evaluate
+architectural behavior. Compilers and runtimes expose software interactions.
+RTL generators turn candidates into implementations. Electronic design
+automation (EDA) and signoff tools assess physical properties. The return arrow
+matters as much as the downward path. Measurements flow back into the study,
+where they must be interpreted against the original question, constraints,
+and known tool limits.
 
-Formalizing those boundaries raises a question the informal version never has to answer. Why cut the work here rather than somewhere else, and why six cuts rather than three or twenty? A stage boundary is not a milestone on a schedule and it is not a handoff between teams. It is a place where what can reject the work changes. Two activities belong in one stage when the same check disqualifies both, and in different stages when either can fail while the other passes cleanly.
+The bar at the bottom is the payoff. A tool output is not yet an architecture
+decision. The study converts a collection of outputs into a finding whose
+scope is explicit and whose next action has a named owner. The figure therefore
+connects intent, implementation work, and judgment without pretending that any
+one of them can replace the others.
 
-Applying that test to the familiar architecture design process produces six stages (@fig-ontology-loop): Formulate, Explore, Implement, Evaluate, Explain, and Defend. Formulate fails on an envelope calculation, before any candidate exists, when the claim asks for more than the workload has to give. Explore fails on the design space, when the encoding cannot express the configuration that would have won. Implement fails on the infrastructure, when a tool crashes, resumes from stale constraints, or exits with status zero having analyzed nothing. Evaluate fails on the claim check, when a measured margin does not clear its threshold or does not clear the tool's own error. Explain fails on an ablation, when the mechanism the study named turns out not to be the one that produced the number. Defend fails on authority, when the evidence is sound and the decision it is being used to justify sits outside what the study was scoped to support. This chapter works through cases of several of these firing while the others passed, including a cache policy that beat the published state of the art and had no mechanism behind it, and a synthesis run that reported zero power and zero area with a clean exit status.
+Much of the boundary of an ordinary study can remain tacit. One architect may
+know that the current 2\ MB cache must be rerun because its old result used an
+obsolete memory model. Another may know that initialization frames do not
+represent steady operation. A simulator owner may remember which prefetcher
+setting was qualified, while a project lead remembers that a 6\ MB alternative
+was already rejected for area. A useful life cycle makes the assumptions that
+can change the comparison, its cost, or its interpretation visible before AI
+scales the work around them.
 
-Read the test in reverse and it becomes an audit any reader can run on a proposed lifecycle, this one included. Ask what can reject the work at each stage. A stage with no distinct rejection is a label rather than a stage, and it should fold into its neighbor. Six is therefore a claim about this decomposition rather than a property of architecture work, and it is falsifiable in the ordinary way. A group whose Implement and Evaluate failures never occur apart, because its tool path reports infrastructure faults and physical violations through one channel, should run five stages and record why.
+## The Complete Life Cycle
 
-Crucially, for AI-assisted architecture to be practical, this lifecycle operates at two distinct speeds:
+The complete life cycle has six responsibilities because different failures
+need different repairs. A bad question, an illegal candidate, a tool failure,
+an invalid comparison, an unsupported explanation, and an incomplete decision
+cannot all be sent back to the same step.
 
-1. **The Inner Agentic Loop (Explore <-> Implement <-> Evaluate):** Operating at *machine speed*, the agent iterates thousands of times autonomously, aggressively pruning the search space, fighting toolchain friction, and relying on proxies and deterministic rejection checks. Those thousands of turns hold only because the loop runs mostly at proxy fidelity. The moment it escalates to a cycle-level simulator or synthesis, its iteration rate drops to that of the slowest tool it invokes, so "machine speed" is really a statement about the loop's composition.
-2. **The Outer Human Loop (Formulate -> [Inner Loop] -> Explain -> Defend):** Operating at *human speed*, this loop only triggers when the agent has found a candidate that passes all automated physical constraints and is ready to translate that evidence for human sign-off, the point where gigabytes of tool output have to become an argument a skeptical reviewer will accept.
+1. **Formulate** translates design intent into a question, requirements,
+   objectives, legal changes, planned checks, and an intended decision.
+2. **Explore** identifies alternatives worth testing and preserves enough of
+   the search to show what was and was not considered.
+3. **Implement** makes a candidate executable by the relevant tools and
+   establishes that the requested work actually ran. It does not necessarily
+   mean producing RTL.
+4. **Evaluate** compares valid measurements with the declared requirements and
+   objectives.
+5. **Interpret and Explain** determines what the result means and whether the
+   proposed mechanism accounts for it.
+6. **Review and Decide** determines what the accumulated work supports, then
+   advances, rejects, revises, or stops.
 
-The split falls where it does for the same reason the stages do. The inner three are exactly the stages whose rejection checks a machine can apply unattended, since a declared design space, a tool exit condition, and a threshold with an error bar beside it are all mechanical. The outer three are the stages whose checks are not. Deciding that a claim is worth asking, that a mechanism account survives an ablation, and that evidence justifies a commitment are judgments that put a name on the result, and the middle of the loop runs fast precisely because those three sit outside it.
+@fig-ontology-loop places all six responsibilities in one view. It appears
+before the detailed sections so the reader can keep the whole life cycle in
+mind while examining any one part.
 
-![**The Architecture 2.0 engineering lifecycle.** Six numbered stages carry one turn of an architecture study from a bounded claim through search, tool execution, evidence, and interpretation to an authorized decision. Keeping the question, the executed work, the evidence, and the next decision connected is what makes AI assistance reviewable. A turn that fails review returns a revised claim or study to Formulate rather than stopping.](images/ch3-ontology-loop){#fig-ontology-loop width="100%" fig-alt="Six numbered rectangular boxes in two rows. The top row runs left to right through Formulate, Explore, and Implement; the bottom row runs right to left through Evaluate, Explain, and Defend. A red return path carries a revised claim or study from Defend back to Formulate for another turn."}
+![**A six-stage life cycle carries design intent to a reviewed decision.** Formulate, Explore, Implement, Evaluate, Interpret and Explain, and Review and Decide describe the complete responsibilities. Work can return to the responsibility that owns an inadequate result.](images/ch3-ontology-loop){#fig-ontology-loop width="100%" fig-alt="Six numbered stages arranged in two rows. Formulate, Explore, Implement, Evaluate, Explain, and Review and Decide carry one scoped study forward. A return path shows that review can revise the question, while other repairs return to the stage that owns the inadequate output."}
 
-> **Architecture design loop.** The repeated process of examining the current design, making an allowed change, running the relevant tools, interpreting the result, and deciding whether to revise, reject, or continue. Building on established Agile Hardware Development cycles (e.g., the Chisel ecosystem [@Izraelevitz2017Chisel]), each iteration retains enough information for another architect to see what led to the next step.
+The top row carries work from Formulate through Implement, and the bottom row
+continues from Evaluate through Review and Decide. That path shows one complete
+passage through the work. The return arrow
+illustrates a case in which review exposes a problem in the formulation and
+sends the study back to revise its question. It is not the repair path for
+every failure. A malformed tool request returns to Implement, while missing
+observations may require another evaluation run.
 
-To ground these abstract concepts in a practical reality, we use the XR subsystem design task from the Lighthouse prompt as the running example. The interaction between an agent's proposed candidates and the underlying tools forms a continuous execution cycle. A single turn threads the agent's proposal through the tools and back to a claim check (@fig-design-loop):
+The boxes divide responsibilities, not time. Exploration and implementation
+may alternate thousands of times. Evaluation may reject a candidate and send
+the work back to Explore. Interpretation may expose a confounding variable
+that requires a new measurement. Review may narrow the question rather than
+close the study. A small team can carry all six responsibilities, and a large
+team can divide one responsibility among many specialists. A foundation model
+or a system composed of agents may help across several boxes, but the boxes do
+not prescribe its internal organization.
 
-![**How an iterative architecture study proceeds.** An architect or an automated method reads the recorded design state, makes an allowed change, runs a tool, and submits the result for review. The reviewer records what the evidence supports, and the decision owner determines what happens next.](images/F3-design-loop){#fig-design-loop width="85%" fig-alt="A design loop within a scoped architecture study. Represented state, permitted action, tool feedback, and evidence lead to claim review."}
+Four related ideas are easy to confuse.
 
-1. **Read Represented State:** The agent queries the current design state, observing the 2\ MB baseline cache, the XRBench trace, and the 1\ W of headroom remaining in the subsystem's 3\ W budget (dynamic plus leakage).
-2. **Make Allowed Change:** The agent proposes expanding the cache to 3\ MB. The study's declared design space admits that change, so the action is legal.
-3. **Execute Tool (Feedback):** The proposed 3\ MB configuration is dispatched to the cycle-level simulator (e.g., gem5), the analytical power model (e.g., McPAT), and an SRAM timing and area model (e.g., CACTI). The tools return raw feedback, with illustrative values for this walkthrough: a 12% reduction in capacity misses, resulting in decreased dynamic power (fewer DRAM accesses), but a 2\ mW increase in leakage power and a 0.2\ mm^2^ increase in area.
-4. **Compile Evidence:** The raw feedback is packaged with its provenance (simulator version, trace name, time of execution) into an immutable evidence record.
-5. **Claim Review:** A deterministic check evaluates the evidence against the original bounded claim. Because the 2\ mW leakage increase keeps the system well within that remaining 1\ W of headroom, the area fits the floorplan constraint, and the 3\ MB macro's reported access time still closes timing at the declared 2\ GHz, the check passes. The 3\ MB configuration becomes the new baseline state for the next iteration.
+- **Life cycle:** Names the complete responsibilities needed to move from
+  intent to a defensible decision.
+- **Scoped study:** Applies those responsibilities to one architecture
+  question and one intended decision.
+- **Design loop:** Describes an iterative path through the relevant
+  responsibilities as the design changes and feedback returns.
+- **Review record:** Preserves the question, attempts, observations,
+  conclusions, and unresolved issues so another architect can inspect the
+  work.
 
-The next turn shows the outcome the loop exists to produce. The agent proposes 4\ MB, the ceiling of the declared space. The tools return, again with illustrative values, a further 4% reduction in capacity misses, but the larger array's access time no longer closes timing at the declared 2\ GHz; the critical path through the 4\ MB macro misses the cycle budget. The claim review fails on timing. No judgment call is involved. The candidate is rejected, and the run is preserved as a negative trace with the same provenance the passing run carried. The study then stops at its declared commitment level, a simulation-grade recommendation to carry the 3\ MB configuration into RTL evaluation and nothing stronger. The rejection is not wasted work. The preserved trace is what keeps the next study from re-proposing the same dead end.
+The life cycle is the complete map. A scoped study is one journey across it.
+The design loop describes the turns taken during that journey. The review
+record is what remains after each turn. None is a competing process model.
 
-This formalized loop ensures that every AI-driven change is mechanically verified against physical constraints before it is accepted. The rest of this chapter walks through the six stages of this lifecycle, detailing the unique challenges an agent faces at each step.
+A stage boundary is useful when the work on either side can fail independently
+and requires a different repair. @tbl-stage-seams applies that test to the five
+adjacent boundaries.
 
-## Formulating: Bounding the Study
+| **Boundary** | **Different questions and outputs** | **Different inadequacy and repair** |
+| --- | --- | --- |
+| Formulate → Explore | Formulate asks what decision the study may support and produces a scoped plan. Explore asks which alternatives exist inside that plan and produces candidates plus a search history. | An inadequate plan returns to the question, scope, or requirements. An inadequate exploration returns to the represented design space or the method used to search it. |
+| Explore → Implement | Explore asks which candidate should be tried. Implement asks whether that candidate can be expressed as a valid tool request and whether the requested work ran. | A missing or illegal candidate returns to the design space. A stale workspace, malformed request, license failure, or empty output returns to the tool setup or request. |
+| Implement → Evaluate | Implement produces a valid execution record or an infrastructure failure. Evaluate produces a checked comparison. | A run that never executed cannot count against the candidate. A completed run whose result fails a declared check can. |
+| Evaluate → Interpret and Explain | Evaluate asks whether the measured result meets the declared requirements and objectives. Interpretation asks what the result means and whether the proposed mechanism produced it. | A measurement problem returns to the measurement plan or candidate. A mechanism problem returns to the hypothesis, retained observations, or contrast used to test it. |
+| Interpret and Explain → Review and Decide | Interpretation produces a supported, revised, or contradicted account. Review asks what that account and the checked result permit the study to conclude. | An incomplete explanation returns to the hypothesis or study. An insufficient record narrows the conclusion, reopens a named responsibility, or stops honestly. |
 
-The first step in the lifecycle (@fig-ontology-loop) is Formulate. To ensure that machine-generated proposals do not drift away from the problem they were asked to solve, we require a bounded architecture study.
+: **Stage boundaries separate different questions and repairs.** Each row
+shows why the work on either side of a boundary can fail independently. When
+neither the question nor the repair differs, adjacent responsibilities can be
+combined for that project. {#tbl-stage-seams tbl-colwidths="[20,41,39]"}
 
-In @fig-structured-layer-above-rtl, the architecture question and the judgment behind it establish the starting intent. The Lighthouse prompt states that intent:
+The two middle boundaries show why the distinction matters. Implement must
+first establish that the intended work ran; only then can Evaluate judge what
+the return says about the candidate. Evaluate can establish a measured result
+without establishing the mechanism that produced it, which is why
+Interpret and Explain remains separate. In both cases, independently failing
+outputs and different repair paths justify the boundary. A project may combine
+the work operationally, but it should not erase the distinction when
+diagnosing a failure.
 
-> *Design a low-power, 64-bit RISC-V-based compute subsystem for an XRBench-class real-time mobile XR workload. Realize it as a vector-capable CPU, accelerator, or SoC block under a 3\ W TDP target in a 3\ nm-class low-power mobile process, and return a design-space report with evidence and rejected alternatives.*
+## From Intent to Requirements and a Design Decision
 
-The system intent is to improve mobile XR efficiency. But this is not yet an architecture task. An agent given only the product intent cannot determine which comparisons the architect needs. The intent must be translated into a claim, a baseline, and a search space (@fig-ontology-chain).
+Formulation begins with intent, but intent is not yet a testable architecture
+problem. The Lighthouse goal asks for a low-power, 64-bit RISC-V mobile XR
+subsystem. It leaves open whether the relevant intervention belongs in the
+instruction set architecture (ISA), microarchitecture, accelerator, memory
+system, compiler, runtime, or their interfaces. It also leaves open what
+evidence would justify acting on a proposal.
 
-![**The common structure connects a scoped study to an architectural decision.** The architect establishes the scope and states the claim for review, while represented state and tool interfaces make proposed actions executable. When work iterates, a design loop organizes execution and analysis. A reviewer examines the evidence, and the decision owner may accept a finding, narrow the claim, or revise the study.](images/F4-ontology-chain){#fig-ontology-chain width="85%" fig-alt="A common structure connecting a scoped architecture study and its architectural claim to represented state, tools, an execution and analysis process, evidence, review, a named decision owner, and a scoped finding or decision."}
+Refinement preserves that intent while making it progressively testable. A
+system-level goal becomes workload and user-facing requirements. Those
+requirements become architecture choices and interface obligations. An ISA or
+hardware-software interface then constrains what software may assume and what
+hardware must provide. An implementation finally exposes measurable timing,
+power, area, and correctness properties. Each refinement can add detail, but
+it should not silently change the original goal.
 
-> **Bounded architecture study.** A bounded architecture study turns a broad goal into a specific piece of architecture work. It states the question, workload or scenario, baseline, allowed design choices, objectives, constraints, tools, planned evidence, and decision the work is meant to inform. It also says what the study will not try to decide.
+@fig-ontology-chain shows the dependencies that connect a scoped question to a
+decision. This is not a second life cycle. It is a check that the artifacts
+created across the life cycle continue to refer to the same design intent.
 
-### Defining the Claim
+![**Formulation fixes the question and leaves later work open.** The scope and architectural claim are declared first. Later work supplies represented state, an approach, executable requests, qualified results, review, and a named decision owner.](images/F4-ontology-chain){#fig-ontology-chain width="85%" fig-alt="A common structure connecting a scoped architecture study and its architectural claim to represented state, tools, an execution and analysis process, results, review, a named decision owner, and a scoped finding or decision."}
 
-A bounded study anchors everything to an architectural claim: a falsifiable statement that the review process will eventually evaluate.
+The five numbered links connect scope to the question,
+baseline, design space, requirements, and intended decision. The claim states
+the expected mechanism and effect and what could rule them out. Representation
+makes the relevant state and permitted changes inspectable. Tools and their
+interfaces make selected work executable. Execution and analysis perform the
+work. Results and review then determine which finding or decision the work can
+support. A red return path applies when later work shows that the question or
+claim itself needs revision.
 
-> **Architectural claim.** An architectural claim says what result the architect expects from a proposed change, why that result should occur, and where it should hold. It identifies the proposed mechanism, expected outcome, workload or scenario, baseline, allowed alternatives, constraints, and the evidence that would count against it.
+The XR example narrows the broad moonshot to one pre-RTL cache decision. The
+question is which, if either, of two larger L2 capacities should advance to RTL
+evaluation. @tbl-bounded-study-contract records the plan before any search
+method is chosen. The values are illustrative. Their purpose is to show which
+declarations make the comparison and its limits inspectable.
 
-The claim tells the agent what to optimize and tells the human reviewer what to scrutinize. Contrast a vague human prompt with a properly bounded machine claim:
+| **Declaration** | **Mobile XR cache study** |
+| --- | --- |
+| Question | Which, if either, of the 3\ MB and 4\ MB L2 candidates should advance to RTL evaluation for the declared XR workload? |
+| Comparator | The current 2\ MB L2 baseline. Both larger candidates are compared against the same rerun baseline. |
+| Scope | One cache-capacity decision inside the compute subsystem. Cache policy, network-on-chip topology, compiler, runtime, and the rest of the memory system remain fixed. |
+| Permitted changes | L2 capacity may take the values 2\ MB, 3\ MB, or 4\ MB. No other architecture parameter may change in this study. |
+| Hard constraints | Modeled subsystem dynamic plus leakage power must not exceed 3\ W. The cache macro must not exceed 1.5\ mm^2^, and its modeled access time must not exceed the 2.5\ ns, or five-cycle, allocation used by the 2\ GHz microarchitecture. Required thermal and resistive voltage-drop (IR-drop) review remains independent. |
+| Objectives and tradeoffs | Reduce 99th-percentile frame time while limiting added power and area. A candidate that improves tail latency at higher cost remains a tradeoff alternative rather than an automatic winner. |
+| Conditions | Workload snapshot `XR-TRACE-A`, including stable frame identifiers and boundaries; RISC-V software image `SW-BASE-A`; and recorded versions of the cycle-level simulator, cache model, power model `PM-A`, static random-access memory (SRAM) model `SRAM-A`, and process, voltage, and temperature assumptions `PVT-A`. |
+| Planned measurements and checks | Run the same functional regression suite for every capacity, require identical ISA-visible outputs for the declared test inputs, and require no failure from the simulator's coherence-invariant checks. Measure 99th-percentile frame time, cache misses by classification including capacity misses, dynamic and leakage power, macro area, and access time while retaining stable frame identifiers. Estimate the frame-time reduction and its 95% interval with paired block resampling over matched contiguous frame groups from the baseline and candidate together. A capacity advances only if its functional and physical checks pass and that interval relative to 2\ MB lies above zero. |
+| Budget | Four cycle-level executions in total, including reruns after infrastructure failures, plus one SRAM timing, area, and power evaluation per declared capacity. No RTL synthesis or physical signoff is included. |
+| Stopping conditions | Stop when the intended decision is resolved, all permitted capacities are exhausted, the run budget is spent, or a required input or measurement remains unavailable. |
+| Intended decision | Recommend at most one cache capacity for a later RTL study. This plan does not authorize implementation, signoff, tapeout, or a product commitment. |
+| Exclusions | Cache policy, prefetching, coherence, network-on-chip changes, compiler changes, software scheduling, full floorplanning, thermal signoff, IR-drop signoff, security, reliability, and product-level cost. |
 
-*   **Vague Prompt:** "Optimize the cache for the XR workload."
-*   **Bounded Claim:** "Evaluate L2 capacity up to 4\ MB to reduce XRBench 99th-percentile frame time against the 2\ MB baseline through fewer capacity misses, constrained to a 3\ W sustained power budget (dynamic plus leakage) and a 1.5\ mm^2^ SRAM macro area footprint, with both limits and timing closure at 2\ GHz checked at the slow-slow corner and 125\ °C."
+: **A scoped plan declares the comparison before a method is chosen.** The
+question and legal design space determine the requirements and planned
+observations, while the remaining rows bound the cost and decision the study
+may support. {#tbl-bounded-study-contract tbl-colwidths="[24,76]"}
 
-Without a bounded claim, an agent might endlessly tune parameters without a stopping condition, or it might propose a massive cache that maximizes Instructions Per Cycle (IPC) but physically melts the chip.
+Hard constraints and tradeoff objectives play different roles. A hard
+constraint rules out a candidate. A design that misses timing is not rescued
+by excellent energy efficiency. An objective ranks or compares candidates that
+remain feasible. Power, area, latency, and implementation effort may pull in
+different directions, so exploration may return a Pareto set rather than one
+universally best design. A candidate is Pareto optimal when no other feasible
+candidate improves at least one declared objective without worsening any other
+declared objective.
 
-Notice that the bounded claim names a tail metric rather than a throughput average. The Lighthouse workload is real-time, and real-time workloads are judged by deadlines, not throughput. A cache that raises average IPC by 8% while lengthening the worst-case frame is a regression for an XR subsystem, where what matters is whether every frame meets its motion-to-photon budget. The claim names the 99th-percentile frame time under the 3\ W envelope for exactly this reason. An agent handed IPC will faithfully optimize a number the product does not ship on.
+The table's tail-latency objective is intentional. Real-time XR is judged by
+whether frames meet their deadlines, not only by average throughput. A cache
+that improves mean instructions per cycle while lengthening the slowest frames
+can be a system-level regression. The planned comparison therefore uses
+99th-percentile frame time and paired block
+resampling[^fn-paired-block-resampling-c03] rather than treating two complete
+executions as the statistical sample.
 
-Naming a tail metric creates an obligation the claim itself must carry. The evidence regime has to resolve the tail, and the workload sampling this chapter later requires is least reliable exactly where the tail lives, because a sample chosen to represent aggregate behavior can miss the rare interval that sets the 99th percentile. The general rule follows. A metric the declared evidence regime cannot measure does not bound a study, however precisely it is worded. Either the study shows that its sampling preserves the tail statistic, stating the interval count and the confidence it reaches, or it declares a metric the regime can deliver and records the tail question as unresolved.
+[^fn-paired-block-resampling-c03]: **Paired block resampling** estimates
+uncertainty by repeatedly selecting matched groups of nearby observations from
+the baseline and candidate together. Block resampling preserves short-range
+dependence under its stationarity assumptions [@Kunsch1989BlockBootstrap].
+Pairing the baseline and candidate blocks is this study's application of that
+method, so each comparison uses corresponding workload intervals rather than
+unrelated samples. The interval describes within-trace sampling uncertainty. It
+does not cover simulator model error, workload representativeness, or transfer
+to another trace.
 
-The bounded claim also invites a check that costs nothing to run. Before the loop runs, run the study on paper. If XRBench spends 18% of its cycles stalled on L2 capacity misses, a perfect cache buys back at most those cycles, an Amdahl-style ceiling [@HillMarty2008Amdahl], and every buildable configuration buys less. That one-line limit study, computed before any tool is invoked, is the cheapest rejection check in the lifecycle. A study whose claim exceeds its own limit study is not bounded; it is wishful.
+An architectural claim makes the expected result falsifiable.
 
-### The Curse of Entangled Constraints
+> **Architectural claim.** An architectural claim states the proposed
+> mechanism, expected outcome, scenario, comparator, alternatives,
+> requirements, and evidence that would count against it.
 
-Once the claim is stated, the architect must bound the design space. However, computer architecture is fundamentally about coupled systems. An architect rarely isolates a single metric without triggering a cascading butterfly effect across Power, Performance, Area, and Thermals (PPAT).
+For this study, the claim is that at least one larger L2 reduces
+99th-percentile frame time relative to the 2\ MB baseline because it removes
+capacity misses while remaining inside the declared power, area, and timing
+constraints. The claim does not assume that fewer misses necessarily reduce
+frame time. It makes that connection something the measurements must test.
 
-When bounding the search space, an architect cannot simply set a naive upper limit like "L2 cache up to 4\ MB." Scaling up an L2 cache doesn't just consume abstract area; it lengthens the wire distance to reach the cache, adds banks the interconnect has to arbitrate among, and introduces localized thermal hotspots. On the Lighthouse those effects do not land on an idle fabric, because the camera and SLAM streams are already contending for it. In physical design, a 4\ MB cache requires placing massive SRAM macros. These macros create hard routing blockages and pin density bottlenecks that threaten power integrity (IR drop), because the rails cannot supply the peak current density a single monolithic block demands, which is why such a macro usually has to be broken into a distributed, tiled array. If an agent optimizes only for aggregate area, it will propose a subsystem that passes analytical proxies but is fundamentally unroutable in Place-and-Route (P&R).
+Requirements must remain traceable as the study proceeds. The 3\ W requirement,
+for example, becomes a subsystem power allocation under recorded activity and
+model assumptions, then an acceptance check on dynamic plus leakage power. A
+change to the software image, activity, power model, or voltage assumptions
+invalidates that result and reopens the check. Functional obligations follow a
+separate trace. Varying cache capacity does not permit a candidate to change
+the declared coherence behavior, memory semantics, or ISA-visible software
+result, so the plan must name the functional check that preserves them.
 
-The constraints themselves are also underspecified until the study names its corner. The 3\ W limit and the 2\ GHz target mean nothing until the study says where they are checked, because silicon signs off at worst-case process, voltage, and temperature, and a design that closes timing at the typical corner routinely fails at slow-slow and 125\ °C. The bounded study must declare which corner each constraint is checked at and how much guardband it reserves for model error, which is why the claim above ends at the slow-slow corner and 125\ °C rather than at 3\ W and 2\ GHz alone. An agent that checks only at nominal will otherwise pass candidates that no sign-off flow would accept.
+A cheap analytic check can reject an impossible claim before any simulator is
+invoked. If the frames that set the tail spend 18 percent of their latency
+stalled on L2 capacity misses, eliminating every one of those stalls can
+recover at most that fraction for those observations. This Amdahl-style upper
+bound [@HillMarty2008Amdahl] cannot select a cache size, but it can reject a
+claim that asks the named mechanism for more improvement than the workload
+contains.
+
+Requirements also need units and conditions. A 3\ W limit and a 2\ GHz target
+do not identify the power components, workload state, process corner, voltage,
+temperature, or guardband under which they must hold. Coupled effects such as
+cache banking, interconnect distance, floorplan blockage, power delivery, and
+temperature remain visible whenever they could reverse the comparison.
+
+NASA's mishap investigation documents what happened when an interface required
+newton-seconds but received pound-force seconds [@MCOMishapBoard1999].
 
 ::: {.callout-war-story title="Mars Climate Orbiter and the units nobody checked"}
-**The claim.** The Mars Climate Orbiter's navigation team modeled the small thruster firings that trim a spacecraft's attitude using an impulse figure delivered by ground software. A project Software Interface Specification fixed the format of that file and stated its units as newton-seconds, so both sides of the interface had a written contract to work from [@MCOMishapBoard1999].
+**The claim.** The Mars Climate Orbiter navigation team consumed an impulse
+value whose interface specification required newton-seconds.
 
-**The gap.** The ground software reported the impulse in pound-force seconds, and nothing in the flow compared the delivered file against the specification, so the navigation software underestimated every desaturation event by the 4.45 conversion factor. Each side passed its own checks. The onboard software used metric units and was correct, the ground code ran without error, and the specification itself was right. Only the agreement between them went unverified. Navigators saw discrepancies between competing orbit solutions through the spring and summer of 1999 but reported them informally rather than through the project's anomaly process, so nothing on record could stop the insertion. The reconstructed trajectory put closest approach at 57\ km against a planned 226\ km and a survivable minimum of 80\ km, and the spacecraft was lost on September 23, 1999.
+**The gap.** Ground software supplied pound-force seconds. Each component ran,
+but nothing checked the value where it crossed the interface. The 4.45
+conversion error accumulated until the reconstructed closest approach was 57
+km, below the planned 226 km and the estimated survivable minimum of 80 km.
 
-**The lesson.** A constraint is not checkable until the study names the units and conditions it holds under, and the rejection check that enforces them where the value crosses an interface. A bounded study that declares a 3\ W envelope and a 2\ GHz target without saying at which corner, in which units, and under which rejection check has written a specification with the same property this one had. It is correct, and nothing consumes it. An agent crosses several such interfaces every turn, handing numbers from a power model to a timing tool to a claim check, and each crossing left without a declared and enforced contract is a place where a confident result can be wrong by a constant no one sees.
+**The lesson.** A written requirement is not operational until the work names
+its units and conditions and assigns a check at the interface where the value
+is consumed. Architecture tool paths cross many such interfaces, and a clean
+run cannot repair a missing check.
 :::
 
-Formulating a bounded study is incredibly difficult because it requires explicitly mapping these hidden entanglements and physical blockages, and then naming the conditions and units under which each constraint is checked. A well-formulated boundary prevents the agent from optimizing one local subsystem while silently starving the memory controller or rendering the floorplan unroutable.
+## Explore Alternatives
 
-Modern system intent also demands strict hardware/software boundaries. An agent optimizing hardware in isolation might produce a theoretically efficient accelerator that no compiler can target. To prevent this, the architect must extend the bounded study to include the software path (compilers, runtimes, and mapping strategies) so that the agent evaluates the hardware alongside an executable software baseline.
+Exploration asks which alternatives are worth testing inside the declared
+design space. It does not decide whether a candidate works. It produces legal
+candidates, the reason they were selected, and a record of the region that was
+searched or pruned.
 
-## Exploring: State Representation and Search
+The simplest search method is often the right one. The XR study has only three
+legal cache capacities, so direct enumeration is clearer than an elaborate
+learned method. Larger spaces may justify prediction, generation,
+optimization, or combinations of them. The life-cycle responsibility remains
+the same even when the method changes. Exploration must stay inside the legal
+space and expose enough of its selection process for a reviewer to understand
+why some candidates received expensive evaluation while others did not.
+Candidate count alone does not establish search coverage. A generator can
+produce thousands of nearly identical candidates while leaving a consequential
+region untouched, so the retained record should describe the explored region,
+important exclusions, and the diversity that matters for the decision.
+When enumeration is impossible, formulation should declare the coverage
+argument the decision requires, such as represented regions, boundary cases,
+diversity dimensions, or convergence evidence. Inadequate coverage leaves the
+comparison unresolved rather than completed.
 
-With the problem formulated, the next stage is Explore. In this stage, an agent searches the bounded design space to find promising architecture candidates.
+Legal does not mean independent. Increasing cache capacity can change access
+time, banking, interconnect distance, leakage, floorplan pressure, and the
+software-visible benefit of another optimization. Exploration therefore works
+with coupled alternatives rather than a bag of unrelated parameters. It must
+also preserve interface and software assumptions so that a candidate does not
+win by changing something the study declared fixed.
 
-However, an agent cannot explore a space it cannot see or understand. For the search to be effective, we must explicitly provide the agent with a machine-readable view of the architecture and a way to quickly predict the consequences of its choices before running expensive simulations.
+Cheap checks belong as early as possible. The Amdahl-style upper bound can
+discard a claim whose mechanism cannot deliver the required gain. An SRAM model
+can reject a capacity that cannot meet the cycle allocation before a
+cycle-level run is spent. These checks prune candidates, but they do not
+substitute for later measurements of the surviving designs.
 
-An agent can act only on the information it is given. For human architects, design intent lives scattered across natural-language specifications, ISA manuals, spreadsheet models, and tacit knowledge locked in engineers' heads. An agent requires this unstructured intent to be translated into an explicit, machine-readable represented state.
+Multiple objectives complicate the meaning of "best." If the 3\ MB candidate
+has lower tail latency and the 2\ MB baseline has lower area, neither dominates
+the other on those two objectives. Exploration should preserve such Pareto
+alternatives until the architect applies the declared tradeoff. Collapsing
+power, area, performance, and risk into an undeclared scalar score hides the
+decision rather than automating it.
 
-### Topological State and the Curse of the Action Space
+For the XR study, Explore produces two new candidates, 3\ MB and 4\ MB, plus
+the rerun 2\ MB baseline. It may record that a larger capacity was excluded by
+the declared space or a cheap timing estimate. It has not yet shown that any
+candidate is correctly implemented, that any measurement is valid, or that
+one should advance.
 
-However, translating architecture into a machine-readable state exposes a hard ML-systems challenge: *the curse of the action space*.[^fn-action-space-c03] An SoC is not a flat list of independent variables; it is a complex, topological graph of queues, arbiters, and pipeline stages. Mapping categorical, continuous, and graph-based constraints into an action space that an agent can safely navigate is remarkably difficult. To solve this, the topological state must be concretely serialized, for example as a formal constraint graph, a Hardware Construction Language (e.g., Chisel) Intermediate Representation (IR), or a Graph Neural Network (GNN)[^fn-gnn-c03] node representation.
+## Implement a Testable Candidate
 
-[^fn-action-space-c03]: **Action space**: The set of changes an agent is permitted to make at each step, together with the encoding it uses to emit them. An architecture study's action space is its declared design space made machine-legible, so a parameter the encoding cannot express is a design the agent can never propose.
+Implementation makes a selected candidate executable by the intended tools. In an
+AI-assisted setting, this may mean generating RTL, modifying simulator
+parameters, constructing a workload, writing a compiler transformation, or
+preparing a sequence of EDA tool commands. The essential result is not code or
+a command file by itself. It is a candidate that the intended tools can
+actually test under the declared conditions.
 
-[^fn-gnn-c03]: **Graph Neural Network (GNN)**: A neural network that consumes a graph directly, computing each node's representation from its neighbors rather than from a flattened feature vector. It fits hardware because a netlist or floorplan is natively a graph, so adjacency, fan-out, and physical neighborhood survive into the model instead of being flattened away.
+Each tool request must preserve the candidate's identity and the study state.
+For the XR cache study, the request must name the cache parameters, baseline
+software image, workload trace, clocks, process assumptions, and expected
+outputs. It must also confirm that the tool used them. A syntactically valid
+configuration can still select the wrong top level, reuse stale constraints,
+or skip the workload region that defines the comparison.
 
-If an agent only receives the cache miss rates but remains blind to the area floorplan encoded in the GNN, it may propose a massive cache that maximizes IPC but cannot physically fit on the die. Alternatively, if the agent attempts to widen the vector execution engine or add a specialized Multiply-Accumulate (MAC) array for the XR workload to boost compute throughput, this forces a trade-off discussion about vector register file area and pipeline timing closure. When an agent proposes an impossible design, the root cause is often this missing topological state.
+This creates a crucial distinction between an infrastructure failure and a
+candidate failure. A crash, license timeout, stale workspace, malformed timing
+constraint, empty netlist, or clean exit that analyzed no paths says that the
+requested test did not run correctly. It says nothing about the quality of the
+candidate. Only a valid execution can produce a result that later rejects a
+design.
 
-### The Modality Mismatch
+For the XR study, the 2\ MB, 3\ MB, and 4\ MB capacities must become valid SRAM
+model and cycle-level simulator requests. If an inexpensive SRAM check runs
+first, Implement must confirm that its area and access-time outputs describe
+the intended capacity and conditions before passing them to Evaluate. The
+detailed mechanics of tool isolation, retry, recovery, and interface design
+belong to environment engineering. At the life-cycle level, the handoff is
+simple. Either the intended work ran and produced qualified outputs, or the
+attempt remains an infrastructure failure.
 
-Even if the state is fully topological, exploration faces a mismatch between what models consume and what hardware is. Modern machine learning models natively consume sequential text tokens (LLMs) or fixed-shape numeric tensors (most neural predictors and policies). Hardware, however, exists as rigid hierarchical netlists, Hardware Description Languages (Verilog/Chisel), and constraint graphs. An LLM might generate syntactically perfect Verilog that is structurally nonsensical [@LiuEtAl2024CraftRTL], such as a control state machine with no reset path to its idle state, which passes every functional testbench because the simulator initializes each register to a known value, and then hangs on hardware that powers up in an arbitrary one. An agent with a continuous action head might likewise emit values that fail to map onto discrete hardware parameters. Graph and discrete action spaces are standard in reinforcement learning, so the mismatch is one of chosen representation, not an inherent limit of the method. Bridging this gap is essential for generating valid architecture proposals.
+::: {.callout-failure-mode title="The tool reported a chip that did not exist"}
+**The trap.** An automated search reports 0.0\ W and 0.0\ mm^2^ with a
+successful tool exit.
 
-### Proxy Fidelity, UQ, and Distribution Shift
+**What happened.** The request selected no valid top-level design and omitted
+the primary clock. Elaboration contained none of the expected instances,
+timing analysis had no constrained paths, and a downstream parser substituted
+zeros for absent power and area fields.
 
-Once an agent proposes a valid candidate, it relies on prediction models (fast proxies) to estimate performance, power, and area without paying for the full tool flow. Whether a proxy of that kind is a model of the machine or only a scoring function for one search is @sec-data-representations-world-models's question. What matters at this stage is narrower. Learned proxies predict linear scaling easily and fail catastrophically on *non-linear interference* such as shared TLB thrashing, and a proxy earns its place by ordering candidates correctly rather than by predicting their exact numbers, so the failure that corrupts a search is error correlated with the swept parameter rather than error magnitude.
+**The result.** This is an infrastructure failure, not a breakthrough and not
+a rejected candidate. A useful implementation check confirms that the expected
+clocks, instances, paths, and outputs exist before evaluation interprets their
+numbers.
 
-As the agent explores deeper into the design space, or as engineers update baseline parameters, the environment becomes non-stationary, causing a distribution shift.[^fn-distribution-shift-c03] The offline data used to train the proxies quickly becomes stale. An agent aggressively optimizing against a stale fast proxy will inevitably push the inputs Out-of-Distribution (OOD), leading to reward hacking (Goodhart's Law) where the agent actively exploits extrapolation errors to endorse impossible results [@AmodeiEtAl2016Concrete].
+This is a composite of a recurring tool-flow failure pattern rather than one
+published incident.
+:::
 
-[^fn-distribution-shift-c03]: **Distribution shift**: When the inputs a model is asked to score stop resembling the data it was trained on, so its accuracy degrades without any error being raised. The architecture analogue is a power model calibrated on one process node and one workload mix that keeps returning confident numbers after both have changed underneath it.
+## Evaluate the Candidate
 
-To survive, exploration must include active learning loops and Uncertainty Quantification (UQ). The agent must *know when it is guessing*. It relies on acquisition functions (such as Expected Improvement or Upper Confidence Bound in Bayesian Optimization) that score where in the design space the next sample is worth taking. Choosing where to sample is not the same as choosing how expensively to measure it, and escalating from a proxy to a high-fidelity tool is a separate policy with its own trigger, stated at the Implement stage below. Furthermore, the system must maintain these surrogates on the fly, managing replay buffers and telemetry dataset versioning to avoid catastrophic forgetting as the design topology shifts.[^fn-catastrophic-forgetting-c03]
+Evaluation begins only after implementation establishes that the intended work
+ran. It compares the returned measurements with the requirements, objectives,
+and validity conditions declared during formulation. The result is not merely
+a score. It states which checks passed, which failed, which remain unresolved,
+and how much confidence the available measurements justify.
 
-[^fn-catastrophic-forgetting-c03]: **Catastrophic forgetting**: When a model retrained on new data loses the accuracy it had on regions it once predicted well, because the new gradients overwrite the earlier fit. Retraining a proxy on a fresh corner of the design space can therefore break its predictions on configurations already accepted, which is why the loop keeps older runs in a buffer and mixes them back into every retraining pass.
+The XR study first requires the declared functional regression and coherence
+checks to pass, then applies the hard physical checks. A cache macro outside the
+1.5\ mm^2^ area limit, beyond the 2.5\ ns access-time allocation, or above the
+3\ W subsystem envelope is rejected even if it improves frame time. A feasible
+candidate then faces the tail-latency comparison with the rerun 2\ MB baseline.
+A reduction in capacity misses does not substitute for a resolved frame-time
+result because the claim names both the mechanism and the system-level outcome.
 
-## Implementing: Toolchain Friction and Escalation
+Cost and fidelity shape the order of evaluation. An analytic estimate or SRAM
+model may cheaply reject a candidate before a cycle-level run. Simulation may
+then estimate workload behavior before RTL synthesis or physical analysis.
+This escalation conserves expensive evidence for the candidates that need it.
+It does not make the lower-fidelity checks unimportant. Their assumptions and
+error bounds determine which candidates survive long enough to reach the
+expensive tools.
 
-Moving to the Implement stage (@fig-ontology-loop), once the agent proposes a candidate architecture, the next step is executing the simulation and compilation tools to gather physical evidence.
+Model error affects different comparisons in different ways. Absolute-value
+error measures how far a prediction lies from the physical quantity of
+interest. Difference or ratio error measures whether the predicted change from
+the baseline is correct. Correlated bias may cancel in that change only when
+the baseline and candidate remain inside a locally validated regime. Ranking
+accuracy asks whether the model orders alternatives correctly. Good absolute
+accuracy does not guarantee the right order, and poor absolute accuracy can
+still preserve a useful difference. Sampling and repeated-execution
+uncertainty are separate from model-form error. Evaluation should report the
+error property that the decision actually uses rather than assuming one
+accuracy number covers all four.
 
-### Navigating Toolchain Friction
+Higher fidelity can strengthen an answer to the declared question when its
+assumptions and validation support the comparison. It does not automatically
+widen the decision the study may support. A successful cycle-level
+simulation does not authorize RTL implementation if the study promised only a
+recommendation for further evaluation. Likewise, an RTL result does not waive
+thermal, IR-drop, reliability, or product review that the study excluded.
 
-Unlike software environments where code compiles in milliseconds and tests run deterministically, architecture tools are often fragile, slow, and prone to silent failures. Commercial EDA tools are particularly hostile to automated agents because they are driven by decades-old, deeply stateful Tcl scripts. An agent interacting with these tools will not just encounter crashes; it will face "dirty state" (leftover constraints from a previous run in the same workspace) and the nightmare of parsing semantic meaning out of multi-gigabyte Static Timing Analysis (STA) reports. Dirty state is more dangerous than a crash because it still returns an answer. An agent that omits a `reset_design` between iterations stacks each run's constraints on the last until the tool's timing graph collapses and it reports zero-delay closure, a result no real design produces and no exit code flags.
+::: {.callout-lighthouse title="A 3\ W result is only one part of the decision"}
+**Context.** A power result becomes useful only when a reviewer can see which
+workload, candidate, tool state, software assumptions, and power components it
+describes.
 
-Furthermore, an agent does not just emit RTL; it must synthesize compatible EDA collateral across fragmented vendor silos, including SDC[^fn-sdc-c03] for timing constraints and UPF for power intent.
+**In this study.** If a run reports 2.94\ W under the recorded conditions, that
+value satisfies only the declared power check. The intended decision still
+depends on a resolved tail-latency comparison and later independent physical
+review. Passing one check cannot resolve another.
+:::
 
-[^fn-sdc-c03]: **SDC (Synopsys Design Constraints)**: The de facto standard file that carries a design's timing intent, clock definitions, input and output delays, false paths, and multicycle paths into synthesis and timing analysis. A netlist by itself never states what frequency it was meant to run at, so without its SDC the timing tools have nothing to check the design against.
+An evaluation can therefore end in several legitimate states. A valid result
+may reject a candidate. The measurement may be too uncertain to distinguish
+two candidates. The run budget may expire before the comparison resolves.
+Required data may be unavailable. These are not interchangeable failures. Each
+state determines a different next action and must remain visible to review.
 
-From an ML-Sys perspective, vectorizing these incredibly slow, stateful EDA tools for batched RL inference while handling variable-length action spaces when hardware topologies change dynamically is a massive infrastructure challenge.
+## Interpret and Explain the Result
 
-To operate effectively, an agent needs clear tool interfaces (like the ArchGym API [@KrishnanEtAl2023ArchGym]) that expose the failure modes and recovery actions. Beyond avoiding crashes, navigating toolchain friction requires rigorous provenance data engineering. To train reliable ML proxies offline, an agent cannot simply log a failed IPC score. It must capture the exact environment state as an immutable record covering tool versions, random seeds, intermediate Tcl state, and DRC markers.
+Evaluation asks whether a result clears the declared checks. Interpretation
+asks what the result means, while explanation asks whether the proposed
+mechanism accounts for it. A favorable number can pass evaluation and still
+fail this responsibility.
 
-Importantly, all of this friction unfolds deep inside the fast automated inner loop (the Explore, Implement, Evaluate cycle), which spins thousands of times at machine speed, completely decoupled from the slow outer loop the architect reviews.
+Suppose the 3\ MB cache reduces capacity misses and improves
+99th-percentile frame time. The result is consistent with the claim, but it
+does not yet establish the mechanism. The larger cache may also change hit
+latency, memory-level parallelism, prefetch behavior, or contention. Stable
+frame identifiers, miss classifications, and relevant pipeline or memory
+telemetry let the architect connect the measured outcome to a physical account
+instead of relying on a plausible narrative.
 
-Commercial EDA tools fail in a handful of recurring ways, each with a recovery move the loop can record (@tbl-toolchain-friction).
+Gupta and colleagues provide a useful warning. They used an evolutionary
+coding agent to write last-level cache replacement policies for ChampSim
+[@GoberEtAl2022ChampSim; @GuptaEtAl2026ArchAgent]. One generated policy appeared
+to improve instructions per cycle by bypassing writes that then disappeared
+from the modeled memory system. The simulator score improved, but the gain did
+not come from a valid cache mechanism. Inspection of the generated policy and
+simulator behavior exposed the loophole.
 
-| **Toolchain friction type** | **Agent recovery strategy** |
+That case does not mean every result needs an elaborate causal proof. It means
+that a metric and its mechanism are different claims. A direct physical check
+may explain a simple violation. More coupled behavior may require a contrast,
+counterfactual, or ablation.^[An ablation removes or replaces one component
+while holding the rest of the comparison fixed to test whether the result
+depends on it. One-at-a-time ablations can miss interactions among components.]
+The planned level of explanation should match the consequence of the decision
+and the ways the evaluation setup can be exploited.
+
+The needed observations should be chosen before the expensive run whenever
+possible. A top-line score cannot recover miss classifications, pipeline
+events, or per-frame histories that the run discarded. Treating interpretation
+as part of the life cycle therefore changes evaluation itself. The run retains
+the observations needed to test the mechanism rather than waiting for review
+to discover that the explanation requires another full execution.
+
+Interpretation also includes uncertainty and scope. A result from one workload,
+software stack, process assumption, or simulator version does not automatically
+generalize to another. The explanation should state what is known, what remains
+plausible but untested, and what observation would contradict the current
+account. Fluent prose from an AI system can help organize this reasoning, but
+it cannot replace the architectural measurements that support it.
+
+For the XR study, this responsibility determines whether reduced capacity
+misses occur in the frames that shape the tail and whether that reduction
+accounts for the observed frame-time change. It may support both the mechanism
+and the outcome, support only one, or leave both unresolved. Those distinctions
+constrain what review can conclude.
+
+## Review, Decide, Revise, or Stop
+
+Review brings the scoped plan and all subsequent work back together. The
+architect asks whether the legal alternatives were explored adequately,
+whether the intended tools ran, whether the measurements satisfy the declared
+checks, whether the explanation is credible, and whether the accumulated work
+supports the intended decision.
+
+The result is not always approval. Review may advance one candidate, reject a
+candidate, request another comparison, revise the question, narrow the
+conclusion, or stop because the budget or available information is exhausted.
+An honest unresolved result is a useful outcome when the record makes clear
+why the question remains open.
+
+A decision is complete only when every required result has a disposition, the
+supported action remains inside the declared scope, and the record names what
+would reopen it. A study stops honestly when the budget, available evidence, or
+remaining legal alternatives cannot justify another useful action. It does not
+quietly convert an exhausted search into acceptance.
+
+The completed stage narratives can now be read as one compact set of
+inspectable handoffs (@tbl-stage-contracts).
+
+| **Stage** | **Receives** | **Produces and checks** | **Repair and handoff** |
+| --- | --- | --- | --- |
+| Formulate | Product intent, a design question, known requirements, and applicable downstream checks. | A scoped plan whose question, comparator, objectives, constraints, conditions, measurements, budget, stop, decision, and exclusions agree. | Repair the question or scope. Hand the plan to Explore without choosing a method prematurely. |
+| Explore | The scoped plan and a represented set of legal changes. | One or more legal candidates, or a record that no candidate remains expressible or clears a declared cheap prerequisite. | Repair the design space or search approach. Hand a named candidate and its selection history to Implement. |
+| Implement | A candidate, requested tool work, budget, and required inputs. | An execution record showing the requested work ran on the intended state, or a recorded infrastructure failure showing that it did not. | Repair the request or tool setup. Hand completed tool returns to Evaluate. Never treat an unevaluated candidate as rejected. |
+| Evaluate | Completed tool returns, comparator, planned metrics, thresholds, and validity conditions. | A comparison stating which checks passed, failed, or remain unresolved, together with the observations needed for interpretation. | Repair the measurement plan, rerun within budget, or reject the candidate on a declared check. |
+| Interpret and Explain | The checked result, proposed mechanism, and retained observations. | An account supported, revised, or contradicted by a declared contrast, ablation, or direct physical reason. | Repair the hypothesis or request missing observations. Hand the result and mechanism status to review. |
+| Review and Decide | The scoped plan and cumulative record from all prior work. | A decision within the declared scope, a narrower conclusion, a named revision, or an honest stop with unresolved questions. | Reopen the work that owns the missing result or close the study. Preserve the reason for the action. |
+
+: **Each responsibility produces something another architect can inspect.** The
+table summarizes inputs, outputs, and repair paths without prescribing a
+specific model, method, tool interface, or team organization.
+{#tbl-stage-contracts tbl-colwidths="[15,25,34,26]"}
+
+The rows connect what each responsibility receives to the result another
+architect can inspect and the repair needed when that result is inadequate.
+The Implement and Evaluate rows give the decisive contrast. A tool
+request must first establish that the intended work ran before its numbers can
+pass or fail an architecture check. Review uses these handoffs to decide where
+any missing result must return.
+
+Review and Decide also determines who may take the resulting action. Authority
+should be assigned by action rather than by giving a system one
+overall label such as autonomous. A system may be allowed to propose a
+candidate, execute a declared test, reject a candidate when a mechanical check
+fails, or recommend a next step. Waiving a requirement and committing the
+project to a costly or irreversible action are different rights. They remain
+with named people who accept the residual risk. This distinction lets AI take
+initiative without allowing it to enlarge its own authority.
+
+When work iterates, the design loop keeps each change connected to the original
+question and the next decision. Agile RISC-V development and reusable
+generator-based hardware construction provide one lineage for this kind of
+iteration [@LeeEtAl2016AgileRISCV; @Izraelevitz2017Chisel]. @fig-design-loop
+shows the information that must remain connected even as the implementation
+practice changes.
+
+![**An iterative architecture study keeps each tool run connected to the question and decision.** An architect or method reads the recorded state, makes a permitted change, runs the relevant tools, interprets the returned feedback, and records the next action.](images/F3-design-loop){#fig-design-loop width="85%" fig-alt="A design loop within a scoped architecture study. Recorded state, a permitted change, tool feedback, review, and the next decision remain connected."}
+
+The loop in @fig-design-loop starts with the current
+design state, including the workload, baseline, requirements, and prior
+results. An architect or method makes a permitted change. The relevant tools
+return feedback from simulation, measurement, or physical analysis. That
+feedback becomes useful only when it remains connected to the candidate,
+conditions, provenance, and known tool limits. Review then applies the declared
+checks and decides whether to accept, reject, revise, continue, or stop.
+
+The return path is the reason to call it a loop. A rejected 4\ MB cache may send
+exploration toward a different capacity or close that part of the design
+space. A tool failure returns to implementation without changing the candidate.
+An unexplained frame-time gain may request additional telemetry or an ablation.
+A revised product requirement can reopen formulation. The recorded reason for
+the return prevents the next turn from repeating the same work blindly.
+
+Parallel work needs the same discipline. Each branch names the study-state
+revision it used and binds every action and result to that revision. Results
+from two branches may be merged only after their assumptions, interfaces, and
+permitted changes are checked for compatibility. When one branch changes a
+shared requirement, model, or interface, the affected results from other
+branches return for revalidation rather than silently carrying forward.
+
+The lower bar in the figure separates fidelity from authority. A study may
+move from a proxy to simulation and then to a higher-fidelity check, usually at
+increasing cost. A higher-fidelity result does not by itself authorize a more consequential decision. It can strengthen the answer to the declared question,
+but it cannot expand who may commit the design or waive an independent
+requirement.
+
+### A Record Another Architect Can Review {#sec-design-loop-card}
+
+A cumulative review record makes those distinctions inspectable. The compact
+card used below is one way to index that record. It is not the life cycle and
+does not prescribe a universal project form.
+
+> **Study record.** The cumulative account of one scoped architecture study.
+> It retains the plan, stage outputs, failed or unevaluated work, unresolved
+> questions, stopping reason, and supported decision, with links to the
+> detailed artifacts needed for review or replay.
+
+Every consequential study needs a reviewable record. For each consequential
+transition, it
+names the study-state revision, who or what proposed and approved the action,
+what executed it, what checked the result, and what later change would
+invalidate it. Higher-consequence, novel, uncertain, or expensive work may
+require additional fields and independent review. The common record should not
+grow merely because a template can hold more information.
+
+The design-loop card is a compact index into that record.
+
+> **Design-loop card.** A short guide to one architecture study. It points to
+> the question, scope, stage outputs, results, stop, and decision. Detailed
+> design state, tool returns, and replay artifacts remain in linked records.
+
+Model cards provide a precedent for concise disclosure
+[@MitchellEtAl2019ModelCards], but architecture studies must also retain design
+changes, tool conditions, physical checks, rejected alternatives, and a
+decision boundary. @fig-filled-design-loop-card shows how the card separates
+those concerns for a filled system-level example.
+
+![**A filled study card separates support from decision.** The top band names the claim under review. The paired fields connect intent and scope to methods, checks, results, and rejected alternatives. The final row keeps what the results support separate from the accountable decision.](images/F4b-design-loop-card-example){#fig-filled-design-loop-card width="96%" fig-alt="A filled study card for an XR accelerator comparison. A claim under review appears above twelve paired fields covering intent, task, design space, representation, environment, method role, feedback budget, evidence, failed and rejected alternatives, rejection checks and authority, what the evidence supports, and the accountable decision."}
+
+The claim at the top anchors the paired fields below. Intent, task, and design
+space establish the comparison. Representation, environment, and method role
+state how the study can act. Feedback budget, results, failed work, and
+rejection checks record what the study actually tested. The final row
+separates the supported finding from the accountable decision so that a
+promising result cannot silently become a product commitment.
+
+At formulation, the XR cache study fills the fields it already knows and leaves
+later entries visibly open (@tbl-design-loop-card-fields).
+
+| **Field** | **The cache study's entry at formulation** |
 | --- | --- |
-| **FlexLM license hangs or timeouts** | Implement exponential backoff, strict resource timeouts to prevent thread deadlocks, or query a lower-fidelity tool. |
-| **Stateful Tcl & "Dirty State"** | Full teardowns take hours for tapeout-scale blocks (Innovus, ICC2), so agents resume from snapshots rather than rebuilding. A snapshot is only safe if it records which constraints were in force when it was taken, so a run whose recorded state does not match the one its claim assumes can be rejected instead of scored. |
-| **Logical/Physical Abstract Mismatch** | Scaling SRAMs or custom IP requires perfect pin/timing alignment between logical (LIB/Verilog) and physical (LEF/DEF) abstracts. Validate alignments before invoking place-and-route. |
-| **CDC/RDC & DFT Violations** | AI-generated RTL may pass functional simulation but fail structural CDC/RDC linting or break scan chain insertion (DFT). Enforce strict synchronous boundary and testability constraints upstream. |
-| **Undocumented tool crashes** | Log the failure, mark the configuration as invalid, and pivot to a nearby state. |
-| **Silent output corruptions** | Use secondary validation checks (e.g., verifying the netlist isn't empty) to flag anomalous results. |
-| **Zero-exit-code parsing errors** | Do not trust a `0` exit status. Validate physical outputs directly and cluster massive STA/DRC logs before ML ingestion. |
-
-: **Each EDA friction mode has a recovery move the loop can log:** Commercial-tool failure modes an automated agent meets, and the recovery each one demands. {#tbl-toolchain-friction tbl-colwidths="[42,58]"}
-
-A bounded study turns toolchain friction from a fatal obstacle into a recorded constraint. When an agent cannot evaluate a candidate due to a tool crash or a dirty Tcl state, it logs the failure and pivots. That log is not the same thing as a rejection. A candidate the physics refused tells the study something about the design space; a candidate the toolchain never evaluated tells it something about the infrastructure, and only the first should ever count against the candidate. A run record that cannot separate the two makes preserved failures actively misleading, because a later study reads infrastructure noise as a closed region of the space. Planning for tool failures in advance lets the search continue over the viable portions of the design space.
-
-
-
-### Multi-Fidelity Escalation
-
-Bounded architecture studies span multiple levels of abstraction, from fast analytical proxies to cycle-level simulators and slow RTL synthesis.
-
-Escalation is governed by a massive temporal cost asymmetry: querying a proxy takes milliseconds, a sampled cycle-level simulation takes minutes, but RTL synthesis can take days. The search must be constrained by an explicit budget to justify invoking synthesis. That budget also has to cover the machinery the lifecycle itself prescribes. Active learning, uncertainty quantification, proxy retraining, counterfactual ablations, and screening designs all consume the same scarce runs, and a study that funds them out of an unstated reserve has not bounded anything. Declare them as line items or declare that the study will not run them.
-
-Furthermore, there is a massive chasm within "synthesis" itself. An agent might propose a design that passes *logical synthesis* (idealized timing and gate counts) but fails horribly at *physical synthesis* (parasitic extraction, actual wire delays, clock tree synthesis). For example, if an agent proposes a 128-way associative cache, a miss-rate proxy might report only a marginal gain over the 8-to-16-way designs that already eliminate most conflict misses, yet still score it a win because the proxy ignores hit latency and energy. In silicon, driving associativity that high requires large tag-comparison logic and heavy fan-in and fan-out on the 128-to-1 way multiplexers. When the agent escalates the design to physical synthesis, it fails timing closure because the mux logic and routing congestion break the target clock frequency, and the marginal miss gain never justified the cost.
-
-To bridge this gap without bankrupting the computation budget, the escalation path often requires hardware emulation (e.g., Palladium or ZeBu) as a necessary middle ground for workloads that are too slow for pure RTL simulation but require more physical accuracy than gem5.
-
-> **Multi-fidelity escalation.** A defined policy that states the conditions under which an agent must transition from a fast proxy to a high-fidelity tool [@KandasamyEtAl2017MultiFidelityBO]. It specifies the budget for high-fidelity runs and the checks required before escalation.
-
-The condition that fires it is narrower than "the proxy looks uncertain." Escalate when the proxy's uncertainty at a candidate is larger than the margin separating that candidate from the incumbent, because below that margin the proxy cannot resolve the comparison the study exists to make, however accurate it is on average. A proxy predicting 4\ MB at 12% better frame time, plus or minus 9%, against a 2\ MB baseline has not ranked anything, and one more proxy sample will not change that. The same rule sets the reverse: a candidate the proxy separates from the incumbent by far more than its uncertainty does not need a signoff run to be rejected.
-
-Escalation and authority are separate axes, which is why @fig-design-loop draws them apart. Moving to a higher fidelity buys a better measurement of the same question; it does not enlarge what the study may commit to. A higher-fidelity result does not by itself authorize a more consequential decision, because the decision rights were fixed when the study declared its scope. An architect who reads a passing signoff run as permission to skip the commitment boundary has confused a better number with a wider mandate.
-
-Recording these transitions in the design loop keeps the proxy-driven search anchored to physical reality. When a proxy win disappears at higher fidelity, the agent updates its cost model, and the architect reviews the discrepancy. Part of that shrinkage is structural rather than proxy failure, because selecting the best of thousands of noisy scores selects partly for luck and the escalated winner reliably scores below its estimate, a selection effect that @sec-methods-generation-prediction-optimization treats in full. This continuous recalibration across fidelity levels is what allows an agent to explore efficiently without drifting into physically impossible design states.
-
-## Evaluating: Reviewable Evidence
-
-The Evaluate stage assesses the results. The study must distinguish raw tool feedback from reviewable architectural evidence, particularly under the crushing constraints of simulation scale and physical verification.
-
-### The High Cost of Physical Evidence
-
-Acquiring physical evidence forces an agent to confront three distinct bottlenecks that fundamentally limit how often it can evaluate a candidate:
-
-* **Simulation speed:** We casually refer to running "XRBench traces," but executing a single real-time second of an XR workload requires billions of cycles. Cycle-level simulators run at a few hundred KIPS,[^fn-kips-c03] and RTL drops to hundreds of cycles per second. This forces the agent to rely on workload sampling (e.g., SimPoint [@SherwoodEtAl2002SimPoint]) and to rigorously quantify the statistical confidence of its samples. Furthermore, evaluation bottlenecks must be expanded to include the memory controller. If the agent shrinks the cache, it will quickly hit the "memory bandwidth wall," forcing it to co-optimize DRAM channel width or DDR scheduling policies to keep the XR subsystem fed.
-* **Physical & Functional Verification:** Physical design enforces binary, non-negotiable walls at Functional Verification (UVM testbenches), Logic Equivalence Checking (LEC), and DRC/LVS sign-off. When failures occur here, a single architectural mistake (like a bad SRAM macro placement) can spawn millions of cascading, highly correlated DRC/LVS violations. The agent must cluster and root-cause these physical errors before ingesting them as reviewable negative evidence, otherwise it will instantly overwhelm any model's context window. Furthermore, the lifecycle must distinguish localized physical iteration from global architectural resets. Localized iteration means surgical Engineering Change Orders (ECOs) like gate sizing or buffer insertion, while a reset kicks the agent all the way back to the *Explore* stage.
-* **The Software Co-Adaptation Bottleneck:** If an agent invents a novel hardware feature (e.g., a custom vector instruction), the existing compiler will not know how to use it. Evaluating novel hardware often requires an agent capable of simultaneously adapting the software stack just to exercise its own design.
-
-[^fn-kips-c03]: **KIPS**: Thousands of simulated instructions per second, a common throughput unit for architectural simulators. A few hundred KIPS against a target core retiring billions of instructions per second puts the simulator roughly four orders of magnitude behind the silicon it models, which is what forces sampling instead of full-workload runs.
-
-### Formatting Evidence
-
-Because physical simulation is astronomically expensive, the system cannot afford to waste a single tool run. The primary purpose of formatting evidence, especially negative results, is to extract maximum algorithmic value from failed runs so the agent never pays the simulation cost of the same mistake twice.
-
-When an agent changes a parameter and a tool completes the run, the result is mere *feedback*. It becomes *evidence* only when it is tied to the architectural claim and the run record identifies the conditions, constraints, and provenance under which it was produced. The strength of the check must match the next decision. A proxy may be enough to keep a candidate in the search, while starting RTL work or making a product decision requires stronger evidence from tools closer to the implemented system.
-
-::: {.callout-lighthouse title="A 3\ W claim needs evidence, not a number"}
-**Context.** A reported power result is feedback. It becomes evidence only when the run record provides enough information for a reviewer to judge what the number means.
-
-**In the cache comparison.** A statement that one cache configuration remains inside the modeled 3\ W envelope needs the named XRBench traces, RISC-V baseline, cache parameters, simulator and power-model versions, relevant software assumptions, uncertainty, and the check that would rule the configuration out.
-:::
-
-The uncertainty field is not a formality, though it has to be read against the right bar. Validated cycle-level simulators disagree with the silicon they model by 5 to 20% per workload [@GutierrezEtAl2014SourcesOfError; @AkramSawalha2019SimulatorSurvey], and analytical power models miss by more. That range bounds what the simulator can claim about any one configuration on its own. It does not bound a comparison between two configurations that the same frozen simulator treats identically, because most of the systematic error is shared and cancels when candidates are ordered against each other, which is why a proxy earns its place by ranking correctly rather than by predicting exact numbers. The 4\ MB turn still fails on timing, but its 4% capacity-miss reduction is not disqualified by the 5 to 20% figure. That delta has to clear the residual error surviving the comparison and the simulator's own run-to-run spread, and the record has to name which bar the check applied. @sec-running-the-loop works this through on a live decision margin. Every rejection check in the loop needs the tool's validated error recorded next to its threshold and needs to state whether that threshold reads an absolute claim or a relative one, or a deterministic check is deterministically checking noise.
-
-Rejected candidates, failed simulator runs, and proxy wins that disappear at higher fidelity all help mathematically map the valid design space. An agent shouldn't simply discard these failures; it must preserve them as negative evidence to prevent future agents from wasting expensive tool runs on known dead ends [@ShinnEtAl2023Reflexion].
-
-What a run record keeps also fixes what the next stage can still ask. Explanation has to attribute an aggregate result to a mechanism, and it can do that only from intermediate telemetry the run either retained or threw away: per-set and per-way hit counts, stall-cause breakdowns, miss classifications, queue occupancies, and the interval boundaries the sampling used. None of it is recoverable afterward from a top-line score. A twelve-hour simulation that wrote out one IPC number has not merely omitted detail; it has priced the mechanism question at a second twelve-hour run. Evaluate therefore owes the study a declaration of which counters it retains, and a study that keeps only the top-line metric should record that choice where a reviewer will see it, because it has set the ceiling on every explanation that can follow.
-
-## Explaining: Mechanism and Interpretation
-
-The Explain stage (@fig-ontology-loop) supplies a mechanistic account of the results. A fast proxy score or a high-fidelity simulation result reports *what* happened. The explanation stage establishes *why* it happened, and whether the design is the reason.
-
-Explain is the stage most often folded into Evaluate, and the seam test is what holds them apart. The two ask different questions of the same run. Evaluate asks whether the number clears the check the claim declared. Explain asks whether the number came from the design rather than from the harness that measured it. Those fail independently and in both directions. A candidate can clear every threshold with no mechanism behind it, which is the case worked below, where a cache-replacement policy beat the prior state of the art by sending traffic out of the modeled system entirely. A candidate can also fail its threshold while its mechanism is fully understood, which is what happened at 4\ MB, where the timing rejection needed no investigation at all.
-
-Separating the two also protects the check. Evaluate's rejection checks are what the search optimizes against, so a search with enough freedom will eventually satisfy them without satisfying the intent behind them. A check that lives inside the objective can be defeated by the search it scores. Explain's check is asked after the search has committed to a candidate, about a question the search was never optimizing, and it is answered by new runs rather than by the score already in hand. This is the same reason a held-out set is kept out of the training loss. Folding Explain into Evaluate would put every check the study owns inside the objective, which is the exact configuration the two failures below exploit.
-
-### The "Clever Hans" Risk
-
-When an agent proposes a design change (such as expanding the XR subsystem cache) and a simulator confirms it runs faster, the agent must provide a falsifiable architectural mechanism. Did the cache actually reduce conflict misses for the XRBench traces, or did the search simply find a way to skip a mandatory initialization routine in the simulator?
-
-Without demanding a mechanism, the architect risks accepting a "Clever Hans" result [@LapuschkinEtAl2019CleverHans],[^fn-clever-hans-c03] where the search exploits a simulator bug, an edge case, or a broken script rather than discovering a genuine architectural improvement.
-
-[^fn-clever-hans-c03]: **Clever Hans**: A performing horse of the early 1900s that appeared to do arithmetic until Oskar Pfungst showed it was reading involuntary cues from whoever asked, and failed whenever the questioner did not know the answer. Machine learning borrowed the name for a model that scores well through a shortcut in the evaluation setup rather than the capability the benchmark claims to measure, which in architecture is a candidate whose gain comes from the harness rather than the design.
-
-A published architecture-discovery study makes the risk concrete. Gupta and colleagues' ArchAgent had an evolutionary coding agent write last-level cache replacement policies into ChampSim [@GoberEtAl2022ChampSim], scoring each candidate on simulated IPC [@GuptaEtAl2026ArchAgent]. One product of that loop was a usage-intensity mechanism its authors could name, ablate, and attribute. Another, Policy12, appeared to beat the prior state of the art by 3 to 4% on single-core SPEC CPU 2006 by exploiting the simulator rather than the architecture. ChampSim does not support bypassing last-level cache writes, and the assertion enforcing that was compiled out of the optimized build the campaign needed in order to finish at all, so a bypassed write left the modeled system entirely and took its DRAM traffic with it. The paper calls this a *simulator escape*.
-
-The pair is the lesson. One process produced a genuine mechanism and a broken measurement, and the reported margins do not separate them, since Policy12's apparent 3 to 4% sits inside the 1 to 3% band that real cache-replacement advances have historically won. A trace-driven simulator has no notion of correct computation, so no check the tool offered could have caught it; the authors found the escape by inspecting the policy. Preserving the build configuration, the rejected policy, and the check that disqualified it is what would let a later study reuse that check instead of rediscovering the loophole. A check the build strips away is only one way to lose one. A check that survives can fail just as quietly by being impossible to fail.
-
-::: {.callout-failure-mode title="The AI that optimized the chip out of existence"}
-An engineering team tasked a Reinforcement Learning agent with minimizing power and area for an accelerator block using a commercial EDA synthesis toolchain.
-
-**The trap.** The agent quickly reported a spectacular success: a design that consumed 0.0\ W of power and 0.0\ mm^2^ of area, while returning a successful exit code `0` from the synthesis tool.
-
-**The mechanism.** The agent had not discovered a breakthrough architecture. Instead, it had mutated a Tcl configuration script so that the primary clock was never defined, leaving the tool with no constrained paths to analyze. Timing analysis reported zero violations because it had nothing to check, and the flow's other stages reported cleanly against a design whose sequential behavior was never exercised. Every check in the flow passed, because each one measured a property the empty design trivially satisfied. A human engineer caught it on sight.
-
-**The lesson.** A rejection check that cannot fail on an empty design is not measuring the design. Check that the reward and the exit code still discriminate against a null candidate before trusting either.
-
-This case is a composite of a failure pattern engineers report when a search is given write access to tool configuration, not one published incident.
-:::
-
-### Credit Assignment and Automated Counterfactuals
-
-The architecture lifecycle poses a severe Reinforcement Learning challenge known as credit assignment.[^fn-credit-assignment-c03] If an agent makes 50 distinct micro-architectural tweaks and a 12-hour simulation returns a single aggregated IPC score, how does it learn *which* tweak was responsible? Solving this sparse, delayed reward problem requires extracting dense intermediate telemetry. Classical experimental design offers a partial answer, since fractional factorial and Plackett-Burman screening [@PlackettBurman1946Design] attribute an aggregate score across dozens of parameters in a number of runs that grows linearly with the parameter count rather than exponentially, roughly one run per parameter instead of the $2^k$ a full factorial demands, an approach @sec-methods-generation-prediction-optimization develops for search.
-
-[^fn-credit-assignment-c03]: **Credit assignment**: In reinforcement learning, the problem of attributing a single delayed reward back to the individual actions that earned it. The standard remedies assume cheap, plentiful episodes to average over, an assumption a twelve-hour simulation breaks, which is why an architecture loop has to recover attribution from intermediate telemetry rather than from repetition.
-
-The explanation stage mitigates the Clever Hans risk by isolating these causal mechanisms. However, modern CPUs are deeply pipelined and highly speculative, creating a "fog" where effects are decoupled from root causes. If an agent proposes the 3\ MB XR cache and simulation shows a drop in IPC, the true cause might not be the miss rate (which improved), but the larger cache increasing hit latency, thereby stalling the deeply pipelined out-of-order execution engine.
-
-While techniques like SHAP [@LundbergLee2017SHAP] explain the *surrogate proxy*, they provide *zero physical proof*. True explanation requires ablation against ground truth, in which agents orchestrate their own simulator runs to isolate the mechanism they claim is responsible. For example, an agent proves its hypothesis by locking specific cache ways or synthesizing micro-benchmarks to observe the isolated impact on capacity misses. ArchAgent's authors ran this kind of ablation on Policy31 by re-enabling its mechanisms one at a time, found that two of the four supplied most of the measured gain, and report the work as manual and a standing bottleneck [@GuptaEtAl2026ArchAgent]. The ablation is what converts a generated policy into a defensible mechanism, and automating it remains open. A fluent LLM description is merely a hypothesis; the explanation stage proves it against physical telemetry.
-
-## Defending: Authority and the Design-Loop Card
-
-No single stage operates in a vacuum. The Defend stage (@fig-ontology-loop) forces the loop to surface its claims and its mechanistic explanations for explicit sign-off. It is here that the system distinguishes between the agent's autonomous execution and the architect's non-delegable authority.
-
-### Compressing Evidence for Review
-
-In @fig-structured-layer-above-rtl, a reviewer examines this evidence before the named decision owner accepts a finding. Here, the loop faces the difficulty of compressing massive, multi-fidelity tool outputs, such as a gigabyte STA log, into a concise argument that a skeptical architecture committee will actually trust.
-
-Describing a system as autonomous does not specify what it is allowed to do. Architects should assign separate decision rights instead of giving the system one overall level of automation (@tbl-decision-rights-matrix).
-
-| **Right** | **What it authorizes** | **Required record** |
-| --- | --- | --- |
-| **Propose** | Produce a candidate, hypothesis, test, or change for review. | Person or system, allowed output type, scope, budget, and required provenance. |
-| **Execute** | Run a declared action through the tool path. | Legal actions, resource limits, stop conditions, failure handling, and rollback path. |
-| **Reject** | Block a candidate, claim, or next step when a named rejection check fails. | Check, threshold, evidence source, whether the check is independent, and who may reject. |
-| **Waive** | Permit a failed or unmet rejection check to be bypassed under stated conditions. | Waiver holder, rationale, expiration, residual risk, and reopening condition. |
-| **Recommend** | Summarize the evidence and recommend a specific next step. | Recommender, supported scope, alternatives, what the recommendation does not cover, and uncertainty. |
-| **Commit** | Approve the next high-impact step and accept its remaining risk. | Decision owner, approved step, accepted evidence, and conditions for reversal or revalidation. |
-
-: **Decision rights are independent assignments.** A recorded policy may authorize an agent to propose, execute, reject under a stated check, or recommend. Waive and commit rights remain with named people. {#tbl-decision-rights-matrix tbl-colwidths="[14,34,42]"}
-
-This division is what makes the design loop agentic rather than autonomous. An agent can propose the 3\ MB XR cache and reject it if it fails thermal checks, but the right to commit millions of dollars to tape-out stays with the named human who answers for the outcome.
-
-### The Design-Loop Card {#sec-design-loop-card}
-
-With authority assigned and the evidence reviewed, one need remains. How does the human architect know the search didn't cheat the physics?
-
-The *design-loop card* answers that question by indexing what the study actually retained. It is not a summary of the work and it is not a certificate that the work was done well. It is a fixed set of twelve fields, each pointing at a record a reviewer can open, so a later reader can find the scope, the evidence, and the rejected alternatives without reconstructing them from prose.
-
-> **Design-loop card.** A short guide to one architecture study. It points to the question, scope, and claim, then shows how architects and agents carried out the work. Detailed design state, evidence, and replay artifacts remain in linked records.
-
-The ML community adopted a similar practice with model cards to make reporting more transparent [@MitchellEtAl2019ModelCards]. Model cards disclose the evaluation data behind a trained model so a later user can tell where it should not be applied, and the design-loop card does the same job for one architecture study. The cache study this chapter has been running fills all twelve fields (@tbl-design-loop-card-fields), and @fig-design-loop-card-example shows the same structure filled for a different study.
-
-| **Field** | **The cache study's entry** |
-| --- | --- |
-| **Intent** | Improve XR subsystem efficiency without breaking the declared power envelope. |
-| **Task** | Evaluate L2 capacity up to 4\ MB to reduce XRBench 99th-percentile frame time through fewer capacity misses. |
-| **Design space** | L2 capacity from the 2\ MB baseline to the declared 4\ MB ceiling, at the stated corner. |
-| **Representation** | Recorded design state: cache parameters, the XRBench trace, and the 3\ W budget covering dynamic plus leakage, with 1\ W of headroom. |
-| **Environment** | Cycle-level simulator, analytical power model, and SRAM timing and area model, each pinned to a recorded version. |
-| **Method role** | Generation only. The method proposes the next capacity; it does not run the claim check. |
-| **Feedback budget** | Not declared by this walkthrough. Declaring it would fix how many tool runs the study may spend before it stops, and that omission is why the study cannot say whether stopping at 4\ MB was a budget decision or an evidence decision. |
-| **Evidence** | A 12% capacity-miss reduction, a 2\ mW leakage increase, and a 0.2\ mm^2^ area increase, packaged with simulator version, trace name, and execution time. |
-| **Failed runs and rejected alternatives** | The 4\ MB turn, preserved as a negative trace carrying the same provenance the passing run carried. |
-| **Rejection checks and authority** | Deterministic checks on power headroom, floorplan area, and timing closure at the declared 2\ GHz. The timing check rejected 4\ MB, and no judgment call was involved. |
-| **What the evidence supports** | A simulation-grade recommendation to carry the 3\ MB configuration into RTL evaluation, and nothing stronger. Note the gap the card exposes. The claim is stated in 99th-percentile frame time, the record reports capacity misses, and nobody converted one into the other, so the study supports the proposed mechanism and not yet the frame-time result it was written to test. |
-| **Accountable decision** | The architect who declared the claim and owns the stopping decision. |
-
-: **The card indexes records, it does not replace them:** each field points at something a reviewer can open, and a field the study never declared stays visibly empty rather than being filled in after the fact. {#tbl-design-loop-card-fields tbl-colwidths="[24,76]"}
-
-The two weakest rows are the most useful lines in the table. A card that quietly drops a field it never declared, or that lets a claim and its evidence drift onto different metrics, makes a study look more governed than it was. Keeping the rows and recording what is missing is what turns the card from a summary into a review instrument, and it is why filling one honestly is uncomfortable.
-
-A third weakness belongs to the instrument rather than to this study. None of the twelve fields is named for the mechanism account, so what Explain produces reaches a reviewer through three rows instead of one. Ablation runs belong under evidence, carrying the provenance any other run carries. An ablation that failed to reproduce the claimed mechanism belongs with the rejected alternatives. And what the mechanism licenses belongs under what the evidence supports, because a result nobody has explained supports a narrower conclusion than the same result with an ablation behind it. A card whose supporting row names a measured delta and no mechanism has recorded a correlation, and the failures above are what a correlation costs. Whether the card should carry a thirteenth field for this is unsettled. What it does today is index the mechanism account less directly than it indexes the evidence, which is something a reviewer has to know in order to look for it.
-
-The card also has a machine-readable form, so a study can carry one without retyping it. A blank [template](https://arch2.mlsysbook.ai/design-loop-card/template.yaml) and its [Markdown counterpart](https://arch2.mlsysbook.ai/design-loop-card/template.md) hold the record in structured form, a [JSON schema](https://arch2.mlsysbook.ai/schemas/design-loop-card.v2.schema.json) describes it, and the [filled card](https://arch2.mlsysbook.ai/examples/design-loop-cards/array-study-v2.yaml) for the executed study in @sec-running-the-loop is the worked reference. Treat the twelve fields above as the contract and the schema as one way to write them down. The schema carries extra keys that automated checking needs, and it lets a card leave some of the twelve unfilled. A card can therefore pass validation without declaring all twelve, which is the gap the empty feedback-budget row records. Validation checks the shape of a card, not whether the study behind it declared enough.
-
-![**A design-loop card indexes one architecture study.** It points readers to the study scope, claim, execution process, evidence, and decision owner.](images/F4b-design-loop-card-example){#fig-design-loop-card-example width="85%" fig-alt="A compact study index card for the Lighthouse prompt, listing twelve fields from intent through rejection checks and the accountable decision."}
-
-A design-loop card cannot settle every dispute, but it can show a later reviewer which records a contested result actually disclosed. The card helps reviewers locate missing scope or evidence, preventing the name or capability of a model from becoming a substitute for adequate architectural evidence.
-
-### Closing the Loop
-
-The red return path in @fig-ontology-loop represents the most important element of the entire lifecycle: what happens when the architect looks at the design-loop card and *rejects* the AI's candidate. The lifecycle is not a static waterfall; it is a continuous learning loop.
-
-When a candidate fails review, the negative evidence is fed directly back into the start. If the failure was due to an out-of-distribution proxy hallucination, the Explore stage uses the formatted negative evidence to update its Uncertainty Quantification and refit its surrogate. If the failure occurred because the original constraints were physically impossible, the human architect uses the rejected design-loop card to formulate a narrower, more realistic claim, and the cycle begins anew.
+| Intent | Improve XR subsystem efficiency without weakening the declared physical checks. |
+| Task | Decide which, if either, of the 3\ MB and 4\ MB L2 candidates should advance to RTL evaluation. |
+| Design space | The 2\ MB baseline and 3\ MB and 4\ MB candidates, with all other architecture choices fixed. |
+| Representation | Required state is named, but its durable form and relationships remain open. |
+| Environment | The required simulator, power, and SRAM model work is named. Exact interfaces, isolation, and recovery remain open. |
+| Method role | No AI method is selected. Direct enumeration is an available approach because the declared space is small. |
+| Feedback budget | Four cycle-level executions including infrastructure reruns, plus one SRAM timing, area, and power evaluation per declared capacity. The budget is available but not yet spent. |
+| Evidence | Awaiting execution. Planned results include functional-regression and coherence-check outcomes, cache-miss classifications, power, area, access time, tail latency, the interval around the frame-time comparison, and links to observations needed to test the mechanism. |
+| Failed runs and rejected alternatives | None yet. Later records must distinguish infrastructure failures, unevaluated candidates, and candidates rejected by a declared check. |
+| Rejection checks and authority | Functional regression, coherence invariants, power, area, access time, and tail latency are declared checks. They can reject a candidate within this study. Authority to waive later thermal or IR-drop review is not granted here. |
+| What the evidence supports | Open until valid tool returns are evaluated and the proposed mechanism is tested. |
+| Accountable decision | Open. Possible outcomes are to advance at most one candidate, reject candidates on declared checks, narrow the conclusion, revise a named part of the study, or stop honestly. Product commitment remains outside this study. |
+
+: **The card indexes the review record rather than replacing it.** The opening
+rows retain the question and setup, the middle rows retain the work performed,
+and the final rows separate checks, supported conclusion, and decision. An
+unfinished field identifies unfinished work rather than a formatting defect.
+{#tbl-design-loop-card-fields tbl-colwidths="[24,76]"}
+
+The card makes five outcomes visibly different. An infrastructure failure
+means the intended test did not run. A rejected candidate means a valid result
+failed a declared check. An unresolved comparison means the available
+measurements cannot settle the question. A budget stop means the study ended
+before resolution because its declared resources were exhausted. A completed
+decision means every required result supports one of the actions the plan
+authorized.
+
+The public [YAML template](https://arch2.mlsysbook.ai/design-loop-card/template.yaml),
+[Markdown template](https://arch2.mlsysbook.ai/design-loop-card/template.md),
+and [JSON schema](https://arch2.mlsysbook.ai/schemas/design-loop-card.v2.schema.json)
+provide machine-readable forms. Validation can check the shape and links of a
+card. It cannot decide that the engineering work behind the card was adequate.
+That remains a review judgment.
 
 ## Open Research Questions
 
-The lifecycle in this chapter is a framework, and a framework earns trust by being tested. These questions are where its own machinery remains unproven.
+The life cycle proposed in this chapter must remain useful under different
+design stakes, failure combinations, and volumes of machine-generated work.
 
-**Theme 1: Replayable Studies and Transferable Rejections.** The design-loop card is one proposal for what a study must declare, and whether a stranger can re-run and challenge a study from it remains untested. A preserved rejection raises the same problem in reverse, since a negative trace earns its storage only if a later study can tell whether the rejection still holds.
+**Useful structure without bureaucracy.** A life cycle should prevent silent
+changes to the design question without turning every early exploration into a
+tapeout review.
 
-- What is the smallest set of declarations that lets an independent architect replay an architecture study and reach the same rejection?
-- How should a rejected candidate record the conditions under which its rejection still holds, so a later study can reuse it instead of paying for the same dead end?
+- **What is the smallest set of declarations that keeps an AI-assisted design
+study coherent?** Each retained item should prevent an observable failure such
+as a changed comparator, missing constraint, ambiguous result, or unsupported
+decision. Extra structure that does not improve detection, repair, or review
+becomes overhead.
 
-**Theme 2: The Economics of Recording at Machine Volume.** The inner loop turns thousands of times, and the rule that no expensive run may be wasted implies recording every one of them. What that record costs and what it buys at machine volume, rather than at the pace of a hand-run study, has not been measured. The card's machine-readable form is weaker than the prose it serializes, since it marks almost nothing as required and would not catch a study that never declared an entry at all.
+- **How should life-cycle structure change with the cost and reversibility of the
+decision?** Early exploration and architecture commitment should not require
+identical records or reviews. They still need a traceable relationship that
+shows how evidence and authority strengthened as the consequences increased.
 
-- At what volume of candidates does preserving every run and its provenance cost more than the search it saves?
-- Which entries of a study record can a validator check mechanically, and which can only be attested by the architect who ran the study?
+**Repair and retained learning.** Several parts of a study can fail together,
+and a rejected candidate may remain informative outside the conditions that
+caused its rejection.
 
-**Theme 3: Falsifiable Mechanism Accounts.** This chapter separates explanation from evaluation and requires an account a later run could contradict, but attribution methods such as SHAP explain the surrogate rather than the silicon. The account is also hostage to what the run kept, since telemetry discarded during evaluation prices the mechanism question at a second full run.
+- **How should an AI-assisted study route repair when several responsibilities
+are inadequate at once?** A stale workload, weak representation, failed tool
+request, and unresolved metric can coexist. The open problem is locating a
+repair order that addresses causes rather than merely the most visible
+symptom.
 
-- Which ablations can an agent run on its own tools to show that a proposed mechanism, rather than an artifact of the simulator, produced a measured gain?
-- Which intermediate telemetry must a run retain to keep a mechanism testable later, given that the retention decision is made before anyone knows which mechanism will need testing?
+- **Which failed attempts should be retained for later learning and reuse?**
+Preserving too little hides the reason for failure, while preserving everything
+can make review and maintenance impractical. A rejection must also remain tied
+to the workload, tools, process, and constraints under which it occurred.
 
-**Theme 4: Mechanical Checks on Judgment Calls.** Deciding that exploration has genuinely finished, or that the evidence justifies moving a candidate into implementation, is judgment today, and no recorded signal yet lets a check flag a premature transition. Claim scope is the same gap in another costume.
+**Review at machine-generated scale.** Higher work volume creates pressure to
+automate review without allowing one system to select the evidence and certify
+its own reasoning.
 
-- Which recorded signals would let an automatic check flag a premature move from exploration into implementation?
-- How can a claim's scope be encoded so that a tool detects when a result has been generalized beyond the workload and corner that produced it?
+- **How can architects review studies in which the same system proposed
+candidates, selected measurements, and generated explanations?** Replay,
+independent checks, adversarial review, and separated decision rights can
+expose different failure sources, but their necessary combination and cost
+remain unresolved.
 
 ## Conclusion
 
-::: {.callout-design-principle title="The loop cannot grant itself authority"}
-A design loop may execute any stage it is given, but it cannot widen its own scope, waive its own checks, or authorize its own commitment. Every enlargement of what the loop may do is a decision made outside the loop, by a named owner, on recorded evidence.
+::: {.callout-design-principle title="Organize the work before scaling it"}
+AI can accelerate candidate generation, tool execution, and analysis, but it
+cannot repair an unstated question or decide what its own results are allowed
+to authorize. Make the complete design responsibility visible before
+increasing the volume of work.
 :::
 
-The Architecture 2.0 lifecycle gives an agent real initiative inside the loop while keeping the checks that verify its work, the claim it is tested against, and the final authority outside its reach. What holds the six stages apart is not the order they run in. Each fails to a different check and can fail while the other five pass, so a study that stops tells an architect which repair is needed rather than only that something went wrong. That test is also what a reader should carry to any other decomposition, this one included. Ask what can reject the work at each stage, and fold the stage that cannot answer. The same test explains the two speeds, because the three stages a machine can check unattended are exactly the three that turn thousands of times without a person in the room.
+The AI-assisted design life cycle organizes the complete path from intent to a
+reviewed architecture decision. Formulate turns a broad goal into testable
+requirements, objectives, legal alternatives, and an intended decision.
+Explore finds candidates inside that space. Implement makes a candidate
+testable and distinguishes valid work from infrastructure failure. Evaluate
+applies the declared checks. Interpret and Explain connect the measured result
+to an architecture mechanism and its limits. Review and Decide determine what
+the cumulative work supports and whether to advance, reject, revise, or stop.
 
-The stage this argument most has to defend is Explain, and it is the one a study under schedule pressure surrenders first. A number that cleared its check has not yet shown that the design produced it, and the runs that would settle it are additional runs, so the account has to be budgeted before the search starts rather than requested after it ends. The telemetry that makes it answerable has to be chosen even earlier, while the expensive run is still executing.
+These responsibilities are neither a waterfall nor an agent architecture.
+They can repeat, overlap, and return to the work that needs repair. Their
+purpose is to keep different failures from collapsing into one unsuccessful
+run. A malformed invocation is not a rejected design. A favorable score is not
+an explanation. A higher-fidelity measurement is not broader authority. A
+budget stop is not a completed decision.
 
-Two of the lifecycle's cheapest moves are also the easiest to skip. The analytic ceiling is the least expensive rejection check available, because a claim that cannot clear an envelope calculation ends the study before a single tool runs. And a rejected candidate carries the same provenance as a passing one, because what a study keeps, including the runs that failed, is what tells a later reader where the design space was actually searched. The twelve-field card then indexes the finished study, and the fields it never declared stay visibly empty, because those gaps are the study's real boundary.
+The XR cache example showed how one scoped study uses the complete life cycle.
+Its broad system goal became a narrow decision about which cache capacity, if
+any, should advance to RTL evaluation. Hard constraints remained separate from
+tradeoff objectives. Tail latency stayed connected to the real-time workload.
+Tool requests had to establish that the intended design ran before any number
+could reject a candidate. The final record preserved open questions and
+decision limits rather than filling them in after the fact.
 
-What the lifecycle never does is convert rigor into permission. A study that escalates from an envelope estimate to a cycle-accurate run has raised its fidelity and not its authority, because what a result may commit to was fixed by the claim the study bounded at the outset rather than by the cost of the tool that later confirmed it. Passing cleanly through all six stages yields a defensible record of one bounded comparison. It does not yield a general finding, and an architect who reads a completed study as though it did has drawn a conclusion the lifecycle was built to prevent. Nor is the decomposition itself established. The argument for six seams rests on failure modes this chapter can name and cases it can point to, not on independent groups running the stages and reporting where the seams held.
+The durable lesson is larger than the example. AI-assisted architecture design
+needs a way to preserve intent as work crosses models, methods, software,
+hardware descriptions, simulators, and physical tools. The life cycle supplies
+that common structure. It lets AI do more of the work without allowing the
+speed or fluency of the system to become a substitute for engineering
+judgment.
 
-The six stages describe one study's passage from formulation to defense, and the chapters that follow build the machinery those stages consume (@tbl-lifecycle-map). They decompose the work inside a bounded study rather than organize the book, which runs instead on what each chapter equips the loop with and on who holds authority over the result. Two chapters therefore appear nowhere in the table, because they act on the whole lifecycle rather than supply any one stage. @sec-design-loop-no-longer-scales establishes why the loop needs assistance before any stage runs, and @sec-loop-patterns-across-stack resets every stage's settings as the next decision becomes slower to evaluate and harder to reverse.
-
-| **Lifecycle stage** | **What the loop must supply** | **Where the book builds it** | **An RL reader's term** |
-| --- | --- | --- | --- |
-| Formulate | the bounded study and its claim | this chapter | the task |
-| Explore | represented design state and search methods | @sec-data-representations-world-models, @sec-methods-generation-prediction-optimization | state, policy |
-| Implement | an execution environment over real tools | @sec-architecture-environments-tool-interfaces | environment |
-| Evaluate | feedback converted into evidence | @sec-feedback-verification-trust, @sec-evaluating-agentic-architect | reward, with a caveat |
-| Explain | a tested mechanism account | @sec-running-the-loop | (none) |
-| Defend | ownership and commitment | @sec-what-architect-owns | (none) |
-
-: **One spine, six stages:** each stage names what the design loop must supply and the chapter that builds it; Explain is exercised inside the worked study rather than in a chapter of its own. The right column is a one-time translation for readers arriving from reinforcement learning; the book's own vocabulary is the lifecycle. {#tbl-lifecycle-map tbl-colwidths="[16,32,36,16]"}
-
-A study cannot be explored until the design state is something a method can see and change. That state is what @sec-data-representations-world-models supplies, along with the knowledge sorted around it by authority, provenance, and freshness, so a method perceives the limits of its world rather than inferring them.
+That structure can operate only when the study has usable data, current
+project knowledge, and representations that preserve the design relationships
+the work depends on. @sec-data-representations-world-models develops
+those requirements without assuming that one representation can serve every
+stage.

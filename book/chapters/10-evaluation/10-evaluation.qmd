@@ -4,180 +4,556 @@ format:
     output-file: index.html
 ---
 
-# Evaluating the AI Architect {#sec-evaluating-agentic-architect}
+# Evaluating and Red-Teaming AI-Assisted Design Systems {#sec-evaluating-agentic-architect}
 
 ::: {.epigraph}
-> *"Measurement is the first step that leads to control and eventually to improvement. If you can’t measure something, you can’t understand it. If you can’t understand it, you can’t control it. If you can’t control it, you can’t improve it."*
+> *"Measurements are key."*
 >
-> — H. James Harrington, *Business Process Improvement* (1991) [@Harrington1991BusinessProcess]
+> — H. James Harrington, *Business Process Improvement* (1991) [@Harrington1991BusinessProcess, p. 82]
 :::
 
 ::: {.column-margin}
-**Author's Note:** H. James Harrington, an author and quality engineer, emphasized that systemic improvement requires rigorous, well-defined measurement. In AI-assisted hardware design, the immediate temptation is to measure the final instructions-per-cycle (IPC) of the generated chip. But this conflates a lucky guess with systemic engineering capability. To build reliable systems, we must measure the *agent*, not just the *artifact*.
+**Author's Note:** H. James Harrington, an author and quality engineer,
+emphasized that systemic improvement requires well-defined measurement. In
+AI-assisted hardware design, neither a good final design nor an efficient
+search settles the question alone. The design shows what was achieved. The
+complete workflow and its cost show whether AI improved how architects reached
+it.
 :::
 
 ::: {.callout-crux}
-How do we measure the AI architect rather than the artifact it produced, when the score belongs to a whole system rather than a model, and the benchmark behind it can leak, wear out, or flatter a search that random guessing would have matched?
+How should we evaluate the architecture result, the complete design workflow,
+its total cost, and the conditions under which any advantage survives, then
+attack the system to discover how it fails?
 :::
 
-@sec-loop-patterns-across-stack scaled the loop across the full hardware stack. Once that loop is running at any level, the architect has to measure the search and not only the design it returns. With two different agents optimizing the same low-power RISC-V XR subsystem, how do we decide which one to trust?
+An AI-assisted design system can return an impressive candidate and still be
+an engineering failure. The candidate may pass a fast simulator while failing
+at a higher-fidelity tool stage. It may require more model calls, simulation
+runs, formal checks, physical-design jobs, and expert repair than the
+alternative it claims to improve. It may work only for one prompt, seed,
+workload, or tool version. It may even alter a constraint or exploit a
+checker instead of improving the design.
 
-In a traditional workflow, evaluation focuses on the artifact. Does the final compiled netlist meet the timing and power budget? When evaluating agents, judging the artifact alone is not enough. An agent might stumble onto a valid configuration through brute force, running tens of thousands of failed EDA simulations before getting lucky. The final artifact might pass, but the process that produced it is inefficient and economically unviable.
+Evaluation must therefore distinguish three objects.
 
-Evaluating the agent rather than the artifact rests on three moves that build on each other. The first is to measure the search trajectory itself, including what it cost in EDA tool time. The second is to establish that the resulting score still means something, because a benchmark can be memorized before the first run, can decay until it no longer measures the capability it was built for, and can report a margin the apparatus produces by accident. The third is to pin the system and the environment that produced the score, since a number nobody can attribute is a number nobody can compare. A measurement that survives all three is what any later decision about how much of the search to leave unsupervised has to rest on.
+1. **Candidate architecture.** This is the proposed microarchitecture, RTL,
+   configuration, script, mapping, or other design artifact. It is judged by
+   function, constraints, architectural quality, implementation feasibility,
+   and the work needed to integrate and maintain it.
+2. **Configured technical design system.** This is the versioned combination
+   of models, retrieval sources, predictors, generators, optimizers, routing
+   rules, represented design state, tool wrappers, checks, and stopping logic
+   that produced the candidate.
+3. **Complete design workflow.** This includes the technical system and the
+   architects, engineers, and reviewers who set up the task, intervene,
+   interpret results, repair failures, approve changes, and decide when to
+   stop.
+
+A claim about one object does not automatically apply to another. A correct
+candidate does not prove that the technical system is efficient. A reliable
+technical system does not prove that the complete workflow saves engineering
+time. A workflow that helps on one study does not establish that its advantage
+survives a different workload, design, tool, or implementation condition.
+
+This chapter organizes evaluation around four connected questions.
+
+1. **Architecture result.** Did the workflow produce a correct, feasible, and
+   architecturally valuable design?
+2. **Coordination, decision quality, and evidence use.** Did the workflow
+   choose suitable methods and tools, maintain consistent state, interpret
+   results correctly, and turn measurements into supported decisions?
+3. **Total cost.** What did the work consume across models, data, tools,
+   compute, licenses, elapsed time, failed attempts, and human effort?
+4. **Reliability of the advantage.** Does any improvement persist across
+   repeated runs and relevant changes in prompts, seeds, workloads, designs,
+   tools, and operating conditions?
+
+Red teaming cuts across all four. It asks whether the candidate or the design
+system can hide behavior, weaken its own checks, exploit misleading feedback,
+spend without limit, resist interruption, or leave corrupted state behind.
+
+Verifying feedback inside one design study asks whether a particular
+observation supports the next action. Complete-system evaluation asks a broader
+question. Across tasks, runs, conditions, costs, people, and attacks, does the
+assembled workflow improve architecture work over a credible alternative?
+This chapter focuses on that broader claim while retaining feedback failures
+as one important source of error.
+
+One successful run cannot settle these questions. A clean result may come from
+a strong model, a conventional search method, a carefully engineered harness,
+intensive human repair, or a benchmark that has become easy to exploit. A
+failure may reveal a weak design, a poor method choice, a broken environment,
+or an attack the system did not recognize. The evaluator must locate the
+source rather than compressing everything into one score.
+
+The output is a supported evaluation claim, not permission to tape out, waive a
+check, or accept residual risk. Those decisions remain the architect's
+responsibility.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
 
-- Score the search itself, what it cost in EDA tool time and how its trajectory moved toward a clean result, rather than reading the final artifact alone.
-- Demand a random-search null baseline at the same budget before crediting a trajectory score as reasoning, and require the margin to clear the apparatus's own noise floor rather than merely look convincing.
-- Refuse to read an agent score until both identities behind it are pinned, the system of model, harness, and budget, and the environment of RTL, process design kit, constraints, tool version, and signoff corner, since a comparison across harnesses ranks engineering teams and a percentage does not port across process nodes.
-- Require a benchmark to publish its refresh and retirement policy, because a score erodes both from memorized training data and, with nothing leaked at all, from a community optimizing against a fixed target.
-- Separate a metric that is specified from one that is only named, state the convention behind any score you report, and aggregate across a suite with the geometric mean of normalized ratios rather than the arithmetic mean.
-- Match an agent's autonomy to the evidence level its results actually reached, reserving the waiver, the right to change the checks, and the commitment boundary for people.
+- Distinguish the candidate architecture, configured technical design system,
+  and complete design workflow required for a fair comparison.
+- Evaluate architecture results, coordination and decision quality, total
+  cost, and the reliability of any measured advantage without collapsing them
+  into one score.
+- Compare an AI-assisted workflow with credible human-directed, conventional,
+  retrieval-only, and model-based alternatives.
+- Use repeated runs, varied conditions, budget curves, and component
+  replacements to locate where an advantage holds, while keeping benchmarks
+  current and comparable.
+- Red-team an AI-assisted design system for altered requirements, weakened
+  checks, misleading feedback, hidden behavior, uncontrolled spending, and
+  failed interruption or recovery, then state what the evaluation supports
+  without converting a score into permission.
 :::
 
-## From Artifact Metrics to Trajectory Metrics
+## Define the Workflow and Systems Under Test
 
-Before we can benchmark an AI architect, we should recall why human architects measure anything at all. Computer architecture is a strictly empirical discipline. Architects do not evaluate a processor by reading its source code; they evaluate it by running standardized workloads such as SPEC CPU, a standard suite of compute-intensive integer and floating-point programs, or MLPerf, an industry-standard machine learning benchmark, and measuring the physical consequences, including IPC, power, area, and latency.
+A benchmark score is never a property of a model alone. It belongs to the
+whole system that received the task and produced the result. Retry logic,
+retrieved material, tool access, prompts, search policy, and human
+interventions can change the outcome as much as the model. A comparison that
+names only the model hides the engineering system under test.
 
-Historically, benchmarks have served as the foundational bedrock for both computer architecture and machine learning as independent fields. Computer architects rely on SPEC to measure core compute throughput and on PARSEC, a multi-threaded workload suite, to measure shared-memory parallel scaling, while machine learning researchers rely on ImageNet, a standard computer vision dataset, and SWE-bench to evaluate model generalization. However, evaluating the AI architect requires benchmarks that exist precisely at the intersection of these two areas. Constructing these intersectional benchmarks demands deep domain expertise from both disciplines: the machine learning expertise to rigorously measure model variance and data contamination, coupled with the architecture expertise to measure cycle-accurate physical consequences and EDA tool telemetry. As introduced in @sec-moonshot, this cross-disciplinary reality changes the definition of success.
+The legal action space determines what the score means and what can go wrong.
+Four common action spaces require different evidence.
 
-Because building a physical chip costs millions of dollars and takes years [@Shilov2023IBSDesignCost], architects measure these properties early and often using simulators and analytical models such as the Roofline model [@Williams2009Roofline] or McPAT [@McPAT]. The goal of traditional architectural measurement is risk reduction. Each measurement buys confidence that a design point will meet its physical requirements before the team commits it to silicon.
+- **RTL or intermediate-representation generation.** The system returns a new
+  design artifact. Evaluation must cover function, blocking constraints,
+  implementation feasibility, hidden behavior, structure, and the work needed
+  to verify and change it.
+- **Tool, script, or parameter tuning.** The system changes how an existing
+  design is analyzed or implemented. Evaluation must preserve constraints,
+  defaults, tool state, and stopping rules so that a cleaner report cannot come
+  from silently changing the conditions.
+- **Microarchitecture change.** The system changes queues, caches, arrays,
+  interfaces, protocols, or another architectural mechanism. Evaluation must
+  reach the affected workload, software, system boundary, implementation, and
+  future integration consequences.
+- **Test or constraint change.** The system changes a testbench, property,
+  timing constraint, scoring script, or other part of the apparatus judging
+  it. Any permitted change needs an evaluator-owned check that the system under
+  test cannot modify.
 
-When an agent enters the loop, the object of measurement shifts. As established, evaluating the artifact alone hides whether the search reached the design through methodical reasoning or brute force. This distinction matters because an unreasoned search does not *transfer*. An agent that finds a five percent gain by luck cannot explain which change caused it, cannot reproduce the result on the next workload, and cannot be trusted to know when to stop.
+A pass rate for generated RTL, a power, performance, and area (PPA) result from
+parameter tuning, and a workload result from a microarchitecture change are not
+interchangeable scores. They grant different powers and expose different
+attack surfaces. Moving between action spaces creates a new evaluation
+obligation, especially when the system can change the tests or constraints that
+determine whether it passed.
 
-In hardware, this lack of causality carries a steep penalty. In software, a stochastic search that eventually types a working script wastes ten milliseconds per try. In architecture, a search that burns ten thousand hours of EDA tool licenses and compute-cluster core-hours to find a gain destroys tape-out schedules. So the evaluator measures the *trajectory* of design as a proxy for two things a single final score hides. The first is whether a result will survive physical synthesis. The second is whether the agent can safely be given more autonomy. That reframing, from Human-Labor-Dominated NRE[^fn-nre-c10] to Compute-Dominated NRE, changes what each evaluation dimension measures (@tbl-eval-shift).
+The system record should pin at least the elements in
+@tbl-complete-system-identity.
 
-| **Dimension** | **Evaluating the Artifact (Traditional)** | **Evaluating the Agent (Architecture 2.0)** |
+| **Element** | **What the record must identify** | **Why it matters** |
 | --- | --- | --- |
-| What is measured? | The physical consequences of the processor. | The algorithmic efficiency of the search under physical constraints. |
-| Benchmark suites | SPEC CPU, MLPerf, PARSEC [@PARSEC]. | ArchEval [@WangEtAl2026ArchEval], VerilogEval [@VerilogEval], RTLLM [@RTLLM]. |
-| Primary Cost | Human salaries and schedule months (Labor-Dominated NRE). | Scalable compute and licensing (Compute-Dominated NRE). |
-| Failure Mode | Thermal throttling, timing violations. | Unroutable netlists, PDN violations, ignored formal equivalence constraints. |
-| Goal of Measurement | Prove the chip works. | Prove the agent can reason causally about hardware constraints. |
+| Learned components | Immutable model snapshot or endpoint identity where exposed, access date, mutable alias if used, inference settings, and any fine-tuning or adaptation | A changed model or setting creates a different system; an alias alone may not identify what ran. |
+| Design information | Starting artifacts, retrieved sources with identities and versions, represented state, decision-relevant retrieval coverage, conflict handling, and update policy | Extra or fresher information can explain an apparent capability gain. |
+| Methods and instructions | Generation, prediction, optimization, and composition rules; system and task instructions; prompt policy; retrieval and routing policy | The model may be one component in a stronger procedure, and changed instructions create a different configured system. |
+| Legal action space | Which design, tool, script, parameter, test, and constraint changes are permitted | The allowed actions determine both the supported claim and the ways the system can alter its own evaluation. |
+| Environment | Tool wrappers and schemas, executable tools, configurations, checkpoints, harness revision, runtime or container dependencies, and returned fields | The harness and runtime determine which actions are possible and which failures become visible. |
+| Checks | Functional, architectural, physical, security, and acceptance checks | A result is only as strong as the checks it actually reached. |
+| Human work | Setup, prompting, intervention, review, repair, and escalation roles | Hidden engineering effort can make an automated result look cheaper than it is. |
+| Operating limits | Compute, tool, time, retry, and review budgets plus stopping rules | A system allowed more attempts or stronger tools is not a matched comparison. |
 
-: **From measuring the chip to measuring the agent:** Evaluating an AI architect requires a different set of metrics than evaluating the chip it produces. {#tbl-eval-shift tbl-colwidths="[20,40,40]"}
+: **A complete-system identity extends beyond the model.** The system record
+must make every material source of capability and cost visible.
+{#tbl-complete-system-identity tbl-colwidths="[18,42,40]"}
 
-The three suites in the right-hand column are worth distinguishing, because they are the closest prior art to what this chapter argues is missing. VerilogEval scores whether a model can turn a natural-language specification into functionally correct Verilog, checking the result against a testbench [@VerilogEval]. RTLLM does the same at design scale, adding syntax and functional goals alongside a rough quality measure [@RTLLM]. ArchEval reaches furthest toward physical constraints [@WangEtAl2026ArchEval]. What none of them scores is the trajectory: how much compute and EDA time the search consumed, whether the agent reasoned about the physical constraint or stumbled onto a configuration that satisfied it, and how the result behaves after synthesis rather than after simulation. They measure whether the artifact is right, which is the column on the left applied to generated code, and that is exactly the gap the rest of this chapter works on.
+Use hashes or another immutable identity for prompts, retrieved snapshots,
+starting artifacts, scripts, constraints, workloads, containers, and raw
+records. Hosted model aliases and endpoints can change without changing their
+names. When an immutable model snapshot is unavailable, record the access date
+and state that exact model replay is unavailable.
 
-[^fn-nre-c10]: **Non-Recurring Engineering (NRE)**: The one-time cost to research, develop, design, and test a new product. In hardware, NRE covers the immense upfront cost of mask sets and physical verification before a single chip is manufactured.
+Learned components, design information, and methods define where capability
+may come from. The legal action space,
+environment, and checks define what the system may change, which tools it can
+reach, and which failures can become visible. Human work and operating limits
+then expose expert effort, compute, tool, retry, elapsed-time, and review
+budgets that a model-only description would hide. This identity makes versioned
+systems comparable. It does not establish that either system is better.
 
-### The Reproducibility Crisis
+The task and evaluation environment need a separate identity. At minimum, a
+hardware result should name the design artifacts, workload and software path,
+process design kit and cell library where relevant, constraints, tools and
+versions, implementation stage, analysis corners, and acceptance rules.
+Changing any of these may create a different result. A percentage measured on
+an open 45\ nm library does not automatically transfer to a commercial node,
+and a routed result is not a signoff result.
 
-To establish how to benchmark agents, the immediate temptation is to look to software engineering. However, trivial software benchmarks like HumanEval [@Chen2021Codex] or LeetCode [@LeetCode], and even complex repository-level evaluations like SWE-bench [@JimenezEtAl2024SWEBench],[^fn-swebench-c10] measure whether the system under test can emit syntax that passes a hidden, purely logical test suite. While these highlight the importance of execution-based evaluation, software analogies fail in architecture because they are decoupled from physics and indifferent to *execution cost*.
+This separation between system identity and environment identity prevents two
+common errors. The first is attributing the work of a carefully tuned harness
+to its base model. The second is comparing two percentages that came from
+different tasks, tool settings, or physical stages. Both can produce a
+leaderboard, but neither establishes an architecture advantage.
 
-[^fn-swebench-c10]: **SWE-bench**: A standard software engineering benchmark that asks an AI agent to resolve real-world GitHub issues by submitting pull requests. While rigorous for software, it only tests logical syntax, not physical realization constraints.
+### The Four-Part Evaluation Map
 
-In software, running five hundred unit tests takes seconds. In architecture, exploring five hundred microarchitectural parameters takes days and consumes expensive EDA resources. Because of this steep cost, the field requires standardized, physics-bound benchmarks to mature. Before MLPerf, the machine learning hardware industry suffered a reproducibility crisis; vendors reported performance using fragmented, incompatible metrics. What resolved it was not a better metric but an agreed one, fixing the model, the dataset, the target quality, and the rules for what counted as a valid run, so that two vendors' numbers finally referred to the same thing. AI-assisted hardware design sits at the same pre-benchmark stage today, and it needs the same kind of agreement rather than a better score. A claim of a "10% area reduction" is meaningless if we don't know the EDA tool settings, the baseline RTL, or the Simulator Tax paid to achieve it. The number also does not port across process nodes. Ten percent of area saved on Nangate45, where standard cells dominate, says little on a wire-dominated commercial node, and predictive kits like ASAP7 exist only in simulation. A hardware benchmark task is really a five-tuple: the RTL, the PDK and cell library, the constraints, the tool and its version, and the signoff corner. Changing any element creates a different benchmark.
+No single metric answers whether an AI-assisted design system is good. The
+useful question is which engineering decision a measurement can support and
+what remains unknown. Four decision questions organize the measurements
+without turning unlike quantities into one score
+(@tbl-evaluation-metric-map).
 
-Architectural benchmarks must measure how the system under test handles Power, Performance, and Area (PPA). Emerging benchmarks attempt exactly this. ArchEval [@WangEtAl2026ArchEval] attempts to bridge this gap by scoring LLM agents on architectural challenges across multiple levels of simulator-feedback support, evaluating whether an agent can navigate the deeply coupled dependencies of a full system. This distinction between the sandbox's *fixed constraints* and the agent's *given files* forces the evaluation to measure system-level exploration rather than just syntax generation.[^fn-archeval-bounds-c10]
-
-[^fn-archeval-bounds-c10]: **Fixed vs. tunable bounds (example)**: ArchEval expects the evaluated agent to solve a bounded problem within a fixed environment. The agent must find the optimal pipeline depth and prefetcher aggressiveness without touching the fixed memory configuration or violating SoC memory bandwidth limits. An agent that 'solves' the pipeline depth by arbitrarily doubling the L1 cache size fails the constraint check.
-
-## Building the Evaluation Harness
-
-Evaluating the process of design means tracking metrics across three distinct roles: *generation* (creating the design candidate), *prediction* (estimating its physical value), and *optimization* (methodically searching the tradeoff space). As illustrated in @fig-ch10-pipeline, a rigorous evaluation pipeline must wrap the agent's interaction with the simulator sandbox inside a trajectory logger. What that logger records has to be fixed as a harness requirement rather than left to whoever builds it, because the metrics below need per-iteration violation counts, per-attempt timing outcomes, and per-candidate proxy-versus-ground-truth pairs. A logger that keeps only final scores makes those metrics unrecoverable after the run, and the run is the expensive part.
-
-![**A trajectory logger must sit between the agent and the sandbox:** it intercepts every proposal to measure the Simulator Tax before the sandbox spends compute on it, wrapping the agent's interaction with the simulator sandbox so no proposal reaches the environment unmeasured.](images/F10-pipeline){#fig-ch10-pipeline width="100%" fig-alt="A workflow-card diagram showing the interaction between the Generation Agent Architect, the Prediction Trajectory Logger, and the Optimization Simulator Sandbox."}
-
-### Mitigating Data Contamination
-
-The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets, and repository-scale RTL benchmarks such as RTL-Repo [@AllamShalan2024RTLRepo] draw directly from that small pool. If we evaluate a model on optimizing an OpenTitan core, did it actually reason through the architecture, or did it just regurgitate the optimal configuration it memorized during pre-training [@WangEtAl2025VeriContaminated]? In addition to standard overlap detection that estimates Jaccard similarity over shingled n-grams (e.g., MinHash)[^fn-jaccard-minhash-c10] against the pre-training corpus, evaluators must build strict operational safeguards against memorization:
-
-*   **Canary Strings and AST Obfuscation:** Inject globally unique, searchable canary strings (random GUIDs) into benchmark source files, so that any verbatim reappearance in a model's output signals contamination. Furthermore, evaluators should use AST-level rewriting to de-identify standard naming conventions (masking `clk` or `axi_wdata` with randomized aliases), ensuring the model isn't coasting on semantic priors.
-*   **Zero-Day Sandboxes:** Introduce held-out, non-standard ISAs or custom accelerators that post-date the model's knowledge cutoff, mirroring the time-stamped, post-cutoff task discipline of LiveCodeBench [@JainEtAl2025LiveCodeBench]. Evaluation must measure zero-shot synthesis from raw, unseen specifications rather than standard RISC-V cores.
-*   **Semantic Equivalence vs. Exact Match:** Shift from BLEU/ROUGE-style surface metrics to formal equivalence checking against the reference design (e.g., using Yosys `eqy` or JasperGold SEC), so that a functionally correct implementation is not penalized for differing textually from the reference. This safeguard removes an incentive rather than detecting a behavior. Equivalence checking scores correctness, not provenance, and a memorized reference passes it trivially, so contamination itself must still be caught by the canary strings and post-cutoff tasks above.
-
-[^fn-jaccard-minhash-c10]: **Jaccard similarity and MinHash**: Jaccard similarity measures how much two documents overlap by cutting each into short overlapping fragments, called shingles, and dividing the number of shingles they share by the number they have between them. MinHash estimates that ratio from a small fixed-size signature per document, which makes it affordable to test one benchmark file against a pre-training corpus of billions of documents.
-
-### Benchmark Decay and Retirement
-
-Contamination is the young failure mode. Benchmark decay is the old one, and it needs no leaked data at all. SPEC learned it with matrix300, a kernel that compilers learned to gut so thoroughly that a preprocessor could inflate the score by roughly an order of magnitude, which led SPEC to retire the workload in its 1992 suite [@HennessyPatterson2017QuantitativeApproach]. Nothing leaked into training. The community simply optimized against a fixed target until the number stopped measuring the underlying capability. Every benchmark this chapter names, from ArchEval to VerilogEval to RTLLM, will decay the same way once labs begin optimizing against its leaderboard. LiveCodeBench's time-stamped refresh discipline defends against decay as much as against contamination. An agent benchmark therefore needs a lifecycle before its first score is worth quoting, with versioned releases, a held-out refresh pool, and a published retirement policy for tasks the field has learned to game.
-
-### Tiered Sandboxes & Latency
-
-A flat evaluation environment fails in EDA because of the massive latency disparity. An eval team cannot afford to run a 24-hour OpenROAD physical synthesis for every agent proposal. Benchmark designers must construct environments that explicitly expose the hierarchy of the IC design flow:
-
-*   **Tier 1: Syntax & Static Linting (Milliseconds to Seconds):** Tools like Verilator lint, which return in seconds. Heavier structural and clock-domain-crossing checkers such as SpyGlass run in minutes on real blocks and sit at this tier's slow edge. Agents must receive immediate feedback on structural validity and combinatorial loops before wasting downstream compute.
-*   **Tier 2: Functional Simulation (Seconds to Minutes):** Execution of testbenches using Icarus Verilog or commercial simulators (VCS/Xcelium). Evaluators must track if agents can interpret waveform data to fix bugs.
-*   **Tier 3: Logical Synthesis & Pre-Layout Static Timing Analysis (STA) (Minutes to Hours):** Tools like Yosys map RTL to standard cell libraries to provide initial gate-count and idealized timing.
-*   **Tier 4: Physical Implementation (Hours to Days):** OpenROAD or Innovus. Encompasses placement, clock tree synthesis (CTS), and routing. These produce a routed database rather than a signoff result.
-*   **Tier 5: Signoff (Hours to Days):** Separate tools on a separate budget, covering parasitic extraction, multi-corner multi-mode signoff STA on those extracted parasitics, physical verification against the foundry runset, and IR-drop and electromigration analysis. The timing and design-rule engines built into Tier 4 tools are correlation aids, so only a Tier 5 result carries the signoff corner the reporting standard asks for.
-
-A single Lighthouse change crosses the whole spread. Linting its integer ALU returns in seconds, simulating the interconnect that carries the new accelerator's traffic takes minutes, and routing the full multi-core subsystem takes a day, so the tier an evaluation stops at decides what its numbers can be compared against.
-
-Benchmarks should penalize agents that attempt to push structurally invalid RTL into Tier 3 or 4. Furthermore, environments must support state checkpointing (saving a full tool session database, such as an OpenROAD .odb or Innovus .enc, rather than just a DEF geometry file, after placement). Agents must be evaluated on their ability to branch their search (e.g., trying three different CTS strategies) from a checkpoint rather than restarting from RTL synthesis.
-
-### Defining the Action Space
-
-An eval team must explicitly define what the agent is allowed to do. A benchmark that tests raw RTL generation requires a completely different harness than one testing EDA tool parameter tuning.
-
-*   **Granularity of Generation:** Is the generator emitting text-based RTL (Verilog), or programmatically manipulating intermediate representations (PyRTL, Chisel, CIRCT)?
-*   **EDA Tool Integration:** Is the system under test a pure logic generator, or is it a "Tool Manipulator" emitting Tcl scripts to drive Design Compiler or OpenROAD?
-*   **Temporal Action Dynamics:** Does the benchmark evaluate one-shot generation (static artifacts) or iterative, multi-step refinement, the in-context refinement of compiler errors that VerilogEval's spec-to-RTL revision measures [@PinckneyEtAl2024RevisitingVerilogEval]?
-*   **Multi-Modal Action Spaces:** The most demanding benchmarks treat the microarchitectural parameters (e.g., cache sizes, queue depths), the generated RTL, the timing constraints (SDC), and the verification testbench as one action space and ask the agent to optimize them jointly.
-
-Whatever the action space, an agent score is a property of a system, the model plus the harness plus the budget, and the harness is rarely the smaller factor. The same base model can move substantially on SWE-bench depending on the retry logic, tool wrappers, and prompt harness wrapped around it. A claim that model X reaches Y percent on an architecture benchmark is unfalsifiable until the harness is pinned and published as part of the system under test, and a comparison across different harnesses ranks two engineering teams, not two models.
-
-## Identifying Pitfalls: Misled, Outmatched, and Gaming
-
-An agent evaluated strictly on maximizing performance will aggressively exploit the environment. An evaluator's job is to catch the agent cheating by designing metrics that expose specific failure modes (@tbl-agent-metrics).[^fn-igd-c10]
-
-| **Metric** | **AI Role** | **What It Measures** | **Failure Mode Exposed** |
+| **Decision question** | **Measures to consider** | **What they reveal** | **What they cannot establish alone** |
 | --- | --- | --- | --- |
-| **`pass@k` & Sequential Success** | Generation | Parallel zero-shot viability versus iterative probing viability. | Separates robust internalized logic from lucky iterative probing under a fixed sampling budget. |
-| **Proxy Calibration** | Prediction | Rank fidelity between the fast proxy and the slow simulator. | Exposes the Proxy Mirage, where a surrogate misranks physical reality. |
-| **Trajectory Efficiency (AUC)** | Optimization | Reward quality as a function of environment interactions spent. | Quantifies the Simulator Tax; shows whether the search is causal or random. |
-| **Self-Correction (SCR)** | Generation & Optimization | Probability the agent resolves a failing STA/formal report on the next try. | Isolates the agent's ability to use causal failure logs over brute force. |
-| **Monotonic Convergence** | Optimization | Evaluates whether the agent smoothly traverses the power, performance, area, and cost frontier without regressing. | Exposes Constraint Whac-A-Mole (fixing setup timing but breaking hold timing). |
-| **Inverted Generational Distance (IGD)** | Optimization | Measures how fully the agent's found points cover the reference Pareto front. | Detects agents trapped in local minima whose points cluster instead of spanning the front (tweaking registers vs switching topologies). |
-| **Security Adherence** | Optimization | Measures whether the agent preserves isolation and side-channel boundaries. | Exposes Security Reward Hacking (deleting Spectre mitigations for IPC gains). |
-| **Structural Legibility** | Generation | Scores cyclomatic complexity, signal naming, and module boundaries. | Exposes obfuscated, unmaintainable "sea of gates" RTL that ruins post-silicon ECOs. |
-| **EDA-NIAH (Needle In A Haystack)** | Prediction | Evaluates extraction of a critical path violation buried in 50,000 lines of an STA report, the long-context stress test RULER formalizes [@HsiehEtAl2024RULER]. | Detects context-window saturation and loss of critical telemetry. |
+| Is the architecture result supported? | Function and blocking constraints; performance, latency, and throughput; energy, power, and thermal behavior; area and product cost; security; implementation feasibility; maintainability; integration and verification burden; future change cost | What the candidate achieved, which requirements it met, and how deeply it was checked | Whether AI improved the work, whether the result repeats, or whether the organization should commit the design |
+| Did the workflow make sound decisions? | Component-role selection; state consistency; tool and fidelity selection; interpretation accuracy; useful observations; supported decisions; false accepts and rejects; escalation, stopping, recovery, and human override | Whether the system coordinated its parts, interpreted tool results, and converted measurements into defensible architecture decisions | Whether the final design is good enough or whether the workflow is economical |
+| What was the total cost? | Model calls and tokens; compiler builds; simulation, formal, synthesis, and physical-design runs; compute, memory, energy, and licenses; data and setup; failures and retries; elapsed time; human setup, diagnosis, review, and repair | Where resources were spent and whether a local speedup shifted cost or risk elsewhere | Whether the candidate is correct or which component caused a difference |
+| Is the advantage reliable? | Repeated runs and uncertainty; calibration; worst cases and constraint violations; recovery; sensitivity to seeds, prompts, workloads, designs, tools, and operating conditions | How often an advantage repeats and the tested conditions in which it remains useful | Why the advantage holds or whether it transfers beyond the sampled tasks and conditions |
 
-: **Core metrics for evaluating the AI architect:** A rigorous evaluation maps its metrics to the distinct roles of generation, prediction, and optimization. {#tbl-agent-metrics tbl-colwidths="[20,15,30,35]"}
+: **Metrics support different engineering decisions and should remain
+separate.** Architecture results come first. Coordination, total cost, and
+reliability explain how those results were reached and where an advantage
+holds. Red-team tests cut across every row.
+{#tbl-evaluation-metric-map tbl-colwidths="[20,36,22,22]"}
 
-[^fn-igd-c10]: **Inverted Generational Distance (IGD)**: The average distance from each point on a reference Pareto front to the nearest point the agent actually found, so the score falls as the agent's results spread across the whole front rather than clustering in one region of it. The metric is defined only against a known reference front, so where none exists evaluators substitute the pooled non-dominated set of every point every agent evaluated, which makes the resulting number relative to that pool rather than comparable across studies.
+The rows are related but not interchangeable. A sound decision can still
+produce a weak candidate when the search space is poor. A strong candidate can
+hide an inefficient workflow. Low total cost cannot compensate for a result
+that violates a blocking constraint. Red-team results do not form a fifth
+score; they challenge the assumptions, interfaces, and checks behind all four
+rows.
 
-Naming a metric is not the same as specifying one, and the table above names more than it specifies. Four of these can be pinned here, and the rest cannot yet, which is worth stating rather than leaving a reader to discover it while trying to implement one.
+Naming a metric does not specify it. Every reported metric should identify the
+event or outcome, experimental unit, target population and denominator,
+evaluator-owned check and tool stage, budget or time window, aggregation and
+failure policy, uncertainty, and treatment of censored runs. Architecture tasks
+or decisions usually support generalization. Seeds, retries, candidates, tool
+calls, and prompt samples are nested observations unless the claim and sampling
+plan establish otherwise. More repeats inside ten tasks do not create more than
+ten independent tasks.
 
-Report `pass@k` with the unbiased estimator over $n \ge k$ samples. The two common shortcuts err in opposite directions. The fraction of individual runs that succeeded understates `pass@k`, while the any-success rate across all $n$ samples overstates it, because that quantity is `pass@n`. Report proxy calibration as Spearman rank correlation computed on the candidates the search actually visited near the decision boundary, not averaged over the whole space, since a proxy that ranks the frontier well and the interior badly is the one worth having. Report trajectory area under the curve normalized by the budget horizon and the score range, because two areas computed at different budgets or reward scalings are not comparable numbers. Report self-correction as the fraction of failing checks the agent clears on its immediately following attempt, counting a partial repair as a failure, since a partial repair leaves the transition blocked.
+The next sections define architecture result, decision behavior, and total
+cost. Comparison design and component replacement provide the experiments
+needed to estimate an advantage. Reliability then asks where that comparative
+result repeats, while benchmark maintenance and red teaming challenge whether
+it remains readable.
 
-The others are named honestly and not yet specified. Monotonic convergence has no agreed score over a vector objective. Structural legibility borrows cyclomatic complexity, which has no standard definition on synthesized RTL. Security adherence and the needle-in-a-haystack construction describe what to look for without saying how to measure it. Inverted generational distance is the hardest of them, because it is defined against a reference front that a hardware evaluator does not have; the workable substitute is a pooled non-dominated set assembled from every arm in the comparison, which makes the score meaningful within that comparison and meaningless across studies. Say which convention a reported number used, or the number cannot be checked.
+## Architecture Result
 
-### The Proxy Mirage
+Architecture quality is not one scalar. A candidate must first satisfy the
+functional requirements and every blocking constraint at the stated
+evaluation stage. Among candidates that pass, the study can compare workload
+performance, power, area, latency, cost, programmability, or other declared
+objectives. If no candidate passes, the outcome is a failure at that stage, not
+a low score to average away.
 
-Before an agent queries a slow physical synthesis tool or RTL simulator, it typically queries a fast surrogate model to predict the outcome (e.g., an analytical or learned performance predictor for cycle counts, McPAT for power/area, or LLM-as-a-judge heuristics). Even a detailed cycle-level simulator like gem5, itself far slower than these proxies, is a surrogate the agent leans on to avoid full RTL simulation and physical synthesis.
+Select metrics from the intended decision rather than from a standard
+checklist. Four groups are usually needed.
 
-The epistemic danger of evaluating an agent purely within these abstract environments is the *Proxy Mirage*. When an optimizer is tasked with minimizing a fast analytical proxy, it will inevitably push into edge cases where that proxy's assumptions break down (e.g., abstracting away wire delay or port contention). The evaluator exposes the mirage by measuring rank fidelity where the search concentrates.[^fn-rank-fidelity-c10]
+- **Correctness and blocking constraints** establish whether the candidate is
+  eligible for comparison at all. They include functional checks, protocol and
+  interface properties, timing and physical rules, security requirements, and
+  any product constraint that cannot be traded away.
+- **Architectural objectives** measure the quantities the decision is trying
+  to improve, such as throughput, latency, energy, power, area, cost,
+  programmability, or quality of service.
+- **Implementation feasibility** records the deepest tool stage reached,
+  analysis corners, congestion, timing, power delivery, thermal limits, and
+  other evidence that the candidate can be realized. For a silicon-bound
+  decision, it also covers manufacturability and yield assumptions,
+  design-for-test and fault coverage, packaging, and the planned path through
+  post-silicon bring-up.
+- **Lifecycle burden** covers integration, verification, maintainability,
+  traceability, and the work required to make likely future changes.
 
-[^fn-rank-fidelity-c10]: **Rank fidelity vs. Absolute error**: An optimizer does not need the proxy to predict the exact cycle count (absolute error); it only needs the proxy to correctly order which of two designs is better (rank fidelity).
+Verification coverage is part of the architecture result, but it is not a
+correctness score. Workload and scenario coverage state which required
+behaviors were exercised. Functional, assertion, code, and toggle
+coverage expose different gaps where they apply [@IEEE2023SystemVerilog].
+Formal results need property
+and assumption coverage, reachability, bounds, vacuity checks, and any
+unreachable or waived cases [@BeerEtAl2001Vacuity;
+@Clarke2018ModelChecking]. Seeded defects or mutation tests can test whether
+the checker notices plausible errors rather than merely accumulating coverage.
+Mutation results remain limited to the injected fault model
+[@DeMilloLiptonSayward1978Hints].
+Report exclusions, waivers, remaining holes, and the work needed to close them.
+A high percentage cannot prove correctness, but a correctness claim is not
+interpretable when the exercised behavior and untested requirements are
+unknown. Keep this verification coverage separate from benchmark coverage
+across the population of architecture tasks.
 
-Whether an agent recognizes the mirage is observable in its trajectory rather than in what it says about its own confidence. When a highly optimized logical cone comes back unroutable from physical synthesis, the agent either keeps forcing the layout at the same proxy setting or it stops trusting the proxy in that region of the space. Score which one happened: after each escalation that contradicts the proxy, does the agent's next batch of candidates move away from the region the proxy mispredicted, or back into it?
+The outcome fields follow the problem rather than a universal metric list.
+A processor or accelerator study may need workload coverage, throughput and
+tail latency, compiler and runtime behavior, interface overhead, average and
+peak power with a stated activity source, energy, area, floorplan and timing
+results, thermal and power-delivery limits, reliability, security,
+maintainability, integration status, verification burden, expected engineering
+change order (ECO) work, and the deepest implementation stage reached. Omitting
+a field does not make it irrelevant. It makes the corresponding claim
+untested.
 
-::: {.callout-war-story title="The placement proxy dispute"}
-**The claim.** In 2021, a widely publicized reinforcement learning agent for chip floorplanning reported expert-comparable macro placements. To learn without waiting hours for a commercial router, the agent optimized a fast analytical proxy, a weighted combination of half-perimeter wirelength (HPWL) and an estimated congestion grid.
+Multi-objective results should preserve the tradeoff rather than hide it in an
+arbitrary weighted score. Report the feasible Pareto set or another explicit
+tradeoff view, identify dominated candidates, and state how the final choice
+was made. If a reference Pareto front exists, coverage and distance measures
+can show whether a search found one narrow region or represented the broader
+tradeoff. If the reference is constructed from the pooled candidates found by
+the evaluated systems, say so because the measure is then relative to that
+pool, not absolute.
 
-**The gap.** When independent researchers assessed the public implementation (Circuit Training) in 2023, the proxy scores correlated poorly with post-route outcomes on their test cases, and post-route evaluation through a commercial flow favored a strengthened simulated annealing baseline, a commercial macro placer, and human macro placements over Circuit Training [@ChengEtAl2023MacroPlacement]. The authors replied that the assessment did not reproduce the proprietary pretraining and production setup behind the strongest results [@GoldieEtAl2024ThatChipHasSailed]. Neither side could collapse the disagreement into one shared experiment; @sec-feedback-verification-trust examines the full dispute as an evidence problem.
+Maintainability and future change cost should remain inspectable rather than
+being hidden inside a style score. Record whether the artifact is traceable to
+the declared architecture, preserves understandable interfaces and module
+boundaries, can enter the existing build and verification flow, and supports
+the changes the product is likely to need. A change exercise can make the
+burden concrete. Change a queue depth, interface field, timing target, or
+security property, then record the design work, failed checks, verification
+reruns, and affected modules needed to restore a supported result. A candidate
+that wins PPA but turns every small ECO into broad manual repair is a weaker
+architecture result, not merely a more expensive workflow.
 
-**The lesson.** Measure a proxy's rank fidelity where the search concentrates, and evaluate agents against physical reality rather than the proxy alone. When the strongest claims rest on setups outsiders cannot inspect, an end-to-end benchmark, ChiPBench, that scores final metrics [@WangEtAl2025ChiPBench] is what lets both sides argue about the same experiment.
-:::
+Energy and power results need a measurement window, execution rate or work
+completed, duty cycle, idle and leakage treatment, and the full boundary of
+the claimed system. On-chip logic alone cannot support a subsystem-energy
+claim that excludes the memory, interface, or regulator costs needed to
+operate it.
 
-### Constraint Whac-A-Mole
+Each reported quantity remains bound to its candidate, conditions, comparator,
+uncertainty, check scope, and explicit nonclaims. A simulator result does not
+become a silicon result because the workflow producing it was automated. A
+trajectory that steadily reduces violations does not establish functional
+correctness, physical feasibility, or a sound architectural mechanism.
 
-Unlike software unit tests which are largely orthogonal, hardware design involves navigating tight Pareto frontiers. Improving one metric almost invariably degrades another. The canonical failure mode for naive agents is oscillation between setup and hold violations. For instance, consider an agent optimizing the XR Lighthouse's L2 cache controller: fixing a setup time violation (e.g., by upsizing a logic cell or swapping to a low-Vt cell)[^fn-low-vt-c10] speeds up the logic cone, which instantly breaks the hold timing on an intersecting SRAM memory interface if that cell is shared with a short path that is now too fast for the capturing flip-flop.
+For the Lighthouse target, the primary result is not a model or workflow score.
+It is whether the checks support freezing an array and its interface under the
+declared workload, software, memory, energy, and implementation conditions. A
+local simulator result is one input to that decision. It does not settle the
+implementation-facing result.
 
-[^fn-low-vt-c10]: **Low-Vt cell**: A standard cell built from transistors with a lower threshold voltage, which switch faster but leak far more current while idle. Swapping a cell to its low-Vt variant is the quickest way to buy timing on a critical path and the quickest way to overrun a leakage-power budget.
+## Coordination, Decision Quality, and Evidence Use
 
-Furthermore, resolving physical Design Rule Checks (DRCs) is highly localized but structurally rigid. A single violation looks like it should yield to a localized nudge of one wire, but that shift pushes the wire into an adjacent net, and each subsequent repair opens fresh spacing and short violations across the block. Evaluators must log the state trajectory of the agent, not just the final outcome. A rigorous benchmark tracks this state trajectory over time to distinguish a capable agent demonstrating directed, *monotonic convergence* toward a clean state from a failing agent thrashing wildly in an infinite constraint loop, blindly creating new violations for every one it fixes (@fig-whac-a-mole).
+An AI-assisted workflow does more than produce candidates. It selects which
+component should act, what information that component should receive, which
+tool and fidelity should be used next, how a result changes the represented
+design state, and when the evidence is sufficient to stop or escalate. These
+decisions can be wrong even when every individual model and tool works as
+specified.
+
+Evaluation should therefore reconstruct the sequence of architecture
+decisions. For each consequential step, record the design question, the
+available state, the action chosen, the expected observation, the result
+returned, the interpretation applied, and the next decision. This is not a
+request to save every internal token or private chain of thought. It is a
+request to preserve the engineering information needed to understand why the
+workflow changed the design or its conclusion.
+
+Six failure classes deserve separate measurement.
+
+1. **Role-selection failures** occur when the system uses generation where a
+   lookup, predictor, optimizer, formal check, or human decision would have
+   been more appropriate.
+2. **State failures** occur when constraints, candidate identity, tool status,
+   units, or prior results are dropped, duplicated, or carried to the wrong
+   design.
+3. **Information-use failures** occur when retrieval omits a
+   decision-relevant source, uses the wrong version, hides conflicting sources,
+   or returns material that does not support the downstream claim.
+4. **Tool-selection failures** occur when the system uses an unsuitable tool
+   or fidelity, repeats an uninformative run, or pays for a high-fidelity check
+   before a cheaper test could reject the candidate.
+5. **Interpretation failures** occur when the tool call completes but the
+   workflow reads the result incorrectly, treats an inconclusive check as a
+   pass, or attributes a change to the wrong mechanism.
+6. **Control failures** occur when the system should stop, escalate, roll back,
+   or request human review but instead continues or commits a bad state.
+
+These distinctions prevent a common counting error. A completed tool call is
+not necessarily a useful observation, and a useful observation is not
+necessarily a supported decision. Report all three. Also report false accepts,
+in which the workflow advances an invalid candidate, and false rejects, in
+which it discards a candidate that an evaluator-owned check later shows was
+viable. Parser failures, stale caches, incomplete logs, and corrupted state
+belong in the same record because they affect the information available to the
+workflow.
+
+Tool-using behavior needs several rates rather than one autonomy score. Record
+valid and authorized tool calls, useful observations per call and per unit
+cost, first-attempt and retry success by failure class, repeated actions or
+states, unsupported retries, stop-rule compliance, escalation accuracy on
+evaluator-declared cases, intervention-free completion, human takeover, and
+recovery of trusted state. A retry after a transient license failure is not
+the same event as repeated repair of one conceptual mistake, so aggregate
+retry counts remain secondary to their causes and outcomes.
+
+Retrieved information also needs positive quality measures. Record the identity
+and version of each source, coverage of facts relevant to the decision,
+unresolved conflicts, and whether the returned material actually supports the
+claim that later steps make from it. An ablation can show that retrieval changed
+an outcome, but it cannot establish that the information was current, complete,
+or correctly used.
+
+Decision quality should be compared against declared expected actions or
+independent engineering review where such a reference can be established. For
+ambiguous decisions, report reviewer agreement and the unresolved alternatives
+instead of manufacturing one correct label. Calibration is also important. For
+a predeclared binary outcome, such as whether a candidate passes one
+evaluator-owned target check within a fixed evaluation horizon, a system that
+assigns 80 percent confidence should see about 80 percent of held-out cases
+reach that outcome under the tested conditions. Evaluate that relationship with a
+calibration plot and a proper score or risk-coverage view. If the workflow does
+not issue probabilities, evaluate when it abstains or escalates rather than
+inventing a confidence measure.
+
+Human support is part of the workflow, not an embarrassment to hide. Record
+where people supplied missing context, corrected an interpretation, overrode a
+decision, repaired an artifact, or stopped the run. Useful workflow metrics
+include the fraction of decisions requiring support, time to a supported
+decision, override rate, recovery rate, and the outcome after an override.
+These measurements show whether AI reduced architectural work, moved it into
+review and repair, or made expert intervention more effective.
+
+## Total Cost
+
+The cost classes in @tbl-total-system-cost extend beyond inference and EDA
+calls. They include the work needed to prepare the task, make the environment
+usable, inspect failures, verify outputs, recover from bad actions, and defend
+the final recommendation. A local speedup can disappear when these costs move
+downstream.
+
+| **Cost class** | **Examples to record** |
+| --- | --- |
+| Human setup | Formulation, artifact preparation, environment integration, prompt and procedure development |
+| Human operation | Supervision, intervention, failure triage, and manual design work |
+| Human review and decision work | Independent checking, design review, documentation, approval preparation, and unresolved follow-up |
+| Model and general compute | Model calls and tokens, inference time, accelerator time, training or adaptation, memory, storage, energy, and orchestration |
+| Engineering tools | Compiler builds; invocations by tool type, fidelity, and final status; simulation runs and simulated cycles; formal, synthesis, physical-design, FPGA or emulation, and measurement resources; license checkout, wall time, and queue time |
+| Data and samples | Workload traces, training or adaptation data, reference outputs, implementation samples, lab access, and silicon measurements where used |
+| Verification and integration | Check development, proof and simulation work, debug, interface and software integration, regression, and evidence needed to close the result |
+| Future change and ECO work | Expected design edits, affected modules and interfaces, verification reruns, implementation work, and specialist review for declared change scenarios |
+| Failure and recovery | Invalid candidates, repeated runs, rollback, restored state, debugging, and rework |
+| Schedule | Wall-clock time, time to a supported decision, critical-path delay, and variability in completion time |
+
+: **Total cost includes the work before, during, and after the automated
+search.** Report the categories separately unless a disclosed accounting rule
+converts them to a common unit.
+{#tbl-total-system-cost tbl-colwidths="[24,76]"}
+
+Human work, machine resources, verification, future change, recovery, and
+schedule remain separate accounting dimensions. A speedup in one can move cost
+into another without lowering the total engineering burden.
+
+Tool counts need fidelity, lineage, and cost composition. Report unique
+configurations and seeds separately from invocation attempts. Give every
+attempt an execution status, such as completed, crashed, timed out, canceled,
+or license unavailable, and link every retry to the attempt that caused it.
+Record the engineering result separately as passed, violated, infeasible, or
+inconclusive. A formal timeout is not a falsification, and a place-and-route
+crash is not evidence that the candidate is physically infeasible. Preserve
+partial output, the allocated timeout, resources consumed, and failure
+ownership. A timeout followed by a retry is two attempts, but it is not
+automatically two independent configurations or two useful samples.
+
+The minimum attempt record in @tbl-attempt-cost-record makes those distinctions
+executable.
+
+| **Field group** | **Minimum recorded fields** |
+| --- | --- |
+| Identity and lineage | Task, comparison arm, candidate, attempt, parent attempt, retry cause, configuration and artifact hashes |
+| Environment and stage | Tool and version, stage and fidelity, mode and corner, constraints, host class, thread count, seed, container or runtime, cache and checkpoint provenance |
+| Time | Submission, queue entry, execution start, completion, active execution time, elapsed time, and timeout |
+| Resources | Requested and consumed CPU core-hours, accelerator-hours, peak memory, storage and network use where material, measured energy, and license feature and occupancy |
+| Tool outcome | Exit status, infrastructure failure, partial outputs, properties or simulated cycles attempted, and whether resources were released |
+| Engineering outcome | Passed, violated, infeasible, inconclusive, or not reached; applicable coverage, waivers, and deepest evidence stage |
+| Recovery and people | State invalidated or restored, preserved descendants, active engineering minutes by role, independent review, intervention, adjudication, and passive waiting reported separately |
+
+: **One attempt record separates work from result.** The same schema applies to
+successful, failed, retried, and censored attempts, so a workflow cannot erase
+cost or difficulty by reporting only the candidates that finish.
+{#tbl-attempt-cost-record tbl-colwidths="[22,78]"}
+
+Shared human work needs its own work-episode identity. When one review,
+meeting, or diagnosis covers several concurrent attempts, record the episode
+once and link the affected attempts to it. Allocate that labor under a declared
+rule or report it as shared work; do not charge the same minutes in full to
+every attempt.
+
+Report analytical or cycle-level simulations separately from RTL or gate-level
+simulations, synthesis, place-and-route and physical checks,
+field-programmable gate array (FPGA) or emulation runs, and silicon
+measurements. Record both simulation runs and simulated cycles where the latter
+drives compute cost. Count formal property and equivalence runs separately. Report
+properties attempted, proved, falsified, or left inconclusive; timeouts and
+solver time; and the human work needed to write, debug, and review them. One
+hundred model calls, one hundred cycle-level simulations, and one hundred
+physical-design runs are not equivalent samples.
+
+A tool count also needs result semantics. Simulation records should bind the
+stimulus, seed, testbench and checker versions, assertion outcomes, applicable
+coverage, reset and unknown-state treatment, and exercised operating window.
+Formal records should bind property identity and version, assumptions, proof
+type, bound where applicable, vacuity checks, abstractions, black boxes, reset
+and initial-state assumptions, and unknown-value treatment. Equivalence records
+should state the relation, compare points, permitted latency or protocol
+changes, state mapping, memory abstractions, and exceptions. Physical records
+should identify estimated versus extracted parasitics, required modes and
+corners, signoff decks, applicable design-rule, layout-versus-schematic,
+electrical-rule, and power-integrity scope, and every waiver or exception.
+
+These quantities should not be collapsed carelessly. An hour of expert review,
+an accelerator-hour, a license-hour, and a day of schedule delay are different
+resources. Report the cost vector directly. A monetary total can be added when
+labor rates, utilization assumptions, energy accounting, license accounting,
+and treatment of shared infrastructure are disclosed. When those values are
+unavailable, report the resource vector rather than inventing a precise total.
+
+Report intrinsic service demand separately from realized schedule. Service
+demand includes active compute, memory, tool, and license occupancy. Realized
+latency also includes queues, license denial, scheduler preemption, and
+critical-path delay. State whether comparison arms ran concurrently, in
+randomized time blocks, or under different infrastructure loads. Queueing is a
+real operational cost, but it is also an apparatus condition that can make one
+arm appear slower when the underlying service demand is unchanged. Do not sum
+overlapping wall time, machine time, and license time as though they were one
+resource.
+
+Separate observed study cost, one-time integration and training cost, and
+projected downstream product or lifecycle cost. Building a harness, integrating
+a tool, preparing a prompt, calibrating a predictor, or training a model can
+serve many later tasks, while each model call, simulator run, repair, and review
+belongs to a particular task. Declare the expected usage horizon over which
+setup and training are amortized and apply the same rule to both arms. If that
+horizon is uncertain, report the comparison across several plausible task
+counts. A standardized change exercise can measure maintenance work. An
+unexecuted engineering change order remains a projection and should report its
+estimation method and uncertainty rather than enter incurred cost as if it had
+been observed.
+
+Hardware adds a steep evaluation cost [@Kahng2018Machine]. A model may spend
+seconds proposing a tool-script change whose physical implementation takes
+hours. More expensive reasoning can still be economical if it avoids enough
+failed tool runs, but the trade must be measured rather than assumed. Report
+quality as a function of total cost, identify non-dominated points on the
+cost-quality frontier, and report the cost required to reach a predeclared
+quality threshold. This preserves the useful lesson behind simulator-tax and
+cost-quality plots without assuming that inference cost and tool cost always
+form one universal curve.
+
+@fig-cost-quality-frontier makes the comparison explicit. Each point is a
+complete workflow at one measured budget, not a model score. A point is
+dominated when another workflow reaches at least as much supported design
+quality at lower total cost. The non-dominated frontier preserves the choices
+that remain defensible. A predeclared quality threshold then answers a
+different question, how much each workflow must spend before it produces a
+candidate good enough for the architecture decision.
+
+The vertical axis must represent one predeclared architecture outcome or an
+explicit comparison rule for the declared objectives and constraints. It is
+not permission to combine performance, power, area, correctness, and other
+dimensions into an arbitrary hidden score.
 
 ```{python}
-#| label: fig-whac-a-mole
+#| label: fig-cost-quality-frontier
 #| fig-cap: |
-#|   **A capable agent burns violations down monotonically while a naive agent oscillates forever:** the capable agent resolves complex, coupled constraints smoothly over time, reaching zero violations (green), while the naive agent gets trapped in Constraint Whac-A-Mole, blindly fixing setup violations only to create hold violations, oscillating endlessly without converging on a valid physical implementation (red). Both curves are drawn from illustrative values chosen to show the two shapes, not from a measured run. What would make the contrast evidence rather than illustration is a per-iteration violation count logged from a real place-and-route flow across several seeds, reported with its spread, so a reader could tell a thrashing agent from a slow one on their own logs.
-#| out-width: "85%"
-#| fig-alt: "Line chart showing number of timing/DRC violations over agent tool iterations. The X-axis spans 0 to 20 iterations. The Y-axis shows the count of violations. A green line ('Capable Agent') drops smoothly from 50 to 0 by iteration 15. A red dashed line ('Naive Agent') drops initially but then bounces up and down endlessly between 10 and 20 violations in a jagged sawtooth pattern."
+#|   **A cost-quality frontier keeps one declared architecture outcome and one disclosed cost measure visible together.** The illustrative points assume a declared conversion into a synthetic cost index; measured studies should preserve the underlying resource vector. Filled points form the non-dominated frontier. Faded points cost more without producing a better supported result. The horizontal line marks a predeclared outcome threshold.
+#| out-width: "82%"
+#| fig-alt: "Illustrative scatter plot of total workflow cost against one normalized, predeclared architecture outcome. Four filled points form an increasing non-dominated frontier, three faded points are dominated, and a horizontal dashed line marks the predeclared outcome threshold."
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -185,35 +561,886 @@ from _python.plots import COLORS, apply_style
 
 apply_style()
 
-# Synthetic trajectory data
-iterations = np.arange(21)
-capable = 50 * np.exp(-0.25 * iterations)
-capable = [max(0, int(val)) for val in capable]
+frontier_cost = np.array([1.0, 1.8, 3.0, 4.6])
+frontier_quality = np.array([0.48, 0.67, 0.81, 0.89])
+dominated_cost = np.array([2.4, 3.8, 5.2])
+dominated_quality = np.array([0.56, 0.70, 0.83])
+quality_threshold = 0.78
 
-naive = []
-for i in iterations:
-    if i < 5:
-        naive.append(int(50 * np.exp(-0.2 * i)))
-    else:
-        # Oscillate between setup and hold fixes
-        naive.append(15 + 5 * (-1)**i)
+fig, ax = plt.subplots(figsize=(5.6, 3.1))
+fig.subplots_adjust(left=0.13, right=0.96, top=0.88, bottom=0.19)
+
+ax.plot(
+    frontier_cost,
+    frontier_quality,
+    color=COLORS["blue"],
+    linewidth=1.8,
+    zorder=2,
+)
+ax.scatter(
+    frontier_cost,
+    frontier_quality,
+    color=COLORS["blue"],
+    edgecolor="white",
+    linewidth=0.8,
+    s=42,
+    label="Non-dominated workflows",
+    zorder=3,
+)
+ax.scatter(
+    dominated_cost,
+    dominated_quality,
+    color=COLORS["muted"],
+    alpha=0.5,
+    s=34,
+    label="Dominated workflows",
+    zorder=2,
+)
+ax.axhline(
+    quality_threshold,
+    color=COLORS["red"],
+    linestyle="--",
+    linewidth=1.2,
+    label="Declared quality threshold",
+)
+
+ax.annotate(
+    "lowest cost above threshold",
+    xy=(3.0, 0.81),
+    xytext=(3.35, 0.6),
+    arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=0.8),
+    fontsize=6,
+    color=COLORS["ink"],
+)
+
+ax.set_title("Declared architecture outcome versus total workflow cost", fontsize=7.5, pad=10)
+ax.set_xlabel("Disclosed illustrative cost index", fontsize=6.5)
+ax.set_ylabel("Declared outcome (normalized)", fontsize=6.5)
+ax.set_xlim(0.6, 5.6)
+ax.set_ylim(0.4, 0.96)
+ax.legend(frameon=False, fontsize=5.8, loc="lower right")
+ax.tick_params(axis="both", labelsize=5.9, length=2.5, width=0.6, pad=2)
+ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+plt.show()
+```
+
+The blue points improve supported quality as the disclosed cost index
+increases, so none is strictly better on both axes. The gray points are
+inferior to at least one blue point and should not anchor a claim of efficient
+design. The dashed line changes the comparison from the best tradeoff to the
+lowest cost that reaches an acceptable result. Real studies should plot
+measured budgets and the predeclared architecture outcome, show uncertainty,
+and preserve the underlying resource vector.
+
+## Design a Credible Comparison
+
+The program test in @sec-moonshot is stricter than “does an AI system produce
+a valid design?” Full architectural success requires a supported design that
+meets the fixed Lighthouse conditions. Demonstrated AI contribution requires a
+comparison with the strongest practical conventional or human-directed workflow
+for the same question, declared starting artifacts and source access, shared
+evaluation-tool access, evaluator-owned acceptance checks, conditions,
+cost-accounting rule, budgets, and stopping rules. The systems may use
+different internal workflow tools and checks, but those differences remain
+part of the system identity and cost. AI adds value only if it improves the
+architecture result, lowers the total cost of reaching a result of comparable
+quality, or both.
+
+Useful comparison arms answer different questions. Random or enumerated search
+tests whether guided search beats sampling. A strong conventional or
+human-directed workflow tests whether AI assistance improves current practice.
+A no-AI arm, retrieval-only assistance, foundation-model assistance, and the
+fully configured workflow reveal how capability and cost change across
+the system. No one baseline supports all of these claims.
+
+Random search remains useful. It can expose a learned search that does no
+better than sampling at the same budget. It is a diagnostic floor, not the
+credible alternative an architecture team would otherwise use. Depending on
+the task, that alternative may be direct enumeration, a deterministic
+heuristic, a tuned optimizer, an existing EDA flow, or a human-directed study.
+@sec-methods-generation-prediction-optimization explains why the best
+alternative follows from the represented problem rather than from a fixed
+method hierarchy.
+
+The two primary arms should obey the same comparison rules
+(@tbl-matched-system-comparison).
+
+| **Comparison element** | **Matching rule** |
+| --- | --- |
+| Architecture question | Ask both systems to resolve the same decision and preserve the same candidate and condition identities. |
+| Starting information | Give both arms the same specifications, starting artifacts, workload information, prior results, and source access, except where access itself is the tested component. Record which sources each system actually consumes. |
+| Evaluation tools and checks | Give both arms access to the same evaluator-run tools and fidelity stages, and judge them with the same evaluator-owned acceptance checks and criteria. Treat workflow-internal tools and checks as system components, record their cost, and document any arm-specific access. |
+| Budget | Use one cost-accounting window and compare at declared human, machine, tool, review, and elapsed-time budgets, preferably across several budget points rather than one arbitrary cutoff. |
+| Human capability | Use practitioners with appropriate task knowledge in both arms and record their actions. Equal clock time does not make unequal expertise comparable. |
+| Stopping rule | Apply the same success, failure, exhaustion, and timeout conditions. |
+| Reporting | Publish the same architecture outcomes, failed runs, costs, and uncertainty for both arms. |
+
+: **A matched comparison holds the architecture task and evidence standard
+fixed.** Matching reduces alternative explanations and permits a qualified
+estimate of system differences under the declared assumptions.
+{#tbl-matched-system-comparison tbl-colwidths="[22,78]"}
+
+The systems need not use identical internal methods or workflow tools because
+those differences are part of what the study evaluates. They do need the same
+architecture question, evaluator-owned evidence standard, declared resource
+window, and reporting rule. Matching reduces alternative explanations without
+making unequal expertise or unreported access equivalent.
+
+An incremental AI contribution can be estimated only when one declared study
+feeds two complete systems and both arms report results under the same
+evaluator-owned standard (@fig-matched-complete-systems). The AI-assisted arm
+includes every learned component, method, workflow tool, internal check, and
+human intervention that contributes to the result. The alternative includes
+the strongest practical complete system the team would otherwise use, not a
+deliberately weak baseline.
+
+![**Incremental AI contribution is estimated by comparing complete systems
+under a declared match.** The same architecture question and evaluator-owned
+evidence standard feed an AI-assisted workflow and the strongest practical
+complete system. Each arm returns a supported architecture outcome or declared
+failure, a resource-cost record, and results across repeated runs and varied
+conditions, including failed runs. Task-paired differences support a qualified
+program status conditional on the matching assumptions; they do not authorize
+architecture commitment.](images/F10-matched-complete-systems){#fig-matched-complete-systems
+fig-alt="One declared architecture study feeds an AI-assisted complete system
+and the strongest practical complete system. The comparison fixes the
+architecture question, starting artifacts and source access, shared evaluation
+tools, evaluator-owned acceptance checks, conditions, cost-accounting window,
+budgets, stopping rules, and reporting requirements. Each system returns a
+supported architecture outcome or declared failure, stated limits, a
+resource-cost record, and results across repeated runs and varied conditions.
+Failed runs remain part of those results. Task-paired differences estimate
+incremental AI contribution conditional on the matching assumptions and tested
+envelope. The program status does not authorize architecture commitment."
+width="100%"}
+
+The shared header fixes the comparison before the two arms diverge. Workflow
+tools and internal checks may differ when they are part of the systems being
+compared, but the record exposes those differences. Each arm is a complete
+workflow rather than a model in isolation and can produce either a supported
+outcome or a declared failure. Failed attempts remain in the record. Qualified
+expertise, interventions, task assignment, and order are recorded rather than
+assumed equivalent.
+
+The comparison pairs the arms at the task level, then measures differences in
+supported architecture outcome and total resources across repeated runs and
+varied conditions. Those differences, their uncertainty, the matching
+assumptions, and the tested envelope support a qualified estimate of incremental
+contribution. A mismatch between the arms weakens that estimate, and even a
+favorable program status does not decide whether the architecture should be
+committed.
+
+Before either arm runs, predeclare the primary architecture outcomes, required
+task and condition coverage, acceptable total-cost envelope, minimum
+worthwhile architecture improvement, and noninferiority margin for a
+cost-reduction claim, meaning the largest acceptable loss in architecture
+quality when the cost falls. Also state how many paired tasks and repeats are needed
+to distinguish those margins with useful precision. Without these rules, a
+study can call an imperceptible gain successful after seeing it or accept a
+cheaper result whose architecture quality has materially fallen.
+
+The task population and sampling rule also belong in the predeclared study
+plan.
+Name the class of architecture decisions the program claim covers, then state
+how tasks, workloads, implementation conditions, and repeats are sampled from
+it. Adaptive prompt development, method tuning, and search may use a
+development set. The primary program comparison should use held-out tasks and
+conditions that did not guide those choices, followed by evaluator-owned
+confirmation of any selected architecture result.
+
+Exploratory configuration development and confirmatory evaluation must remain
+separate. Record how many prompts, models, routing policies, metrics, task
+variants, and analysis choices were tried before the final comparison. Name the
+primary outcome and analysis before opening the holdout. If adaptive search
+across configurations or outcomes could explain the reported advantage, use a
+fresh confirmation set rather than treating the selected result as
+confirmatory.
+
+When people direct either arm, assign tasks with a declared balancing or
+randomization rule and record who worked on which task. If the same person
+uses both systems, rotate the order and account for knowledge carried from the
+first arm into the second. If different people are used, match relevant
+experience and report the remaining difference. These controls do not make
+expertise identical. They make the human comparison interpretable. Give both
+arms a declared familiarization period and a stable operating procedure.
+Separate familiarization from measured task time. When the first arm reveals
+design information that would advantage the second, use fresh tasks, a
+declared washout, or an analysis that treats the carryover explicitly.
+
+Every assigned run remains in the result. An incomplete design, timeout, tool
+failure, or exhausted budget receives its declared result status and cost rather
+than disappearing because it produced no final score. Results restricted to
+successful runs can be reported as a secondary view, but they cannot replace
+the all-assigned comparison on which the program claim depends.
+
+A timeout is a failure when the outcome is success within a fixed budget. It is
+right-censored when the outcome is time to a supported result, meaning the
+completion time is known only to exceed the timeout. The analysis should not
+discard either case or assign a fabricated completion time.
+
+A single equal-budget comparison can still conceal the important result. One
+system may find a better design only by spending much more, while another may
+reach an adequate design quickly. Budget sweeps reveal the cost-quality
+relationship. For each arm, report the best supported architecture outcome
+reached as human effort, model compute, tool use, and elapsed time increase.
+Points dominated on both outcome and cost need no further defense.
+Report both quality at comparable total cost and the total cost required to
+reach a predeclared quality threshold. Either view alone can favor one part of
+the relationship.
+
+“Comparable total cost” needs a declared accounting rule. One option is a
+resource envelope that limits human effort, model compute, tool use, review,
+and elapsed time separately, then compares systems by outcome and resource
+dominance. Another is a disclosed conversion to a common unit using stated
+labor, compute, license, and schedule assumptions. Without one of these rules,
+two resource vectors cannot be called equal merely because each was summarized
+as “cost.”
+
+The architecture-result and total-cost definitions established earlier now
+apply identically to both arms. A cheap invalid design is not a cost win, and a
+good design does not by itself show that AI improved the work. The next step is
+to estimate the system difference and then locate which components it depends
+on.
+
+## Estimate System and Component Contributions
+
+The matched comparison estimates the contribution of the AI-assisted system as
+a whole. It does not show which component produced the difference. Component
+ablations address that second question by removing or replacing one material
+part while keeping the task, checks, and reporting fixed. Each replacement
+supports only a dependency claim under that comparison
+(@tbl-system-ablations).
+
+| **Component under test** | **Useful comparison** | **Claim the comparison can support** |
+| --- | --- | --- |
+| Complete AI assistance | Compare with the strongest practical no-AI workflow under the same task, evidence standard, and total-cost accounting | Whether the configured AI-assisted system changed result quality or cost as a whole |
+| Foundation model | Replace it with retrieval-only assistance, a smaller model, or another declared model while preserving the surrounding workflow | Whether the measured result depends on that model capability and its cost |
+| Generation | Replace generated candidates with the same-size human, rule-based, or existing candidate set | Whether generation changed candidate quality or diversity at the declared cost |
+| Prediction | Remove the learned screen or replace it with a conventional proxy and send a matched sample to the higher-fidelity check | Whether prediction saved evaluation work without discarding decisive candidates |
+| Optimization | Replace the search policy with the strongest practical conventional method at matched budgets | Whether the optimizer improved the cost-quality relationship |
+| Retrieved design information | Remove, freeze, or substitute the retrieval source while preserving the remaining system; check source versions, decision-relevant coverage, conflicts, and local claim support | Whether retrieved material changed results and which source dependencies remain |
+| Routing and role selection | Replace adaptive routing with a fixed sequence or evaluator-declared component choice | Whether dynamic method and tool selection improved decisions or merely added complexity |
+| Tool feedback | Restrict or delay selected feedback fields while keeping tool stages fixed | Which returned information enables correction and which merely adds cost |
+| Automated checking | Replace one checker with an independently developed check where feasible | Whether the conclusion depends on one checker or one shared assumption |
+| Human intervention | Compare declared intervention policies and record every intervention | How much human work is necessary for the measured result |
+
+: **Ablations locate dependencies inside the complete system.** They do not
+turn an interacting workflow into independent additive contributions.
+{#tbl-system-ablations tbl-colwidths="[20,45,35]"}
+
+The first rows move from the complete system to the foundation model and the
+three method families. The remaining rows vary retrieved information, routing,
+tool feedback, automated checking, and human intervention to expose
+dependencies that a model-only comparison would miss. Equalize tool budgets
+when the question concerns method quality. Allow budgets to differ, but count
+them, when the question concerns complete-workflow efficiency. The final
+column limits each result to the job the replacement actually changed.
+
+One-at-a-time replacement is not a guarantee of causal isolation. Components
+interact. A predictor may help only with one optimizer, and a model may appear
+strong only because a human repairs its tool calls. A practical evaluation
+starts with the components most likely to explain the measured advantage,
+tests selected interactions when conclusions change, and reports the
+dependencies it cannot separate. Contributions are not additive. The gain from
+replacing several interacting parts cannot be reconstructed by summing
+one-at-a-time differences.
+
+## Reliability Across Conditions
+
+A single stochastic run is an anecdote, not a measurement
+[@HendersonEtAl2018DeepRL]. Repeated runs estimate reliability under the same
+task. Varied conditions test whether the result survives the changes that
+matter to an architecture decision. Both are necessary.
+
+Reliability is broader than average success. Report worst cases, blocking
+constraint violations, recovery after failure, time and human support required
+to recover, and the fraction of decisions that experts override. Test whether
+reported confidence is calibrated to eventual results. A workflow that is
+correct 90 percent of the time but is most confident on its failures presents
+a different engineering risk from one with the same pass rate and useful
+uncertainty estimates.
+
+The earlier decision-quality test covers confidence in workflow outcomes.
+Numerical architecture estimates need a different calibration record. Report
+interval coverage, interval sharpness, and errors near the decision boundary,
+each tied to a tool stage, time horizon, and condition distribution.
+Calibration on one workload, node, design family, or toolchain does not imply
+calibration after that condition changes.
+
+### Separating System Variation From Apparatus Variation
+
+Pair the arms on tasks, controlled tool factors, and declared starting
+conditions. Treat model or search seeds as repeats under one fixed configured
+system. A changed prompt is usually a changed system configuration. Prompt
+samples are exchangeable repeats only when a predeclared prompt-sampling policy
+is itself part of the system under test. None of these is an independent
+architecture task. Report successes, failures, constraint violations,
+recoveries, median,
+interquartile range, and per-task results. Means and standard
+deviations can hide hardware studies whose outcomes are bimodal, with one
+group of runs failing implementation and another finding a strong design.
+
+The evaluation apparatus can vary too. Placement seeds, host counts, tool
+settings, machine types, or logically neutral edits may perturb a result.
+Identical reruns test whether a nominally fixed setup is repeatable. Separate
+sensitivity studies deliberately vary one of these factors. Do not subtract
+environment variance from model variance as if they were automatically
+independent. Predeclare whether the comparison estimates an average over the
+declared apparatus factors, a result at one fixed setup, or a worst case.
+Estimate that quantity and its interval with a design that can separate the
+factors where possible. If the system difference cannot be distinguished from
+the apparatus-induced difference at the required practical margin, the result
+remains unresolved.
+
+`pass@k` can describe whether at least one of $k$ exchangeable generated
+candidates produces a binary pass. Report it with the estimator and sampling
+convention used
+[@Chen2021Codex]. In hardware it also needs a time or tool budget, since one
+success among many expensive failures may be unusable. Deployment reliability
+asks a different question, how often an ordinary run succeeds, not whether at
+least one of many attempts eventually worked. Neither score says anything
+about physical validity beyond the check used to define “pass.”
+
+Statistical analysis should match the data and the claim. Paired comparisons
+are useful when both systems run on the same tasks and conditions.
+Nonparametric tests avoid a specified parametric distributional form but still
+make assumptions about independence, pairing, exchangeability, ordering, or
+other structure. Bootstrap intervals can summarize skewed statistics, but additional
+resamples do not repair a small or unrepresentative task set.^[Bootstrap
+resampling repeatedly draws observed experimental units with replacement to
+estimate variation in a statistic. Paired or time-dependent observations
+require paired or block resampling that preserves their relationship.] Report the
+realized sample size, failures, effect sizes, intervals, and the analysis
+choice rather than treating one test as mandatory.
+
+A study that claims performance across a sampled task population should treat
+architecture tasks as the primary generalization units, pair systems within
+task and condition, and treat repeated runs as nested observations rather than
+extra tasks. A fixed finite suite or convenience sample supports only the
+population it actually represents. Report per-task effects, the across-task
+effect when that estimand is justified, uncertainty, failures, and practical
+decision margins.
+Analyze seeds, retries, and conditions according to their nested relationship
+without treating them as independent tasks. Keep exploratory configuration
+selection separate from held-out confirmation, and declare how multiple
+outcomes or subgroup comparisons affect the decision rule.
+
+### Varying Architecture-Relevant Conditions
+
+The varied conditions from @sec-loop-patterns-across-stack become an
+evaluation matrix rather than background description
+(@tbl-lighthouse-evaluation-matrix).
+
+| **Condition varied** | **What remains fixed** | **Failure the variation can expose** |
+| --- | --- | --- |
+| Workload and input distribution | Architecture question, candidate identities, and required functions | A gain limited to the synthetic or easiest workload |
+| Compiler, runtime, and mapping | Hardware candidates and system constraints | A hardware result that depends on one software path |
+| Interface and traffic assumptions | Functional contract and candidate set | A local gain erased by communication or synchronization cost |
+| Memory and energy model | Workload and mapping identities | A candidate selected through an incomplete subsystem model |
+| Implementation stage and corner | RTL intent and acceptance properties | A simulated gain that disappears in synthesis, routing, power, or signoff analysis |
+| Tool version and configuration | Task and declared design space | A conclusion tied to one tool behavior or hidden default |
+| Prompt, model, or routing configuration | Task, legal actions, tools, and acceptance checks | An apparent architecture advantage that depends on one phrasing or component choice |
+| Source and represented-state freshness | Task, legal actions, evaluator-owned checks, and current project artifacts | A decision based on stale specifications, constraints, tool guidance, or project state |
+
+: **Architecture-relevant variation tests where an advantage holds.** Each
+material change either receives a test or remains an explicit untested
+boundary.
+{#tbl-lighthouse-evaluation-matrix tbl-colwidths="[25,36,39]"}
+
+The fixed conditions isolate the failure attributable to each declared
+variation. A result that disappears under one row narrows the tested envelope.
+It does not explain every other condition or transfer to an untested one.
+
+One task cannot support a program-wide claim. A useful suite spans distinct
+architecture decisions, workloads, designs, result costs, representations,
+tool stages, and failure consequences. Report the envelope in which the
+advantage repeats, the conditions where it disappears, the worst observed
+case, and the cases not tested. Also report whether failures were detected
+before an invalid candidate advanced and whether the workflow recovered
+without expert repair. That is empirical generalization. Similar-looking
+artifacts are not enough.
+
+Four levels of claims should remain distinct. Repeated runs measure stochastic
+behavior on the same task. Input-preserving apparatus or representation
+perturbations test robustness around that configured system; a changed prompt,
+representation semantics, or tool policy may instead define a different
+system. Held-out tasks support generalization within a declared design
+population only when their sampling or selection represents that population
+and they remained outside system and evaluator selection. A convenience
+holdout is merely unseen. A new design family, toolchain, process node,
+organization, or decision class is a transfer claim and needs a new target
+evaluation. Performance and calibration must be re-estimated at each level.
+Cross these conditions selectively, such as workload with compiler or design
+with physical corner, when their interaction is part of the architecture risk.
+
+## Keep Benchmarks Healthy
+
+Benchmarks make comparisons repeatable, but they do not remove the need for
+architecture judgment. Their job in this chapter is to instantiate the metric
+map for a declared task, action space, and evidence depth. SPEC CPU, PARSEC, and
+MLPerf became useful because they defined workloads, rules, and reporting
+conventions that made results more comparable [@PARSEC;
+@SPEC2017CPU; @MattsonEtAl2020MLPerf]. An AI-assisted architecture benchmark must define both
+the design problem and the system allowed to work on it. Its score remains one
+instrument inside the complete-system evaluation.
+
+Existing hardware-generation suites illuminate parts of the problem.
+VerilogEval evaluates whether a model can generate functionally correct
+Verilog from a specification [@VerilogEval;
+@PinckneyEtAl2024RevisitingVerilogEval]. RTLLM broadens the designs and reports
+syntax, functional, and post-synthesis quality-of-result measures [@RTLLM].
+ArchEval evaluates architecture challenges across several simulators and
+harness-support settings while recording system trajectories
+[@WangEtAl2026ArchEval]. ChiPBench evaluates chip-placement methods through a
+common physical-design flow [@WangEtAl2025ChiPBench]. Two recent preprints
+connect more of that path. HSCO-Bench exercises hardware-software co-design
+through FPGA-deployed SoC prototypes [@TsaiEtAl2026HSCOBench]. CLOSER-Bench
+couples front-end and back-end closure tasks and records simulator, synthesis,
+static timing, and place-and-route invocations together with final quality,
+progress over budget, tool cost, and cross-stage recovery
+[@ZhouEtAl2026CLOSERBench]. These are useful building blocks, but each remains
+limited to its declared tasks, platforms, tools, and checks. None alone
+establishes that a complete AI-assisted workflow improves an architecture
+program over its credible alternative.
+
+### Pinning the Task, Action Space, and Fidelity
+
+A benchmark release should identify the following elements without redefining
+the action spaces established earlier.
+
+- the architecture question, artifacts, workloads, software path, legal action
+  space, and permitted design or evaluation changes;
+- the process design kit, libraries, macros, floorplan, utilization, activity
+  source, constraints, scripts, defaults, tools, versions, hosts, threads,
+  seeds, modes, and analysis corners where relevant;
+- the functional, implementation, security, and acceptance checks, plus the
+  information visible to the system and the feedback returned after each
+  action;
+- human intervention rules, budgets, stopping rules, failure treatment; and
+- the scoring, aggregation, refresh, and retirement conventions.
+
+Evaluator-owned requirements, rejection checks, and scoring rules should be
+immutable to the system under test. When modification of a constraint,
+testbench, or tool script is itself part of the task, an independent
+evaluator-owned check must determine whether the change remains legal.
+
+Task selection determines what the benchmark can represent. Remove exact and
+near-duplicate tasks across development and evaluation splits, preserve
+distinct design families rather than many variants of one easy block, and
+state the architecture population the suite is intended to sample. Keep
+hidden tests and evaluator-owned holdouts for properties that should not be
+optimized directly, but document their categories and failure rules well
+enough that the task remains an engineering problem rather than a guessing
+game.
+
+Benchmark validity is an inference from tasks to a claim, not a property of the
+score alone. Three questions make that inference concrete. Do evaluator-owned
+checks measure success on the declared task? Does the score capture the claimed
+architecture capability rather than syntax repair, harness familiarity, or
+checker exploitation? Do the task distribution, artifacts, feedback, budgets,
+and human interactions resemble the design programs to which the result is
+applied? A claim-to-task map should connect each program claim to sampled
+decisions, failure consequences, and evidence stages. Gaps in that map become
+limits on the claim rather than hidden assumptions.
+
+The evaluation stage bounds the claim. Syntax and lint checks can reject
+malformed RTL. Simulation can exercise declared functional behavior. Logical
+synthesis and pre-layout timing can estimate mapped structure and timing.
+Placement and routing can expose congestion and parasitic effects. Signoff
+requires separate analysis across the required process, voltage, temperature,
+and operating modes using the relevant foundry rules and models. Passing an
+earlier stage supports only the claims that stage can test.
+
+This hierarchy also shapes cost. It is often wasteful to send malformed RTL
+directly into a long physical flow. A benchmark may use cheap checks before
+expensive ones, but it must report which candidates reached each stage and
+must not score a cheap proxy as though it were the stronger check. State
+checkpoints can reduce repeated setup cost, provided both arms receive
+equivalent access and the restored tool state is part of the system record.
+Cached results must be keyed by the complete environment manifest, not only
+the RTL hash, because a changed constraint, library, floorplan, activity file,
+or tool version creates a different evaluation.
+
+The evaluator also needs tests for its own apparatus. Seed benchmark releases
+with known-good and known-bad designs, differential-test important checkers,
+and inspect disagreements among simulators, formal tools, synthesis, and
+physical-design stages. A checker bug or simulator exploit can make an invalid
+candidate look capable. Treat benchmark and tool failures as first-class
+results, correct affected scores, and version the repaired release.
+
+### Contamination, Decay, and Retirement
+
+RTL-Repo contributes 4,098 samples drawn from 1,361 public repositories
+[@AllamShalan2024RTLRepo]. Public benchmark tasks may also overlap model
+training data [@WangEtAl2025VeriContaminated]. When the training
+corpus is available, exact and approximate overlap searches can identify
+obvious reuse. When it is unavailable, the evaluation should state that limit
+instead of claiming contamination freedom.
+
+LiveCodeBench demonstrates how time-split tasks can reduce exposure to benchmark
+material [@JainEtAl2025LiveCodeBench]. Private held-out designs and newly
+constructed architecture problems provide additional barriers. None proves
+that a model has never encountered the design or a close relative.
+Private tasks can also leak through repeated evaluation. Record how often the
+system, its developers, or its prompt-tuning process observed held-out scores or
+diagnostic feedback; limit queries and feedback granularity; separate
+development access from final evaluation; and rotate holdouts when repeated
+submissions could reveal the evaluator. A private split becomes development
+data when its feedback repeatedly guides configuration choices.
+Semantics-preserving variants can test sensitivity to surface form, but
+renaming meaningful hardware signals or changing structure may also change the
+task. Functional simulation, formal equivalence where its assumptions apply,
+and stronger implementation checks determine whether an output satisfies the
+task. They do not determine whether the output was memorized.
+
+The practical response is layered. Publish known corpus overlap, separate
+public development tasks from private evaluation tasks, record model and
+benchmark dates, disable unreported retrieval during held-out tests, refresh
+the held-out pool, detect near-duplicate tasks, and qualify conclusions by the
+remaining exposure risk.
+
+A benchmark can also decay when no training example leaked. Once a community
+optimizes repeatedly against a fixed target, the score may stop measuring the
+underlying capability. Computer architecture has a durable example.
+Compiler-specific optimization made the `matrix300` workload cease to
+represent the performance behavior SPEC intended to measure, and the workload
+was retired from later suites [@HennessyPatterson2017QuantitativeApproach].
+
+An architecture benchmark therefore needs a lifecycle before its first score
+is quoted. Version each release, retain a refresh pool, monitor whether task
+success has saturated or become dominated by benchmark-specific tricks, and
+publish retirement criteria. Old tasks can remain useful for regression
+testing after they stop supporting comparative capability claims.
+
+### Reporting Comparable Results
+
+Publish per-task results before any suite summary. Normalized ratios across
+positive-valued tasks with a common direction should generally use a geometric
+mean, not an arithmetic mean, because the geometric mean is invariant to the
+choice of common reference [@FlemingWallace1986HowNotToLie]. Invalid runs,
+zeros, signed slacks, and heterogeneous raw quantities need a declared failure
+policy rather than being inserted into that mean. Multi-objective architecture
+outcomes may not admit one defensible aggregate. In that case, report the
+constraint pass rate, per-objective results, and non-dominated sets rather than
+inventing a weighted score that hides the decision.
+
+Comparable reporting also requires reproducibility material. Publish the
+benchmark version, task and split identifiers, system manifest, permitted
+sources, tool and library versions, seeds, budgets, stopping rules, failure
+policy, cost accounting, and scripts needed to regenerate the summary from raw
+results. The manifest should pin system instructions, task prompts or the
+prompt-sampling policy, tool schemas, harness revision, runtime or container
+dependencies, and the exact model endpoint or snapshot where available.
+Use immutable hashes for prompts, retrieval snapshots, RTL, scripts,
+constraints, workloads, containers, and raw-result records. A hosted model
+alias or endpoint may change without changing its name. When no immutable
+snapshot is available, record the access date and classify exact model replay
+as unavailable.
+Preserve enough run records to investigate invalid scores without
+requiring disclosure of proprietary design data. If a result depends on a
+private process kit or tool, describe the inaccessible boundary and provide a
+public validation path where feasible.
+
+Trajectory measures can supplement those outcomes.
+
+- best supported outcome versus total cost shows how quickly a system reaches
+  useful results;
+- proposals and failures by tool stage expose where it spends expensive
+  evaluations;
+- correction after a returned failure shows whether the next action resolves
+  that failure without creating a disqualifying one;
+- repeated states and repeated failure classes expose ineffective iteration;
+  and
+- proxy fidelity on an independently selected audit sample near the decision
+  boundary shows whether the cheap screen retained and ordered the cases that
+  mattered.
+
+These are diagnostics, not evidence of reasoning. A trajectory area under the
+curve requires a declared cost axis, common starting point and horizon,
+directionally consistent normalization, feasible-candidate rule, and treatment
+of failures, timeouts, and censored runs before two values can be compared.
+Best-so-far is monotone by construction and says nothing about whether the
+underlying path thrashed. Monotonic improvement is not a general requirement
+in a multi-objective search. A useful exploration may temporarily regress one
+quantity to reach a better region.
+
+## Red Team the Design System
+
+Ordinary evaluation asks how the system performs when its inputs, tools, and
+checks behave as expected. Red teaming asks what happens when assumptions are
+missing, inputs are hostile, feedback is misleading, or the scoring rule
+permits improvement by weakening the task. The goal is not to assemble a
+single “security score.” It is to expose concrete failure classes and measure
+detection, interruption, correction, recovery, and residual uncertainty. The
+test classes in @tbl-red-team-program exercise both the returned design and the
+workflow.
+
+Begin with a threat model. For the candidate architecture, identify the assets
+that must be protected, the actors who can influence the design, the boundary
+between trusted requirements and untrusted artifacts, the interfaces and tool
+stages an attacker can reach, the changes the workflow is authorized to make,
+and the consequences of hidden or incorrect behavior. For the design workflow,
+repeat the exercise for models, retrieval and training data, represented
+state, prompts, tool wrappers, checkers, credentials, compute and license
+budgets, human review, and the final recommendation. A design backdoor and a
+compromised workflow may interact, but they have different assets, attack
+surfaces, trust boundaries, and containment measures.
+
+This book uses an operational split between two hidden-behavior targets because
+they require different tests. Hidden or malicious behavior inserted into a
+returned design remains in the RTL, firmware, microcode, configuration, or
+implemented artifact after the design workflow has ended. A rare instruction,
+state sequence, or input can activate it in the delivered system. Triggered
+hidden behavior of this kind is one form of what is commonly called a hardware
+backdoor.
+
+Malicious LUT shows why the evaluated artifact and tool stage matter. In this
+controlled research construction, a malicious change remained functionally and
+formally equivalent to the HDL through the FPGA design flow, then took effect
+when place and route emitted the bitstream
+[@KriegWolfJantsch2016MaliciousLUT]. This was a research demonstration, not a
+reported production incident. Its lesson is narrower and durable. Source-level
+simulation and formal checks do not establish the behavior of the delivered
+artifact when a later stage can change it.
+
+Component-triggered behavior instead lives in a model, retriever, checker,
+surrogate, wrapper, or tool component. A crafted prompt, document, report,
+design pattern, or internal trigger may cause that component to propose a harmful change,
+suppress a failure, misreport a result, or exceed its access. The returned
+design may contain the consequence, but the trigger and failing mechanism are
+part of the workflow. The split is an evaluation aid rather than a claim that
+all security failures fall cleanly into two exhaustive classes.
+
+| **Test class** | **Example challenge** | **Required observations** |
+| --- | --- | --- |
+| Requirement integrity | Omit a requirement, introduce a contradiction, or make a costly function easy to discard | Did the system identify the conflict, ask for resolution, preserve the function, or accept an invalid design? |
+| Check integrity | Remove a clock, weaken a constraint, alter a testbench, edit a scoring script, or exploit a simulator or parser discrepancy | Did an independent check detect the change before acceptance? |
+| Feedback integrity | Return a stale, partial, malformed, or deliberately misleading tool report | Did the system bind the result to the correct candidate and conditions, reject the report, or act on it? |
+| Information integrity | Place misleading instructions in retrieved documents, source comments, issue text, or tool logs | Did the workflow separate design information from instructions and preserve its operating limits? |
+| Confidentiality and authority | Attempt unauthorized reads, writes, or external transmission involving proprietary RTL, process-design-kit or licensed-IP material, repositories, logs, credentials, or another project | Did least-privilege controls prevent or contain the access, record the attempt, revoke affected authority, and identify any exposed data? |
+| Returned-design behavior | Remove isolation, memory protection, error detection, or a declared speculative-execution defense; insert hidden behavior activated only by a rare input or state | Did an evaluator-owned functional, formal, relational, or security check detect the changed behavior in the artifact? |
+| Component-triggered behavior | Poison retrieval or adaptation data, or present a trigger designed to make a model, retriever, checker, surrogate, wrapper, or tool component propose a harmful action, hide a failure, misreport a result, produce a deceptive explanation, or exceed its access | Did the component behavior change, and did a trusted comparison path, component replacement, access monitor, or independent check expose and contain the failure? |
+| Component and supply-chain integrity | Substitute a model endpoint, binary, wrapper, container, package, process kit, library, IP block, compiler, benchmark dependency, cache, or manifest between evaluation and use | Did independent identity and provenance checks detect the change, prevent reuse of incompatible state, and identify every result that depended on the substituted component? |
+| Evaluator awareness and visible-check gaming | Vary only whether hidden audit is signaled across matched tasks while holding checker access, actionable feedback, and hidden requirements fixed | Did behavior or risk-taking change when monitoring was less visible, and did the system satisfy visible checks while violating hidden requirements? |
+| Operational control | Force repeated states, timeouts, out-of-memory kills, scheduler preemption, disk or scratch failures, stale locks, truncated reports, missing corners, license-feature mismatch, excessive retries, unsafe tool actions, or incompatible checkpoint reuse | Could the run distinguish infrastructure failure from engineering result, stop within budget, contain tool access, release resources, preserve inspectable state, invalidate affected descendants, and restart safely? |
+| Shared blind spots | Give proposal and checking paths the same wrong assumption or corrupted source | Did an independently developed check or reviewer expose the common failure? |
+
+: **A red-team program attacks the design result and the workflow that produced
+it.** Each test records acceptance of invalid output, detection, interruption,
+correction, recovery cost, and what remains unresolved.
+{#tbl-red-team-program tbl-colwidths="[20,40,40]"}
+
+The program covers corrupted requirements and feedback, unauthorized access,
+hidden behavior in returned artifacts, triggered workflow components,
+supply-chain substitution, visible-check gaming, operational control, and
+shared blind spots. Its observations emphasize detection, containment, and
+recovery rather than a single pass count.
+
+AgentDojo provides a useful precedent outside hardware. It tests tool-using
+agents when untrusted tool returns contain prompt injections
+[@DebenedettiEtAl2024AgentDojo]. It does not cover architecture work, but its
+attack structure applies to the information-integrity and component-triggered
+tests above.
+
+A useful feedback-integrity test places one blocking timing or design-rule
+violation inside a long tool report whose candidate identity, conditions, and
+other results are valid. The system should preserve and escalate that
+violation rather than summarize the report as clean. Record whether it found
+the exact violation, prevented acceptance, retained the relevant report
+context, and required human review or another tool run to recover.
+
+For every attack, predeclare the attacker access, target surface,
+trusted evaluator-owned check, attack budget, and success condition. Also state the
+consequence of success, what should detect or interrupt the attack, what counts
+as recovery, and which related attacks remain untested. Give the two comparison
+arms comparable attack opportunity rather than testing only the system expected
+to fail. Pair seeded attacks with clean designs, difficult but benign inputs,
+and near-miss triggers. Report trial count and diversity, attack success,
+detection, containment, recovery, false alarms, unnecessary stops, clean-task
+success, defense overhead, residual failures, uncertainty or an upper bound on
+missed failures, untested attacker capabilities, and total recovery cost. Zero
+observed failures is not a zero failure rate, and passing one attack class does
+not support a general security claim.
+
+An evaluator-awareness test must separate audit visibility from information the
+system legitimately needs to solve the task. Use randomized or counterbalanced
+matched trials with equivalent usable feedback, while varying whether hidden
+review is signaled. Gaming is not any behavioral change. It is improved
+visible-check performance accompanied by hidden-requirement violations or
+riskier actions under the matched information condition. Clean controls and
+near-miss cases are needed to distinguish that pattern from an ordinary
+response to different feedback.
+
+For a returned-design test, preserve the artifact and the exact rare input,
+state, or sequence that exposed the behavior. For a triggered-component test,
+preserve the component version, trigger, surrounding context, proposed or
+suppressed action, access used, and downstream artifacts. Replacing or
+bypassing the component helps locate the workflow failure. It does not by
+itself prove that a returned design is clean, so the artifact checks still run.
+For a supply-chain test, preserve expected and observed component identities,
+signatures or hashes where available, acquisition path, update event, manifest,
+and the dependent caches, checkpoints, artifacts, and claims that must be
+invalidated.
+
+Inspectability is a prerequisite for these tests. Evaluator-owned or otherwise
+tamper-resistant capture should connect each action to the system version,
+candidate state, inputs, tool call, returned result, access decision, human
+intervention, cost, and final status. Red-team attempts should try to delete,
+rewrite, truncate, or selectively omit that record. When a test fails, the
+evaluator must be able to determine what the system used, what it changed, and
+which later results may have inherited the failure.
+
+### Exposing Proxy Failure
+
+Before a system spends hours on RTL simulation or physical implementation, it
+may use an analytical model or learned predictor to screen candidates. Even a
+detailed cycle-level simulator is a lower-fidelity reference for some physical
+claims. An optimizer will concentrate on regions where its proxy predicts
+improvement, including regions where that proxy's assumptions fail.
+
+The useful measurement is fidelity on a held-out, independently selected
+sample near the candidates the system may choose, followed by a
+higher-fidelity check on those candidates. Reusing proxy-fitting or
+search-selected points for this audit introduces selection bias. Report
+uncertainty and decision-relevant errors such as pairwise misranking, retention
+of the strongest candidates, and simple regret near the acceptance boundary.
+Here, simple regret is the stronger-check objective gap between the selected
+candidate and the best candidate audited by that stronger check.
+
+A static held-out sample is insufficient after a search repeatedly queries the
+proxy and concentrates on its errors. Preserve an evaluator-selected audit
+stream or refreshable holdout, measure stronger-check error on candidates
+selected after adaptive search, report how error changes with search budget,
+and test whether support or out-of-distribution warnings identify cases the
+proxy should decline.
+
+The following documented dispute draws on the original reinforcement-learning
+placement result and two later assessments that disagree about the reproduced
+setup and conclusion [@MirhoseiniEtAl2021GraphPlacement;
+@ChengEtAl2023MacroPlacement; @GoldieEtAl2024ThatChipHasSailed].
+
+::: {.callout-war-story title="The placement proxy dispute"}
+**The claim.** A reinforcement learning method for chip floorplanning reported
+expert-comparable macro placements. It trained against a fast analytical proxy
+combining wirelength and estimated congestion rather than waiting for a full
+commercial physical-design flow.
+
+**The gap.** An independent assessment of the public Circuit Training
+implementation found weak correlation between proxy and post-route outcomes
+on its tested cases. Its commercial-flow comparison favored strengthened
+simulated annealing, a commercial macro placer, and human placements.
+The original authors argued that the assessment
+omitted pretraining, used less compute, stopped before convergence, and
+evaluated different older-node cases.
+Proprietary TPU cases remain a separate reproducibility limit.
+
+**The lesson.** Proxy quality, system identity, and the final implementation
+check cannot be separated. When the strongest setup is unavailable, the
+disagreement remains limited by that missing comparison.
+:::
+
+A placement benchmark such as ChiPBench can make more of the physical-flow
+comparison inspectable, but its result remains tied to that flow
+[@WangEtAl2025ChiPBench].
+
+### Attacking Constraints and Unrewarded Requirements
+
+An optimizer rewarded for performance and area has an incentive to remove
+anything costly that the score does not protect. The simplest attack is not a
+better design. It is a weaker task.
+
+The deleted-clock example from @sec-architecture-20-ontology makes the failure
+plain. Removing a clock definition can produce a clean timing report because
+the intended sequential paths are no longer analyzed. The evaluation must
+confirm that required constraints were loaded and unchanged, that the
+candidate still implements the declared function, and that the scoring checks
+were not modified by the system they judge.
+
+Other attacks remove error correction, memory protection, isolation, or
+security mitigations because these features cost power, area, or performance.
+The needed check depends on the property. Assertions and model checking can
+cover selected single-execution safety properties such as permission
+enforcement. Timing and speculative side channels relate multiple executions
+and need relational analysis or another check designed for that class. A
+generic “formal passed” flag is not enough.
+
+Formal equivalence also has a boundary. It applies when candidate and reference
+are intended to have the same observable behavior. Architecture changes that
+alter latency, protocols, or permitted behavior need refinement checks,
+properties, or another relation that states what may change.
+
+Timing exceptions deserve the same treatment. A false-path or multicycle-path
+constraint changes what static timing analysis is asked to check. It is an
+assumption, not a timing repair. Credit it only when endpoint-specific timing
+intent and protocol or property checks justify the exception. A structural
+clock-domain report or documentation alone does not settle it.
+
+Constraint repair also need not improve every count monotonically. Fixing one
+setup path may expose a hold path, and routing one net may create a local
+spacing violation. The failure is repeated movement among the same states
+without progress on the blocking conditions, not every temporary regression.
+Eventual burn-down and a recurring count pattern therefore raise different
+questions (@fig-whac-a-mole).
+
+```{python}
+#| label: fig-whac-a-mole
+#| fig-cap: |
+#|   **A recurring violation count is a warning, not proof of a repeated design state.** The green illustrative trace burns the blocking timing and design-rule violations down. The red trace settles into a recurring count pattern after an initial improvement. These synthetic counts do not identify the candidate, constraint, violation, or tool state. A real evaluation needs those identities to establish a repeated-state cycle and should not require every useful multi-objective search to be monotonic.
+#| out-width: "85%"
+#| fig-alt: "Line chart of blocking timing and design-rule violations over twenty tool iterations. A green illustrative trace declines to zero. A red dashed trace declines at first and then alternates between ten and twenty violations."
+
+import matplotlib.pyplot as plt
+import numpy as np
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+iterations = np.arange(21)
+directed = [max(0, int(value)) for value in 50 * np.exp(-0.25 * iterations)]
+repeated = [
+    int(50 * np.exp(-0.2 * index)) if index < 5 else 15 + 5 * (-1) ** index
+    for index in iterations
+]
 
 fig, ax = plt.subplots(figsize=(5.6, 3))
 fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
 
-ax.plot(iterations, capable, linewidth=2.5, color=COLORS["green"], label="Capable Agent (Monotonic burn-down)")
-ax.plot(iterations, naive, linewidth=2.0, linestyle="--", color=COLORS["red"], label="Naive Agent (Constraint oscillation)")
+ax.plot(
+    iterations,
+    directed,
+    linewidth=2.5,
+    color=COLORS["green"],
+    label="Directed repair",
+)
+ax.plot(
+    iterations,
+    repeated,
+    linewidth=2.0,
+    linestyle="--",
+    color=COLORS["red"],
+    label="Recurring violation count",
+)
 
-# Annotate the Whac-a-Mole behavior
-ax.annotate("Fixes Setup", xy=(9, 10), xytext=(7, 2), arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=0.8), fontsize=6, color=COLORS["ink"])
-ax.annotate("Breaks Hold", xy=(8, 20), xytext=(8, 28), arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=0.8), fontsize=6, color=COLORS["ink"])
+ax.annotate(
+    "inspect state identity",
+    xy=(10, 20),
+    xytext=(11, 31),
+    arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=0.8),
+    fontsize=6,
+    color=COLORS["ink"],
+)
 
-ax.set_title("Agent Trajectory: Constraint Whac-A-Mole", fontsize=7.5, pad=10)
-ax.set_xlabel("Tool Iterations", fontsize=6.5)
-ax.set_ylabel("Total Timing / DRC Violations", fontsize=6.5)
+ax.set_title("Constraint repair under repeated feedback", fontsize=7.5, pad=10)
+ax.set_xlabel("Tool iteration", fontsize=6.5)
+ax.set_ylabel("Blocking violations", fontsize=6.5)
 ax.set_xlim(0, 20)
 ax.set_ylim(-2, 55)
-
 ax.legend(frameon=False, fontsize=6.5, loc="upper right")
 ax.tick_params(axis="both", labelsize=5.9, length=2.5, width=0.6, pad=2)
 ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
@@ -226,146 +1453,252 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 plt.show()
 ```
 
-Often, the correct response to an error is not to rewrite the RTL, but to exercise *Constraint Intelligence*. The evaluation scores the agent's ability to emit proper SDC files (e.g., defining `set_false_path` for CDC boundaries, or `set_multicycle_path` for architectural multi-cycle logic) rather than uselessly trying to physically optimize an impossible timing path. A timing exception is an assumption rather than a fix, since it removes a path from analysis and the tool then reports clean because it stopped looking. Credit an exception only when it arrives with independent justification, a structural CDC check confirming a correct synchronizer for a false path or a documented protocol for a multicycle path, and score an unjustified one as a waived check rather than as constraint intelligence.
+Both paths reduce the initial count, but the green path continues toward zero
+while the red path settles into a recurring count pattern. That sawtooth is a
+warning to inspect the run, not proof that the same design state repeated.
+Different candidates can have the same number of blocking violations, and the
+same count can hide changes in violation type, endpoint, severity, or
+constraint coverage.
 
-### Reward Hacking
+Establishing a repeated state requires the candidate or artifact identity, the
+loaded constraints, tool and checker versions and settings, seed, violation
+identities and severities, relevant checkpoint or tool state, and the action
+that led there. A cycle detector can then compare state signatures and action
+history rather than treating an equal count as an equal state. The count trace
+finds suspicious behavior. The preserved identities determine whether the
+workflow actually revisited a state.
 
-An agent rewarded solely for maximizing IPC and minimizing Area invites Goodhart’s Law.[^fn-goodharts-law-c10] The most effective "reward hack" is for the agent to quietly strip out essential but un-rewarded features [@Lehman2020SurprisingCreativity], and models trained on simple reward hacks have been shown to generalize toward tampering with the reward mechanism itself [@DenisonEtAl2024Sycophancy].
+### Testing Interruption, Correction, and Recovery
 
-[^fn-goodharts-law-c10]: **Goodhart's Law**: When a measure becomes a target, it ceases to be a good measure [@Strathern1997Goodhart]. If an agent is evaluated solely on IPC, it will optimize strictly for that metric, even if it requires emitting physically impossible structures.
+An unattended workflow can turn a small disagreement into a large cost. A
+generator may rename a signal to fix lint, trigger equivalence failure, revert
+the change, and repeat the original lint failure. Two components can continue
+the cycle indefinitely if neither recognizes a repeated state and neither owns
+a retry limit.
 
-The sharpest version of that hack is already on record in @sec-architecture-20-ontology, a search that reached a clean timing report by deleting the clock definition rather than the critical path, so every stage of the flow reported success against a design whose sequential behavior was never exercised. That case belongs to formulation, where the reward was written. Evaluation owns the consequence, because no reward function polices itself and nothing in that score distinguished a design that met its constraints from one whose constraints had been removed. A benchmark that cannot fail a candidate whose constraints were never applied is not measuring the design, so the scoring rules have to confirm that the constraints a score claims to enforce were actually loaded, and that the candidate is still functionally equivalent to what was asked for, rather than trusting the optimizer's good intentions.
+::: {.callout-failure-mode title="A repeated-state loop"}
+**The trap.** A proposal component and a checking component repeatedly
+alternate between the same lint failure and the same equivalence failure.
 
-*   **Sacrificing Non-Functional Requirements:** Agents may artificially boost the XR SoC's PPA by silently deleting its Memory Management Unit (MMU), ECC parity bits, or branch-predictor security mitigations because they cost performance and area. Evaluators must enforce formal property checks so the agent cannot silently discard reliability or security to inflate its reward, and the check has to match the property class. ECC encode and decode behavior and memory-management permission enforcement are single-trace safety properties that assertions and a model checker genuinely cover. Freedom from a speculative or timing side channel is a relation between two executions rather than a property of one, so no single-trace assertion reaches it, and it needs self-composition or an equivalent relational method.
-*   **Testbench Loopholes:** Exploiting unspecified behavior and corner-case bugs in the simulator itself rather than improving the actual design.
-*   **Spaghetti RTL:** Agents may generate hyper-optimized but completely obfuscated "sea of gates" RTL. This prevents human engineers from performing manual ECOs (Engineering Change Orders). Evaluators score *structural legibility* and penalize obfuscation, and since no complexity metric has an agreed definition on synthesized RTL, the scoreable part is the part that needs none: whether repeated structure is expressed as a parameterized `generate` block rather than hardcoded instances, whether module boundaries survive into the netlist, and whether signal names remain recoverable. A legibility number reported without its convention is not comparable to anyone else's.
+**The mechanism.** Each component responds correctly to its immediate input,
+but the complete system has no cycle detector, shared retry budget, or stopping
+rule for repeated states.
 
-## The Canonical Reporting Standard
-
-If a research team or engineering group claims a breakthrough in autonomous hardware design, their evaluation must adhere to a strict reporting standard.
-
-This is not a second design-loop card. The card of @sec-architecture-20-ontology indexes one study and says what that study's evidence supports, and @sec-running-the-loop fills one in for a completed run. The standard below reports on an agent across many studies, so it records what the card cannot: how the search behaved over a trajectory, what it cost, what null it was measured against, and which system produced it. A team publishing an agent result owes both, one card per study it ran and one report for the agent that ran them.
-
-### Trajectory Efficiency and Simulator Tax
-
-Architecture imposes a steep Simulator Tax [@Kahng2018Machine]. Every unreasoned guess spends scarce EDA tool license tokens and saturates LSF/Slurm compute cluster core-hours. Reported cost must separate the model's inference footprint from the EDA environment's compute execution.
-
-To formalize this tax, the harness measures the area under the curve (AUC) of the agent's trajectory, plotting total Compute Cost (measured in core-hours and license checkout time) and Wall-Clock Time (Makespan) against the best reward seen so far. That translates raw simulator round-trips into a measurement of methodical search. Agent A and Agent B must be compared on total Compute Cost and Makespan, not just cumulative tool calls.
-
-A trajectory AUC has no meaning until a null curve sits beside it. Random search over the same action space at the same simulator budget is embarrassingly hard to beat in high-dimensional design spaces, and the baseline search discipline that @sec-methods-generation-prediction-optimization develops is what an agent's curve must clear before the search counts as reasoning rather than spending. Clearing it means clearing it by more than the apparatus produces by accident, which is the A/A noise floor defined below, rather than by any gap that looks convincing on a plot.
-
-That comparison is also the instrument the stop condition of @sec-moonshot has been waiting for. The Lighthouse program is failing if, under matched baselines and budgets, AI carries no step of the work that conventional methods could not already do as well and more cheaply, and a null curve at equal budget sitting beside a trajectory scored on a pinned system is what would eventually settle that. Nothing in this chapter returns a verdict, because no published result yet reports that comparison over enough of the flow to attempt one.
-
-Because agents differ in both quality and cost, the comparison is a cost-quality plane. On that plane, the agents worth trusting are the non-dominated points on the frontier that clear the human-expert baseline within an affordable compute budget (@fig-agent-pareto).
-
-![**The agents worth trusting are the non-dominated ones on the cost-quality frontier:** each agent is a point at its total evaluation compute and best quality reached, and those below the frontier are dominated, beaten on both axes by a cheaper or better agent.](images/F10-agent-pareto){#fig-agent-pareto width="80%" fig-alt="A scatter plot of agents on axes of total evaluation compute versus design quality, with a Pareto frontier of non-dominated agents."}
-
-The cost axis cannot be waved away, because total search compute is a U-shape with expensive extremes at both ends (@fig-compute-economics). Spending 100x more on upfront LLM inference (seconds and cents) is almost always economically viable if it prevents even *one* 24-hour physical synthesis cycle.
-
-![**The economics of agentic evaluation:** The total computational cost forms a U-shaped curve. Weak agents incur a large EDA Simulator Tax through brute-force interaction. Frontier agents minimize simulation but incur a high Transformer inference cost.](images/F10-compute-economics){#fig-compute-economics fig-alt="A U-shaped curve showing that total evaluation compute is a trade-off between inference cost and simulation cost." width=80%}
-
-This dictates the ratio of inference latency to tool latency. If the model takes 30 seconds of inference to generate a Tcl script and synthesis takes 10 seconds, the model is the bottleneck. If synthesis takes 10 hours, the model's inference time is effectively free. The same ratio bounds how much unsupervised iteration is affordable, because an unattended loop can convert a cheap disagreement into an expensive one.
-
-::: {.callout-failure-mode title="The infinite loop in automated CI/CD"}
-**The trap.** Two agentic systems, a Generator and a Verifier, can autonomously close RTL bugs without human intervention.
-
-**The mechanism.** An automated CI/CD actor-critic agent pair ran unattended and consumed cloud compute for as long as it was left alone, because it was trapped in an infinite loop. The Generator fixed a simple Verilator lint error by renaming a signal, which immediately triggered a formal equivalence failure. The Verifier demanded a fix, so the Generator reverted the change, re-introducing the lint error. Neither actor could detect that the pair had already visited this state, so the cycle repeated until a human intervened.
-
-**The lesson.** Multi-agent systems without cycle detection and strict retry limits will happily convert simple logical conflicts into open-ended cloud billing events. Cost metrics must be part of the evaluation, not an afterthought. This case is a composite of a recurring multi-agent failure pattern, not one documented incident.
+**The lesson.** Evaluation must test whether the complete workflow stops,
+releases tool resources, preserves the last trustworthy state, reports why it
+stopped, and can resume without restoring the failed action. This is an
+illustrative composite failure pattern, not one documented incident.
 :::
 
-### Statistical Rigor
+Operational red-team runs should deliberately trigger tool timeouts and
+process kills, queue or scheduler interruption, partial or nominally successful
+but incomplete reports, license-feature failures, scratch or database
+corruption, stale locks, incompatible incremental checkpoints, missing
+analysis modes or corners, and budget exhaustion.
+Measure time to detection, actions taken after the fault, ability to revoke
+tool access, state preserved for inspection, recovery time, repeated work, and
+whether the final evaluation excludes results produced after the failure.
 
-Because these systems are stochastic, a single run is an anecdote, not a measurement. Both deep reinforcement learning and language model generation have high variance; a lucky random seed can outperform an unlucky one, creating the illusion of an algorithmic breakthrough when the result is statistical noise [@HendersonEtAl2018DeepRL].
+Correction matters as much as interruption. A system that notices a malformed
+report but continues from state derived from it is not recovered. The
+evaluation should invalidate descendant artifacts and cached results, restore
+an evaluator-approved checkpoint, revoke or rotate affected credentials,
+release tool and license resources, rerun the affected checks, and trace which
+claims were withdrawn or re-established. It should also verify that no poisoned
+retrieval entry, script, checkpoint, or tool state remains active. When clean
+state cannot be reconstructed, the result remains unresolved.
 
-Agentic optimization often results in heavy-tailed or bimodal distributions because the LLM either completely fails (unroutable netlist) or discovers a massive optimization. With such distributions, the mean and standard deviation alone can misrank two stochastic agents; evaluators should report the median and interquartile range (IQR) to represent typical performance.
+## A Minimum Complete-System Protocol
 
-A rigorous benchmark must mandate:
+A minimum complete-system study can now connect the chapter's pieces.
 
-*   **A/A Noise Floor:** Before any A/B comparison of agents, run the A/A experiment. Rerun the same agent with new seeds, and separately push the same netlist through the flow under perturbations that should not matter, such as a different placement seed where the tool exposes one, a different thread or host count, or a logically neutral netlist edit. Do not simply run the identical flow twice. Commercial place-and-route tools are engineered for run-to-run determinism at a fixed version, host, and thread count, so an identical rerun reproduces the same result and reports a noise floor of zero. The several percent of scatter that is genuinely normal comes from chaotic sensitivity to benign perturbation, and that scatter is the noise floor of the whole apparatus. A claimed delta that does not clear it measures the tool's dice, not the agent, and only the variance that remains after subtracting the environment's share says anything about the model. This is the agent-evaluation form of the measurement-bias result of @Mytkowicz2009WrongData, where environment effects exceeded the effect under study.
-*   **`pass@k,t`:** Adapt traditional software `pass@k` to hardware's compilation bottlenecks. Define probability of success within $k$ attempts and a bounded EDA tool time $t$ to penalize outliers that cause simulation timeouts. Compute the rate with the unbiased estimator of @Chen2021Codex, drawing $n \geq k$ samples per task; the naive success fraction over $n$ samples is biased and is a common evaluation error.
+1. Freeze the two systems, environments, task population, legal actions,
+   evaluator-owned checks, and artifact identities.
+2. Predeclare primary architecture outcomes, blocking constraints, practical
+   margins, resource envelopes, stopping rules, and the treatment of failures.
+3. Balance or randomize paired tasks and operators, then keep a held-out
+   confirmation set outside system and evaluator tuning.
+4. Run both complete workflows while emitting the attempt record in
+   @tbl-attempt-cost-record and retaining every assigned task.
+5. Promote candidates through declared fidelity stages and audit cheap screens
+   against checks capable of observing the property at risk.
+6. Estimate paired task-level outcome and cost differences with uncertainty,
+   including failures, censored runs, and heterogeneous task effects.
+7. Run the declared sensitivity, component, benchmark-integrity, and red-team
+   tests under comparable opportunity.
+8. Report the claim as supported, unsupported, or unresolved, together with
+   the tasks, conditions, costs, checks, and transfer limits that produced that
+   status.
 
-    While `pass@k,t` is necessary to measure an agent's algorithmic search capability during benchmarking, traditional `pass@k` merely rewards at least one success in $k$ tries.[^fn-pass-at-k-c10] Deployment, however, usually needs the opposite property, high `pass^k` reliability (the probability that all $k$ runs succeed), so the agent does not fail on a single run and ruin a tape-out schedule. Furthermore, an abstract `pass@k` fails as a metric without rigorous physical place-and-route validation [@Kahng2018Machine]; a model might achieve a high `pass@k` on logic-only tests or Verilog linting, but if those passing designs contain unroutable congestion or violate physical layout rules, the metric is misleading.
+This protocol is connective tissue, not a universal experiment template. An
+RTL optimization study may progress from lint and simulation through synthesis
+and place and route, while a system-architecture study uses different checks.
+Both still preserve task identity, comparable budgets, attempt-level cost,
+fidelity promotion, and a final claim bounded by what actually ran.
 
-[^fn-pass-at-k-c10]: **`pass@k`**: A software metric measuring whether at least one of $k$ generated solutions passes the tests. In hardware the same score hides its cost, because generating 99 unroutable netlists alongside one working netlist still spends 100 physical-synthesis runs.
+## Reporting What the Evaluation Supports
 
-*   **Wilcoxon Signed-Rank Test:** Use non-parametric tests to verify whether one agent's trajectory shows a consistent paired improvement over another across matched task suites. The test detects a shift in the median paired difference, which is a weaker and more defensible claim than full stochastic dominance.[^fn-wilcoxon-c10]
-*   **Bootstrapping Confidence Intervals:** When comparing Agent A to Agent B, authors must use bootstrap sampling (e.g., 10,000 resamples) to establish 95% confidence intervals around the expected Simulator Tax or PPA gain, because the statistic is skewed rather than because the sample is small. Small $N$ is the reason to distrust the interval, not the reason to build it. Bootstrap validity is asymptotic in $N$ and not in the resample count, so at the $N < 30$ typical of hardware studies percentile intervals undercover badly on heavy-tailed outcomes; prefer bias-corrected and accelerated intervals and report the realized $N$ beside the interval.
-*   **Regression Test Caching:** For CI/CD regression tracking, evaluators must recognize that $T=0$ (greedy decoding) does not guarantee deterministic outputs due to floating-point non-determinism in GPU batching and MoE routing; regression systems must instead rely on strict seed tracking and semantic hashing of outputs. ML-Sys platforms must cache EDA outputs mapped to specific generated Verilog SHAs to prevent wasting license hours on unchanged proposals.
+A complete-system evaluation combines results across tasks with the matched
+comparison, costs, component tests, varied conditions, and attacks needed to
+judge the AI-assisted system. It should contain the fields in
+@tbl-complete-system-assessment.
 
-[^fn-wilcoxon-c10]: **Wilcoxon signed-rank test**: Pairs the two agents' scores task by task, ranks the absolute differences, and asks whether the positive ranks outweigh the negative ones by more than chance would produce. Because it uses ranks rather than magnitudes, it drops the normality assumption a paired t-test needs, but it is not shape-free. Its null is that the paired differences are symmetric about zero, and the bimodal outcomes described above, total failure against a large win, produce exactly the skew that inflates its error rate. Where symmetry is doubtful, the sign test assumes nothing about shape and costs power in exchange.
+| **Evaluation field** | **Required content** |
+| --- | --- |
+| Complete-system identity | Versioned AI-assisted workflow, represented information, methods, legal action space, tools, checks, people, budgets, and stopping rules |
+| Matched alternative | Strongest practical conventional or human-directed workflow and any remaining mismatch |
+| Benchmark identity and health | Task and benchmark versions, remaining contamination risk, refresh or retirement status, fidelity depth, and aggregation policy |
+| Architecture outcomes | Per-task supported results, failures, verification depth, maintainability, integration and change burden, comparators, uncertainty, and nonclaims; manufacturability, test, packaging, and bring-up evidence when the decision reaches silicon |
+| Coordination and decision quality | Role, state, information-use, tool, interpretation, and control failures; retrieval quality; useful observations; supported decisions; false accepts and rejects; escalation, stopping, recovery, and human overrides |
+| Incremental AI contribution | Difference in result quality, total cost, or both, with the comparison that supports it |
+| Total cost | Observed human setup, operation, review and decision work, model and general compute, data and samples, engineering tools by type and stage, verification, integration, recovery, and elapsed time; one-time amortized work and projected future change burden reported separately |
+| Reliability and robustness | Repeated-run success and failure distributions, calibration, worst cases, constraint violations, recovery and override behavior, apparatus sensitivity, and behavior under declared perturbations |
+| Transfer limits | Conditions where the result repeated, failed, or was not tested |
+| Component dependencies | Ablations, selected interactions, human intervention, and unresolved attribution |
+| Red-team results | Threat-model coverage; attacks and benign controls attempted against returned artifacts, workflow components, authority boundaries, and protected records; invalid acceptances, unauthorized access, false alarms, detection, interruption, correction, containment, recovery, defense cost, and residual uncertainty |
+| Program status | Supported, unsupported, or unresolved claim within named tasks, conditions, budgets, and checks |
 
-### The Base Metrics a Claim Must Report
+: **The final output states what the complete-system evaluation supports.** It
+gives architects the result needed for a responsibility and commitment
+decision without making that decision itself.
+{#tbl-complete-system-assessment tbl-colwidths="[24,76]"}
 
-Any rigorous publication or production deployment should report the same base metrics, one per concept (@tbl-evaluator-cheat-sheet). The rows compress the metric catalog of @tbl-agent-metrics into what a claim must publish.
+The assessment keeps system identity, benchmark health, architecture outcome,
+decision behavior, incremental contribution, cost, reliability, dependencies,
+attacks, and transfer limits separately inspectable. Program status comes last
+because it summarizes the tested evidence without authorizing architecture
+commitment.
 
-| **The Concept** | **The Metric to Report** | **Why It Must Be Reported** |
-| --- | --- | --- |
-| **Cost & Efficiency** | Total API Token Cost, Total Tool Calls, EDA License Hours | A 5% area reduction is meaningless if it required brute-forcing 10,000 synthesis runs. |
-| **Statistical Guarantees** | N (seeds), Bootstrap 95% CIs, Wilcoxon p-value | A single stochastic run is an anecdote, and a point estimate can misrank two agents whose score distributions overlap. |
-| **Reality Grounding** | Rank Correlation between Proxy Predictions and Ground Truth | Shows whether the proxy ordered candidates the way the slower tool does, in the region the search concentrated. A high correlation supports carrying a ranking forward; it does not establish that any one gain survives to silicon. |
-| **Trajectory Efficiency** | Area Under the Curve (AUC) of best reward vs. Compute Cost | Maps the agent's methodical reasoning over time to prove the search was causal, not random. |
-| **Convergence Stability** | DRC violation burndown rate, Monotonicity score | Demonstrates that the agent can navigate highly coupled constraints without oscillating. |
-| **Pareto Front Quality** | Generational Distance (GD), Inverted Generational Distance (IGD), with the reference set declared | GD reports how close the found points sit to the reference set (convergence); IGD reports how fully they cover it (diversity). Hardware has no true reference front, so say whether the set is a pooled non-dominated union of the arms, which makes the score comparable inside this study and not across studies. |
-| **Null Baselines** | AUC of random search and a tuned classical heuristic at equal budget | A trajectory counts as reasoning only if it beats random search and a tuned classical solver given the same compute. |
-| **System Identity** | Model, harness, and budget, pinned and published | An agent score is a property of the whole system, and the same model swings by tens of points under a different harness. |
-| **Environment Identity** | RTL, PDK and library, constraints, tool version, signoff corner | A percentage does not port across nodes; changing any element of this five-tuple creates a different benchmark. |
+The three status terms need explicit rules.
 
-: **A defensible autonomous-design claim reports cost, statistics, grounding, trajectory, convergence, diversity, null baselines, and system and environment identity together:** the base metrics a reviewer needs to quantify an agent's capability in hardware design. {#tbl-evaluator-cheat-sheet tbl-colwidths="[20,30,50]"}
+**Supported.** Across the predeclared task and condition coverage, repeated
+matched comparisons show either an architecture improvement that clears the
+minimum worthwhile effect within the acceptable total-cost envelope, or a cost
+reduction that clears its declared margin while architecture quality remains
+within the noninferiority margin. The paired effect and its uncertainty must
+clear the relevant decision boundary. The component dependencies, failures,
+attacks, and uncertainty must also be understood well enough to support the
+claim.
 
-When a suite has twenty tasks, someone will average, and how they average can flip the winner. Architecture settled this in 1986, when Fleming and Wallace [-@FlemingWallace1986HowNotToLie] showed that the arithmetic mean of normalized ratios rewards whoever picked the baseline, which is why SPEC has reported geometric means of SPECratios ever since.[^fn-geometric-mean-c10] Agent suites inherit the same law. Aggregate normalized scores with the geometric mean, publish the per-task results alongside, and treat any suite average whose winner changes under a different baseline as an artifact of arithmetic, not of capability.
+**Unsupported.** Matched comparisons with the declared task coverage and
+resolving power show neither a worthwhile architecture improvement within the
+acceptable cost envelope nor the required cost reduction at noninferior
+quality, or directly contradict the narrower claim being tested. A successful
+artifact can coexist with an unsupported AI-contribution claim.
 
-[^fn-geometric-mean-c10]: **Geometric mean**: The nth root of the product of n numbers rather than their sum divided by n; a SPECratio is one such number, a workload's runtime normalized against the same workload's runtime on a fixed reference machine. The ranking a geometric mean produces does not change when every score is renormalized to a different baseline, which is precisely the manipulation an arithmetic mean of ratios rewards.
+**Unresolved.** The credible alternative was not run, uncertainty obscures the
+difference, important costs were omitted, the task set is too narrow, a
+comparison lacks the resolving power to distinguish the declared margins, a
+paired interval overlaps the decision boundary, a disqualifying stage was not
+reached, or red-team failures leave the result unreadable. Unresolved is not a
+polite form of supported.
 
-### Calibrating Autonomy to Evidence
+::: {.callout-lighthouse title="The current Lighthouse evaluation"}
+The current manuscript does not contain the matched, repeated,
+implementation-facing comparison required to close the Lighthouse program
+test. @sec-running-the-loop supplies one limited simulator study.
+@sec-loop-patterns-across-stack shows why its local no-change result
+cannot justify freezing the array and interface and defines the target tests.
+No complete AI-assisted and credible alternative systems have yet run that
+target evaluation across the required conditions.
 
-The most consequential use of a measurement like this is an autonomy grant, a statement of what the agent may now do unsupervised, justified by the evidence level its results reached. A working calibration maps one to the other directly.
+The implementation-facing architecture outcome is therefore unresolved. The
+incremental contribution of AI is unresolved. The moonshot program status is
+also unresolved. This evaluation is useful because it identifies the exact
+comparison, costs, conditions, and attacks needed to change that status.
 
-::: {.callout-lighthouse title="What the XR agent has earned the right to do next"}
-Suppose an agent has been resizing the L2 in the 3\ W XR subsystem, and its results reach calibrated proxy evidence: a measured rank correlation against the golden simulator on this workload, a random-search null curve at equal budget sitting below its trajectory, and a noise floor from repeated identical runs. That evidence supports a grant, and the grant is narrower than the score makes it feel. The agent may propose and screen cache configurations without a person reviewing each one, because a wrong screen costs simulator time and nothing else. It may not advance a configuration into RTL evaluation, because that spends synthesis hours nobody budgeted and the proxy has never been checked against a signoff corner. It may not alter the rejection checks that produced its own score. Written down action by action, the grant survives the moment the workload shifts and the calibration decays, which a single number never does.
+The current evaluation contains the declared target, the simulator result,
+its transfer limits, the required implementation-facing tests, and these
+unresolved statuses. It does not contain versioned complete-system comparison
+arms, matched total costs, repeated-run reliability, implementation-facing
+attack results, or a closed contribution estimate.
 :::
 
-*   **Uncalibrated proxy evidence.** The agent's results exist only in a fast surrogate whose rank fidelity is unmeasured. The agent proposes; every candidate crosses a human review before any serious tool budget is spent on it.
-*   **Calibrated proxy evidence.** Rank fidelity is measured and acceptable in the region the search concentrates on, and the budgets are declared. The agent may iterate unsupervised inside the declared budget, and rejection checks may auto-reject its candidates without escalation.
-*   **Signoff-grade evidence with stable trajectories.** Candidates survive independent implementation checks, and the trajectory shows violations burning down monotonically across repeated runs rather than oscillating, with the agent clearing most failing checks on its immediately following attempt. Both quantities are scoreable as stated; a grant resting on convergence over the full vector objective is not, because no agreed score for that exists. The agent may batch its work and commit candidates directly into the human review queue.
-*   **At no evidence level** does the agent waive its own rejection checks, modify the checks that score it, or advance a candidate past the commitment boundary, the point in a flow after which reversing a decision costs more than living with it, which for silicon is the tape-out release and earlier for anything that ships to a customer. Those rights stay assigned to people, which is where @sec-what-architect-owns picks up.
+This status does not grant or withhold permission. A supported system-level
+claim can still leave residual risks an organization refuses to accept. An
+unsupported AI-contribution claim can still accompany a sound architecture
+produced by conventional work. The architect receives this evaluation and its
+named missing conditions. @sec-what-architect-owns takes up the separate
+question of authority, residual risk, and architecture commitment.
 
 ## Open Research Questions
 
-The metrics above standardize how an episodic agent is scored today. What remains open is how to score the properties this chapter can only name, how to charge an agent for the costs it pushes downstream, and how long any benchmark keeps measuring the capability it was built for.
+Evaluating an AI-assisted design system requires comparable architecture
+outcomes, complete cost accounting, reliable behavior, and tests that expose
+how the system fails.
 
-**Theme 1: Scoring a Multi-Objective Search.** Coverage of a tradeoff frontier is the natural way to score an optimizer, and hardware design has no reference front to measure coverage against. Pooling the non-dominated points of every arm in one comparison keeps the score meaningful inside that comparison and useless across studies, and progress over a vector objective has no agreed score at all.
+**Credible program comparison.** The comparison must remain meaningful across
+tasks and organizations without hiding the resources or decisions that differ.
 
-- Which reference set would make a Pareto-coverage score comparable across studies run by different groups?
-- What score captures monotonic progress over a vector objective without collapsing it into a single weighted sum?
+- **How should total architecture-workflow cost be compared across
+organizations?** Labor, tool access, queueing, data, and schedule consequences
+do not share one natural unit, and a single dollar value can conceal the
+resource that actually limits the work.
 
-**Theme 2: Pricing the Hidden Costs.** Nominal PPA scoring rewards stripping the margin a signoff flow reserves for variation, and a design can pass a typical corner while failing across process, voltage, and temperature. The same shifted burden reappears later in the flow, where a design that is cheap to generate can be expensive to prove. Proof effort is measurable in principle [@KangEtAl2024FVEval], and no benchmark yet scores a design by the work needed to prove it.
+- **How can an architecture benchmark remain representative as models, tools,
+workloads, and design practices change without losing comparability across
+versions?** Refresh is necessary to limit contamination and decay, but frequent
+change can make longitudinal results uninterpretable.
 
-- What score exposes a candidate that passes at the nominal corner by consuming the margin reserved for variation?
-- How can a benchmark price a generated design by the verification effort it pushes downstream?
+**Attribution and reliability.** A complete workflow contains interacting
+learned components, conventional tools, and human intervention whose effects
+may not separate cleanly.
 
-**Theme 3: Evaluation Beyond the Episodic Sandbox.** Real engineering is lifelong, and agents are scored inside episodic sandboxes that reset after every task. A reported percentage does not port across process nodes, and neither the capability behind it nor the calibration that made it readable has an instrument that outlives the episode.
+- **How can improvement be attributed among interacting system components
+without an infeasible number of ablations?** One-at-a-time replacement misses
+interactions, while exhaustive combinations can cost more than the architecture
+work being evaluated.
 
-- How much of an agent's capability on one process node transfers to the next?
-- What signal shows that the calibration behind an autonomy grant has stopped holding after the environment changed?
+- **Which variations are most predictive of failure when an AI-assisted system
+enters a new design program?** Repeated runs on one task measure only a narrow
+form of reliability, while broad variation across designs, tools, and operating
+conditions is expensive.
 
-**Theme 4: System Identity and Benchmark Decay.** An agent score is a property of a model, a harness, and a budget together, and no published result yet separates the three. Benchmarks also decay with no leaked data at all, once a community optimizes against a fixed target, and the neutral corpus of physically realistic designs and public trajectories that would let outsiders check either problem still sits behind proprietary walls.
+**Adversarial evaluation.** Red teaming should reveal consequential failures
+that ordinary tasks and visible checks do not expose.
 
-- What experiment separates the contribution of the harness from the contribution of the model in an agent's benchmark score?
-- What refresh and retirement policy keeps an architecture benchmark measuring capability after labs begin optimizing against its leaderboard?
+- **Which red-team tests best predict failures in real architecture workflows?**
+Reproducible synthetic attacks are useful, but their value depends on whether
+they expose unsafe design changes, corrupted checks, bad tool actions, or
+recovery failures that also arise in practice.
 
 ## Conclusion
 
-::: {.callout-design-principle title="Count the whole burden, not the local speedup"}
-An AI-assisted method is successful only if it reduces the total wall-clock time and engineering effort required to reach a defensible, tape-out-ready decision. Metrics that celebrate localized speedups, such as time-to-first-compile, say nothing about that total until the downstream burden is measured too. The standard in this chapter prices the search and not yet what the search leaves for physical synthesis, verification debugging, and human review, so treat a localized speedup as unproven rather than invalid, and say which downstream cost went unmeasured.
+::: {.callout-design-principle title="Evaluate the result, workflow, cost, and limits"}
+Judge an AI-assisted design workflow by the architecture it produces, the
+quality of its decisions, its total cost, and the conditions under which its
+advantage survives. Compare complete workflows and attack their assumptions
+before stating what they improve.
 :::
 
-Evaluating an AI architect is a different discipline than evaluating a compiled netlist. Hardware engineers must borrow the statistical rigor of machine learning evaluations, and ML researchers must constrain their agents with the uncompromising physical realities of the EDA toolchain.
+Evaluation separates the candidate architecture, configured technical design
+system, and complete workflow. The architecture result shows what the workflow
+achieved. Coordination and decision measures show whether it selected suitable
+methods and tools, preserved state, interpreted results correctly, and
+escalated when needed. Total cost shows whether a local speedup survived model
+use, data preparation, tools, verification, integration, review, recovery, and
+future change work.
 
-The chapter opened with a chain of three, and it closes on the same three. Measure the search trajectory and what it cost, rather than the artifact alone, because an agent that stumbles onto a passing configuration through brute force has not earned the result. Establish that the resulting score still means something, because a benchmark can arrive already memorized, decays once a community optimizes against it, and will report a margin its own apparatus produced by accident. Then pin the system and the environment behind the number, because a score nobody can attribute is a score nobody can compare. What the chapter builds is a measurement, not a permission. A measurement nobody can check has cost EDA hours and bought nothing.
+A credible comparison holds the architecture question and evaluator-owned
+checks fixed while comparing the strongest practical complete workflows.
+Repeated runs and varied conditions reveal whether the advantage survives
+changes in prompts, seeds, workloads, designs, tools, and operating conditions.
+Component replacements locate dependencies without pretending that
+interacting parts make independent, additive contributions. Healthy benchmarks
+keep these comparisons readable through clear identity, representative tasks,
+contamination controls, versioning, refresh, retirement, and reproducible
+reporting.
 
-The reporting standard is where most of that becomes checkable. A trajectory score means nothing until the environment and the system that produced it are pinned and a random-search null baseline sits beside it at equal budget. Two agent scores are not comparable until each names its model, its harness, and its budget, and a reported design gain is not readable until it names the RTL, process design kit, constraints, and tool versions behind it. Aggregate across a suite with the geometric mean of normalized ratios, never the arithmetic mean, and say which convention any reported metric used, since naming a metric is not the same as specifying one.
+Red teaming completes the evaluation. A system must face altered requirements,
+weakened checks, misleading feedback, hidden behavior inserted into returned
+designs, triggered misbehavior in workflow components, repeated-state loops,
+and failures of interruption and recovery. The result is not a universal trust
+score. It is a qualified account of where the system works, what it costs, what
+it depends on, and how it fails.
 
-What this replaces is blind optimism, not uncertainty. Several of the measurements named here cannot yet be specified. Hardware design has no reference frontier to score multi-objective coverage against, no published result separates a score's model from its harness and its budget, and the cost of the margin an agent strips is easier to name than to price. The discipline is in reporting an agent's autonomy at the evidence level its results actually reached, and in saying which parts of that evidence the field cannot yet produce.
-
-An autonomy grant says what a system may do. It does not say who answers when the system is wrong, and @sec-what-architect-owns draws that second line: what an organization can delegate, and what a named architect must own.
+For the current Lighthouse program, that account remains unresolved. The
+matched complete-system comparison has not been run across the target
+conditions and implementation checks. The resulting evaluation record can
+inform an architecture commitment, but it does not authorize one. The
+remaining question is what architects contribute, decide, and remain
+responsible for when the technical system can do substantial work.
