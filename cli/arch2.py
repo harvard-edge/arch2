@@ -5447,7 +5447,7 @@ def preview(
             f.write(content)
 
         render_cmd = ["quarto", "render", str(BOOK_DIR), "--to", fmt]
-        console.print(f"[cyan]preview[/cyan] rendering {target_match} to {fmt}...")
+        console.print(f"[cyan]preview[/cyan] rendering {target_rel} to {fmt}...")
         _run(render_cmd, cwd=ROOT)
         console.print(f"[green]Done.[/green]")
 
