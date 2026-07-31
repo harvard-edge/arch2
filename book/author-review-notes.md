@@ -3664,6 +3664,100 @@ relocate the material, or reconsider whether it belongs in Chapter 7. The pass
 should preserve technical depth while making the chapter's cumulative argument
 visible.
 
+### Chapter 10 Continuous-Read Notes
+
+**Title feedback.** The author prefers “Evaluating and Red-Teaming AI-Assisted
+Systems” over “Evaluating and Red-Teaming AI-Assisted Design Systems.”
+
+**Editorial question.** Removing *design* makes the title shorter, but
+“AI-assisted systems” can also name systems in medicine, finance, education,
+and other domains. Before applying the change, compare whether “AI-Assisted
+Architecture Systems” or another concise form preserves the book's scope more
+clearly. The title should reflect that the chapter evaluates the complete
+architecture workflow and its components, not only the generated design and
+not arbitrary AI-enabled products.
+
+**Learning-objective consistency.** Learning-objective sentences vary
+substantially in length and density across the book. Run a dedicated audit
+after the chapter structures stabilize. Each block should contain a small set
+of parallel, assessable reader capabilities rather than a mixture of short
+actions and long inventories of chapter terminology.
+
+The shared Claude rule now uses these soft constraints:
+
+- three to five objectives for a typical chapter;
+- one sentence and one principal capability per bullet;
+- a target of roughly 12–22 words;
+- review, rather than automatic rejection, beyond 28 words; and
+- parallel grammar and comparable abstraction across the block.
+
+The conclusion must still resolve the capabilities promised at the beginning.
+Do not shorten objectives by making them vague.
+
+**Ground evaluation in ML lessons.** Chapter 10 should synthesize established
+ML evaluation practice where it changes how architects evaluate an
+AI-assisted system. The research packet should cover at least:
+
+- benchmark contamination and temporal separation;
+- distribution shift and out-of-distribution behavior;
+- matched baselines and ablations;
+- variance, repeated trials, and reproducibility;
+- robustness and adversarial evaluation;
+- metric gaming and reward hacking;
+- calibration and selective deferral;
+- total compute, tool-call, simulation, and human-review cost;
+- security, backdoors, and supply-chain risks; and
+- red-team methods and their limits.
+
+The prose should not become a generic ML evaluation survey. Each imported
+lesson needs an architecture translation, such as unseen designs, changed
+workloads, new compiler or tool versions, expensive simulator calls, invalid
+artifacts, physical constraints, checker exploitation, or generated RTL that
+passes an incomplete testbench.
+
+**LiveCodeBench is a positive example with a required bridge.** Preserve the
+use of LiveCodeBench to explain time-split evaluation and contamination
+resistance. Make the transfer explicit. Architecture evaluation may similarly
+separate training or development material from later designs, workloads,
+toolchain versions, bug fixes, or benchmark releases. State what the analogy
+does and does not establish rather than leaving the coding benchmark to carry
+the architecture lesson implicitly.
+
+**Introduce red teaming before transferring it.** Computer architects may not
+know the term's use in cybersecurity and AI safety. At first use:
+
+1. give a plain definition and briefly identify the adjacent practice from
+   which the chapter borrows it;
+2. explain what conventional evaluation fails to expose;
+3. translate the method into architecture-specific attacks, stress cases, or
+   attempts to exploit the workflow; and
+4. state that red teaming finds failures but does not prove their absence.
+
+Candidate architecture applications include inducing invalid tool actions,
+gaming a proxy metric, exploiting an incomplete checker, triggering
+pathological simulator or compiler behavior, hiding a physical violation,
+testing prompt or artifact injection through design files, and exposing
+backdoors or contamination in a learned component.
+
+**Book-wide adjacent-field vocabulary rule.** Whenever the lecture borrows a
+term from ML, statistics, software engineering, security, control, or another
+field, do not drop it into architecture prose as assumed knowledge. Define the
+term in its home context, cite the relevant literature, explain why it is useful
+for architecture, give an architecture example, and state where the analogy
+stops. This is one of the lecture's central synthesis moves, not merely a
+glossary requirement.
+
+**Architecture tie-back test.** Every Chapter 10 example, metric, benchmark,
+and failure mode should answer at least one architecture question:
+
+- Did the workflow produce a supported architecture result?
+- Did it improve the architecture decision relative to a serious baseline?
+- What complete work and cost were required?
+- Which design, workload, software, tool, physical, or verification condition
+  limits the result?
+- Could the system be induced to produce or accept an architecturally invalid
+  result?
+
 ### Dedicated Chapter-Prose Workflow
 
 **Author direction.** Later chapters should receive the same writing attention
