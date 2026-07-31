@@ -302,7 +302,7 @@ technology assumptions under `PVT-A`; an implementation return carries its
 corner, mode, libraries, constraints, and flags; and `SIM-A`, `CACHE-A`, and
 `PM-A` carry workload, software, warm-up, region, seed, checkpoint, and model
 configuration. The environment preserves these fields without judging their
-sufficiency. A timing-slack return of `-12\ ps` at a slow process corner is not
+sufficiency. A timing-slack return of $-12\,\mathrm{ps}$ at a slow process corner is not
 interchangeable with the same numeric return at a typical corner. The number
 travels with the condition that gives it meaning.
 
@@ -417,10 +417,11 @@ artifacts, or time out after producing a parseable report. An infrastructure
 failure may be retryable, while a cancelled job may not be. None of these
 fields says what the candidate means until later measurement qualification.
 
-The execution interface uses two linked records. @lst-environment-interface
-keeps the request identifiable from validation through termination.
+The execution interface keeps the request identifiable across three linked
+parts. @lst-environment-interface validates and admits one attempt without
+silently changing its meaning.
 
-```{.text #lst-environment-interface lst-cap="**One request remains identifiable through execution:** Request identity, scheduling state, termination, retry, reset, and resource use remain connected."}
+```{.text #lst-environment-interface lst-cap="**Admission preserves request identity:** Validation, setup, and admission operate on one attempt whose immutable fields cannot be silently reused."}
 envelope, created = create_attempt_once(
     submission_key,
     attempt_id, request_id, candidate_id, condition_id,
@@ -456,7 +457,12 @@ if submission.status is REFUSED:
         artifact_status=NOT_CREATED,
         parse_status=NOT_RUN
     )
+```
 
+Once admitted, @lst-environment-execution keeps scheduling, termination, and
+resource use attached to that same attempt.
+
+```{.text #lst-environment-execution lst-cap="**Execution preserves operational state:** Queueing, cancellation, timeout, termination, and resource use remain connected to the admitted attempt."}
 job_id = submission.job_id
 record scheduling_state=current_scheduler_state(job_id)
 
@@ -484,6 +490,20 @@ record final scheduler state
 record queue_time, run_time, cpu_time, gpu_time,
        peak_memory, storage_written, license_occupancy
 ```
+
+Recording candidate identity before submission prevents late returns from
+attaching to whichever candidate is current when a job finishes. Repeating
+submission with the same idempotency key returns the existing attempt or job
+identifier rather than launching duplicate work. An intentional retry receives
+a new attempt identifier, links to its parent, and consumes the declared retry
+budget.
+
+Cancellation also remains a request until termination is confirmed. A process
+may report cancellation, terminate after producing partial artifacts, or
+complete before the cancellation takes effect. The environment retains any
+late return under its original attempt. It does not expose that return as a
+live observation until the current request revision and budget policy admit
+it.
 
 After the process stops, @lst-environment-return records what happened to the
 process, expected artifacts, and parser as separate outcomes.
@@ -515,20 +535,8 @@ return envelope(
 )
 ```
 
-Recording candidate identity before submission prevents late returns from
-attaching to whichever candidate is current when a job finishes. Repeating
-submission with the same idempotency key returns the existing attempt or job
-identifier rather than launching duplicate work. An intentional retry receives
-a new attempt identifier, links to its parent, and consumes the declared retry
-budget.
-
-Cancellation also remains a request until termination is confirmed. A process
-may report cancellation, terminate after producing partial artifacts, or
-complete before the cancellation takes effect. The environment retains any
-late return under its original attempt. It does not expose that return as a
-live observation until the current request revision and budget policy admit
-it. The return then separates process completion, expected artifacts, and
-parser status so later review can locate the failed work.
+The return separates process completion, expected artifacts, and parser status
+so later review can locate the failed work.
 
 The resource record is a typed vector rather than one opaque cost field
 (@tbl-attempt-resource-record). Fields that the environment cannot observe
@@ -889,7 +897,7 @@ throughout the chapter in one place (@tbl-environment-contract).
 | **Candidates and fixed state** | `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`; cache policy `CACHE-POLICY-A`; NoC `NOC-A`; memory system `MEMSYS-A`; compiler `COMPILER-A`; runtime `RUNTIME-A`; software image `SW-BASE-A`; and workload snapshot `XR-TRACE-A` with stable frame identifiers. |
 | **Permitted translation** | Serialize only `l2.capacity` values `2MB`, `3MB`, and `4MB` into declared `SRAM-A` and `SIM-A` inputs. A wrapper may change syntax and file layout but may not change architecture meaning. |
 | **Tool and condition identities** | `SRAM-A` under `PVT-A`, followed by `SIM-A` with `CACHE-A` and `PM-A`. The record retains exact versions or hashes, relevant flags, host or container identity, seeds, and reset state. |
-| **Execution order** | Run one SRAM evaluation per capacity. After the required area and access-time fields parse successfully, dispatch no `SIM-A` attempt for a capacity whose returned area exceeds `1.5\ mm^2^` or whose returned access time exceeds `2.5\ ns`. This predeclared predicate controls only the next tool call and does not label the candidate rejected. Run the shared 2\ MB baseline and other authorized alternatives under matched workload and software conditions. |
+| **Execution order** | Run one SRAM evaluation per capacity. After the required area and access-time fields parse successfully, dispatch no `SIM-A` attempt for a capacity whose returned area exceeds $1.5\,\mathrm{mm}^2$ or whose returned access time exceeds $2.5\,\mathrm{ns}$. This predeclared predicate controls only the next tool call and does not label the candidate rejected. Run the shared $2\,\mathrm{MB}$ baseline and other authorized alternatives under matched workload and software conditions. |
 | **Expected returns** | Area, access time, cache-local energy and leakage, matched frame records, 99th-percentile frame-time inputs, capacity misses, subsystem dynamic and leakage power, warnings, reports, and raw logs. |
 | **Budget and stop** | Three SRAM evaluations and no more than four cycle-level attempts, including infrastructure reruns. Stop on budget exhaustion, missing required inputs or tools, no eligible alternative, or completion of all authorized work. |
 | **Failure and retry behavior** | Refuse invalid requests before invocation. Record timeouts, cancellations, license failures, host failures, stale-state failures, missing outputs, and parser failures separately. A retry creates a new attempt linked to its parent and consumes the declared run budget. |
@@ -933,15 +941,15 @@ their record status. They exercise the record rather than predict the
 Lighthouse design, and fields absent from the construction remain marked
 unreported.
 
-| **Constructed Attempt** | **Candidate and Constructed State** | **Constructed Outcome and Record Status** | **Return Included in the Teaching Trace** | **Known Cost and Lineage** |
+| **Attempt** | **Candidate and Constructed State** | **Constructed Outcome and Record Status** | **Return Included in the Teaching Trace** | **Known Cost and Lineage** |
 | --- | --- | --- | --- | --- |
-| `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.2\ mm^2^` and access time `2.1\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
-| `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.4\ mm^2^` and access time `2.4\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
-| `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area `1.7\ mm^2^` and access time `2.8\ ns`. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The trace includes no `SIM-A` request and places area and access time above the dispatch limits. Parser status and the exact dispatch event remain unreported. This is a constructed scheduling outcome, not a design verdict. |
-| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Constructed clean execution included; record intentionally incomplete. | A baseline frame summary and subsystem dynamic plus leakage power `2.90\ W` are included. Underlying matched frame records, artifact identity, and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
+| `SRAM-2-A1` | `L2-2M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.2\,\mathrm{mm}^2$ and access time $2.1\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-3-A1` | `L2-3M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.4\,\mathrm{mm}^2$ and access time $2.4\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call; child candidate is known; all other cost and lineage fields are unreported. |
+| `SRAM-4-A1` | `L2-4M-A` under `PVT-A`; the exact serialized input is unreported. | Constructed execution included; record intentionally incomplete. | Area $1.7\,\mathrm{mm}^2$ and access time $2.8\,\mathrm{ns}$. Cache-local energy and leakage, raw report identity, and parse status are unreported. | One SRAM call. The trace includes no `SIM-A` request and places area and access time above the dispatch limits. Parser status and the exact dispatch event remain unreported. This is a constructed scheduling outcome, not a design verdict. |
+| `SIM-2-A1` | `L2-2M-A`, `XR-TRACE-A`, and `SW-BASE-A`; exact clean-state identity unreported. | Constructed clean execution included; record intentionally incomplete. | A baseline frame summary and subsystem dynamic plus leakage power $2.90\,\mathrm{W}$ are included. Underlying matched frame records, artifact identity, and parser fields are unreported. | Cycle attempt 1 of 4; baseline relationship known; other cost and lineage fields unreported. |
 | `SIM-3-A1` | `L2-3M-A` with stale constraint state. | The trace includes a stale-state setup failure. | No candidate return. Diagnostic and partial-artifact identities are unreported. | Cycle attempt 2 of 4. A later clean attempt is included, but retry parent, reset mechanism, and reset-state identity are unreported. |
-| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean 3\ MB attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
-| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean 3\ MB attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A2` | `L2-3M-A`; one of two clean attempts under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean $3\,\mathrm{MB}$ attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 3 of 4; exact parent, cost, and output lineage unreported. |
+| `SIM-3-A3` | `L2-3M-A`; the clean repeatability attempt under conditions constructed as matched to baseline. | Constructed clean execution included; attempt-level completeness unverified. | The trace says grouped frame, cache, and power summaries span both clean $3\,\mathrm{MB}$ attempts, but it retains neither their values nor attempt-level attribution. | Cycle attempt 4 of 4; budget exhausted; exact parent, cost, and output lineage unreported. |
 
 : **An execution record preserves missing information as carefully as returned
 values.** The constructed cache chronology retains candidate state, failure,
