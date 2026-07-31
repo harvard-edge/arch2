@@ -3403,13 +3403,149 @@ conditions under which it transfers, and the architecture example that would
 make the lesson concrete. The result should remain an architecture chapter,
 not a summary of ML data practice.
 
-### Chapter 5 Continuous-Read Note
+**Licensing needs visible treatment.** Licensing currently appears in several
+paragraphs, examples, and the dataset checklist, but the reader should not have
+to assemble the issue from scattered references. Give access, licensing, and
+redistribution a named, visible passage near the sources or dataset-building
+discussion. It should explain how licenses and contractual restrictions affect
+what may be collected, used for training, redistributed, published as a
+benchmark, or retained in a project.
+
+The architecture-specific discussion should distinguish public code licenses,
+RTL and IP restrictions, foundry process design kit (PDK) terms, EDA tool and
+report restrictions, workload and trace access, and the rights attached to
+derived or generated artifacts. Keep the treatment technically useful and
+source-backed without presenting legal advice. This probably warrants a named
+H3 or a substantial callout, not a new chapter-level H2.
+
+### Chapter 5 Continuous-Read Notes
 
 **Section 5.1.** The section moves too abruptly from roles and feedback budgets
 to “eight fundamental roles.” Rebuild the conceptual entry so the reader first
 understands why roles are a separate axis from prediction, generation, and
 optimization. This observation should inform the audit of every Section x.1,
 not only Chapter 5.
+
+**The opening sentence assumes its comparison.** “Approach selection begins
+with a simpler question than which technique to use” does not say what approach
+is being selected, and *simpler* asks the reader to accept a comparison that
+has not been established. State the engineering context and the actual
+question directly. A candidate direction is:
+
+> Selecting an approach for an architecture study begins by asking what work is
+> limiting progress and whether the represented problem can be settled
+> directly.
+
+This is clearer than calling the question simpler. Audit book-wide uses of
+*simple*, *simpler*, *obvious*, *clear*, and similar comparative judgments.
+Each should either name the basis of the comparison or be replaced by the
+substantive claim.
+
+**Roles should not become anthropomorphic job titles.** Existing engineering
+teams provide useful evidence for decomposing work into proposal, screening,
+search, critique, repair, checking, explanation, and coordination. The chapter
+should acknowledge those precedents. It should not imply that an AI-assisted
+system must imitate a human organization or assign one agent to each familiar
+job.
+
+The durable distinction is between externally inspectable engineering
+functions and the internal organization used to perform them. An agent or
+multi-agent system may discover a different internal procedure, combine
+several functions, or reorganize them dynamically. That freedom is acceptable
+when its inputs, outputs, permitted actions, costs, checks, and responsibility
+boundaries remain visible. The method should preserve engineering invariants
+without prescribing an agent's internal reasoning process.
+
+**Literature grounding for roles and compositions.** Build a source packet that
+tests whether recent architecture, EDA, software-engineering, tool-using-agent,
+and multi-agent systems actually exhibit recurring functional roles or
+compositions. Use the papers to support or challenge the proposed taxonomy, not
+merely to attach citations to eight author-defined labels. Look for evidence
+about:
+
+- functional specialization versus one general controller;
+- planner, proposer, critic, checker, repair, and tool-execution patterns;
+- centralized versus distributed coordination;
+- learned versus conventional components in one system;
+- where human review remains part of the composition; and
+- systems whose internal discovery process does not mirror a human team.
+
+The chapter should report patterns that survive comparison across systems and
+should say when the evidence is still too immature to support a fixed taxonomy.
+
+**Section 5.1 needs a full reader-flow pass.** The content is useful, but the
+writing quality and pacing drop after the opening. The section moves among the
+smallest sufficient approach, four decision layers, eight roles, two large
+tables, and method-family distinctions faster than a new reader can build the
+relationships. Map the teaching job of every paragraph and table, introduce
+one distinction at a time, and decide whether both tables are needed at their
+current size and location.
+
+**Section 5.2.1 does not introduce its procedure.** “A Conditional Selection
+Guide” begins with “Use the following sequence before selecting a learned
+method,” but it does not first explain what decision the sequence supports,
+why the order matters, or what result the reader should have at the end. Give
+the guide a short motivating setup, define its output, and walk through one
+architecture example before or alongside the full sequence. Read it as a
+graduate student attempting to use the guide, not as its author scanning a
+completed framework.
+
+**Section titles need a plain-language audit.** “Result Economics and Feedback
+Budgets” sounds coined and abstract rather than like language an architect
+would naturally use. The material is important, but the title weakens it.
+Candidate directions include “Counting the Full Cost of a Method” or “Method
+Cost and Evaluation Capacity.” Select a title only after the section's exact
+teaching job is clear.
+
+Do not automatically demote or fold this material into a deeper subsection.
+Total method cost and limited evaluation capacity are central to method choice
+and may deserve their own H3. The structural problem may be the name and
+transition rather than the section's existence. Avoid creating an H4 merely to
+hide an awkward H3.
+
+**Section 5.7.1 is too dense at entry.** “Constrained Generation and Compiler
+Tuning” reaches a large table before establishing the design situation,
+comparison, or reason for the table. Add a narrative setup that explains the
+two construction paths, what must be held constant, and what the table lets the
+reader compare. Then determine whether the table should remain whole, be
+reduced, or follow a short worked example.
+
+**Open questions inherit the quality drop.** The Chapter 5 research agenda
+should ask technically precise, paper-sized questions about method selection,
+composition, support, cost, and checks. It should not restate the chapter's
+taxonomy in dense language. Apply the book-wide theme-and-bullets format and
+test each question with a fresh reader.
+
+### Dedicated Chapter-Prose Workflow
+
+**Author direction.** Later chapters should receive the same writing attention
+as the opening chapters. Chapter 5 shows that technically sound content can
+still lose quality through rushed exposition, dense tables, abstract section
+titles, and missing transitions.
+
+**Proposed workflow.** Run a dedicated prose and reader-flow pass with fresh
+subagents, one chapter at a time:
+
+1. Give each chapter agent only the approved book north star, chapter purpose,
+   section goals, relevant author feedback, and that chapter's source.
+2. Ask the agent to produce a reasoning map before editing. It should identify
+   the job of every section, the claim of every paragraph, and the purpose of
+   every table or figure.
+3. Use a separate reader agent to flag unclear assumptions, unexplained
+   comparisons, dense entries, weak transitions, and language that sounds
+   coined or machine-written.
+4. Let a revision agent propose focused changes one section at a time. Do not
+   authorize a wholesale chapter rewrite.
+5. Have the main editor compare each proposal against the approved chapter
+   architecture, technical sources, and neighboring chapters before accepting
+   it.
+6. Run a second fresh-reader pass on the revised section.
+7. Finish with one book-wide title audit and one chapter-level stitch pass.
+
+Parallelize chapter diagnosis and source research where outputs do not touch
+the same files. Apply prose changes sequentially or in isolated worktrees so
+that section transitions and chapter consistency remain under central review.
+Subagents supply fresh attention; they do not replace editorial judgment.
 
 ### Verification Required After Editorial Changes
 
