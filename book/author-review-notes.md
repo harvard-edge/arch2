@@ -3561,6 +3561,109 @@ architectural consequence rather than restate the rows. Maintain enough prose
 between tables that the chapter advances as an argument about environments,
 not as a catalog of record formats.
 
+### Chapter 7 Continuous-Read Notes
+
+**The chapter's purpose is not yet obvious enough.** A reader can follow the
+local move from a tool return to interpretation, but the chapter does not state
+its complete teaching job sharply enough. Chapter 7 should teach an architect
+how to turn a returned signal into qualified feedback that can support a
+bounded claim or a justified change.
+
+A candidate one-sentence contract is:
+
+> Chapter 7 shows how to bind a tool return to the design and conditions that
+> produced it, determine which property it addresses, compare it fairly, state
+> its uncertainty and scope, and update only the object the result actually
+> implicates.
+
+This separates Chapter 7 from its neighbors. Chapter 6 establishes what ran and
+what returned. Chapter 7 establishes what that return means and what it can
+support. Chapter 8 uses qualified feedback while running a complete study.
+Chapter 9 asks what survives when the problem changes. Chapter 10 evaluates the
+complete result and process.
+
+**Figure 7.1 is the right conceptual spine.** “A Tool Return Gains Meaning in
+Stages” captures the chapter's unique movement:
+
+1. preserve the execution return and lineage;
+2. qualify a returned field as a measurement or another typed result;
+3. construct a matched comparison;
+4. interpret the comparison for one named property and scope; and
+5. route the supported update, non-update, or reopening.
+
+Use this progression to audit the section order and remove material that does
+not help the reader perform one of these moves.
+
+**Current section jobs to test.**
+
+- **7.1, From Tool Return to Feedback:** Establish why execution status and
+  interpretation are different, then introduce the staged qualification path.
+- **7.2, Sources of Feedback:** Explain why human review, tools, learned
+  methods, and deployed systems return signals with different latency,
+  locality, coverage, and failure modes. The section should serve later
+  qualification rather than remain a general taxonomy.
+- **7.3, Qualifying Empirical Measurements:** Teach what turns a numerical
+  field into a usable architecture measurement, including identity, quantity,
+  unit, conditions, extraction status, variability, error, and recoverable
+  source.
+- **7.4, Formal Verification and Its Scope:** Distinguish proof,
+  counterexample, bounded-only, and inconclusive outcomes, and show how
+  property, model, assumptions, bounds, fairness, and vacuity limit the claim.
+- **7.5, Making Measurements Comparable:** Teach matched baselines,
+  decision-relevant differences, uncertainty, confounding, and selection
+  effects.
+- **7.6, Testing Explanations and Proxies:** Separate an observed outcome from
+  its proposed mechanism and determine when a proxy remains adequate for the
+  stronger property.
+- **7.7, Scope, Uncertainty, and Assurance:** Show that checks cover different
+  properties, may share failure modes, and should grow with the consequence
+  and reversibility of the intended use.
+- **7.8, Feedback That Changes the Work:** Route the result to the environment,
+  representation, method, study, model, design, or project record. Preserve a
+  valid “no change” outcome and define when prior support must be reopened.
+
+**Technical-depth test.** The current chapter already contains substantial
+technical material, including empirical uncertainty, formal verification,
+vacuity, matched comparisons, proxy mismatch, confounding, correlated checks,
+waivers, and reopening conditions. The main risk is not superficiality alone.
+It is that these topics read as several adjacent mini-lectures rather than one
+architecture discipline.
+
+Each section should therefore answer three questions:
+
+1. Which architecture mistake does this distinction prevent?
+2. What exact record, comparison, property, or check would an architect use?
+3. What stronger conclusion does the result still fail to support?
+
+Use concrete architecture returns such as simulator statistics, timing slack,
+power estimates, formal counterexamples, physical-rule violations, RTL
+equivalence results, and post-silicon telemetry. Do not add generic statistical
+or ML terminology unless it changes how an architect interprets one of those
+returns.
+
+**Verification should remain the center of gravity.** The chapter must explain
+that generation is not the hard end of the problem. A plausible artifact still
+needs property-specific checks, and no one check establishes general
+correctness. Formal verification belongs here as one powerful class of
+property-specific evidence, not as a universal replacement for simulation,
+implementation, measurement, or review.
+
+**Learning needs a narrower meaning.** If the title retains “Learning,”
+distinguish project learning from model training. A project can learn that a
+candidate failed, that a comparison is unresolved, or that an assumption was
+wrong without turning the return into training data. If this distinction is
+not central enough to justify the title, consider whether “Feedback,
+Verification, and Confidence” or “From Tool Returns to Supported Claims” states
+the chapter's job more directly. Do not rename it until the section audit
+confirms the intended center.
+
+**Reader-flow pass required.** Have a fresh architecture reader summarize the
+claim and resulting capability after every section. If the reader cannot say
+how the section advances Figure 7.1's progression, revise the transition,
+relocate the material, or reconsider whether it belongs in Chapter 7. The pass
+should preserve technical depth while making the chapter's cumulative argument
+visible.
+
 ### Dedicated Chapter-Prose Workflow
 
 **Author direction.** Later chapters should receive the same writing attention
