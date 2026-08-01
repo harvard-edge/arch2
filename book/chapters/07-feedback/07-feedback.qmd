@@ -32,8 +32,9 @@ trustworthy and what, if anything, it can support. Empirical checks qualify
 observed or computed quantities from runs, experiments, prototypes, or deployed
 systems. Dynamic verification is one empirical form in which tests, simulation,
 or emulation exercise an artifact and observe named behaviors. Formal methods
-instead establish logical status for a property over a model under stated
-assumptions. These approaches are complementary, not interchangeable. Feedback
+instead use mathematical models and logic to establish the status of a property
+over a model under stated assumptions [@Clarke2018ModelChecking]. These
+approaches are complementary, not interchangeable. Feedback
 interprets the qualified result for the named object and identifies the next
 justified action. Learning is what the work improves or retains because of that
 interpretation. A return may report a measurement, expose a failure, localize a
@@ -74,7 +75,7 @@ After reading this chapter, you can:
   conditions, uncertainty, and decision margins.
 - Interpret empirical uncertainty and formal status without widening the
   property, assumptions, bounds, or coverage.
-- Test proxies and explanations for support, calibration, confounding,
+- Test proxies and explanations for support, numerical calibration, confounding,
   variability, selection bias, and robustness.
 - Use qualified feedback to choose the next action and decide what to retain
   within a run, across a project, and for later work without turning every
@@ -200,7 +201,8 @@ support.
 Human review can carry substantial context but arrives intermittently.
 Architecture tools return property-specific values or artifacts whose
 conditions and coverage must be recorded. Learned methods return dense signals
-whose calibration and shared assumptions need checking. Deployment observes
+whose agreement with stronger checks, uncertainty behavior, and shared
+assumptions need checking. Deployment observes
 system behavior directly but supports an inference only after versions,
 workloads, and other possible causes are separated. The final column prevents
 speed, density, or direct observation from standing in for evidence quality.
@@ -213,6 +215,15 @@ candidate missed timing, but the final result does not identify which of
 thousands of generated choices caused the miss. Revision needs a signal at the
 right locality, such as path slack linked to the graph node, parameter, or
 transformation that changed.
+
+Feedback engineering offers a useful precedent. It separates whether the state
+needed for a corrective action is observable from the design of that action,
+and it treats delay as part of the feedback path
+[@AstromMurray2008FeedbackSystems]. A multi-day architecture tool return can
+leave the cause of a failure only partially observable even when the final
+outcome is clear. The analogy stops there. This chapter does not model design
+search as a linear controller; it borrows the narrower lesson that available
+signals and their delay limit which correction is justified.
 
 Handling that delayed result begins with lineage rather than causal
 attribution. Bind the return to the exact candidate, parent actions, represented
@@ -464,8 +475,10 @@ constrained-random stimuli, coverage-guided generation, emulation, formal
 methods, and post-silicon testing complement one another because exhaustive
 simulation is generally infeasible. Code coverage reports exercised
 structures. Functional coverage reports events or bins defined by the
-verification plan. Neither reports the fraction of every reachable behavior
-checked, while a formal proof covers no property that was never written.
+verification plan. SystemVerilog defines functional-coverage constructs such as
+covergroups, coverpoints, bins, and crosses [@IEEE2023SystemVerilog]. Neither
+coverage family reports the fraction of every reachable behavior checked, while
+a formal proof covers no property that was never written.
 
 Published accounts of the Pentium floating-point division (FDIV) failure
 document both the missing table entries and Intel's \$475 million pretax charge
@@ -526,9 +539,11 @@ $$
 The sign convention must be stated. Positive may mean improvement for
 throughput and regression for latency. A percentage must name its
 denominator. An aggregate must state whether it is a mean, percentile, maximum,
-geometric mean, or another statistic. Without those choices, two correct
-numbers can still form an incoherent comparison
-[@FlemingWallace1986HowNotToLie].
+geometric mean, or another statistic. For positive ratios normalized to a
+reference, the geometric mean preserves the relative interpretation across a
+benchmark set; an arithmetic mean of those ratios can depend on which system is
+chosen as the reference [@FlemingWallace1986HowNotToLie]. Without those choices,
+two correct numbers can still form an incoherent comparison.
 
 ### Matching Factors That Can Change the Result
 
@@ -552,16 +567,18 @@ the same tool [@GutierrezEtAl2014SourcesOfError;
 
 Repeated measurements estimate run-to-run variability when the flow or
 workload is variable. Paired resampling can preserve the relationship between
-matched baseline and candidate frames.[^fn-paired-block-resampling-c07]
-Numerical tolerances, finite sampling, heuristic variation, and model error
-may require different treatments. One generic error bar cannot represent all
-of them.
+matched baseline and candidate frames.[^fn-paired-block-resampling-c07] The
+resampled object is the paired-difference sequence $d_j$, not two independently
+resampled streams. The resulting interval assumes that this sequence is
+sufficiently stationary over the sampled region and that the declared block
+length preserves the dependence relevant to the statistic. Numerical
+tolerances, finite sampling, heuristic variation, and model error may require
+different treatments. One generic error bar cannot represent all of them.
 
-[^fn-paired-block-resampling-c07]: **Paired block resampling** resamples
-matched baseline and candidate observations together in contiguous blocks.
-Pairing preserves the comparison, while blocks preserve short-range dependence
-among nearby observations under the method's assumptions
-[@Kunsch1989BlockBootstrap].
+[^fn-paired-block-resampling-c07]: **Paired block resampling**: A block bootstrap
+resamples contiguous segments of the paired-difference sequence. Pairing keeps
+each baseline and candidate case together, while blocks preserve local
+dependence under the method's assumptions [@Kunsch1989BlockBootstrap].
 
 Consider a future, fully retained matched run that defines improvement as
 baseline latency minus candidate latency, so a positive value means the
@@ -627,11 +644,14 @@ establish only the sampled points or strata in named workload, candidate, tool,
 and condition dimensions. Neither the curves nor the spaces between observed
 strata qualify unsampled cases or dimensions.
 
-Here, *proxy qualification* is the umbrella term. Calibration refers only to a
-declared numerical or probabilistic relationship between the proxy and a
-reference. Observed qualification coverage records the sampled dimensions,
-strata or cases, and gaps. Held-out error, ranking stability, uncertainty, and
-fitness for the architecture decision remain separate tests.
+Here, *proxy qualification* is the umbrella term. Numerical calibration refers
+only to a declared mapping between proxy outputs and stronger reference
+outcomes. It is not confidence calibration, which asks whether stated
+probabilities or intervals match observed frequencies and is treated as a
+system-evaluation question in @sec-evaluating-agentic-architect. Observed
+qualification coverage records the sampled dimensions, strata or cases, and
+gaps. Held-out error, ranking stability, uncertainty, and fitness for the
+architecture decision remain separate tests.
 
 ![**Discrete qualification cases leave visible gaps**: The conceptual,
 normalized curves show paired proxy and stronger-reference observations in
@@ -663,13 +683,14 @@ candidate, tool, or condition regions outside the population and sampling
 design.
 
 Numerical calibration and ranking fidelity answer different questions. A
-calibrated scalar mapping or predictive interval relates proxy outputs to
-reference outcomes under a declared procedure. Ranking fidelity asks whether
-candidate ordering survives the stronger check. Low average error can coexist
-with the wrong ordering near the decision boundary, while a useful ordering
-can coexist with biased absolute values. Qualification therefore reports the
-relationship needed by the decision and tests its error or instability against
-the declared margin.
+numerically calibrated scalar mapping relates proxy outputs to reference
+outcomes under a declared procedure, while a predictive interval adds a stated
+uncertainty model [@ForresterSobesterKeane2008Surrogate]. Ranking fidelity asks
+whether candidate ordering survives the stronger check. Low average error can
+coexist with the wrong ordering near the decision boundary, while a useful
+ordering can coexist with biased absolute values. Qualification therefore
+reports the relationship needed by the decision and tests its error or
+instability against the declared margin.
 
 Six problems should be tested separately (@tbl-proxy-diagnostics).
 
@@ -759,7 +780,7 @@ around the changed parameter. They should be declared before the result when
 possible. Otherwise, an explanation can be fitted to any outcome after the
 fact. A contrast identifies a cause only when the intervention is well defined
 and plausible alternative paths are ruled out by the design or bounded by
-explicit identification assumptions [@Pearl2018BookOfWhy]. The resulting
+explicit identification assumptions [@Pearl2009Causality]. The resulting
 judgments must remain separate even when they come from the same study
 (@tbl-outcome-mechanism).
 
@@ -828,14 +849,15 @@ remainder. A missing or unqualified mapping leaves that requirement unresolved,
 even when every other performed check passes. Passing the mapped checks does
 not establish that the requirement set is complete.
 
-A confidence interval can support a statistical performance requirement when
-the target population, sampling assumptions, and decision margin are declared.
-A non-negotiable timing, power, reliability, or design-rule limit instead
-requires the project's designated conservative analysis or qualified signoff
-method under named modes and corners. A favorable point estimate is not a
-hard-limit pass. The designated analysis must establish the acceptable side of
-the limit, or qualified signoff must report compliance under the declared
-conditions. Otherwise, the requirement remains unresolved.
+A confidence interval can support a statistical performance or reliability
+requirement when the target population, sampling assumptions, risk criterion,
+and decision margin are declared. Some yield and manufacturing requirements are
+also statistical and must retain their population and variation model. A hard
+timing, power, or design-rule acceptance limit instead requires the project's
+designated signoff method to resolve the acceptance rule under named modes,
+corners, modeled variation, and uncertainty. A favorable point estimate is not
+a hard-limit pass. If the designated analysis cannot establish the acceptable
+side of the limit under those conditions, the requirement remains unresolved.
 
 The unexecuted Lighthouse cache study makes the mappings concrete without
 inventing a candidate result.
@@ -1155,37 +1177,51 @@ An updated model or proxy is a new component version within the design system
 invalidate candidate rankings, proxy scope, and cached search decisions that
 depended on the previous component. Architecture search also chooses which
 candidates receive expensive labels, so the labeled outcomes are
-policy-selected and the missing outcomes are not random. Learning only from
-returned labels can reinforce the regions the current search already favors and
-preserve its blind spots.
+policy-selected and the missing outcomes are not random. Active learning studies
+how a method chooses which example to label next [@Settles2009ActiveLearning];
+@sec-data-representations-world-models introduced the corresponding
+selective-acquisition problem for architecture data. Learning only from returned
+labels can reinforce the regions the current search already favors and preserve
+its blind spots.
 
 Before the component reenters the design process, the project records the
 update data, the acquisition policy, and the retained selection decisions,
 including candidates that did not receive labels. It tests failure-relevant
 cases and previously qualified cases or strata that were not used for the
 update, repeats the decision-relevant error, ranking, or proxy-qualification
-checks, and looks for regressions. Randomized or stratified audit evaluations
-should probe cases outside the policy's choices where practical. When acceptance
-results steer subsequent updates, repeated use turns those cases into
-development data, just as adaptive reuse can overfit a holdout set
+checks, and looks for regressions. This book recommends randomized or stratified
+audit evaluations that probe cases outside the policy's choices where
+practical.
+
+When acceptance results steer subsequent updates, repeated use turns those
+cases into development data, just as adaptive reuse can overfit a holdout set
 [@DworkEtAl2015ReusableHoldout]. The project must therefore keep acceptance cases
-untouched or refresh them. The updated component remains outside the active
-process until it passes a shadow evaluation that does not steer candidate
-selection or a sufficiently independent acceptance path. It then reenters with
-revised qualification scope and reopening conditions rather than inheriting the
-previous version's scope. Passing these checks qualifies the new component
-version for its declared use. It does not inherit the architecture conclusions
-supported by the old version.
+untouched or refresh them. This book recommends keeping the updated component
+outside the active process until it passes a shadow evaluation that does not
+steer candidate selection, or a sufficiently independent acceptance path. It
+then reenters with revised qualification scope and reopening conditions rather
+than inheriting the previous version's scope. Passing these checks qualifies the
+new component version for its declared use. It does not inherit the architecture
+conclusions supported by the old version.
 
 ### Reopening and Requalifying
 
 Reopening marks the conditions under which an old interpretation must be
 requalified. A changed workload, software image, model, tool, operating
-condition, candidate revision, artifact, interface, requirement, calibration
-result, or contrary observation can reopen dependent claims without
+condition, candidate revision, artifact, interface, requirement, proxy
+calibration result, or contrary observation can reopen dependent claims without
 predetermining the next revision. The project identifies which binding or
 relationship may no longer hold. It does not silently invalidate unrelated
 results.
+
+Distribution shift occurs when the data-generating conditions encountered in
+use differ from those represented during development or qualification
+[@QuinoneroCandelaEtAl2009DatasetShift]. In architecture work, the change can be
+a new workload mix, movement into a different candidate region, or a new
+distribution of process, voltage, and temperature conditions. This chapter uses
+*drift signal* for an observed change over time in those conditions or in the
+proxy's residuals, interval coverage, or ranking stability. Such a signal does
+not identify its cause, and it does not by itself authorize retraining.
 
 Many changes remain within the same project and current target decision. A
 tightened timing constraint may reopen only the requirement comparison and
@@ -1200,9 +1236,9 @@ keeps an unaffected claim only with a recorded rationale.
 A candidate, configuration, tool, or operating-condition mismatch can make an
 affected execution record stale and require lineage repair or a rerun of the
 same check. Changed workload populations, phase coverage, or movement among
-candidate cases can require new sampling and repeated qualification
-[@QuinoneroCandelaEtAl2009DatasetShift]. Deteriorating proxy-reference
-residuals, interval coverage, or ranking stability can require narrowing,
+candidate cases can require new sampling and repeated qualification.
+Deteriorating proxy-reference residuals, interval coverage, or ranking stability
+can require narrowing,
 recalibrating, replacing, or stopping the proxy. Relearning is one possible
 response only when the proxy is a learned component and an independent
 acceptance test exists.
