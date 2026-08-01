@@ -349,16 +349,15 @@ typical processor thermal design power. Like the other series, it shows the
 frontier represented in the dataset so that the directions of change can be
 compared on one chart.
 
-Dennard-style constant-field scaling broke down as voltage scaling stalled.
-Threshold-voltage and leakage tradeoffs were a central reason, alongside
-growing variability and reliability constraints. With voltage pinned, each
-additional transistor clocked at full frequency adds net power. That is the
-arithmetic behind both the frequency plateau in @fig-microprocessor-trends and
-the dark-silicon fraction that followed, the share of the chip that must stay
-powered off to fit its thermal budget. The discipline responded increasingly
-with parallelism and specialization. Those responses handed architects more of
-the machine to manage rather than inheriting the benefit from the next process
-node.
+Constant-field scaling depended on lowering voltage as transistor dimensions
+shrank [@DennardEtAl1974Scaling]. Once voltage scaling slowed, power limited how
+many transistors could operate at full frequency at the same time
+[@EsmaeilzadehEtAl2011DarkSilicon]. That constraint helps explain both the
+frequency plateau in @fig-microprocessor-trends and the dark-silicon fraction
+that followed, the share of a chip that must remain inactive to fit its power
+budget. The discipline responded increasingly with parallelism and
+specialization. Those responses handed architects more of the machine to
+manage rather than inheriting the benefit from the next process node.
 
 The figure stops with the measured history. It does not establish what comes
 next. Technology continues to supply transistors, but it no longer turns those
@@ -584,8 +583,9 @@ measure. Before sizing a specialized block, an architect asks Amdahl's question,
 namely what fraction of the deployed workload the block actually covers. If the
 targeted kernels account for half the execution time, an accelerator that runs
 them ten times faster improves total execution time by at most about 1.8 times,
-because the untouched half now dominates. Specialization's ceiling is set by the
-work it leaves behind on the general-purpose core. A specialized block must
+because the untouched half now dominates [@Amdahl1967ValiditySingleProcessor].
+Specialization's ceiling is set by the work it leaves behind on the
+general-purpose core. A specialized block must
 therefore be compared together with the compiler, runtime, memory traffic, and
 remaining workload that determine its delivered benefit.
 
@@ -595,10 +595,11 @@ Specialized blocks rarely ship alone. Architects compose them into a
 system-on-chip and, increasingly, across multiple chiplets. Yield is one
 important motivation. Under simple random-defect models, the fraction of good
 dies falls rapidly as die area and defect density rise, so partitioning a large
-die can improve die yield. It does not make total cost linear because packaging,
-interconnect, test, and duplicated interfaces add costs of their own. Chiplets
-also let architects mix process technologies, intellectual property (IP)
-blocks, and memory. Open
+die can improve die yield [@Murphy1964CostSize]. It does not make total cost
+linear because package technology, chiplet and package reuse, and heterogeneous
+process choices change the cost model
+[@FengMa2022ChipletActuary]. Chiplets also let architects mix process
+technologies, intellectual property (IP) blocks, and memory. Open
 standards such as UCIe stabilize the interface while leaving partitioning and
 implementation to architects [@UCIeConsortium2026Spec].
 
@@ -627,7 +628,7 @@ network-on-chip (NoC) may have to arbitrate between bursty accelerator traffic
 and a real-time client with a fixed deadline. Average bandwidth can look
 adequate while contention still violates the deadline.
 
-[^fn-soc-deadlocks-c02]: **System-level deadlocks:** Independently tested IP blocks can create a cyclic dependency when composed because their flow-control mechanisms, such as credit counters or memory consistency assumptions, interact in a way that no block-level test exercised.
+[^fn-soc-deadlocks-c02]: **System-level deadlocks**: Independently tested IP blocks can create a cyclic dependency when composed because their flow-control mechanisms, such as credit counters or memory consistency assumptions, interact in a way that no block-level test exercised.
 
 The search can fail in two opposite ways. If its choices are broad but poorly
 constrained, it spends evaluations on combinations that cannot be implemented.
@@ -656,12 +657,13 @@ constraint. In 2.5D and 3D integration such as TSMC CoWoS [@TSMCCoWoS] or Intel
 Foveros [@IntelFoveros], discovering a defective die after packaging can waste
 other components in the assembly. Pre-bond screening reduces that risk without
 proving that every die will survive assembly and operation, so a proposed
-partition must preserve adequate test access, the Known-Good-Die
-constraint.[^fn-known-good-die-c02]
+partition must preserve adequate test access and support pre-bond screening
+that can establish Known-Good-Die status.[^fn-known-good-die-c02]
 
-[^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: A bare die screened before packaging to reduce the risk that a defective component is committed to a multi-die assembly. The available tests improve confidence but cannot guarantee performance through every assembly and operating condition.
+[^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: KGD is the screening status assigned to a bare die judged suitable for assembly. Test-access work for three-dimensional stacks covers both pre-stacking die tests and post-stacking tests because screening one die does not establish the behavior of the completed assembly [@MarinissenEtAl2010PrePostBond; @IEEE2020Std1838].
 
-The remaining constraints work the same way. Sharing speculative-state buffers
+Security, power delivery, and opaque IP all constrain composition, but each
+requires a different authoritative check. Sharing speculative-state buffers
 or execution units across secure and non-secure domains can save power while
 opening side channels, so security must be checked by formal methods or
 penetration testing that performance proxies cannot stand in for. Pushing
@@ -669,15 +671,13 @@ hundreds of amps through a dense package produces voltage loss across the power
 network, commonly called IR drop, and localized
 hotspots, so a power delivery network (PDN) and thermomechanical model, not an
 aggregate-power proxy, decides whether a layout passes signoff. Much of the SoC
-is opaque as well. Third-party blocks arrive with varying degrees of opacity.
-Analog and mixed-signal physical-layer interfaces (PHYs), such as Peripheral
-Component Interconnect Express (PCIe), double-data-rate (DDR) memory, and
-serializer/deserializer (SerDes) links, arrive as hard macros with only
-abstract timing and power views. Much digital IP, including Arm CPU cores and
-memory controllers, arrives as encrypted or licensed RTL that simulates and
-synthesizes but cannot be inspected or modified. Either way the search cannot
-see inside, which forces integration-level testing across interfaces whose
-internals are unavailable to it.
+is opaque as well. Official product documentation illustrates the range. Arm
+has offered processor IP as a process-specific hard macro
+[@Arm2013CortexA15HardMacro], while Intel documents encrypted RTL whose permitted
+uses can be controlled by a generated license [@Intel2024EncryptedRTLIP]. In
+either case, an architecture study may
+have less access to the block's internals than to an in-house design, which
+raises the importance of integration-level testing at its interfaces.
 
 ### Wafer-Scale Systems
 
@@ -727,11 +727,13 @@ standard for processors, accelerators, and memory devices. Its memory semantics
 and switching support can make device-attached or pooled memory part of a
 system-level provisioning decision [@CXLConsortium2026CXL].
 
-No practical study models a 100,000-node system at the cycle-level fidelity used
-for one core, and component failure is a continuous condition rather than an
-exceptional case. Architects instead combine trace-driven and discrete-event
-models, emulation, controlled deployment, and production measurements. Each
-leaves something out. A trace may miss dynamic network congestion that creates
+Warehouse-scale systems are difficult to experiment with or simulate
+efficiently, and component failure is a continuous condition rather than an
+exceptional case [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Architects
+therefore
+combine trace-driven and discrete-event models, emulation, controlled
+deployment, and production measurements. Every model and measurement leaves
+something out. A trace may miss dynamic network congestion that creates
 severe "tail at scale" latency [@DeanBarroso2013TailAtScale], while a node that
 looks efficient in isolation can lose that benefit under stragglers or
 distributed coordination. The difficulty is choosing evidence at a scale the
@@ -798,7 +800,7 @@ and performance constraints remove most candidates.
 
 | **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
 | --- | --- | --- |
-| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
+| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
 | DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
 | TPU-block floorplanning | The AlphaChip paper reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
 | Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
@@ -822,7 +824,7 @@ compared without treating equal counts as equal amounts of evaluation work
 ```{python}
 #| label: fig-search-vs-eval-gap
 #| fig-cap: |
-#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
+#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
 #| out-width: "92%"
 #| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
 
@@ -979,7 +981,7 @@ announcements, and two product lines illustrate how much that interval can diffe
 ```{python}
 #| label: fig-apple-silicon-cadence
 #| fig-cap: |
-#|   **Announcement dates show different product-release intervals.** Apple's M-series intervals shorten from 19 to 7 months while NVIDIA's data-center GPUs hold a roughly two-year cycle in the period shown. Labels give the month gap between consecutive announced parts. The dates establish product-release timing only; they do not measure software change, development duration, or decision-to-release latency.
+#|   **Announcement dates show different product-release intervals.** Apple's M-series intervals shorten from 19 to 7 months while NVIDIA's data-center GPUs hold a roughly two-year cycle in the period shown [@Apple2020M1; @Apple2022M2; @Apple2023M3; @Apple2024M4; @NVIDIA2020A100; @NVIDIA2022H100; @NVIDIA2024B100]. Labels give the month gap between consecutive announced parts. The dates establish product-release timing only; they do not measure software change, development duration, or decision-to-release latency.
 #| out-width: "100%"
 #| fig-alt: "Two-row timeline. Apple's M1 (Nov 2020), M2 (Jun 2022), M3 (Oct 2023), and M4 (May 2024) fall 19, then 16, then 7 months apart, a shrinking interval; NVIDIA's A100 (May 2020), H100 (Mar 2022), and B100 (Mar 2024) fall 22 and 24 months apart."
 
@@ -1060,7 +1062,7 @@ as models and software evolve.
 When a long-lived hardware decision still rests on an outdated workload, the
 evidence no longer supports the original commitment.
 
-[^fn-block-scale-formats-c02]: **Block-scale formats**: Low-precision number formats that share one exponent across a block of mantissas, preserving dynamic range at a small memory cost. Committing to one in silicon fixes datapath choices while formats and workloads can continue to change, so the architect must judge whether the choice will remain useful.
+[^fn-block-scale-formats-c02]: **Block-scale formats**: Low-precision number formats amortize shared exponent or scale metadata across a block of elements rather than storing independent metadata for every element [@RouhaniEtAl2023Microscaling]. Committing to one in silicon fixes datapath choices while formats and workloads can continue to change, so the architect must judge whether the choice will remain useful.
 
 The target moves in two different periods, and a useful comparison has to say
 which one it covers. Before release, hardware and software teams can revise the
@@ -1104,7 +1106,7 @@ stack, or training regime cannot be transferred to another without checking
 the assumptions. A useful comparison therefore states which model, compiler,
 runtime, benchmark, trace, and deployment versions support each decision.
 
-[^fn-mixture-of-experts-c02]: **Mixture-of-experts (MoE) routing**: A model structure that activates only a small subset of its parameters, the experts, for each token. Which experts fire depends on the input, so the memory traffic a design must serve varies token to token instead of following a fixed schedule.
+[^fn-mixture-of-experts-c02]: **Mixture-of-experts (MoE) routing**: A sparsely gated model activates only a subset of its expert subnetworks for each input [@ShazeerEtAl2017MoE]. Input-dependent routing can therefore make the memory traffic a design must serve vary from token to token instead of following one fixed schedule.
 
 ```{python}
 #| label: fig-training-compute-growth
@@ -1218,7 +1220,7 @@ rules that make results comparable.[^fn-metrology-calibration-c02]
 When those rules change, an earlier comparison may no longer answer the same
 question.
 
-[^fn-metrology-calibration-c02]: **Calibration chain (metrology)**: The U.S. National Institute of Standards and Technology (NIST) maintains reference standards and calibration chains so that a stated unit means the same thing in every laboratory. Architecture benchmarks need the same maintenance of tasks and run rules if their results are to stay comparable over time.
+[^fn-metrology-calibration-c02]: **Metrological traceability**: A measurement result is traceable when it can be related to a reference through a documented, unbroken chain of calibrations, each contributing uncertainty [@NIST2021MetrologicalTraceability]. Architecture benchmarks do not create this kind of calibration chain, but their tasks, run rules, and measurement procedures still need explicit versions so reviewers can tell when two results remain comparable.
 
 For the Lighthouse mobile extended-reality (XR) target, “XR” is still too broad
 to define a workload.
@@ -1372,9 +1374,10 @@ before final signoff.
 **The expectation.** Adding 512-bit vector units to general-purpose CPU cores
 raises peak floating-point throughput.
 
-**Example to verify.** Sustained wide-vector execution raises instantaneous
-power and power-delivery demand, and some processors may reduce frequency under
-these conditions. The policy and magnitude are implementation-specific.
+**Measurement hypothesis.** Sustained wide-vector execution may raise power and
+power-delivery demand enough for a processor to reduce frequency. The policy
+and magnitude are implementation-specific and must be measured on the processor
+under review.
 
 **The lesson.** Peak vector width does not determine application speed by
 itself. The architect must measure the active-frequency policy and the mix of
@@ -1406,7 +1409,7 @@ Evaluating physical constraints also requires bridging the semantic gap between
 high-level proposals and EDA formats such as LEF/DEF and Liberty timing
 files.[^fn-lef-def-c02]
 
-[^fn-lef-def-c02]: **LEF/DEF and Liberty**: The Library Exchange Format (LEF) describes a standard cell's abstract geometry and pin locations, the Design Exchange Format (DEF) records the placed and routed instance of one specific design, and a Liberty file holds a cell library's characterized timing and power at one corner. They are verbose, detailed formats tied to implementation state rather than high-level architectural descriptions.
+[^fn-lef-def-c02]: **LEF/DEF and Liberty**: In place-and-route flows, LEF carries abstract physical information used to place and connect blocks, while DEF carries the placed and routed state of a particular design [@Si2LEFDEF]. Liberty carries characterized cell models for timing, power, noise, and related behavior [@Synopsys2012LibertyFormat]. These implementation formats expose details that a high-level architecture description does not contain.
 
 Multifidelity methods combine many inexpensive estimates with
 selected high-fidelity evaluations and retain the stronger model to check
@@ -1636,7 +1639,7 @@ checking designs has consumed a growing share of engineering capacity in the
 surveyed projects. A generated candidate that reaches this stage is no longer
 free to evaluate.
 
-Hardware is unforgiving because a defect in shipped silicon is costly to address and never cleanly undone. The 1994 Pentium FDIV flaw shows why early checks matter, as a defect arising from five omitted lookup table entries [@Edelman1997PentiumDivision] led Intel to report a \$475M pretax charge for replacement and associated costs [@Intel1995PentiumCharge]. More recently, the Meltdown and Spectre vulnerabilities [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre] exposed microarchitectural side channels in speculative execution. Software and microcode mitigations can impose workload- and processor-dependent costs without removing the underlying hardware mechanism. These episodes show how a hardware flaw becomes an expensive, long-lived liability after a design has shipped, one that replacement, support, or a software workaround can mitigate but not cleanly remove.
+Hardware is unforgiving because a defect in shipped silicon is costly to address and never cleanly undone. The 1994 Pentium FDIV flaw shows why early checks matter, as a defect arising from five omitted lookup table entries [@Edelman1997PentiumDivision] led Intel to report a \$475M pretax charge for replacement and associated costs [@Intel1995PentiumCharge]. More recently, the Meltdown and Spectre vulnerabilities [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre] exposed microarchitectural side channels in speculative execution. Published evaluations report workload- and processor-dependent performance costs for transient-execution defenses [@CanellaEtAl2019Transient], while those defenses do not remove the underlying hardware mechanism. These episodes show how a hardware flaw becomes an expensive, long-lived liability after a design has shipped, one that replacement, support, or a software workaround can mitigate but not cleanly remove.
 
 The Pentium charge reflects one escaped defect, but leading-edge development
 raises the cost of commitment even when no public recall occurs. Arm's 2023
@@ -1858,13 +1861,15 @@ reduce manual reevaluation, but it cannot decide whether the change invalidates
 the architecture comparison. The architect still has to judge which software
 changes could reverse the decision.
 
-Amarasinghe's Compiler 2.0 proposal makes the opportunity more explicit. It
+Regression automation is one specific use of AI on the software side.
+Amarasinghe's Compiler 2.0 proposal points to a broader opportunity. It
 argues that multicore processors, vector instructions, accelerators, and
 heterogeneous systems have returned more of the performance burden to software
-developers, and proposes rebuilding compiler internals with machine learning
-rather than hand-tuned heuristics [@Amarasinghe2026Compiler20CSAIL]. Such
-assistance still has to produce an executable path and demonstrate its benefit
-on the hardware and workloads under review.
+developers, and calls for modernizing compilers through better abstractions,
+machine learning, and other modern techniques
+[@Amarasinghe2026Compiler20CSAIL]. Such assistance still has to produce an
+executable path and demonstrate its benefit on the hardware and workloads under
+review.
 
 Each use has a different cost and a different failure mode. The comparison in
 @tbl-ai-contributions-by-bound brings the five limits together and identifies
