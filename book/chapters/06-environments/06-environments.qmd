@@ -101,12 +101,6 @@ Five terms divide the work:
   defines the state a method may observe, the requests it may issue, the tools
   it may reach, and the returns it may receive.
 
-This chapter uses *adapter* for a stable caller-facing mapping between the
-harness and a scheduler or execution backend. It is not a synonym for a tool
-wrapper or a sixth component category. A wrapper owns tool-specific request
-validation, translation, invocation, and parsing. A scheduler adapter maps
-harness operations such as submit, inspect status, and cancel onto one backend.
-
 One environment may contain wrappers for an SRAM model, a cycle-level
 simulator, a cache model, and a power model. One harness keeps their outputs
 tied to the same candidate and conditions.
@@ -275,11 +269,10 @@ candidate itself.
 
 Content hashes make exact artifacts distinguishable. They do not prove that
 two artifacts are functionally equivalent or represent the same architecture.
-Build systems such as Bazel illustrate how declared inputs and
-content-sensitive action caches can make transformations more inspectable
-[@Bazel]. Nondeterministic or undeclared tool state can still defeat
-reproducibility, so the harness records the execution conditions as well as the
-hash.
+Bazel provides one example of a build system that uses declared dependencies
+and cached actions [@Bazel]. Nondeterministic or undeclared tool state can still
+defeat reproducibility, so the harness records the execution conditions as well
+as the hash.
 
 Seeds are only one source of variation. Thread counts, scheduler placement,
 parallel reduction order, host libraries, timing of concurrent jobs, and
@@ -414,25 +407,33 @@ stale state, then check cancellation, retry, reset, and parsing behavior. The
 project should rerun these tests when a wrapper, parser, schema, library, or tool
 version changes. For the requests, faults, states, and tool versions they
 exercise, passing tests establishes only that translation, control, state, and
-parsing behave as declared. Untested combinations remain unknown. It does not
-establish that a returned value is a valid measurement or that the architecture
-is useful.
+parsing behave as declared. Untested combinations remain unknown.
 
 Once a request crosses the tested interface, the runtime must keep its identity
 intact while the work waits, runs, fails, or returns.
 
 ## Coordinating and Containing Tool Runs
 
+Architecture work rarely fits one blocking function call. A cycle simulation
+may run for hours. A physical-design job may wait in a queue, hold a scarce
+license, produce intermediate databases, and fail after substantial work. Tool
+state persists in working directories, caches, checkpoints, license servers,
+random seeds, and generated artifacts. Outputs return asynchronously and may
+arrive out of order, while one tool path may depend on an artifact produced by
+another.
+
 The familiar reinforcement-learning interface calls `step()` and receives an
 observation, reward, termination flags, and auxiliary information through a
-standard synchronous API [@TowersEtAl2023Gymnasium]. An architecture
-environment instead preserves the typed return from the tool and lets the
-method derive a reward when one is needed. Neither interface implies that an
-architecture step is cheap. A cycle simulation may run for hours.
-A physical-design job may wait in a queue, hold a scarce license, produce
-intermediate databases, and fail after substantial work. Tool state persists
-in working directories, caches, checkpoints, license servers, random seeds,
-and generated artifacts.
+standard synchronous API [@TowersEtAl2023Gymnasium]. That interface is useful
+when interaction can be presented as one step at a time. An architecture
+runtime must also expose queues, persistent state, dependencies, partial
+artifacts, and delayed returns. It preserves the typed tool return and lets a
+method derive a reward later when one is needed.
+
+The harness reaches a scheduler or execution backend through a *scheduler
+adapter*. The adapter maps stable harness operations such as submit, inspect
+status, and cancel onto one backend. It does not replace a tool wrapper, which
+still owns tool-specific validation, translation, invocation, and parsing.
 
 One request specifies an allowed action for a candidate under declared
 conditions. Each authorized try is an attempt. An attempt may be refused before
@@ -465,8 +466,8 @@ Budgets apply independently to model calls, tool submissions, elapsed time,
 CPU and accelerator use, memory, storage, and license occupancy. Admission
 checks reserve scarce resources before dispatch. An accepted request may still
 be queued, canceled, or fail. A completed run may still be missing an
-artifact. None of those process states is a valid architecture result by
-itself.
+artifact. These states determine what the runtime records and which recovery
+actions remain available.
 
 Automated work also shares queues, machines, storage, and licenses with
 engineers and production flows. The environment applies the site's admission
@@ -482,13 +483,12 @@ parser status, cancellation status, and retry eligibility are separate fields
 rather than additional scheduling states. A process can complete with partial
 artifacts, or time out after producing a parseable report. An infrastructure
 failure may be retryable, while a canceled job may not be. None of these
-fields says what the candidate means until later measurement qualification.
+fields should be collapsed into the scheduling state.
 
-The execution interface keeps the request identifiable across three linked
-parts. @lst-environment-interface retains one attempt, validates its
-translation, seals the translated artifacts, and then performs setup and
-admission without silently changing the request's meaning. The listing shows
-the common case in which one attempt produces one scheduler job.
+The execution interface keeps the request identifiable through validation,
+admission, scheduling, termination, artifact inspection, and parsing. The
+compact sequence in @lst-environment-runtime shows the common case in which
+one attempt produces one scheduler job.
 
 `candidate_id` names the architecture candidate across tool paths.
 `configuration_id` names that candidate's declared tool-specific configuration
@@ -498,113 +498,62 @@ retained because one candidate may require several tool-specific
 configurations, while several attempts may execute the same candidate and
 configuration.
 
-```{.text #lst-environment-interface lst-cap="**Admission preserves request identity:** One attempt retains the request before validated translated artifacts are sealed and any job is submitted."}
-attempt, created = create_attempt_once(
-    submission_token,
-    attempt_id, request_id, candidate_id, condition_id,
-    tool_type, tool_stage, fidelity,
-    configuration_id, seed,
-    retry_parent, reset_parent
+```{.text #lst-environment-runtime lst-cap="**Runtime state remains attached to one attempt:** Identity, scheduling, termination, artifacts, parsing, cost, and lineage stay separate through a delayed tool run."}
+request = retain(request_id, candidate_id, configuration_id, conditions)
+attempt = authorize_attempt(
+    request,
+    kind=INITIAL or PLANNED_REPEAT or RECOVERY_RETRY,
+    retry_parent=retry_parent,
+    reset_parent=reset_parent
 )
-
-if not created:
-    if immutable request fields differ from the retained attempt:
-        refuse reuse of the submission token
-    return current_record(attempt.attempt_id)
 
 translation = translate_and_validate(attempt)
-if translation is invalid or changes request meaning:
+if translation is INVALID:
     return attempt_record(
-        terminal_cause=INVALID_REQUEST,
+        attempt_id=attempt.id,
+        job_id=NONE,
+        terminal_cause=translation.failure,
         artifact_status=NOT_CREATED,
         parse_status=NOT_RUN
     )
 
-seal_translated_inputs_once(
-    attempt.attempt_id,
-    translated_artifact_ids=translation.artifact_ids,
-    translated_input_hashes=translation.hashes
-)
-
-setup_status = check_setup_and_dependencies(attempt)
-if setup_status is not PASSED:
+readiness = check_setup_dependencies_and_budget(attempt, translation)
+if readiness is not PASSED:
     return attempt_record(
-        terminal_cause=SETUP_FAILURE,
+        attempt_id=attempt.id,
+        job_id=NONE,
+        terminal_cause=readiness.failure,
         artifact_status=NOT_CREATED,
         parse_status=NOT_RUN
     )
+retain_attempt_and_inputs_before_submission(attempt, translation)
 
-submission = admit_reserve_and_submit_once(attempt, submission_token)
-if submission.status is REFUSED:
+admission = scheduler_adapter.submit(attempt, submission_token)
+if admission is REFUSED:
     return attempt_record(
-        terminal_cause=ADMISSION_REFUSED,
+        attempt_id=attempt.id,
+        job_id=NONE,
+        terminal_cause=admission.refusal_cause,
         artifact_status=NOT_CREATED,
         parse_status=NOT_RUN
     )
-```
+job = admission.job
+record(attempt.id, job.id, QUEUED, lineage)
 
-Once admitted, @lst-environment-execution keeps scheduling, termination, and
-resource use attached to that same attempt.
+while job is not confirmed terminal:
+    record(scheduler_status, process_status, partial_artifacts, resources)
+    if cancellation is authorized or a declared timeout expires:
+        scheduler_adapter.request_termination(job)
+        record(cancellation_status=REQUESTED)
+    if termination cannot be confirmed by the deadline:
+        quarantine_uncertain_outputs()
+        return open_attempt(termination_status=UNCONFIRMED)
 
-```{.text #lst-environment-execution lst-cap="**Execution preserves operational state:** Queueing, cancellation, timeout, termination, and resource use remain connected to the admitted attempt."}
-job_id = submission.job_id
-latest_terminal_deadline = submission.latest_terminal_deadline
-cancellation_status = NOT_REQUESTED
-termination_requested = false
-scheduler_state = current_scheduler_state(job_id)
-process_state = current_process_state(job_id)
-
-while now() < latest_terminal_deadline:
-    record scheduler_state, process_state, queue_time, and partial_artifact_ids
-    if scheduler_state is terminal and process_state is terminal:
-        break
-    if scheduler or process state is unknown or the states are inconsistent:
-        record state_status=UNRESOLVED
-        latest_terminal_deadline = min(
-            latest_terminal_deadline,
-            now() + state_confirmation_limit
-        )
-    if an authorized cancellation request is pending and not termination_requested:
-        request termination
-        cancellation_status = REQUESTED
-        termination_requested = true
-        latest_terminal_deadline = min(
-            latest_terminal_deadline,
-            now() + termination_confirmation_limit
-        )
-    elif timeout is reached and not termination_requested:
-        request termination
-        cancellation_status = TIMEOUT_REQUESTED
-        termination_requested = true
-        latest_terminal_deadline = min(
-            latest_terminal_deadline,
-            now() + termination_confirmation_limit
-        )
-    scheduler_state = current_scheduler_state(job_id)
-    process_state = current_process_state(job_id)
-
-if scheduler_state is unknown:
-    recorded_scheduling_state = UNKNOWN
-else:
-    recorded_scheduling_state = scheduler_state
-
-if scheduler_state is not terminal or process_state is not terminal:
-    return open_attempt_record(
-        attempt_id=attempt.attempt_id,
-        job_id=job_id,
-        scheduling_state=recorded_scheduling_state,
-        cancellation_status,
-        termination_status=UNCONFIRMED,
-        retry_eligibility=NO,
-        uncertain_outputs=QUARANTINED,
-        resource_record=resources_observed_to_date(job_id)
-    )
-termination_status = CONFIRMED
-record final_scheduler_state=scheduler_state,
-       final_process_state=process_state,
-       termination_status
-record queue_time, run_time, cpu_time, gpu_time,
-       peak_memory, storage_written, license_occupancy
+record(terminal_cause, process_status, termination_status=CONFIRMED)
+artifact_status = inspect_expected_artifacts(COMPLETE, PARTIAL, MISSING)
+parse_status = parse_or_retain_residual(COMPLETE, RESIDUAL, FAILED)
+record(raw_artifacts, typed_fields, warnings, resources, cost, lineage)
+return attempt_record(retry_eligibility)
 ```
 
 Recording candidate identity before submission prevents late returns from
@@ -634,38 +583,11 @@ stage, or an absolute deadline. After a timeout or cancellation, the harness
 keeps late writers and outputs out of live state or quarantines them until
 termination and job identity are confirmed.
 
-After the process stops, @lst-environment-return records what happened to the
-process, expected artifacts, and parser as separate outcomes.
-
-```{.text #lst-environment-return lst-cap="**The return preserves distinct failure sources:** Process outcome, artifact status, parsing, retry eligibility, cost, and lineage do not collapse into one exit code."}
-if terminal state is CANCELED or TIMED_OUT:
-    terminal_cause = CANCELED or TIMED_OUT
-elif setup check fails before or during execution:
-    terminal_cause = SETUP_FAILURE
-elif process exits:
-    record process_outcome, exit_status, run_time, and resource_record
-    terminal_cause = COMPLETED or INFRA_FAILURE or TOOL_FAILURE
-
-artifact_status = inspect_expected_artifacts(
-    COMPLETE or PARTIAL or MISSING
-)
-
-if artifacts can be parsed:
-    parse_status = COMPLETE or COMPLETE_WITH_RESIDUAL
-    retain typed_fields, unclassified_residual, raw_path, and raw_hash
-else:
-    parse_status = FAILED or NOT_RUN
-
-return attempt_record(
-    scheduling_state, setup_status, process_outcome, terminal_cause,
-    cancellation_status, termination_status,
-    artifact_status, parse_status, retry_eligibility,
-    resource_record, retry_parent, reset_parent, lineage
-)
-```
-
-The return separates process completion, expected artifacts, and parser status
-so later review can locate the failed work.
+After the process stops, the same attempt record retains the terminal cause,
+expected-artifact check, parser status, raw and structured output, retry
+eligibility, resource use, cost, and lineage. Keeping those fields separate
+lets the runtime distinguish a tool crash from a missing report or an outdated
+parser.
 
 The harness records resources separately instead of collapsing them into one
 cost value. It keeps tool and candidate identity with submission, queue, start,
@@ -803,9 +725,7 @@ Safe caching follows the same identity rule. A complete return is reusable
 only when its inputs, transformations, tools, libraries, PDK views, flags,
 conditions, and relevant state all match the cache key. Partial and failed
 outputs may support diagnosis, but they are not served as completed
-observations. Unknown dependencies invalidate the entry. Reuse saves execution
-cost; it does not establish that the retained return answers the present
-architecture question.
+observations. Unknown dependencies invalidate the entry.
 
 The 1996 Ariane 5 inquiry documented what happens when a reused component
 carries an operating assumption into a changed system [@LionsAriane1996].
@@ -842,11 +762,10 @@ artifact, return, and cost, including failed work.
 
 ## Returned Records and Reproducibility {#sec-operational-attempt-record}
 
-The execution record and its attempt records form the operational record that
-later evaluation relies on. They preserve what was requested, attempted,
-returned, and spent without deciding what the result proves. An execution
-record contains one or more attempt records. Each attempt record describes one
-authorized try and the scheduler jobs or execution segments created for it. Raw
+The execution record and its attempt records preserve what was requested,
+attempted, returned, and spent. An execution record contains one or more
+attempt records. Each attempt record describes one authorized try and the
+scheduler jobs or execution segments created for it. Raw
 logs, reports, traces, databases, and counterexamples retain details that a
 current parser may miss. Structured fields make status, metrics, warnings,
 cost, and identity inspectable without rereading every file. The execution
@@ -964,9 +883,9 @@ synthesis adds top-level constraints and libraries; physical implementation
 adds floorplan, PDK views, modes, corners, and waivers.
 
 These branches are not interchangeable. Only the SRAM and cycle-level branches
-belong to the constructed trace below. The environment preserves every branch's
-input, raw and structured return, cost, conditions, and limit without promoting
-or rejecting `L2-3M-A`.
+appear in the hypothetical execution scenario later in this chapter. The
+environment preserves every branch's input, raw and structured return, cost,
+conditions, and limit without promoting or rejecting `L2-3M-A`.
 
 Throughput changes how many candidates and conditions a study can afford to
 examine. In one published configuration, ZSim ran a detailed Westmere-class
@@ -1034,10 +953,8 @@ Applicable inexpensive prerequisite checks should run before expensive
 dependent work. If a declared syntax, interface, functional, or equivalence
 check reports that an artifact failed a predeclared prerequisite, the harness
 records the return and suppresses only the dependent dispatch before synthesis
-or physical implementation. It does not issue an architecture verdict. This is
-not one universal tool order. The requested run determines the prerequisites
-and affordable branches, and later measurement qualification determines what a
-passing or failing check establishes.
+or physical implementation. This is not one universal tool order. The requested
+run determines the prerequisites and affordable branches.
 
 ## The Lighthouse Environment
 
@@ -1052,31 +969,22 @@ throughout the chapter in one place (@tbl-environment-contract).
 
 The capacities and dispatch thresholds in this specification are
 author-selected illustrative inputs, not empirical limits or measurements.
-The constructed trace later in this section places the 2\ MiB and 3\ MiB
+The hypothetical scenario later in this section places the 2\ MiB and 3\ MiB
 candidates within both thresholds and the 4\ MiB candidate outside both, but it
 does not report the SRAM parse statuses or exact dispatch events. Those values
 therefore do not establish that the complete dispatch condition was applied.
 The condition authorizes a cycle-level attempt. It neither validates a
 measurement nor rejects a candidate.
 
-| **Run Field** | **`XR-L2-CAP-A` Run Specification** |
+| **Run field** | **`XR-L2-CAP-A` run specification** |
 | --- | --- |
-| **Scope and identity** | Bind `RUN-SPEC-A` and design revision `XR-COMPUTE-A` to candidates `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. |
-| **Candidate state** | The illustrative request schema defines `l2.capacity` as an integer count of mebibytes (MiB), where 1\ MiB is $2^{20}$ bytes, and permits only 2, 3, or 4. Give each candidate a complete `SRAM-A` organization record with every required request-schema field, including capacity, geometry, banking, ports, modeled periphery, and exact SRAM model and technology identity. Only `l2.capacity` may vary. Keep cache policy, NoC, memory system, compiler, runtime, software image `SW-BASE-A`, and workload snapshot `XR-TRACE-A` fixed. |
-| **Translation** | Serialize the declared `l2.capacity` value and its MiB unit exactly into `SRAM-A` under `PVT-A` and into eligible `SIM-A` requests with `CACHE-A` and `PM-A`. A wrapper may change syntax and file layout but not architecture meaning. |
-| **Execution identity** | Retain behavior-affecting wrapper, request-schema, return-schema, parser, tool, and model versions, plus flags, host or container identity, seeds, and reset state. |
-| **SRAM order** | Run one SRAM evaluation per capacity before any dependent cycle-level attempt. |
-| **Dispatch** | Dispatch `SIM-A` only when `(return_complete == true) && (schema_valid == true) && (area_mm2 <= 1.5) && (access_time_ns <= 2.5)`. All four Boolean clauses must be true. A missing, partial, or schema-invalid return cannot authorize dispatch. |
-| **Matched cycle-level runs** | Run the shared 2\ MiB baseline and every eligible alternative under matched conditions. |
-| **Attempt budgets** | Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. |
-| **Attempt deadlines** | Stop an attempt when its queue-wait or run-time deadline expires. |
-| **Study stopping** | Stop the study when authorized work completes, no alternative qualifies for dispatch, the cycle-level budget is exhausted, or the absolute deadline expires. |
-| **Failure states** | Refuse invalid requests before invocation. Keep timeouts, cancellations, infrastructure failures, stale state, missing output, and parser failure distinct. |
-| **Recovery** | Link each retry to its parent, charge it against the budget, and regenerate a clean work directory from the fixed state. |
-| **Authority and containment** | Grant only declared tools, paths, credentials, network access, and resources. Quarantine uncertain output after unconfirmed termination. |
-| **Cache reuse** | Reuse a completed return only when request, candidate, conditions, translated inputs, tool and model, wrapper and parser, and retained artifact identities all match. Failed or partial outputs are not completed cache hits. |
-| **Returned values** | Retain area, access time, cache-local energy and leakage, matched frame records, frame-time inputs, capacity misses, subsystem power, and warnings. |
-| **Execution record** | Retain translated inputs, commands, raw logs, parsed fields, unclassified output, hashes, cost, and parent-child lineage. |
+| **Candidates and fixed state** | Bind `RUN-SPEC-A` and revision `XR-COMPUTE-A` to `L2-2M-A`, `L2-3M-A`, and `L2-4M-A`. Only the declared `l2.capacity` value may vary. Keep cache policy, NoC, memory system, compiler, runtime, `SW-BASE-A`, and `XR-TRACE-A` fixed. Each candidate retains the complete SRAM organization, model, and technology identity. |
+| **Translation and identity** | Serialize the declared capacity and MiB unit exactly into `SRAM-A` under `PVT-A` and into eligible `SIM-A` requests with `CACHE-A` and `PM-A`. Retain the behavior-affecting schema, wrapper, parser, tool, model, flags, host or container, seed, and reset-state identities. |
+| **Order and dispatch** | Run one SRAM evaluation per capacity before dependent cycle-level work. Dispatch `SIM-A` only when the SRAM return is complete, its schema is valid, area is at most $1.5\,\mathrm{mm}^2$, and access time is at most $2.5\,\mathrm{ns}$. |
+| **Matched work and limits** | Run the shared 2\ MiB baseline and every eligible alternative under matched conditions. Allow three SRAM evaluations and at most four cycle-level attempts, including recovery retries. Enforce queue-wait, run-time, and absolute deadlines, and stop when authorized work completes, no alternative qualifies, or a budget expires. |
+| **Failures and recovery** | Keep invalid requests, timeouts, cancellations, infrastructure failures, stale state, missing output, and parser failures distinct. Link each recovery retry to its parent, charge it against the budget, and regenerate a clean working directory from the fixed state. |
+| **Containment and reuse** | Grant only the declared tools, paths, credentials, network access, and resources. Quarantine output after unconfirmed termination. Reuse a complete return only when the request, candidate, conditions, translated inputs, tools, wrappers, parsers, and retained artifacts match. |
+| **Returns, cost, and lineage** | Retain SRAM area, access time, energy and leakage; matched frame records, frame-time inputs, capacity misses, subsystem power, and warnings; translated inputs, commands, raw logs, parsed fields, residual output, hashes, resource use, cost, and parent-child lineage. |
 | **Decisions left outside** | The environment does not decide whether a field is a valid measurement, two returns form a valid comparison, a reported limit establishes rejection, or a candidate should advance. |
 
 : **A run specification prevents tool mechanics from rewriting the study.**
@@ -1098,55 +1006,32 @@ substituting a tool path, serving stale state, or skipping the baseline requires
 a new request.
 
 A run specification states what is authorized to execute. A corresponding
-execution record states what actually happened across its attempts. The
-constructed record below illustrates how comparing the two would expose
-missing outputs, unexpected state, failures, retries, and budget use without
-treating an execution record as an architecture verdict.
+execution record states what happened across its attempts. Suppose three SRAM
+calls in a hypothetical execution return areas of $1.2$, $1.4$, and
+$1.7\,\mathrm{mm}^2$ and access times of $2.1$, $2.4$, and $2.8\,\mathrm{ns}$
+for the 2, 3, and 4\ MiB candidates. No simulator request follows for the 4\ MiB
+candidate, but the missing SRAM parse status and dispatch decision leave the
+reason unspecified.
 
-A constructed trace makes the execution record concrete
-(@tbl-lighthouse-execution-record). It is an author-created teaching example,
-not live project history or measurements from tools run for this book. It
-depicts illustrative SRAM and power values, labels one row as a stale-state
-failure, and lays out a four-attempt cycle-level chronology. The values populate
-the record to teach its structure rather than predict the Lighthouse design,
-and every field absent from the construction remains marked unreported. The
-fixture supports no claim that a request was dispatched, failed, retried,
-returned, or consumed budget. The same boundary appears in
-@sec-running-the-loop, which distinguishes the prospective Lighthouse path from
-a separate executed case.
-
-| **Record item** | **Candidate and state** | **Constructed outcome or return** | **Known cost, lineage, and missing record** |
-| --- | --- | --- | --- |
-| `SRAM-2-A1` | Depicts `L2-2M-A` under `PVT-A`. | Labels area $1.2\,\mathrm{mm}^2$ and access time $2.1\,\mathrm{ns}$. | Labels one illustrative SRAM call. Serialized input, energy, leakage, raw artifact, parse status, and other cost are unreported. |
-| `SRAM-3-A1` | Depicts `L2-3M-A` under `PVT-A`. | Labels area $1.4\,\mathrm{mm}^2$ and access time $2.4\,\mathrm{ns}$. | Labels one illustrative SRAM call. The same fields remain unreported. |
-| `SRAM-4-A1` | Depicts `L2-4M-A` under `PVT-A`. | Labels area $1.7\,\mathrm{mm}^2$ and access time $2.8\,\mathrm{ns}$; no simulator request is depicted. | Labels one illustrative SRAM call. Parse status and the dispatch decision are unreported; this is not a design verdict. |
-| `SIM-2-A1` | Depicts `L2-2M-A` with the fixed workload and software; clean-state identity unreported. | Labels a baseline frame summary and subsystem dynamic plus leakage power of $2.90\,\mathrm{W}$. | Labels cycle attempt 1 of 4. Matched frame records, artifact identity, parser fields, and other cost are unreported. |
-| `SIM-3-A1` | Depicts `L2-3M-A` with stale constraint state. | Labels a setup failure with no candidate return. | Labels cycle attempt 2 of 4. Diagnostics, retry parent, reset action, and partial artifacts are unreported. |
-| `SIM-3-A2` | Depicts a post-reset attempt for `L2-3M-A`; reset-state identity is unreported. | Indicates an illustrative frame, cache, and power return, but leaves its values and artifact identity unreported. | Labels cycle attempt 3 of 4. Retry parent, reset action, cost, and output lineage are unreported. |
-| `SIM-3-A3` | Depicts a planned repeat for `L2-3M-A`; starting-state identity is unreported. | Indicates an illustrative frame, cache, and power return, but leaves its values and artifact identity unreported. | Labels cycle attempt 4 of 4 and depicts the budget as exhausted. Repeat relationship, cost, and output lineage are unreported. |
-| `SIM-3-SUMMARY-A` | Depicted as derived from parent attempts `SIM-3-A2` and `SIM-3-A3`. | Depicts a grouped frame, cache, and power summary with no values or per-attempt attribution. | Labels this as a derivation with no tool call. Derivation version, input artifact identities, and processing cost are unreported. |
-
-: **An execution record preserves missing information as carefully as returned
-values.** The constructed cache chronology illustrates how a record would
-preserve candidate state, a labeled failure, successor attempts, a derived
-summary, and call counts without claiming real measurements, attempt-level
-attribution, or completeness.
-{#tbl-lighthouse-execution-record tbl-colwidths="[13,22,28,37]"}
-
-The fixture depicts a narrow chronology and budget account. It labels three
-SRAM calls, four cycle-level attempts, one stale-state setup failure, a
-post-reset attempt, a planned repeat, and a separate summary derived from the
-last two attempts. The 4\ MiB row depicts no simulator request, but the missing
-parse status and dispatch decision leave the reason unspecified.
+Suppose `SIM-2-A1` is the baseline attempt and returns subsystem dynamic plus
+leakage power of $2.90\,\mathrm{W}$. `SIM-3-A1` then encounters a stale-state
+setup failure. A clean reset leads to recovery attempt `SIM-3-A2`, and
+`SIM-3-A3` is a separate planned repeat that exhausts the four-attempt
+cycle-level budget. Both attempts return frame, cache, and power fields, but
+their values remain unreported. A summary derived from `SIM-3-A2` and
+`SIM-3-A3` is retained as another artifact rather than another tool call. Their
+artifact identities, retry and reset links, resource use, cost, and output
+lineage also remain unreported.
 
 Exact translated inputs and hashes, behavior-affecting versions, starting and
 reset-state identities, seeds and job times, parser and raw-artifact identities,
 matched frame records, and resource costs remain unreported. The record is
 therefore incomplete under @tbl-environment-contract and the execution-record
-idea introduced in @sec-architecture-20-ontology. It illustrates how a record
-would connect proposed work, labeled returns and failures, and counterfactual
-budget consumption. It supports no execution fact and cannot establish that a
-returned value is a valid measurement, that two returns form a sound
+idea introduced in @sec-architecture-20-ontology. The scenario illustrates how a
+record would connect proposed work, labeled returns and failures, and budget
+consumption. It is a teaching example, not live project history or measurements
+from tools run for this book. It supports no execution fact and cannot establish
+that a returned value is a valid measurement, that two returns form a sound
 comparison, or that any candidate should advance.
 
 ## Open Research Questions
@@ -1211,8 +1096,8 @@ violations remain distinct. Exact replay, repeatability, and independent
 reproduction also remain distinct, and hashes establish byte identity rather
 than semantic equivalence.
 
-The author-constructed Lighthouse fixture depicts three SRAM calls and four
-cycle-level attempts, including a labeled stale-state setup failure, a
+The hypothetical Lighthouse scenario includes three SRAM calls and four
+cycle-level attempts, including a stale-state setup failure, a
 post-reset attempt, and a planned repeat. It illustrates how a record would keep
 a summary derived from the final two attempts as a separate artifact. Missing
 starting and reset-state identities, attempt lineage, exact artifacts, and
