@@ -76,6 +76,27 @@ def test_build_help_matches_standard_artifact_contract() -> None:
     assert "arch2 check standard" in result.output
 
 
+def test_footnote_source_check_accepts_reference_style(tmp_path) -> None:
+    chapter = tmp_path / "chapter.qmd"
+    chapter.write_text(
+        "An optional term.[^fn-example-c03]\n\n"
+        "[^fn-example-c03]: **Example term**: A compact optional gloss.\n"
+    )
+
+    assert arch2_cli.footnote_source_findings([chapter]) == []
+
+
+def test_footnote_source_check_rejects_inline_and_malformed_notes(tmp_path) -> None:
+    chapter = tmp_path / "chapter.qmd"
+    chapter.write_text(
+        "Inline note.^[This should be referenced.]\n\n"
+        "[^example]: **Example term:** The colon is inside the bold span.\n"
+    )
+
+    codes = {finding.code for finding in arch2_cli.footnote_source_findings([chapter])}
+    assert codes == {"inline-footnote", "footnote-id", "footnote-term-head"}
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     [

@@ -4172,6 +4172,63 @@ def footnote_in_table_findings(paths: list[Path] | None = None) -> list[Finding]
     return findings
 
 
+def footnote_source_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Flag footnote source forms that violate the manuscript contract.
+
+    Reference-style notes keep definitions inspectable beside the paragraph
+    that uses them. The source convention also gives every note a book-unique
+    identifier and a visible defined-term head. This check is deliberately
+    mechanical. It does not decide whether material belongs in a footnote.
+    """
+    targets = paths if paths is not None else content_qmd_files()
+    inline_marker = re.compile(r"\^\[")
+    definition = re.compile(r"^\[\^([A-Za-z0-9_-]+)\]:\s*(.*)$")
+    identifier = re.compile(r"^fn-[a-z0-9]+(?:-[a-z0-9]+)*-c\d{2}(?:-\d+)?$")
+    term_head = re.compile(r"^\*\*[^*]+\*\*:(?:\s+\S.*)?$")
+    findings: list[Finding] = []
+    for path in targets:
+        in_fence = False
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            if inline_marker.search(line):
+                findings.append(
+                    Finding(
+                        "error",
+                        "inline-footnote",
+                        f"{_relative(path)}:{lineno}",
+                        "inline Pandoc footnote found; use a named reference-style footnote beside the paragraph",
+                    )
+                )
+            match = definition.match(stripped)
+            if not match:
+                continue
+            note_id, body = match.groups()
+            if not identifier.fullmatch(note_id):
+                findings.append(
+                    Finding(
+                        "error",
+                        "footnote-id",
+                        f"{_relative(path)}:{lineno}",
+                        f'footnote id "{note_id}" must use fn-<topic>-cNN with an optional numeric suffix',
+                    )
+                )
+            if not term_head.match(body):
+                findings.append(
+                    Finding(
+                        "error",
+                        "footnote-term-head",
+                        f"{_relative(path)}:{lineno}",
+                        "footnote definition must begin with a bold term or origin label followed by a colon outside the bold span",
+                    )
+                )
+    return findings
+
+
 STRIPPED_VOCABULARY: dict[str, str] = {
     "flywheel": "compounding loop",
     "guardrail": "constraint",
@@ -4340,8 +4397,10 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     return findings
 
 
-def run_footnote_table_check() -> None:
-    _exit_on_findings(footnote_in_table_findings(), title="footnotes in tables")
+def run_footnote_check() -> None:
+    findings = footnote_in_table_findings()
+    findings.extend(footnote_source_findings())
+    _exit_on_findings(findings, title="footnotes")
 
 
 def run_prose_style_check() -> None:
@@ -5623,8 +5682,8 @@ def validate_manifest() -> None:
 
 @validate_app.command("footnotes")
 def validate_footnotes() -> None:
-    """Check that no footnote marker sits inside a table cell (breaks the PDF margin build)."""
-    run_footnote_table_check()
+    """Check footnote placement, identifiers, and defined-term source form."""
+    run_footnote_check()
 
 
 @validate_app.command("prose")
@@ -5739,7 +5798,7 @@ def check_precommit() -> None:
     run_manifest_check()
     run_refs_check()
     run_bibliography_check()
-    run_footnote_table_check()
+    run_footnote_check()
     run_prose_style_check()
     run_concept_check()
     run_disclosure_check()
@@ -5755,7 +5814,7 @@ def check_standard(
     """Run the standard rendered-manuscript gate."""
     run_refs_check()
     run_bibliography_check()
-    run_footnote_table_check()
+    run_footnote_check()
     run_figures_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()
@@ -5774,7 +5833,7 @@ def check_strict(
     """Run the standard gate plus strict SVG text-fit checks."""
     run_refs_check()
     run_bibliography_check()
-    run_footnote_table_check()
+    run_footnote_check()
     run_figures_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()
@@ -5809,7 +5868,7 @@ def check_all(
 ) -> None:
     """Compatibility alias for check standard/strict."""
     run_refs_check()
-    run_footnote_table_check()
+    run_footnote_check()
     run_figures_check()
     run_citation_check(show_context=False)
     _exit_on_findings(epub_findings(EPUB_PATH), title="EPUB package")
