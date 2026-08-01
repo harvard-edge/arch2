@@ -14,11 +14,10 @@ format:
 
 ::: {.column-margin}
 **Author's Note:** John Culkin, an American media scholar writing to explain
-Marshall McLuhan's ideas, observed that tools reshape how people work. The line
-is often credited to McLuhan, but it is Culkin's, a small provenance lesson of
-its own. An architecture tool also shapes what a method can change and what an
-architect can observe. Those limits must be explicit when the method acts
-through the tool.
+Marshall McLuhan's ideas, used the line to describe how tools reshape human
+practice. An architecture tool likewise shapes what a method can change and
+what an architect can observe. Those limits must be explicit when the method
+acts through the tool.
 :::
 
 ::: {.callout-crux}
@@ -157,10 +156,8 @@ simulation, register-transfer-level (RTL) models, formal checks, synthesis, and
 physical implementation. No
 generic software sandbox supplies those architecture meanings automatically.
 
-Architecture and electronic design automation (EDA) tools often expose command
-shells or text interfaces rather than stateless APIs. OpenROAD and its OpenSTA
-timing engine, for example, provide Tool Command Language (Tcl) interfaces
-[@OpenROADDocs]. A wrapper for such a tool must establish or validate
+OpenROAD exposes Tcl and Python command interfaces over a stateful design
+database [@OpenROADDocs]. A wrapper for such a tool must establish or validate
 the declared state before each invocation, use the tool's error mechanism to
 return an explicit status, and serialize the recognized fields. It must also
 retain the raw transcript and any unclassified output. A clean structured
@@ -178,7 +175,7 @@ against a different design or model.
 One legacy SRAM macro, for example, may appear as a behavioral model in
 simulation, a Liberty timing and power view during synthesis and timing
 analysis, and a Library Exchange Format (LEF) physical view during placement
-and routing. Updating the
+and routing [@Synopsys2012LibertyFormat; @Si2LEFDEF]. Updating the
 behavioral model while retaining an older Liberty or LEF view lets different
 tool stages evaluate different versions of what the study treats as one macro.
 The environment must bind compatible views to one identity or refuse the run.
@@ -270,17 +267,19 @@ candidate itself.
 Content hashes make exact artifacts distinguishable. They do not prove that
 two artifacts are functionally equivalent or represent the same architecture.
 Bazel provides one example of a build system that uses declared dependencies
-and cached actions [@Bazel]. Nondeterministic or undeclared tool state can still
-defeat reproducibility, so the harness records the execution conditions as well
-as the hash.
+and cached actions [@Bazel2026Dependencies; @Bazel2026RemoteCaching].
+Undeclared tool state can still defeat
+reproducibility, so the harness records the execution conditions as well as the
+hash.
 
-Seeds are only one source of variation. Thread counts, scheduler placement,
-parallel reduction order, host libraries, timing of concurrent jobs, and
-nondeterministic EDA heuristics can change a return even when source inputs
-match. The setup should pin these factors where the tool permits. Where it
-cannot, the execution record states what varied and retains enough repeated attempts
-to characterize repeatability later. Declared variation can be studied;
-unrecorded variation is an unknown dependency.
+Seeds are only one variation control. The setup should also pin thread counts,
+scheduler placement, parallel reduction order, host libraries, and the timing
+of concurrent jobs where the tool permits. A tool may require additional
+controls when its documentation identifies a nondeterministic algorithm or
+heuristic. Where a factor cannot be fixed, the execution record states what
+varied and retains enough repeated attempts to characterize repeatability
+later. Declared variation can be studied; unrecorded variation is an unknown
+dependency.
 
 A larger hardware and software change makes the lineage problem visible
 (@fig-artifact-lineage). The same root intent may produce several software
@@ -383,10 +382,10 @@ therefore standardizes how work is requested and returned while leaving
 architecture objectives and interpretation outside the wrapper.
 
 Structured hardware representations can reduce ambiguity when they match the
-artifact. Circuit IR Compilers and Tools (CIRCT), built on the Multi-Level
-Intermediate Representation (MLIR) infrastructure, provides typed operations
-for hardware compilation rather than requiring every change to be a textual
-source edit [@CIRCT; @LattnerEtAl2020MLIR]. This is one useful interface
+artifact. Circuit IR Compilers and Tools (CIRCT) documents hardware dialects
+and compiler passes that operate on structured intermediate representations
+rather than requiring every change to be a textual source edit [@CIRCT]. This
+is one useful interface
 technique, not the definition of an environment. A shared CIRCT operation,
 JavaScript Object Notation (JSON) schema, or simulator request also does not
 make two tools equal in
@@ -422,13 +421,14 @@ random seeds, and generated artifacts. Outputs return asynchronously and may
 arrive out of order, while one tool path may depend on an artifact produced by
 another.
 
-The familiar reinforcement-learning interface calls `step()` and receives an
-observation, reward, termination flags, and auxiliary information through a
-standard synchronous API [@TowersEtAl2023Gymnasium]. That interface is useful
-when interaction can be presented as one step at a time. An architecture
-runtime must also expose queues, persistent state, dependencies, partial
-artifacts, and delayed returns. It preserves the typed tool return and lets a
-method derive a reward later when one is needed.
+This chapter adapts a small part of reinforcement-learning environment
+vocabulary. A familiar interface calls `step()` and receives an observation,
+reward, termination flags, and auxiliary information through a standard
+synchronous API [@TowersEtAl2023Gymnasium]. That interface is useful when
+interaction can be presented one step at a time. Architecture execution adds
+queued work, persistent tool state, dependencies, partial artifacts, versioned
+records, failures, and delayed returns. The runtime preserves the typed tool
+return and lets a method derive a reward later when one is needed.
 
 The harness reaches a scheduler or execution backend through a *scheduler
 adapter*. The adapter maps stable harness operations such as submit, inspect
@@ -452,12 +452,13 @@ artifact, RTL simulation may wait for elaboration, and physical implementation
 may wait for a mapped netlist. Independent jobs may run concurrently, but
 concurrency does not relax their identity or resource limits.
 
-Authorization follows least privilege. A wrapper receives only the executables,
-filesystem paths, network destinations, credentials, secrets, licensed
-features, and intellectual property needed for its declared action. Generated
-scripts, constraints, RTL, and compiler inputs are untrusted until validated
-and confined. Each attempt uses an isolated working area, resource limits, and
-a process boundary. Cancellation handling must request termination of
+Authorization follows the established security principle of least privilege
+[@SaltzerSchroeder1975ProtectionInformation]. A wrapper receives only the
+executables, filesystem paths, network destinations, credentials, secrets,
+licensed features, and intellectual property needed for its declared action.
+Generated scripts, constraints, RTL, and compiler inputs are untrusted until
+validated and confined. Each attempt uses an isolated working area, resource
+limits, and a process boundary. Cancellation handling must request termination of
 descendants, then confirm termination and license release. Until confirmation,
 the harness quarantines uncertain outputs, keeps the status unconfirmed, and
 preserves enough partial state to explain what happened.
@@ -489,6 +490,14 @@ The execution interface keeps the request identifiable through validation,
 admission, scheduling, termination, artifact inspection, and parsing. The
 compact sequence in @lst-environment-runtime shows the common case in which
 one attempt produces one scheduler job.
+
+The runtime uses five related objects. A *request* states the desired action.
+The *run specification* fixes the conditions under which that action is
+authorized to execute. An *attempt* is one authorized try. Scheduler *jobs* or
+execution *segments* perform that try. The *execution record* preserves what
+actually happened across the attempts, jobs, and segments. Keeping these
+objects separate prevents a retry from becoming a new candidate or a scheduler
+job from becoming an architecture result.
 
 `candidate_id` names the architecture candidate across tool paths.
 `configuration_id` names that candidate's declared tool-specific configuration
@@ -560,11 +569,15 @@ Recording candidate identity before submission prevents late returns from
 attaching to whichever candidate is current when a job finishes. The scheduler
 may accept work before the harness records its job identifier. The harness tags
 submitted work with the attempt identifier and reconciles its record with the
-scheduler before resubmitting. An *idempotency key* is a token that prevents the
-same submission from launching work twice; `submission_token` serves that role
-here. Reusing it returns or identifies the existing attempt or job. This closes
-the duplicate-work window after a harness crash without changing the retry
-policy.
+scheduler before resubmitting. An *idempotency key* is a request identifier
+whose durable backend handling prevents a repeated submission from launching
+the same work twice; `submission_token` serves that role here. The backend
+records the key with the first admission result. A later submission with the
+same key returns or identifies the existing attempt or job instead of launching
+another one. The harness must retain the key through the retry window,
+reconcile it after a crash, and reject reuse for a different request
+[@Featonby2021IdempotentAPIs]. This closes the duplicate-work window without
+changing the retry policy.
 
 Cancellation also remains a request until termination is confirmed. A process
 may report cancellation, terminate after producing partial artifacts, or
@@ -623,6 +636,13 @@ one exclusive status value. They determine what the harness repairs and what
 it hands forward, so they describe execution rather than architecture judgment
 (@tbl-failure-taxonomy).
 
+Formal methods do not share one universal result vocabulary. A model checker,
+bounded checker, theorem prover, and equivalence tool may report different
+outcomes and attach different assumptions, bounds, or artifacts
+[@Clarke2018ModelChecking]. The environment preserves the exact method and
+tool terminology rather than translating every completed formal run into one
+generic status.
+
 | **Execution outcome** | **How it appears** | **What the harness preserves** | **Runtime response** |
 | --- | --- | --- | --- |
 | Invalid request | An illegal value, missing identity, or meaning-changing translation is found before invocation. | Request, validation rule, and refusal reason. | Repair syntax only when meaning is preserved; otherwise refuse the request and return it to the candidate-producing caller. Reopen method selection only if the failure invalidates the chosen approach or its supported action space. |
@@ -631,7 +651,7 @@ it hands forward, so they describe execution rather than architecture judgment
 | Tool failure | The tool crashes, reports an internal error, or exhausts a local resource. | Tool status, diagnostics, partial artifacts, conditions, cost, and retry history. | Retry, reset, resume a valid checkpoint, or stop. Repetition does not prove physical infeasibility. |
 | Incomplete return | A stage or expected report is missing, stale, or only partly written. | Completed stages, expected-artifact check, produced files, raw output, and parse status. | Preserve the partial return and repair or rerun before treating it as complete. |
 | Parser failure | A retained artifact does not match the declared schema or contains unclassified output. | Parser version, raw artifact, diagnostics, recognized fields, and residual output. | Repair the parser and reparse the retained artifact when safe. |
-| Formal solver outcome | The solver returns a proof result, counterexample, bounded result, `unknown`, or a resource limit. | Property, model, assumptions, bound, solver, exact outcome, artifact, and cost. | Hand the scoped outcome forward without turning it into a general correctness verdict. |
+| Formal-tool return | The declared method and tool report their exact outcome, which may include a proof, counterexample, bounded result, `unknown`, or resource limit. | Method, property or relation, model, assumptions, bound where applicable, tool, exact outcome, artifact, and cost. | Hand the method-specific result forward without turning it into a general correctness verdict. |
 | Reported design-limit violation | A completed run reports a timing, power, congestion, design-rule, or functional violation. | Typed violation, units, candidate, conditions, warnings, raw artifact, and cost. | Record a complete return without rejecting or penalizing the candidate. |
 | Complete tool return | Expected artifacts exist and parse, including reports that contain violations. | Typed fields, units, conditions, warnings, raw artifacts, cost, and lineage. | Retain the return for measurement qualification without deciding what it establishes. |
 
@@ -643,7 +663,7 @@ returns stay separate so the next repair targets the right problem.
 The retained record and next execution action depend on the observed execution
 condition. Invalid requests, setup failures, and infrastructure failures leave
 the candidate unevaluated. Tool, artifact, and parser failures identify
-different recovery owners. A formal solver outcome and a reported design-limit
+different recovery owners. A formal-tool return and a reported design-limit
 violation are completed returns, not process failures, but neither supplies a
 broad design verdict. Every completed result goes forward with its scope
 intact.
@@ -671,11 +691,12 @@ conditions that were never run. Even a complete signoff return supplies neither
 architecture interpretation nor authorization to proceed.
 
 Raw logs remain part of the return. A commercial EDA tool or a detailed
-simulator may emit thousands of lines. Passing all of that text to a model is
-impractical, but discarding everything outside a fixed parser is unsafe. The
-wrapper should return structured fields for recognized metrics and failures,
-an explicitly marked residual of unclassified warnings and errors, and both a
-retrievable artifact identifier and integrity hash for the complete raw log.
+simulator may emit thousands of lines. A model can miss relevant text in a long
+context [@Liu2024LostInTheMiddle]. Discarding everything outside a fixed parser
+is also unsafe. The wrapper should return structured fields for recognized
+metrics and failures, an explicitly marked residual of unclassified warnings
+and errors, and both a retrievable artifact identifier and integrity hash for
+the complete raw log.
 
 ::: {.callout-failure-mode title="The parser recognizes only yesterday's warnings"}
 **The trap.** A parser keeps only known warning classes and drops every line it
@@ -762,14 +783,12 @@ artifact, return, and cost, including failed work.
 
 ## Returned Records and Reproducibility {#sec-operational-attempt-record}
 
-The execution record and its attempt records preserve what was requested,
-attempted, returned, and spent. An execution record contains one or more
-attempt records. Each attempt record describes one authorized try and the
-scheduler jobs or execution segments created for it. Raw
-logs, reports, traces, databases, and counterexamples retain details that a
-current parser may miss. Structured fields make status, metrics, warnings,
-cost, and identity inspectable without rereading every file. The execution
-record keeps both views because neither is sufficient alone.
+The runtime object model becomes concrete in the returned record. The execution
+record preserves what was requested, attempted, returned, and spent across its
+attempt records. Raw logs, reports, traces, databases, and counterexamples
+retain details that a current parser may miss. Structured fields make status,
+metrics, warnings, cost, and identity inspectable without rereading every file.
+The execution record keeps both views because neither is sufficient alone.
 
 The enclosing execution record carries the study and request context and the
 ordered set of attempt identifiers. Unless noted below, the fields are recorded
@@ -789,7 +808,7 @@ for each attempt:
   index.
 - **Status, per attempt:** Validation, setup, admission, queue and process,
   cancellation and timeout, confirmed or unconfirmed termination,
-  expected-artifact, parser, and formal-solver outcomes as applicable, plus
+  expected-artifact, parser, and formal-tool returns as applicable, plus
   retry eligibility.
 - **Returns, per attempt:** Raw artifacts and logs, hashes, structured values
   with units, warnings, unclassified residual output, and artifact completeness.
@@ -807,16 +826,19 @@ and return fields. Unknown or unobservable values remain explicitly unreported.
 A missing seed, library view, or raw report is not repaired by leaving its field
 blank.
 
-Terminology varies, so this chapter uses three distinct reproducibility claims.
-*Exact replay* submits the same retained request, artifacts, versions, and
-recorded state again. The replay record shows that the same retained inputs were
-requested. It does not guarantee identical realized execution or output bits.
-*Repeatability* asks whether repeated attempts under the declared setup agree
-within the variation that the environment records. *Independent reproduction*
-rebuilds the run from the stated specification without depending on private
-working state, and may use a separate implementation or installation. It is
-stronger operational evidence than replay, but the returned agreement still
-must be interpreted against the property and conditions under study.
+Established publication standards distinguish repeatability and
+reproducibility, although communities do not always use the terms identically
+[@ACM2020ArtifactReview]. This chapter therefore uses three operational
+distinctions for tool-connected architecture work. *Exact replay* submits the
+same retained request, artifacts, versions, and recorded state again. The
+replay record shows that the same retained inputs were requested. It does not
+guarantee identical realized execution or output bits. *Repeatability* asks
+whether repeated attempts under the declared setup agree within the variation
+that the environment records. *Independent reproduction* rebuilds the run from
+the stated specification without depending on private working state, and may
+use a separate implementation or installation. It is stronger operational
+evidence than replay, but the returned agreement still must be interpreted
+against the property and conditions under study.
 
 Hashes establish the identity and integrity of exact bytes. They do not prove
 that two netlists are equivalent, two configurations express the same
@@ -827,14 +849,17 @@ survive when one candidate branches through several tools.
 ## Multi-Tool and Multi-Fidelity Environments
 
 Architecture studies often use several tools because no one tool observes
-every relevant property. *Fidelity* describes how well a tool path represents a
-named property under stated conditions. It is not one scalar ranking. A path
-can offer high fidelity for one property and remain silent about another. A
-simulation accelerated by a field-programmable gate array (FPGA) may execute a
-target model much faster than RTL simulation without providing
-application-specific integrated circuit (ASIC) placement or timing signoff. A
-circuit model may estimate SRAM area and access time without executing the
-workload.
+every relevant property. Multifidelity methods combine models whose cost and
+accuracy differ for the quantity being studied
+[@PeherstorferWillcoxGunzburger2018Multifidelity]. This chapter translates that
+lesson to architecture tools. *Fidelity* describes how well a tool path
+represents a named property under stated conditions, not one scalar ranking of
+the tool. A path can offer high fidelity for one property and remain silent
+about another. A simulation accelerated by a field-programmable gate array
+(FPGA) may execute a target model much faster than RTL simulation without
+providing application-specific integrated circuit (ASIC) placement or timing
+signoff. A circuit model may estimate SRAM area and access time without
+executing the workload.
 
 The useful comparison is what each tool consumes and returns
 (@tbl-multi-fidelity-spectrum).
@@ -930,7 +955,7 @@ artifacts and examine different properties (@fig-chipyard-framework).
 simplified view of the cited Chipyard framework retains configuration lineage
 while branch-specific transformations and tools produce artifacts for RTL
 simulation, VLSI implementation, and FPGA-accelerated
-simulation.](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
+simulation [@chipyard].](images/F6b-chipyard-framework){#fig-chipyard-framework fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
 
 The common configuration and generated hardware description provide a shared
 parent, but branch-specific compiler and backend work determines the artifact
