@@ -548,40 +548,61 @@ resource use attached to that same attempt.
 
 ```{.text #lst-environment-execution lst-cap="**Execution preserves operational state:** Queueing, cancellation, timeout, termination, and resource use remain connected to the admitted attempt."}
 job_id = submission.job_id
-termination_confirmation_deadline = NOT_SET
-record scheduling_state=current_scheduler_state(job_id)
+latest_terminal_deadline = submission.latest_terminal_deadline
+cancellation_status = NOT_REQUESTED
+termination_requested = false
+scheduler_state = current_scheduler_state(job_id)
+process_state = current_process_state(job_id)
 
-while job is queued or running:
-    record scheduling_state, queue_time, and partial_artifact_ids
-    if cancellation is authorized:
-        request termination
-        record cancellation_status=REQUESTED
-        termination_confirmation_deadline = now() + termination_confirmation_limit
+while now() < latest_terminal_deadline:
+    record scheduler_state, process_state, queue_time, and partial_artifact_ids
+    if scheduler_state is terminal and process_state is terminal:
         break
-    if timeout is reached:
+    if scheduler or process state is unknown or the states are inconsistent:
+        record state_status=UNRESOLVED
+        latest_terminal_deadline = min(
+            latest_terminal_deadline,
+            now() + state_confirmation_limit
+        )
+    if an authorized cancellation request is pending and not termination_requested:
         request termination
-        record cancellation_status=TIMEOUT_REQUESTED
-        termination_confirmation_deadline = now() + termination_confirmation_limit
-        break
+        cancellation_status = REQUESTED
+        termination_requested = true
+        latest_terminal_deadline = min(
+            latest_terminal_deadline,
+            now() + termination_confirmation_limit
+        )
+    elif timeout is reached and not termination_requested:
+        request termination
+        cancellation_status = TIMEOUT_REQUESTED
+        termination_requested = true
+        latest_terminal_deadline = min(
+            latest_terminal_deadline,
+            now() + termination_confirmation_limit
+        )
+    scheduler_state = current_scheduler_state(job_id)
+    process_state = current_process_state(job_id)
 
-if termination_confirmation_deadline is set:
-    wait until scheduler and process report a terminal state
-               or termination_confirmation_deadline is reached
+if scheduler_state is unknown:
+    recorded_scheduling_state = UNKNOWN
 else:
-    wait until scheduler and process report a terminal state
+    recorded_scheduling_state = scheduler_state
 
-if scheduler or process terminal state is not confirmed:
+if scheduler_state is not terminal or process_state is not terminal:
     return open_attempt_record(
         attempt_id=attempt.attempt_id,
         job_id=job_id,
-        scheduling_state=UNKNOWN or last_observed_state,
+        scheduling_state=recorded_scheduling_state,
         cancellation_status,
         termination_status=UNCONFIRMED,
         retry_eligibility=NO,
         uncertain_outputs=QUARANTINED,
         resource_record=resources_observed_to_date(job_id)
     )
-record final scheduler state
+termination_status = CONFIRMED
+record final_scheduler_state=scheduler_state,
+       final_process_state=process_state,
+       termination_status
 record queue_time, run_time, cpu_time, gpu_time,
        peak_memory, storage_written, license_occupancy
 ```
@@ -601,10 +622,17 @@ may report cancellation, terminate after producing partial artifacts, or
 complete before the cancellation takes effect. The environment retains any
 late return under its original attempt. It does not expose that return as a
 live observation until the current request revision and budget policy admit
-it. A timeout states whether it bounds queue wait, run time, one tool stage, or
-an absolute deadline. After a timeout or cancellation, the harness keeps late
-writers and outputs out of live state or quarantines them until termination and
-job identity are confirmed.
+it. Authorization alone does not stop a job. The harness requests termination
+only when an authorized cancellation request is pending or a declared timeout
+is reached. Admission supplies a finite deadline for confirming a terminal
+state even when no cancellation occurs. If the reported scheduler and process
+states become unknown or disagree, the harness records that condition and
+limits how long it will wait for them to reconcile. If they do not agree before
+the deadline, the harness returns the unconfirmed attempt record shown in the
+listing. A timeout states whether it bounds queue wait, run time, one tool
+stage, or an absolute deadline. After a timeout or cancellation, the harness
+keeps late writers and outputs out of live state or quarantines them until
+termination and job identity are confirmed.
 
 After the process stops, @lst-environment-return records what happened to the
 process, expected artifacts, and parser as separate outcomes.
