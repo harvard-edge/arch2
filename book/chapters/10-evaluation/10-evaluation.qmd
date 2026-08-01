@@ -86,12 +86,16 @@ compared and the difference it intends to measure. The effect of adopting a
 complete workflow is not a component contribution, even when both analyses use
 the same runs.
 
-This chapter uses *red teaming* to mean deliberate tests that challenge the
-requirements, measurements, tool path, component behavior, or stopping logic
-that ordinary evaluation assumes will behave correctly. Those tests ask whether
-the candidate or system can hide behavior, weaken its own checks, exploit
-misleading feedback, spend without limit, resist interruption, or leave
-corrupted state behind.
+Red teaming borrows from security testing. NIST describes tests that take an
+adversary's perspective and warns that they do not identify every vulnerability
+or assess every system [@NIST2008SecurityTesting]. This chapter adapts that
+practice to architecture. It uses *red teaming* to mean deliberate
+tests that challenge the requirements, measurements, tool path, component
+behavior, or stopping logic that ordinary evaluation assumes will behave
+correctly. Those tests ask whether the candidate or system can hide behavior,
+weaken its own checks, exploit misleading feedback, spend without limit,
+resist interruption, or leave corrupted state behind. Passing the selected
+tests does not establish that every attack surface has been covered.
 
 Verifying feedback inside one design study asks whether a particular
 observation supports the next action. Complete-workflow evaluation asks a
@@ -260,11 +264,17 @@ protocol.
 Naming a metric does not specify it. Every reported metric should identify the
 event or outcome, experimental unit, target population and denominator,
 evaluator-owned check and tool stage, budget or time window, aggregation and
-failure policy, uncertainty, and treatment of censored runs. Architecture tasks
-or decisions usually support generalization. Seeds, retries, candidates, tool
-calls, and prompt samples are nested observations unless the claim and sampling
-plan establish otherwise. More repeats inside ten tasks do not create more than
-ten independent tasks.
+failure policy, uncertainty, and treatment of censored runs. For a claim across
+design problems, the architecture task or decision is usually the experimental
+unit. A run is censored when execution stops or reaches a limit before the
+quantity of interest is fully observed; the data and representation chapter
+explains how to retain these partial observations in
+@sec-data-representations-world-models. Seeds, retries, candidates, tool calls,
+and prompt samples are nested observations unless the claim and sampling plan
+establish otherwise. Treating those observations as independent task
+replications is pseudoreplication
+[@Hurlbert1984Pseudoreplication]. More repeats inside ten tasks do not create
+more than ten independent tasks.
 
 The next sections define architecture result, decision behavior, and total
 cost. Comparison design and component replacement provide the experiments
@@ -431,17 +441,22 @@ or correctly used.
 Decision quality should be compared against declared expected actions or
 independent engineering review where such a reference can be established. For
 ambiguous decisions, report reviewer agreement and the unresolved alternatives
-instead of manufacturing one correct label. Calibration is also important. For
-a predeclared binary outcome, such as whether a candidate passes one
-evaluator-owned target check within a fixed evaluation horizon, a system that
-assigns 80 percent confidence should see about 80 percent of held-out cases
-reach that outcome under the tested conditions. Evaluate that relationship with a
-calibration plot, a proper scoring rule, and a risk-coverage curve. A proper
-scoring rule rewards useful probabilistic forecasts and penalizes confident
-errors. A risk-coverage curve shows how the error rate changes as the system
-handles more cases rather than abstaining or escalating. If the workflow does
+instead of manufacturing one correct label. Statistical and machine-learning
+evaluation provide three useful tools for a narrower question: confidence
+calibration, proper scoring rules, and risk-coverage curves. For a predeclared
+binary outcome, such as whether a candidate passes one evaluator-owned target
+check within a fixed evaluation horizon, a system that assigns 80 percent
+confidence should see about 80 percent of held-out cases reach that outcome
+under the tested conditions [@GuoEtAl2017Calibration]. A proper scoring rule
+assigns scores so that reporting the forecaster's probability distribution
+maximizes expected score [@GneitingRaftery2007ScoringRules]. A risk-coverage
+curve shows how the error rate changes as the system handles more cases rather
+than abstaining or escalating [@ElYanivWiener2010SelectiveClassification]. If
+the workflow does
 not issue probabilities, evaluate when it abstains or escalates rather than
-inventing a confidence measure.
+inventing a confidence measure. These tools assess reported uncertainty and
+selective handling under the fixed outcome and horizon. They do not validate
+candidate function, physical feasibility, or architecture value.
 
 Human support is part of the workflow, not an embarrassment to hide. Record
 where people supplied missing context, corrected an interpretation, overrode a
@@ -925,8 +940,11 @@ the all-assigned comparison on which the program claim depends.
 
 A timeout is a failure when the outcome is success within a fixed budget. It is
 right-censored when the outcome is time to a supported result, meaning the
-completion time is known only to exceed the timeout. The analysis should not
-discard either case or assign a fabricated completion time.
+completion time is known only to exceed the timeout. This is the
+timeout-specific form of the censored observation introduced in
+@sec-data-representations-world-models [@KleinMoeschberger2003Survival]. The
+analysis should not discard either case or assign a fabricated completion
+time.
 
 A single equal-budget comparison can still conceal the important result. One
 system may find a better design only by spending much more, while another may
@@ -1064,13 +1082,16 @@ are useful when both systems run on the same tasks and conditions, but the
 corresponding nonparametric tests still rely on paired observations and
 independent task units [@Demsar2006StatisticalComparisons]. Bootstrap intervals
 can summarize skewed statistics, but additional resamples do not repair a small
-or unrepresentative task set.^[Bootstrap
-resampling repeatedly draws observed experimental units with replacement to
-estimate variation in a statistic. Paired observations require paired
-resampling. Time-dependent observations require block resampling that preserves
-local dependence [@Kunsch1989BlockBootstrap].] Report the realized sample size,
-failures, effect sizes, intervals, and the analysis choice rather than treating
-one test as mandatory.
+or unrepresentative task set.[^fn-bootstrap-c10] Report the realized sample
+size, failures, effect sizes, intervals, and the analysis choice rather than
+treating one test as mandatory.
+
+[^fn-bootstrap-c10]: **Bootstrap resampling**: Ordinary bootstrap resampling
+draws observed experimental units with replacement to estimate variation in a
+statistic, while paired comparisons resample the paired units together
+[@EfronTibshirani1993Bootstrap]. For stationary time-dependent observations,
+block resampling is one way to preserve local dependence
+[@Kunsch1989BlockBootstrap].
 
 A study that claims performance across a sampled task population should treat
 architecture tasks as the primary generalization units, pair systems within
@@ -1139,6 +1160,10 @@ and they remained outside system and evaluator selection. A convenience
 holdout is merely unseen. A new design family, toolchain, process node,
 organization, or decision class is a transfer claim and needs a new target
 evaluation. Performance and calibration must be re-estimated at each level.
+The transfer test in @sec-loop-patterns-across-stack determines what must be
+re-established after a workload, design, or tool change. This chapter uses
+those changes as evaluation conditions rather than assuming that a result
+transfers.
 Cross these conditions selectively, such as workload with compiler or design
 with physical corner, when their interaction is part of the architecture risk.
 
@@ -1382,9 +1407,11 @@ This book uses an operational split between two hidden-behavior targets because
 they require different tests. Hidden or malicious behavior inserted into a
 returned design remains in the RTL, firmware, microcode, configuration, or
 implemented artifact after the design workflow has ended. A rare instruction,
-state sequence, or input can activate it in the delivered system. Triggered
-hidden behavior of this kind is one form of what is commonly called a hardware
-backdoor.
+state sequence, or input can activate it in the delivered system. Hardware
+security literature calls a malicious circuit modification of this kind a
+*hardware Trojan* and separates its physical form, activation mechanism, and
+action [@TehranipoorKoushanfar2010HardwareTrojan]. Triggered backdoor-like
+behavior is one possible Trojan action rather than a separate catch-all term.
 
 Malicious LUT shows why the evaluated artifact and tool stage matter. In this
 controlled research construction, a malicious change remained functionally and
@@ -1452,8 +1479,13 @@ and near-miss triggers. Report trial count and diversity, attack success,
 detection, containment, recovery, false alarms, unnecessary stops, clean-task
 success, defense overhead, residual failures, uncertainty or an upper bound on
 missed failures, untested attacker capabilities, and total recovery cost. Zero
-observed failures is not a zero failure rate, and passing one attack class does
-not support a general security claim.
+observed failures is not a zero failure rate. With no failures in $n$
+independent trials under the same declared conditions, a common approximate 95
+percent upper confidence bound on the failure probability is $3/n$
+[@HanleyLippmanHand1983ZeroFailures]. The
+calculation applies only to the sampled failure event and trial population. It
+does not cover untested attack classes, and passing one attack class does not
+support a general security claim.
 
 An evaluator-awareness test must separate audit visibility from information the
 system legitimately needs to solve the task. Use randomized or counterbalanced
@@ -1490,7 +1522,12 @@ stronger physical check, belongs to
 @sec-proxy-mismatch-metric-gaming-and-calibration. Complete-workflow evaluation
 adds a different requirement. Adaptive search changes the candidate
 distribution by concentrating queries where the proxy predicts improvement,
-including regions where its errors are easiest to exploit.
+including regions where its errors are easiest to exploit. Even when proxy
+errors average to zero before selection, choosing the best predicted candidate
+preferentially selects optimistic errors. Decision analysis calls this effect
+the *optimizer's curse* [@SmithWinkler2006OptimizersCurse]. The source does not
+study EDA proxies. The architecture response is an independent,
+higher-fidelity audit of the candidates selected by the search.
 
 A static holdout is therefore insufficient. Preserve an evaluator-selected
 audit stream or refreshable holdout that remains outside proxy fitting, search,
