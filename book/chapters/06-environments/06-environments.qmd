@@ -491,13 +491,24 @@ admission, scheduling, termination, artifact inspection, and parsing. The
 compact sequence in @lst-environment-runtime shows the common case in which
 one attempt produces one scheduler job.
 
-The runtime uses five related objects. A *request* states the desired action.
-The *run specification* fixes the conditions under which that action is
-authorized to execute. An *attempt* is one authorized try. Scheduler *jobs* or
-execution *segments* perform that try. The *execution record* preserves what
-actually happened across the attempts, jobs, and segments. Keeping these
-objects separate prevents a retry from becoming a new candidate or a scheduler
-job from becoming an architecture result.
+Four lead-ins orient the runtime without collapsing its states:
+
+- **Requested:** The retained request and run specification identify the
+  candidate, permitted action, conditions, tool path, and budget.
+- **Ran:** Attempt, job, and execution-segment identifiers show which authorized
+  work actually reached a backend.
+- **Ended:** Terminal cause, artifact completeness, parser status, and
+  cancellation status show how each attempt finished.
+- **Cost:** Resource use and realized cost include failed, canceled, repeated,
+  and retried work as well as completed work.
+
+Those answers come from five related objects. A *request* states the desired
+action, and the *run specification* authorizes the conditions for executing it.
+One complete run may create linked authorized *attempts*, and each attempt may
+create scheduler *jobs* or execution *segments*. The *execution record* joins
+the request and run specification to those attempts, jobs, and segments. Keeping
+these objects separate prevents a retry from becoming a new candidate or a
+scheduler job from becoming an architecture result.
 
 `candidate_id` names the architecture candidate across tool paths.
 `configuration_id` names that candidate's declared tool-specific configuration
@@ -790,41 +801,53 @@ retain details that a current parser may miss. Structured fields make status,
 metrics, warnings, cost, and identity inspectable without rereading every file.
 The execution record keeps both views because neither is sufficient alone.
 
-The enclosing execution record carries the study and request context and the
-ordered set of attempt identifiers. Unless noted below, the fields are recorded
-for each attempt:
+This is a logical record, not a requirement to build a new database. A project
+can map the fields and links onto existing run directories, scheduler records,
+artifact stores, and review records, provided that attempt identity and
+relationships remain recoverable. The enclosing record carries the study and
+request context, preserves the ordered attempt identifiers, and aggregates cost
+without hiding repeated or retried work.
 
-- **Identity, at both levels:** The execution record names the study, run
-  specification, request, candidate, workload, software, declared conditions,
-  parent artifacts, and attempt identifiers. Each attempt records its own
-  identifier and the identifiers of its jobs or execution segments.
-- **Setup, per attempt:** Source revision, translated input, configuration,
-  libraries, PDK views, modes, corners, constraints, waivers, environment
-  variables, reset parent, checkpoint, and behavior-affecting versions of the
-  wrapper, harness and parser, tool and model, host or container, and scheduler
-  adapter or execution policy.
-- **Variation controls, per attempt:** Seeds, thread counts, scheduler and
-  parallelism settings, declared nondeterministic behavior, and repetition
-  index.
-- **Status, per attempt:** Validation, setup, admission, queue and process,
-  cancellation and timeout, confirmed or unconfirmed termination,
-  expected-artifact, parser, and formal-tool returns as applicable, plus
-  retry eligibility.
-- **Returns, per attempt:** Raw artifacts and logs, hashes, structured values
-  with units, warnings, unclassified residual output, and artifact completeness.
-- **Cost, at both levels:** Each attempt records model and tool calls, queue and
-  run time, compute, memory, storage, license occupancy, retries, and linked
-  human work. The execution record aggregates those fields without hiding
-  repeated or retried work.
-- **Lineage, at both levels:** Each attempt records parent-child
-  transformations, retry and reset links, cache decision, and the next
-  authorized consumer. The execution record preserves the order and
-  relationships among attempts.
+At minimum, every attempt needs these fields:
 
-Resource use is one part of the execution record, not a substitute for setup
-and return fields. Unknown or unobservable values remain explicitly unreported.
+- **Request and attempt identity:** Study, request, run specification, candidate,
+  configuration, workload, software, conditions, and attempt identifier.
+- **Starting state:** Exact inputs, source revision, artifact identities, and
+  behavior-affecting state and versions needed to interpret or repeat the
+  attempt.
+- **Execution outcome:** Whether the request was refused or the attempt failed,
+  was canceled, returned partially, or completed, together with terminal cause,
+  termination confirmation, artifact and parser status, and retry eligibility.
+- **Returned material:** Raw artifacts and logs, hashes, structured values with
+  units, warnings, unclassified residual output, and artifact completeness.
+- **Lineage and retry relation:** Parent inputs and artifacts, recorded
+  transformations, whether the attempt is initial, a planned repeat, or a
+  recovery retry, and any retry or reset parent.
+- **Realized cost:** Amounts and units actually spent, including failed,
+  canceled, repeated, and retried work.
+
+The concrete fields expand when the tool or project infrastructure exposes more
+state. Applicable fields include job or execution-segment identifiers and
+per-stage status; validation, setup, admission, queue, process, cancellation,
+and timeout details; formal-tool returns; checkpoint and reset-state identity;
+libraries, PDK views, modes, corners, constraints, waivers, and environment
+variables; cache decisions and the next authorized consumer; and
+behavior-affecting identities or versions for the wrapper, harness, parser,
+tool, model, host, container, scheduler adapter, and execution policy. Seeds,
+thread counts, scheduler and parallelism settings, declared variable or
+nondeterministic behavior, and repetition index also belong in the record when
+they apply.
+Resource services may report model and tool calls, queue and run time, compute,
+memory, storage, license occupancy, retries, cancellations, and reserved,
+consumed, or billable amounts, with units and the scheduler, license server, or
+billing system that supplied each value. Human work may attach to a group of
+attempts when one setup or diagnosis supports several invocations.
+
+Unknowns remain explicit. An unavailable or unobservable value is marked
+unreported or unknown, while a field that does not apply is marked separately.
 A missing seed, library view, or raw report is not repaired by leaving its field
-blank.
+blank. Resource use is one part of the record, not a substitute for starting
+state, status, lineage, or returned material.
 
 Established publication standards distinguish repeatability and
 reproducibility, although communities do not always use the terms identically
@@ -881,21 +904,42 @@ retains each tool's model, inputs, conditions, stage, latency, and artifacts
 instead of collapsing several returns into one generic score.
 {#tbl-multi-fidelity-spectrum tbl-colwidths="[19,22,29,30]"}
 
-The consequence is operational. Heterogeneous latency, dependencies, and
-property coverage determine which authorized branches a study can afford to
-execute. A compiler constructs an executable path but does not return hardware
-timing.
-Functional ISA execution returns software behavior without microarchitectural
-timing. A formal tool reports only the property and model it received, and
-FPGA-accelerated simulation does not establish ASIC implementation results. An
-implementation flow remains limited to its completed stages, libraries,
-constraints, modes, and corners.
+Fidelity comes first because heterogeneous latency and property coverage
+determine which authorized branches a study can afford to execute. A compiler
+constructs an executable path but does not return hardware timing. Functional
+ISA execution returns software behavior without microarchitectural timing. A
+formal tool reports only the property and model it received, and FPGA-accelerated
+simulation does not establish ASIC implementation results. An implementation
+flow remains limited to its completed stages, libraries, constraints, modes,
+and corners.
 
-Branches count as observations of the same candidate only when their recorded
-translations preserve the architecture meaning relevant to each returned
-property. The execution record retains transformation, calibration, and
-version identities together with branch-specific conditions so another
-architect can check that correspondence.
+ZSim and FireSim illustrate one operational consequence. Throughput depends on
+the realized configuration, not only the tool class. In one published
+configuration, ZSim ran a detailed Westmere-class out-of-order model at 20
+million simulated instructions per second, about $200\times$ slower than the
+modeled core. The same study reported conventional detailed simulators at
+roughly 100 to 200 thousand simulated instructions per second [@ZSim]. FireSim
+reports a different regime. Individual target nodes in FPGA-accelerated
+simulation can run at tens to hundreds of megahertz, while one 1,024-node
+configuration ran at 3.4\ MHz for 3.2\ GHz targets, a slowdown of less than
+$1{,}000\times$ [@KarandikarEtAl2018FireSim]. These rates are examples, not
+constants. The modeled system, host or FPGA allocation, workload,
+instrumentation, accuracy, and scale all change them. The environment therefore
+records observed throughput and its conditions, and the method budgets from
+that scoped rate.
+
+SimPoint and SMARTS supply a separate lesson about sampling identity. SimPoint
+selects representative program regions, while SMARTS supplies a statistical
+basis for sampled simulation [@SherwoodEtAl2002SimPoint;
+@WunderlichEtAl2003SMARTS]. The environment records the chosen regions,
+weights, warm-up, fast-forward policy, and checkpoint parent. It does not decide
+whether those choices support the intended comparison.
+
+Shared candidate lineage comes next. Branches count as observations of the same
+candidate only when their recorded translations preserve the architecture
+meaning relevant to each returned property. The execution record retains
+transformation, calibration, and version identities together with
+branch-specific conditions so another architect can check that correspondence.
 
 For one prospective `L2-3M-A` environment, `SRAM-A` receives the exact cache
 organization and `PVT-A`. The compiler branch binds `SW-BASE-A`, target
@@ -905,44 +949,13 @@ branch binds that binary and candidate to `XR-TRACE-A`, `SIM-A`, `CACHE-A`,
 testbench, compile flags, and reset. Formal checking adds one named property or
 equivalence relation, assumptions, abstraction, bound, and solver. Logic
 synthesis adds top-level constraints and libraries; physical implementation
-adds floorplan, PDK views, modes, corners, and waivers.
+adds floorplan, PDK views, modes, corners, and waivers. These branches are not
+interchangeable. Only the SRAM and cycle-level branches appear in the execution
+scenario later in this chapter. The environment preserves every branch's input,
+raw and structured return, cost, conditions, and limit without promoting or
+rejecting `L2-3M-A`.
 
-These branches are not interchangeable. Only the SRAM and cycle-level branches
-appear in the hypothetical execution scenario later in this chapter. The
-environment preserves every branch's input, raw and structured return, cost,
-conditions, and limit without promoting or rejecting `L2-3M-A`.
-
-Throughput changes how many candidates and conditions a study can afford to
-examine. In one published configuration, ZSim ran a detailed Westmere-class
-out-of-order model at 20 million simulated instructions per second, about
-$200\times$ slower than the modeled core. The same study reported conventional
-detailed simulators at roughly 100 to 200 thousand simulated instructions per
-second [@ZSim]. FireSim reports a different regime. Individual target nodes in
-FPGA-accelerated simulation can run at tens to hundreds of megahertz, while one
-1,024-node configuration ran at 3.4\ MHz for 3.2\ GHz targets, a slowdown of
-less than $1{,}000\times$ [@KarandikarEtAl2018FireSim].
-
-Those rates are examples, not constants for a tool class. The modeled system,
-host or FPGA allocation, workload, instrumentation, accuracy, and simulation
-scale all change the rate. The environment should therefore record the
-observed throughput and its conditions, and a method should budget evaluations
-from that scoped rate rather than from a generic label such as *cycle-level* or
-*FPGA-accelerated simulation*.
-
-Sampling and checkpoint policy are part of that identity. SimPoint selects
-representative program regions, while SMARTS supplies a statistical basis for
-sampled simulation [@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. The
-environment records the chosen regions, weights, warm-up, fast-forward policy,
-and checkpoint parent. It does not decide whether those choices support the
-intended comparison.
-
-ArchGym shows the value of exposing several architecture simulators through a
-shared interface under controlled budgets [@KrishnanEtAl2023ArchGym]. Real
-project environments need additional state. Jobs wait in queues, hold licenses,
-resume checkpoints, and return at different times. A common interface should
-make those differences visible rather than hide them behind one `step()` call.
-
-Chipyard provides a concrete multi-tool example. The simplified view here
+Chipyard illustrates this shared lineage. The simplified view here
 follows the cited framework's documented paths from one configuration through
 Chisel generation and Flexible Intermediate Representation for RTL (FIRRTL)
 compiler passes to branch-specific tools for RTL simulation, very-large-scale
@@ -959,8 +972,15 @@ simulation [@chipyard].](images/F6b-chipyard-framework){#fig-chipyard-framework 
 
 The common configuration and generated hardware description provide a shared
 parent, but branch-specific compiler and backend work determines the artifact
-that each path consumes and returns. The fan-out therefore implies neither a
-fixed execution order nor interchangeable branch results.
+that each path consumes and returns. The fan-out does not make branch results
+interchangeable.
+
+Execution dependencies come last. Shared lineage identifies related artifacts,
+but it does not determine when a branch can run. ArchGym demonstrates that
+several architecture simulators can share an interface under controlled budgets
+[@KrishnanEtAl2023ArchGym]. A project environment must additionally expose jobs
+that wait in queues, hold licenses, resume checkpoints, and return at different
+times instead of hiding them behind one `step()` call.
 
 A dependency graph identifies which branches can run concurrently and which
 must wait for an input. Workflow systems such as Nextflow and Snakemake show how
@@ -983,23 +1003,47 @@ run determines the prerequisites and affordable branches.
 
 ## The Lighthouse Environment
 
-For `XR-L2-CAP-A`, the graph stays small. Three independent `SRAM-A` calls
-precede the cycle-level branch. The shared 2\ MiB baseline and each eligible
-alternative use the same `SIM-A`, `CACHE-A`, `PM-A`, workload, software, and
-condition identities. An authorized retry creates a retry edge. It does not
-create another candidate.
+The following scenario is hypothetical. Its thresholds and returned values are
+author-selected illustrations, not empirical tool outputs or project history,
+and they support no execution fact, validated measurement, comparison, or
+architecture recommendation.
 
-The complete run specification can now collect the responsibilities developed
-throughout the chapter in one place (@tbl-environment-contract).
+The study compares three cache capacities. The 2\ MiB setting is a rerun
+baseline, and 3\ MiB and 4\ MiB are alternatives. Each candidate first receives
+a cheap SRAM screen. The three calls return areas of $1.2$, $1.4$, and
+$1.7\,\mathrm{mm}^2$ and access times of $2.1$, $2.4$, and
+$2.8\,\mathrm{ns}$, respectively. The numeric fields place the 2\ MiB and
+3\ MiB candidates within the declared area and access-time thresholds and the
+4\ MiB candidate outside both. The record does not report the SRAM parse
+statuses or exact dispatch decisions, so the values alone do not establish why
+no cycle-level request follows for 4\ MiB.
 
-The capacities and dispatch thresholds in this specification are
-author-selected illustrative inputs, not empirical limits or measurements.
-The hypothetical scenario later in this section places the 2\ MiB and 3\ MiB
-candidates within both thresholds and the 4\ MiB candidate outside both, but it
-does not report the SRAM parse statuses or exact dispatch events. Those values
-therefore do not establish that the complete dispatch condition was applied.
-The condition authorizes a cycle-level attempt. It neither validates a
-measurement nor rejects a candidate.
+Eligible candidates enter matched cycle-level runs under a four-attempt budget.
+The baseline run returns subsystem dynamic plus leakage power of
+$2.90\,\mathrm{W}$. The first 3\ MiB attempt (`SIM-3-A1`) encounters a
+stale-state setup failure. A clean reset authorizes its controlled recovery
+retry (`SIM-3-A2`), followed by a separate planned repeat. Together these
+attempts exhaust the budget. The recovery retry and planned repeat return frame,
+cache, and power fields, but their values remain unreported. A summary derived
+from them is another artifact, not another tool call.
+
+The returned record should connect the three candidates, their screening
+returns, the eligible cycle-level work, the failed attempt, the retry and reset
+links, the planned repeat, every artifact, and total realized cost. This example
+leaves the artifact identities, resource use, cost, output lineage, exact
+translated inputs and hashes, behavior-affecting versions, starting and
+reset-state identities, seeds and job times, parser and raw-artifact identities,
+and matched frame records unreported. The record is therefore incomplete under
+@tbl-environment-contract and the execution-record idea introduced in
+@sec-architecture-20-ontology. @sec-feedback-verification-trust determines
+whether any complete return can become a valid measurement, comparison, or
+basis for advancing a candidate.
+
+The formal run specification collects the responsibilities behind that sequence
+in one place (@tbl-environment-contract). Its dispatch condition authorizes a
+cycle-level attempt only after a complete, schema-valid SRAM return meets both
+thresholds. The condition neither validates a measurement nor rejects a
+candidate.
 
 | **Run field** | **`XR-L2-CAP-A` run specification** |
 | --- | --- |
@@ -1030,35 +1074,6 @@ may authorize host selection, license reservation, pause, and resume, but
 substituting a tool path, serving stale state, or skipping the baseline requires
 a new request.
 
-A run specification states what is authorized to execute. A corresponding
-execution record states what happened across its attempts. Suppose three SRAM
-calls in a hypothetical execution return areas of $1.2$, $1.4$, and
-$1.7\,\mathrm{mm}^2$ and access times of $2.1$, $2.4$, and $2.8\,\mathrm{ns}$
-for the 2, 3, and 4\ MiB candidates. No simulator request follows for the 4\ MiB
-candidate, but the missing SRAM parse status and dispatch decision leave the
-reason unspecified.
-
-Suppose `SIM-2-A1` is the baseline attempt and returns subsystem dynamic plus
-leakage power of $2.90\,\mathrm{W}$. `SIM-3-A1` then encounters a stale-state
-setup failure. A clean reset leads to recovery attempt `SIM-3-A2`, and
-`SIM-3-A3` is a separate planned repeat that exhausts the four-attempt
-cycle-level budget. Both attempts return frame, cache, and power fields, but
-their values remain unreported. A summary derived from `SIM-3-A2` and
-`SIM-3-A3` is retained as another artifact rather than another tool call. Their
-artifact identities, retry and reset links, resource use, cost, and output
-lineage also remain unreported.
-
-Exact translated inputs and hashes, behavior-affecting versions, starting and
-reset-state identities, seeds and job times, parser and raw-artifact identities,
-matched frame records, and resource costs remain unreported. The record is
-therefore incomplete under @tbl-environment-contract and the execution-record
-idea introduced in @sec-architecture-20-ontology. The scenario illustrates how a
-record would connect proposed work, labeled returns and failures, and budget
-consumption. It is a teaching example, not live project history or measurements
-from tools run for this book. It supports no execution fact and cannot establish
-that a returned value is a valid measurement, that two returns form a sound
-comparison, or that any candidate should advance.
-
 ## Open Research Questions
 
 **Preserving architecture meaning across tools.**
@@ -1066,14 +1081,18 @@ comparison, or that any candidate should advance.
 - **How can an automated method verify that a tool translation preserves the
 architecture change it requested?** Syntax and type checks miss defaults,
 rounding, generated collateral, and unsupported combinations. The resulting
-tool input may evaluate the wrong candidate.
+tool input may evaluate the wrong candidate. A benchmark of request-to-tool
+translations with injected semantic defects could measure detection coverage
+and false refusals.
 
 - **How can an AI-assisted environment detect and expose semantic differences
 among operationally similar tool returns?** Shared request identities,
 execution statuses, costs, and lineage do not reveal differences in properties,
 assumptions, units, stages, or fidelities. The open problem is to record those
 differences precisely enough for a downstream verifier to decide whether the
-returns may be compared before a method trains on, ranks, or combines them.
+returns may be compared before a method trains on, ranks, or combines them. A
+return-pair corpus with controlled property, condition, unit, stage, and fidelity
+mismatches could score correct comparison refusals.
 
 **Keeping long-running work valid.**
 
@@ -1081,13 +1100,16 @@ returns may be compared before a method trains on, ranks, or combines them.
 tool has returned to a valid starting state?** Working directories, databases,
 caches, checkpoints, seeds, host libraries, and license state survive different
 forms of restart. Observable reset tests must detect hidden contamination across
-tools and failure modes before another attempt runs.
+tools and failure modes before another attempt runs. A fault-injection suite
+could measure contamination detection and unnecessary clean resets across tool
+versions.
 
 - **When can an automated method safely use a result that arrives after its
 request, state, or budget has changed?** The system must decide whether to admit
 the result as a current observation, retain it only as history, or invalidate
 its cache entry. Evaluation across long simulation and physical-design runs
-should expose stale-result errors and measure how much valid work is preserved.
+could vary request, state, and budget changes, then measure stale-result errors
+and preserved valid work.
 
 **Limiting automated authority.**
 
@@ -1095,7 +1117,9 @@ should expose stale-result errors and measure how much valid work is preserved.
 for a typed architecture action?** Generated scripts, RTL, constraints, and
 commands may need selected files, tools, licenses, and machines without needing
 unrestricted credentials or network access. A credible system must complete
-useful tool flows while containing malformed or hostile generated inputs.
+useful tool flows while containing malformed or hostile generated inputs. A
+corpus of typed actions and adversarial inputs could measure successful
+completion, privilege reduction, and containment failures.
 
 ## Conclusion
 
@@ -1121,10 +1145,10 @@ violations remain distinct. Exact replay, repeatability, and independent
 reproduction also remain distinct, and hashes establish byte identity rather
 than semantic equivalence.
 
-The hypothetical Lighthouse scenario includes three SRAM calls and four
-cycle-level attempts, including a stale-state setup failure, a
-post-reset attempt, and a planned repeat. It illustrates how a record would keep
-a summary derived from the final two attempts as a separate artifact. Missing
+The Lighthouse scenario includes three SRAM calls and four cycle-level attempts,
+including a stale-state setup failure, a post-reset attempt, and a planned
+repeat. It illustrates how a record would keep a summary derived from the final
+two attempts as a separate artifact. Missing
 starting and reset-state identities, attempt lineage, exact artifacts, and
 realized cost limit the fixture to illustrating chronology and budget use. It
 supports no execution fact, measurement, or architecture recommendation.
