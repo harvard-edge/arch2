@@ -33,13 +33,11 @@ warning meant, or whether a retry repeated the same work. AI-assisted methods
 make this gap harder to ignore because they can issue requests faster than a
 person can inspect the state around every invocation.
 
-Consider the prospective, unexecuted Lighthouse cache study `XR-L2-CAP-A`. It
-would compare a rerun 2\ MiB L2 baseline with 3\ MiB and 4\ MiB alternatives,
-and only `l2.capacity` may change. A quick static random-access memory (SRAM)
-evaluation would screen each capacity before the eligible candidates entered a
-small budget of cycle-level runs. The tools would need to return physical
-estimates, matched workload results, warnings, failures, and realized cost. A
-run that loses candidate identity or mismatches conditions could return
+Consider a cache-capacity comparison in which a quick static random-access
+memory (SRAM) evaluation screens each candidate before the eligible designs
+enter a small budget of cycle-level runs. The tools would need to return
+physical estimates, matched workload results, warnings, failures, and realized
+cost. A run that loses candidate identity or mismatches conditions could return
 plausible values for the wrong comparison, while an unbounded retry could spend
 more than the declared study budget.
 
@@ -74,14 +72,7 @@ After reading this chapter, you can:
 
 :::
 
-## What Makes a Tool-Connected Environment?
-
-Giving a method permission to run a shell command does not create an
-architecture environment. A shell can launch the declared simulator, but it
-does not prove that the `3MiB` configuration reached that simulator, that the
-declared workload trace was used, that the cache and power models match the
-study, or that the expected output files exist. A zero exit status reports a
-process outcome. It does not identify what the process evaluated.
+## Tools, Wrappers, Harnesses, and Environments
 
 Five terms divide the work:
 
@@ -145,7 +136,7 @@ never ran from a failed, partial, or complete return.
 Building this environment is difficult because architecture tools carry more
 state and return more varied artifacts than one blocking call suggests.
 
-## Why Architecture Environments Are Hard
+## Architecture Tools Carry State and Return Partial Results
 
 An architecture environment cannot assume that every tool exposes the same
 stateless-service interface. It must support cases in which tools operate on
@@ -437,6 +428,8 @@ adapter*. The adapter maps stable harness operations such as submit, inspect
 status, and cancel onto one backend. It does not replace a tool wrapper, which
 still owns tool-specific validation, translation, invocation, and parsing.
 
+### Attempts, Jobs, and Dependencies
+
 One request specifies an allowed action for a candidate under declared
 conditions. Each authorized try is an attempt. An attempt may be refused before
 a scheduler job exists, or it may produce one or more scheduler jobs or
@@ -453,6 +446,8 @@ conditions. Dependencies are explicit. A compiler build may wait for a source
 artifact, RTL simulation may wait for elaboration, and physical implementation
 may wait for a mapped netlist. Independent jobs may run concurrently, but
 concurrency does not relax their identity or resource limits.
+
+### Authority, Budgets, and Cancellation
 
 Authorization follows the established security principle of least privilege
 [@SaltzerSchroeder1975ProtectionInformation]. A wrapper receives only the
@@ -488,10 +483,12 @@ artifacts, or time out after producing a parseable report. An infrastructure
 failure may be retryable, while a canceled job may not be. None of these
 fields should be collapsed into the scheduling state.
 
+### Returned State and Realized Cost
+
 The execution interface keeps the request identifiable through validation,
-admission, scheduling, termination, artifact inspection, and parsing. The
-compact sequence in @lst-environment-runtime shows the common case in which
-one attempt produces one scheduler job.
+admission, scheduling, termination, artifact inspection, and parsing. In the
+common case, one attempt produces one scheduler job, but the record keeps those
+stages and their outcomes distinct.
 
 Four lead-ins orient the runtime without collapsing its states:
 
@@ -520,63 +517,16 @@ retained because one candidate may require several tool-specific
 configurations, while several attempts may execute the same candidate and
 configuration.
 
-```{.text #lst-environment-runtime lst-cap="**Runtime state remains attached to one attempt:** Identity, scheduling, termination, artifacts, parsing, cost, and lineage stay separate through a delayed tool run."}
-request = retain(request_id, candidate_id, configuration_id, conditions)
-attempt = authorize_attempt(
-    request,
-    kind=INITIAL or PLANNED_REPEAT or RECOVERY_RETRY,
-    retry_parent=retry_parent,
-    reset_parent=reset_parent
-)
-
-translation = translate_and_validate(attempt)
-if translation is INVALID:
-    return attempt_record(
-        attempt_id=attempt.id,
-        job_id=NONE,
-        terminal_cause=translation.failure,
-        artifact_status=NOT_CREATED,
-        parse_status=NOT_RUN
-    )
-
-readiness = check_setup_dependencies_and_budget(attempt, translation)
-if readiness is not PASSED:
-    return attempt_record(
-        attempt_id=attempt.id,
-        job_id=NONE,
-        terminal_cause=readiness.failure,
-        artifact_status=NOT_CREATED,
-        parse_status=NOT_RUN
-    )
-retain_attempt_and_inputs_before_submission(attempt, translation)
-
-admission = scheduler_adapter.submit(attempt, submission_token)
-if admission is REFUSED:
-    return attempt_record(
-        attempt_id=attempt.id,
-        job_id=NONE,
-        terminal_cause=admission.refusal_cause,
-        artifact_status=NOT_CREATED,
-        parse_status=NOT_RUN
-    )
-job = admission.job
-record(attempt.id, job.id, QUEUED, lineage)
-
-while job is not confirmed terminal:
-    record(scheduler_status, process_status, partial_artifacts, resources)
-    if cancellation is authorized or a declared timeout expires:
-        scheduler_adapter.request_termination(job)
-        record(cancellation_status=REQUESTED)
-    if termination cannot be confirmed by the deadline:
-        quarantine_uncertain_outputs()
-        return open_attempt(termination_status=UNCONFIRMED)
-
-record(terminal_cause, process_status, termination_status=CONFIRMED)
-artifact_status = inspect_expected_artifacts(COMPLETE, PARTIAL, MISSING)
-parse_status = parse_or_retain_residual(COMPLETE, RESIDUAL, FAILED)
-record(raw_artifacts, typed_fields, warnings, resources, cost, lineage)
-return attempt_record(retry_eligibility)
-```
+Before submission, the harness retains the request, authorized attempt, and
+translated inputs. An invalid translation, unmet setup dependency, exhausted
+budget, or refused admission produces an attempt record with no scheduler job
+rather than disappearing from the record. Once the backend accepts the work,
+the harness links the job to the attempt while it is queued, running, and
+terminal. A terminal process still requires artifact inspection and parsing.
+The attempt record retains raw artifacts, typed fields, residual output,
+warnings, resources, cost, and lineage. If termination cannot be confirmed by
+the declared deadline, the harness quarantines uncertain outputs and leaves the
+attempt open rather than reporting completion.
 
 Recording candidate identity before submission prevents late returns from
 attaching to whichever candidate is current when a job finishes. The scheduler
@@ -603,8 +553,8 @@ is reached. Admission supplies a finite deadline for confirming a terminal
 state even when no cancellation occurs. If the reported scheduler and process
 states become unknown or disagree, the harness records that condition and
 limits how long it will wait for them to reconcile. If they do not agree before
-the deadline, the harness returns the unconfirmed attempt record shown in the
-listing. A timeout states whether it bounds queue wait, run time, one tool
+the deadline, the harness retains an unconfirmed attempt record. A timeout
+states whether it bounds queue wait, run time, one tool
 stage, or an absolute deadline. After a timeout or cancellation, the harness
 keeps late writers and outputs out of live state or quarantines them until
 termination and job identity are confirmed.
@@ -1002,6 +952,10 @@ records the return and suppresses only the dependent dispatch before synthesis
 or physical implementation. This is not one universal tool order. The requested
 run determines the prerequisites and affordable branches.
 
+The Lighthouse application brings these responsibilities together in one run
+specification spanning pinned state, exact translation, tool dependencies,
+failure handling, realized cost, and containment.
+
 ## The Lighthouse Environment
 
 The following scenario is hypothetical. Its thresholds and returned values are
@@ -1076,7 +1030,7 @@ may authorize host selection, license reservation, pause, and resume, but
 substituting a tool path, serving stale state, or skipping the baseline requires
 a new request.
 
-## Open Research Questions
+## Open Questions
 
 **Preserving architecture meaning across tools.**
 
