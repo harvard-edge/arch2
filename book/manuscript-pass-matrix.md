@@ -5,7 +5,7 @@
 This checklist reorganizes the detailed findings in
 `manuscript-audit-and-improvement-plan.md` into repeatable editorial passes.
 The current planning baseline is commit `840adab9`. The author approved the
-Pass 0 decisions on 2026-08-03. Passes 0–3 are complete, and Pass 4 is next.
+Pass 0 decisions on 2026-08-03. Passes 0–4 are complete, and Pass 5 is next.
 
 The detailed plan remains the source for individual findings, candidate models,
 and reviewer rationale. This file owns execution order, pass boundaries,
@@ -61,17 +61,17 @@ and `—` only when the pass genuinely does not apply.
 
 | Chapter | Shell | Technical | Lighthouse | Pitfalls | Principles | Questions |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1. Moonshot | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 2. Why assistance may help | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 3. Life cycle | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 4. Data, knowledge, and representation | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 5. Prediction, generation, and optimization | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 6. Tool-connected environments | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 7. Verification, feedback, and learning | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 8. Running the loop | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 9. Transfer and generalization | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 10. Evaluation and red teaming | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
-| 11. The architect's role | ✓ | ✓ | ✓ | ☐ | ☐ | ☐ |
+| 1. Moonshot | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 2. Why assistance may help | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 3. Life cycle | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 4. Data, knowledge, and representation | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 5. Prediction, generation, and optimization | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 6. Tool-connected environments | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 7. Verification, feedback, and learning | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 8. Running the loop | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 9. Transfer and generalization | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 10. Evaluation and red teaming | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
+| 11. The architect's role | ✓ | ✓ | ✓ | ✓ | ☐ | ☐ |
 
 | Chapter | Citations | Media | Microflow | Final recheck |
 |---|:---:|:---:|:---:|:---:|
@@ -86,6 +86,28 @@ and `—` only when the pass genuinely does not apply.
 | 9. Transfer and generalization | ☐ | ☐ | ☐ | ☐ |
 | 10. Evaluation and red teaming | ☐ | ☐ | ☐ | ☐ |
 | 11. The architect's role | ☐ | ☐ | ☐ | ☐ |
+
+### Later-pass candidates from current discussion
+
+These are assignments for later passes, not approved chapter edits.
+
+- **Chapter 4:** Test whether the treatment of architecture data should more
+  clearly include negative, failed, and missing samples and survivorship bias.
+  Consider an architecture-specific redraw of the returning-aircraft analogy
+  only after verifying its source and transfer to this domain.
+- **Chapter 5:** Test the claim that LLMs can scale proposal and test production
+  without scaling confidence. Consider Monte Carlo tree search (MCTS) only as a
+  conditional tree-search technique whose fit depends on simulator cost, not
+  as a default method.
+- **Chapter 7:** Evaluate symbolic and formal methods for correctness and
+  counterexample production, clearly separated from learned proposal or test
+  generation.
+- **Chapters 2, 7, and 10:** Evaluate the openness and diversity of the RISC-V
+  ecosystem as, respectively, a complexity example, a source of verification
+  scenarios, and a coverage and generalization case.
+
+Pass 7 owns source discovery and literature verification for every candidate.
+Pass 8 owns any decision to create, redraw, reuse, or omit a figure.
 
 ## Cross-Chapter Contracts
 
