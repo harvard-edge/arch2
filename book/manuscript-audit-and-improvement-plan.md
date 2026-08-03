@@ -1267,6 +1267,394 @@ The following work begins only after content acceptance:
 - production packaging; and
 - broad website adaptation.
 
+### Future empirical companion: one runnable architecture study
+
+- Develop one canonical, publicly runnable study only after the current text
+  content stabilizes. Package the pinned workload, software, architecture
+  configuration, tool versions, execution scripts, checks, expected artifacts,
+  and result records in a reproducible container or equivalent open bundle.
+- The study should exercise the complete teaching path: formulate a decision,
+  define the legal design space, build or select the data and representations,
+  choose a conventional or AI-assisted method, invoke real tools, retain
+  failures and costs, qualify the returned measurements, revise or stop, and
+  state the supported architecture conclusion.
+- Prefer a problem that can run with openly available tools and finish within a
+  realistic teaching budget. A smaller cross-layer study that genuinely runs
+  is more valuable than a nominally complete Lighthouse implementation whose
+  physical or software claims cannot be checked.
+- Keep the scope honest. The runnable study may instantiate part of the
+  Lighthouse system without claiming to realize the full prompt-to-system
+  moonshot.
+- Treat the container, run records, and derived plots as a companion artifact,
+  not as evidence until the exact released version has been executed and its
+  results independently checked.
+
+### Mining prior Architecture 2.0 talks
+
+- Review the author's talk slides as a source-discovery and visual-idea corpus,
+  not as manuscript-ready evidence.
+- Candidate ideas to assess include increasing design-space complexity and chip
+  cost; the expense and limited volume of cycle-level data; method selection
+  under problem suitability, deployment constraints, and data availability;
+  tool-connected environments; verification, generalization, reliability, and
+  cost metrics; QuArch dataset construction and topic distribution; skills
+  required of architecture agents; agents across the computing stack; and the
+  architecture foundation-model question.
+- For every candidate, recover the primary paper or underlying data, determine
+  the chapter that owns the lesson, and decide whether prose, a table, a new
+  source-backed plot, or no inclusion teaches it best.
+- Do not reproduce slide screenshots or dense talk graphics directly. Redraw
+  only the small number of concepts or quantitative results that survive source
+  validation, manuscript scope, permissions, and the book's visual system.
+
+## Author Feedback Queue: August 3, 2026
+
+This queue records the current feedback before any manuscript edits begin. The
+items should be reconciled as coherent chapter or book-wide decisions rather
+than applied as isolated sentence changes.
+
+### Chapter 2: sequence, pacing, and recurring elements
+
+- Separate Figures 2.2 and 2.3 in the source narrative. They currently arrive
+  too close together under the specialization discussion. Move a figure only
+  when its new location gives it a clearer teaching job; do not add filler prose
+  merely to create space.
+- Rename *Wafer-Scale Systems* to *Wafer-Scale Computing*.
+- Reconsider the chapter sequence so that wafer-scale computing closes the
+  chip-side scale discussion, the chapter then develops design-space and
+  software complexity, and warehouse-scale computing follows as the point at
+  which hardware, software, networking, power, cooling, deployment, and
+  operation must be understood together.
+- Expand *Warehouse-Scale Computing and Distributed Systems*. It currently
+  moves too quickly through a system scale that should synthesize the preceding
+  sources of complexity. The expansion must remain relevant to the chapter's
+  job: explaining why AI assistance may help as coupled architecture work
+  becomes harder to inspect and settle.
+- Re-audit the Chapter 2 open questions. Each theme and question should be
+  immediately legible, architecture-centered, and concrete enough to suggest a
+  credible research program. Choose the actor precisely—architect, research
+  team, project, or system—instead of mechanically repeating *architecture
+  team*.
+- Repair the Chapter 2 design-principle callout so that it follows the same
+  semantic structure as the rest of the book.
+
+### Chapter 3: the Lighthouse teaching role
+
+- Resolve the apparent inconsistency between Lighthouse callouts and ordinary
+  body prose such as “For the XR study, Explore produces two candidates.” The
+  reader should be able to tell why a Lighthouse detail is boxed in one place
+  and embedded in the narrative in another.
+- Decide the book-wide Lighthouse rule before revising Chapter 3. Apply the
+  resulting rule to every chapter rather than fixing individual mentions in
+  isolation.
+- Consider promoting the design-loop card into a dedicated H2 section. The
+  section must explain the card's job, why the normal collection of project
+  artifacts does not by itself give another architect a compact account of the
+  work, and how the card points into existing records rather than replacing
+  project-management, version-control, experiment-tracking, or EDA systems.
+- Ground the motivation for a reviewable design record in established practice
+  from adjacent fields. Model cards, dataset documentation, experiment
+  tracking, reproducibility records, safety cases, and engineering change
+  control are candidate precedents to investigate, not a predetermined reading
+  list. The synthesis should explain which failure each practice addressed and
+  which parts transfer to architecture work.
+- Strengthen the lightest life-cycle stage sections uniformly. For each stage,
+  establish its architecture question, expected output, characteristic failure,
+  and handoff to the next responsibility. Use the Lighthouse only when it adds
+  a concrete architecture example rather than merely repeating the stage name.
+- Consider an open question about allocating AI roles: when one component can
+  perform several roles, when distinct components or agents should be assigned
+  separate roles, and what evidence could compare those organizations. Place
+  the final question in the chapter that owns role selection rather than adding
+  it to Chapter 3 merely as a preview.
+
+### Book-wide Lighthouse rule to approve
+
+The working recommendation is:
+
+- Body prose may make a brief Lighthouse reference when one sentence grounds
+  the concept being taught and the paragraph remains understandable without
+  the example.
+- A Lighthouse callout should contain a self-contained application of the
+  chapter's idea: the relevant design context, the concrete choice or artifact,
+  what assistance does, and what remains to be measured or checked.
+- Named study identifiers, candidate settings, multi-step worked details, and
+  chapter-specific Lighthouse outputs belong in a callout or a dedicated
+  Lighthouse application section, not scattered through ordinary prose.
+- A callout should not be a wall of text. Use a small number of stable, bold
+  semantic labels when they genuinely fit, provisionally *Context*, *Use of
+  assistance*, and *Required checks*. Do not force every callout to have the
+  same number of paragraphs.
+- Ordinary prose should introduce or interpret the callout. It should not
+  duplicate the callout's contents.
+- The Lighthouse is an anchor for transfer and continuity, not a second
+  narrative running beside the chapter.
+
+### Book-wide Lighthouse coverage audit
+
+- Audit the complete Lighthouse path across the manuscript. The compact XR
+  request implicates the workload and application, software and compiler path,
+  ISA and microarchitecture, memory hierarchy and interconnect, accelerator or
+  SoC composition, physical limits, reliability, security, and verification.
+- Do not let the cache-capacity study become a proxy for the entire moonshot.
+  It may remain one deliberately narrow worked decision, but other chapters
+  should select examples that expose the part of the stack they teach.
+- Use architecture examples such as ISA or vector support, memory behavior,
+  compiler/code generation, SoC interfaces, reliability, and verification only
+  where they advance the local chapter argument. Do not force every subsystem
+  into every chapter.
+- Preserve traceability to the same workload, requirements, interfaces, and
+  physical target across examples so that the Lighthouse remains one coherent
+  system problem rather than a collection of unrelated anecdotes.
+- Before implementation, produce a chapter-by-chapter coverage map showing
+  which Lighthouse obligation each chapter develops, where the obligation is
+  introduced, and whether it appears in prose, a callout, a figure, a table, or
+  the worked study.
+
+### Book-wide design-principle consistency
+
+- Audit every design-principle callout after the content pass.
+- Preserve one visual and semantic hierarchy: a short principle name followed
+  by one or more bold, actionable statements with concise explanation.
+- Do not force the same number of statements in every chapter. Consistency
+  should make the principles recognizable and independently usable, not make
+  them mechanically identical.
+- Verify that every principle follows from the chapter, transfers beyond the
+  Lighthouse example, and does not merely summarize the conclusion.
+
+### Book-wide figure, table, listing, and cross-reference pass
+
+- Inventory every conceptual SVG and identify ordinary boxes that use rounded
+  corners. Convert them to sharp-corner rectangles unless a non-rectangular
+  shape carries a specific meaning. Exclude protected brand assets named in the
+  visual-system rules.
+- Inspect shared SVG generators and templates before fixing individual assets;
+  correct the shared source when one rule caused repeated rounded corners.
+- Audit every figure, table, and listing in its local prose context. The prose
+  must state the relationship, comparison, sequence, result, limitation, or
+  inference that makes the object useful. A caption cannot carry that entire
+  teaching job.
+- Remove empty float announcements such as “Figure X shows” or “Table Y
+  summarizes.” Lead with the architectural claim and let the cross-reference
+  support it.
+- Do not replace empty announcements with mechanical viewing instructions.
+  Explain the content rather than telling the reader to look left, right, or
+  top to bottom, except when spatial order itself is the substantive point.
+- For a central figure, check the complete three-part integration: introduce
+  the relationship before the figure, interpret the important relationships
+  after it, and state the inference that carries into the next passage.
+- Treat tables similarly: explain the comparison or reusable structure and the
+  conclusion the reader should draw without narrating columns.
+- Produce a findings ledger before editing. Record missing references, thin
+  explanations, redundant prose, style violations, and figures or tables that
+  do not earn their page space.
+
+### Chapter 4: architecture data and learned representations
+
+- Bring in durable lessons from important ML datasets and dataset research,
+  but teach each lesson through an architecture failure or design need. Topics
+  to investigate include documentation, label and metadata errors, leakage,
+  contamination, dataset shift, licensing, private data, missing failures,
+  and synthetic-data limits.
+- Do not turn the chapter into a generic data-engineering tutorial. State the
+  necessary ML practice compactly, then develop what changes when observations
+  come from simulators, RTL, EDA tools, prototypes, silicon, workload traces,
+  software, and restricted project records.
+- Separate three concepts that the current prose may blur:
+  1. a source artifact or observation, such as a trace, report, netlist, or
+     simulation return;
+  2. an explicit architecture representation, such as a schema, graph, typed
+     intermediate form, feature vector, token sequence, or spatial encoding;
+  3. a learned representation, including an embedding, that a model learns or
+     adapts for retrieval, comparison, prediction, generation, or reasoning.
+- Do not define *representation* as synonymous with *embedding*. Embeddings are
+  one learned form; the architecture problem often requires explicit legal
+  structure, units, provenance, interfaces, and invariants that a latent vector
+  alone does not preserve.
+- Revisit the quantitative contrast between the data available for general
+  foundation models and the much smaller, fragmented, proprietary, and costly
+  architecture corpora. Recover an earlier plot or construct a new one only if
+  its quantities have traceable sources and the comparison is genuinely
+  commensurate. Do not invent a dramatic volume ratio.
+- Explain why the scarcity point matters beyond LLMs: it affects supervised
+  predictors, generative methods, optimization, world models, evaluation, and
+  transfer.
+- Move dense Lighthouse identifiers and study-specific state, such as
+  `XR-TRACE-A` and `SW-BASE-A`, under the approved Lighthouse treatment. The
+  surrounding body should teach specification identity and provenance in plain
+  language before exposing any identifier the reader must retain.
+
+### Chapter 5: method choice and composition
+
+- Repair the graph-placement figure's connector geometry. The action,
+  next-state, terminal-evaluation, and reward paths must be visually distinct;
+  connectors may not run through boxes, text, or one another, and every
+  arrowhead must land unambiguously.
+- Include Chapter 5 in the book-wide SVG connector audit. Check overlaps,
+  arrow clearance, label clearance, missing connector shafts, and crossings in
+  every figure rather than fixing only the reported diagram.
+- Preserve the chapter's two different teaching jobs:
+  1. choose a method by identifying the limiting architecture work;
+  2. compose methods only when prediction, generation, optimization, direct
+     tools, or conventional techniques perform distinct necessary jobs.
+- Make the student-facing method-selection test unmistakable:
+  generation addresses missing artifact construction; prediction addresses
+  expensive or unavailable outcome estimation; optimization addresses
+  selection or allocation under a large space or scarce evaluation budget;
+  better checking is needed when evaluation or verification is limiting; and a
+  conventional method or no added method remains a valid result.
+- Do not add a Venn diagram by default. These method families are jobs that can
+  appear in different orders and combinations, not three fixed sets of design
+  problems. The existing conditional method-selection figure should own
+  *when to choose*, and the method-organization table should own the valid
+  combinations and the condition that keeps each minimal.
+- If the visual audit finds that the interaction among method families remains
+  hard to retrieve, consider a compact composition diagram centered on the
+  architecture question, tool feedback, and required check. It should show
+  possible paths such as generator-to-predictor screening,
+  predictor-in-optimizer surrogate use, optimizer-controlled generation, and
+  direct tool feedback. It must not imply a universal order or that all three
+  methods are required.
+
+### Chapter 6: tools become environments
+
+- Keep the opening claim that a tool command is not an environment, but audit
+  the next paragraphs for a smoother build from the familiar act of launching
+  a tool to the state, identity, translation, scheduling, cost, return, and
+  recovery responsibilities that the command does not supply.
+- Replace the question-form Section 6.1 title. Section headings in the numbered
+  chapters should state the section's claim or subject rather than ask a
+  question. A candidate direction is *From Tool Commands to Architecture
+  Environments*; select the final title during the title pass.
+- Audit Lighthouse identifiers such as `XR-L2-CAP-A`, `SRAM-A`, `SIM-A`, and
+  `PVT-A`. The body should first teach why candidate, workload, software,
+  condition, model, and tool identities must remain distinct. Concrete codes
+  belong in the Lighthouse application or retained run specification only when
+  a later comparison actually requires them.
+- Decide whether Listing 6.1 earns its space. It currently gives a long
+  implementation-like account of request validation, admission, execution,
+  cancellation, artifact inspection, parsing, and recording after the prose has
+  already explained those responsibilities. Test three options: remove it;
+  replace it with a much smaller conceptual sequence; or move implementation
+  detail to an appendix. Retain a listing only if a student learns a reusable
+  interface or state distinction more clearly from the pseudocode than from the
+  surrounding prose and figures.
+- Make the architecture-tool spectrum an explicit teaching object. Include
+  analytical and trace-driven models, cycle-level and RTL simulation, formal
+  methods, synthesis and physical-design tools, emulation or FPGA prototypes,
+  and silicon measurements where relevant. Explain that these tools differ in
+  observability, fidelity, latency, cost, state, failure semantics, licensing,
+  and returned artifacts.
+- Preserve the chapter's core insight: an environment may standardize requests,
+  identity, execution control, and returned records, but it must not erase
+  tool-specific meaning or imply that different tools provide interchangeable
+  evidence.
+- Divide the cost lesson across chapter jobs rather than repeating it. Chapter
+  6 owns how tool time, queue time, retries, compute, storage, licenses, model
+  calls, and human intervention are observed and retained. Chapter 5 uses those
+  costs to choose a method, and Chapter 10 uses them to compare complete
+  systems.
+- Audit Chapter 6 tables by semantic class. Bold the first data column only for
+  field or definition tables in which it is a genuine row label; keep it plain
+  for comparisons and matrices. Apply one capitalization convention to sibling
+  row labels and column headers, but do not use a mechanical sweep that changes
+  technical identifiers or prose fragments.
+
+### Chapter openings and subsection orientation
+
+- Except where Chapter 1 introduces the Lighthouse as the moonshot itself,
+  avoid concrete Lighthouse prompts, study identifiers, or candidate details in
+  the chapter prose before the learning objectives. That opening should make the
+  chapter's problem and reader need understandable on their own. Introduce the
+  Lighthouse later where it can test or ground an idea the reader has met.
+- Audit every H2 that contains H3 subsections. The H2 must contain enough
+  orienting prose before the first H3 to explain the parent question, the
+  relationship among its subsections, and why the decomposition is useful.
+- Treat an H2 followed immediately by an H3 as a structural defect. Repair it
+  by adding a real parent-level orientation, removing a redundant H3, or
+  flattening the hierarchy—not by inserting a filler sentence.
+- Continue the lone-H3 audit. A single child subsection usually means the child
+  should be folded into its parent or promoted, unless the hierarchy carries a
+  clear and exceptional teaching purpose.
+- Run a plain-language pass for unfamiliar process phrases such as “unbounded
+  absence claim.” Replace them with the architecture question, measurement
+  limit, or unsupported conclusion they actually mean. Do not preserve coined
+  language merely because it is used consistently.
+
+### Chapter 7: verification, feedback, uncertainty, and learning
+
+- Use an architecture, formal-methods, ML-systems, uncertainty-quantification,
+  and pedagogy panel to assess the chapter before editing. Determine whether
+  each section teaches a necessary technical distinction and whether an
+  architect can use it.
+- Repair the stacked headings at Section 7.6. The parent section on qualifying
+  proxies and testing explanations needs an orientation before its first H3,
+  or its hierarchy should be simplified.
+- Keep formal verification distinct from statistical confidence. Explain what
+  a proof, counterexample, bounded result, timeout, or `unknown` establishes
+  under a declared model and assumptions, and what remains outside that scope.
+- Develop uncertainty only where it changes an architecture action. Candidate
+  topics to assess include measurement variation, model or surrogate error,
+  distribution shift, incomplete coverage, calibration, confidence intervals,
+  and uncertainty that should trigger stronger tools, more samples, review, or
+  refusal to conclude.
+- Borrow from explainability research carefully. Distinguish a plausible
+  post-hoc explanation from mechanism evidence that survives a targeted test,
+  counterfactual, ablation, or higher-fidelity check. Avoid importing generic
+  explainability taxonomies that do not alter an architecture decision.
+- Investigate the idea behind an “AI-certified tool,” but do not adopt that term
+  prematurely. Certification or qualification is normally relative to an
+  intended use, evidence standard, operating envelope, and consequence. A more
+  durable question is what evidence qualifies an AI-assisted tool or component
+  for a defined architecture task and risk class.
+- If retained, distribute that qualification question across chapter jobs:
+  Chapter 6 exposes the interface, state, and records needed for qualification;
+  Chapter 7 determines what the returned evidence establishes; Chapter 10
+  evaluates reliability and failure behavior; Chapter 11 owns authority to use
+  the qualified system in an architecture commitment.
+
+### Evaluation coverage: component task, architecture result, and complete system
+
+- Audit whether the manuscript makes three evaluation objects immediately
+  distinct:
+  1. whether an AI or conventional component performs its assigned task;
+  2. whether the resulting candidate improves the architecture under the
+     declared workload, software, physical conditions, and checks; and
+  3. whether the complete workflow reaches a supported decision more reliably
+     or at lower total cost than a credible alternative.
+- Map the familiar ML-systems dimensions into those objects without treating
+  them as interchangeable:
+  - task performance: prediction error, valid construction, search efficiency,
+    tool-use success, or another role-specific measure;
+  - system performance: architecture correctness, latency, throughput, power,
+    energy, area, reliability, software behavior, and physical feasibility;
+  - cost: data preparation, training or adaptation, model calls, tool runs,
+    queue time, compute, memory, storage, licenses, failures, retries, and human
+    setup, diagnosis, verification, and review;
+  - generalization: performance under changed workloads, software, target
+    hardware, tools, process conditions, and design spaces;
+  - reliability: variation across repetitions, seeds, environments, attacks,
+    faults, interruptions, recovery, and changed conditions;
+  - interpretation and verification: whether the returned explanation or proof
+    supports the architecture claim rather than merely accompanying a good
+    score.
+- Preserve chapter ownership. Chapter 7 qualifies returned measurements,
+  checks, explanations, and uncertainty. Chapter 9 owns transfer to changed
+  problems. Chapter 10 brings the dimensions together for complete-system
+  evaluation and red teaming.
+- Check whether Chapter 10's existing four-part metric map already makes this
+  structure legible. Prefer strengthening its explanation or labels over
+  introducing a competing five- or six-part framework.
+- Use the slide's task/system/cost/generalization/reliability organization as a
+  diagnostic lens and source-discovery prompt, not automatically as a new
+  manuscript figure.
+
+### Hold point
+
+Do not implement these items until the author has reviewed the proposed
+Chapter 2 order and the book-wide Lighthouse rule. Continue read-only audits
+and collect conflicts or implications in this queue.
+
 ## Completion Criteria
 
 The milestone is complete when:
