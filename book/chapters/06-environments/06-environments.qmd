@@ -117,21 +117,23 @@ requests and exposes identifiable returns to that workflow.
 A caller must be able to inspect the candidate, fixed state, supported tool
 operations, resources, and prior attempts before submitting work. The
 environment then accepts only declared requests and returns execution status,
-raw artifacts, parsed fields, unclassified output, cost, and lineage. This
-separation keeps request checking, tool execution, parsing, and run recording
-inspectable (@fig-environment-tool-interface).
+raw artifacts, parsed fields, unclassified output, cost, and lineage. Request
+checking, tool execution, parsing, and run recording remain separate
+responsibilities throughout that path (@fig-environment-tool-interface).
 
-![**A tool interface keeps request checking, execution, parsing, and recording
-separate.** The wrapper validates and translates one request, while the harness
-records the attempt and preserves each return status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question, action schema, constraints, and metric definitions enter an environment as a typed request. The wrapper validates and translates the request before calling the tool. The tool path can fail, return partial output, or complete; the parser retains raw and structured output, and the harness records every outcome with cost, provenance, and execution status."}
+![**A tool interface separates execution state from interpretation.** The
+wrapper validates and translates the request, the tool executes the declared
+operation, the parser interprets retained output, and the harness records both
+the runtime outcome and parse status.](images/F6-environment-tool-interface){#fig-environment-tool-interface fig-alt="An architecture question and workload, action schema, constraints, and metric definitions enter a tool-connected environment as a typed request. A wrapper validates and translates the request before calling the tool. An invalid request goes directly to the harness record. The tool separately produces raw returned material and a runtime outcome that can be failed, partial, or complete. A parser turns retained raw material into structured fields, unclassified residual output, and a parse status. The harness records request and attempt identity, conditions, runtime outcome, artifacts, parse status, cost, and lineage."}
 
 The represented question and state enter the interface as a typed request. The
 wrapper either refuses an invalid request or translates it to the declared tool
-path. That path can fail, return only part of the expected output, or complete,
-and the parser keeps the raw output alongside the fields it recognizes. The
-harness places every outcome in the record for that attempt with its identity,
-cost, provenance, and status. Later work can then distinguish a request that
-never ran from a failed, partial, or complete return.
+path. A valid invocation produces raw returned material and a runtime outcome.
+The parser keeps recognized fields, residual output, and its own interpretation
+status, while the harness records those fields alongside the execution outcome,
+identity, cost, and lineage. A parser failure therefore does not rewrite a
+complete tool invocation as a tool failure, and a clean parse cannot turn a
+partial tool return into a complete one.
 
 Building this environment is difficult because architecture tools carry more
 state and return more varied artifacts than one blocking call suggests.
@@ -284,16 +286,17 @@ creates a new evaluation instance even when the root intent has not changed.
 ![**Every evaluated artifact needs an identifiable parent.** Software and
 hardware artifacts derived from one proposal retain their transformation
 history, and a changed input creates a new evaluation
-identity.](images/F5-artifact-lineage){#fig-artifact-lineage fig-alt="One Lighthouse intent branches into a software variant and a hardware variant. The software compiles into an identified binary, the hardware elaborates into an identified RTL artifact, and one evaluation instance binds the selected binary and RTL artifact. Identifiers and hashes distinguish exact artifacts and paths but do not prove functional equivalence or reproducibility."}
+identity.](images/F5-artifact-lineage){#fig-artifact-lineage fig-alt="One Lighthouse intent branches into a software variant and a hardware variant. The software compiles into an identified binary, and the hardware elaborates into an identified RTL artifact. One evaluation instance binds both artifacts to the tool and version, workload, and operating conditions. Hashes and evaluation keys distinguish exact artifacts and paths but do not prove functional equivalence or reproducibility."}
 
 In the displayed branch, the Lighthouse intent produces one software variant
 and one hardware variant. The software variant compiles into an identified
 binary, while the hardware variant elaborates into an identified RTL artifact.
 The selected pair becomes one evaluation instance. Replacing either child
 creates a different pair even when the root intent does not change. The
-identifiers and hashes distinguish the exact artifacts and their transformation
-path. They do not establish functional equivalence or reproducibility when
-relevant state remains undeclared.
+artifact hashes distinguish the exact files and their transformation path. The
+evaluation key additionally binds the pair to the tool and version, workload,
+and operating conditions. These identities still do not establish functional
+equivalence or reproducibility when relevant state remains undeclared.
 
 Conditions need the same discipline. A return retains the conditions that
 apply to its tool and marks nonapplicable fields. An SRAM-model return carries
@@ -369,8 +372,9 @@ Errors are part of the interface. Validation errors, tool diagnostics, missing
 outputs, parse failures, and unclassified warnings remain distinct and retain
 their original text. A typed result makes routine fields easier to consume, but
 the wrapper must not discard output that its current schema does not recognize.
-@fig-environment-tool-interface shows how request checking, invocation,
-parsing, and run recording keep these responsibilities visible.
+Keeping raw output, parsed fields, execution outcomes, and run identity on
+separate paths prevents one component from silently assigning meaning to
+another component's result (@fig-environment-tool-interface).
 
 The environment need not return a scalar reward. A method may later derive an
 objective or reward from returned values, but the derived value remains
@@ -444,6 +448,26 @@ The minimum control surface lets a caller inspect capabilities and state,
 submit a typed request, receive an attempt identifier, inspect or cancel that
 attempt, and receive its raw and parsed return, status, warnings, cost, and
 lineage.
+
+One request can produce no backend job, one job, or several jobs or execution
+segments. These cases still belong to one attempt, and that attempt retains
+separate fields for how work was scheduled, why it ended, what artifacts exist,
+what the parser recognized, whether cancellation completed, and which prior
+attempt authorized a retry. The object relationships remain visible in
+@fig-runtime-object-state.
+
+![**One attempt can contain zero, one, or several backend executions.** The
+attempt record keeps backend work attached to the authorized request while
+preserving returned artifacts, realized cost, and independent status fields.](images/F6c-runtime-object-state){#fig-runtime-object-state fig-alt="An authorized request creates one attempt. The attempt may be refused before a backend job exists, may create one job, or may create several jobs or execution segments. All paths feed one attempt record. The attempt record points separately to returned artifacts and realized cost. Scheduling state, terminal cause, artifact completeness, parser status, cancellation confirmation, and retry parent remain independent fields."}
+
+The figure separates object identity from state classification. A request that
+fails admission still leaves an attempt record even though no scheduler job
+exists. A multi-stage physical-design invocation may create several backend
+segments without becoming several candidates. Returned artifacts and realized
+cost remain attached to the attempt, including work that failed, was canceled,
+or was retried. Keeping the six status fields independent prevents a terminal
+process state from implying complete artifacts, a successful parse, or
+confirmed cancellation.
 
 ### Attempts, Jobs, and Dependencies
 
@@ -630,15 +654,15 @@ completed formal run into one generic status.
 
 | **Execution outcome** | **How it appears** | **What the harness preserves** | **Runtime response** |
 | --- | --- | --- | --- |
-| Invalid request | An illegal value, missing identity, or meaning-changing translation is found before invocation. | Request, validation rule, and refusal reason. | Repair syntax only when meaning is preserved; otherwise refuse the request and return it to the candidate-producing caller. Reopen method selection only if the failure invalidates the chosen approach or its supported action space. |
-| Setup or dependency failure | The top level, clock, library, constraint, checkpoint, or generated input is missing or stale. | Setup check, diagnostics, partial artifacts, and realized cost. | Restore or regenerate the declared state. The candidate remains unevaluated. |
-| Infrastructure failure | A license, host, scheduler, or storage service is unavailable. | Attempt, failure source, partial artifacts, cost, and retry eligibility. | Retry only under the declared policy. The candidate remains unevaluated. |
-| Tool failure | The tool crashes, reports an internal error, or exhausts a local resource. | Tool status, diagnostics, partial artifacts, conditions, cost, and retry history. | Retry, reset, resume a valid checkpoint, or stop. Repetition does not prove physical infeasibility. |
-| Incomplete return | A stage or expected report is missing, stale, or only partly written. | Completed stages, expected-artifact check, produced files, raw output, and parse status. | Preserve the partial return and repair or rerun before treating it as complete. |
-| Parser failure | A retained artifact does not match the declared schema or contains unclassified output. | Parser version, raw artifact, diagnostics, recognized fields, and residual output. | Repair the parser and reparse the retained artifact when safe. |
-| Formal-tool return | The declared method and tool report their exact outcome, which may include a proof, counterexample, bounded result, `unknown`, or resource limit. | Method, property or relation, model, assumptions, bound where applicable, tool, exact outcome, artifact, and cost. | Hand the method-specific result forward without turning it into a general correctness verdict. |
-| Reported design-limit violation | A completed run reports a timing, power, congestion, design-rule, or functional violation. | Typed violation, units, candidate, conditions, warnings, raw artifact, and cost. | Record a complete return without rejecting or penalizing the candidate. |
-| Complete tool return | Expected artifacts exist and parse, including reports that contain violations. | Typed fields, units, conditions, warnings, raw artifacts, cost, and lineage. | Retain the return for measurement qualification without deciding what it establishes. |
+| **Invalid request** | An illegal value, missing identity, or meaning-changing translation is found before invocation. | Request, validation rule, and refusal reason. | Repair syntax only when meaning is preserved; otherwise refuse the request and return it to the candidate-producing caller. Reopen method selection only if the failure invalidates the chosen approach or its supported action space. |
+| **Setup or dependency failure** | The top level, clock, library, constraint, checkpoint, or generated input is missing or stale. | Setup check, diagnostics, partial artifacts, and realized cost. | Restore or regenerate the declared state. The candidate remains unevaluated. |
+| **Infrastructure failure** | A license, host, scheduler, or storage service is unavailable. | Attempt, failure source, partial artifacts, cost, and retry eligibility. | Retry only under the declared policy. The candidate remains unevaluated. |
+| **Tool failure** | The tool crashes, reports an internal error, or exhausts a local resource. | Tool status, diagnostics, partial artifacts, conditions, cost, and retry history. | Retry, reset, resume a valid checkpoint, or stop. Repetition does not prove physical infeasibility. |
+| **Incomplete return** | A stage or expected report is missing, stale, or only partly written. | Completed stages, expected-artifact check, produced files, raw output, and parse status. | Preserve the partial return and repair or rerun before treating it as complete. |
+| **Parser failure** | A retained artifact does not match the declared schema or contains unclassified output. | Parser version, raw artifact, diagnostics, recognized fields, and residual output. | Repair the parser and reparse the retained artifact when safe. |
+| **Formal-tool return** | The declared method and tool report their exact outcome, which may include a proof, counterexample, bounded result, `unknown`, or resource limit. | Method, property or relation, model, assumptions, bound where applicable, tool, exact outcome, artifact, and cost. | Hand the method-specific result forward without turning it into a general correctness verdict. |
+| **Reported design-limit violation** | A completed run reports a timing, power, congestion, design-rule, or functional violation. | Typed violation, units, candidate, conditions, warnings, raw artifact, and cost. | Record a complete return without rejecting or penalizing the candidate. |
+| **Complete tool return** | Expected artifacts exist and parse, including reports that contain violations. | Typed fields, units, conditions, warnings, raw artifacts, cost, and lineage. | Retain the return for measurement qualification without deciding what it establishes. |
 
 : **Execution status determines what ran, not what the architecture means.**
 Invalid requests, failed paths, partial returns, parser failures, and complete
@@ -868,7 +892,7 @@ executing the workload.
 The useful comparison is what each tool consumes and returns
 (@tbl-multi-fidelity-spectrum).
 
-| **Tool Class** | **Representative Use** | **What It Models or Checks** | **What the Environment Must Preserve** |
+| **Tool class** | **Representative use** | **What it models or checks** | **What the environment must preserve** |
 | --- | --- | --- | --- |
 | Analytical or circuit model | Spreadsheet or CACTI-class SRAM estimate [@MuralimanoharEtAl2009CACTI]. | Encoded equations or circuit and technology assumptions, without workload execution. | Model version, organization, technology assumptions, units, and limits. |
 | Compiler and software build | Target compiler, lowering passes, assembler, linker, libraries, and runtime image. | Whether the declared source and mapping produce the expected executable artifacts; no hardware timing or physical result. | Source and intermediate representations, target features, flags, mapping, library and compiler versions, diagnostics, and binary identity. |
@@ -964,8 +988,9 @@ simulation [@chipyard].](images/F6b-chipyard-framework){#fig-chipyard-framework 
 
 The common configuration and generated hardware description provide a shared
 parent, but branch-specific compiler and backend work determines the artifact
-that each path consumes and returns. The fan-out does not make branch results
-interchangeable.
+that each path consumes and returns. Shared configuration ancestry does not make
+branch returns comparable. A comparison still requires matched artifacts,
+conditions, and checks for the property at issue.
 
 Execution dependencies come last. Shared lineage identifies related artifacts,
 but it does not determine when a branch can run. ArchGym demonstrates that
@@ -1069,9 +1094,9 @@ candidate.
 | **Returns, cost, and lineage** | Retain SRAM area, access time, energy and leakage; matched frame records, frame-time inputs, capacity misses, subsystem power, and warnings; translated inputs, commands, raw logs, parsed fields, residual output, hashes, resource use, cost, and parent-child lineage. |
 | **Decisions left outside** | The environment does not decide whether a field is a valid measurement, two returns form a valid comparison, a reported limit establishes rejection, or a candidate should advance. |
 
-: **A run specification prevents tool mechanics from rewriting the study.**
-The request, translation, state, expected outputs, failure behavior, cost, and
-limits are fixed before invocation.
+: **This prospective specification illustrates runtime responsibilities; it is
+not an executed study record.** The request, translation, state, expected
+outputs, failure behavior, cost, and limits would be fixed before invocation.
 {#tbl-environment-contract tbl-colwidths="[24,76]"}
 
 Exact identity remains connected across candidate state, translation,

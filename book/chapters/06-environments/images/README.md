@@ -4,6 +4,8 @@ Active hand-authored figures:
 
 - `F6-environment-tool-interface`: request checking, invocation, parsing, and
   run recording.
+- `F6c-runtime-object-state`: request, attempt, backend execution, returned
+  artifacts, realized cost, and independent attempt fields.
 - `F6b-chipyard-framework`: framework fan-out from one configuration to several
   tool paths; it does not depict a complete environment.
 - `F5-artifact-lineage`: parent-child identity across software, hardware, and
