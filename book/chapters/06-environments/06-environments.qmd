@@ -215,13 +215,18 @@ The run specification fixes the relationship among that state, the represented
 request, the tool path, and the returned artifacts. It says how the requested
 work will run without changing the architecture comparison.
 
+*Lineage* is the parent-child history that connects requests, transformations,
+and artifacts. It lets another architect determine which inputs produced a
+return and whether a later retry, software image, or hardware artifact belongs
+to the same candidate.
+
 Pinned state is necessary but still inadequate. A retry can repeat billable
 work, a failed process can contaminate the next attempt, a reset can restore the
 wrong baseline, and reused output can cross candidate or condition boundaries.
 Failure, retry, reset, containment, and retention rules must therefore keep
 runtime behavior from changing the request's meaning or realized cost. The
-complete prospective cache-study run specification appears in
-@tbl-environment-contract after those responsibilities have been established.
+prospective cache-study run specification in @tbl-environment-contract gathers
+these responsibilities into one concrete example.
 
 Immutable inputs are the versioned source, workload snapshot, constraints,
 libraries, PDK views, tool images, and baseline artifacts from which a run
@@ -316,8 +321,9 @@ with many attempts can exploit such effects. Pinning and recording the binary,
 host, environment, and flags prevents an accidental host difference from
 masquerading as a candidate difference.
 
-Pinned state becomes useful to another method only when a wrapper exposes the
-allowed change and preserves the tool-specific meaning of its return.
+Pinned state establishes what a run starts from. A wrapper must now expose the
+change a method is allowed to request without erasing the meaning of the
+tool-specific return.
 
 ## Interfaces and Tool Wrappers
 
@@ -430,14 +436,13 @@ persist in working directories, caches, checkpoints, license servers, random
 seeds, and generated artifacts; and outputs that may return asynchronously or
 out of order. One tool path may also depend on an artifact produced by another.
 
-This chapter adapts a small part of reinforcement-learning environment
-vocabulary. A familiar interface calls `step()` and receives an observation,
-reward, termination flags, and auxiliary information through a standard
-synchronous API [@TowersEtAl2023Gymnasium]. That interface is useful when
-interaction can be presented one step at a time. Architecture execution adds
-queued work, persistent tool state, dependencies, partial artifacts, versioned
-records, failures, and delayed returns. The runtime preserves the typed tool
-return and lets a method derive a reward later when one is needed.
+A familiar reinforcement-learning environment presents a synchronous
+`step()` interface that returns an observation, reward, termination flags, and
+auxiliary information [@TowersEtAl2023Gymnasium]. Architecture execution cannot
+usually be reduced to that exchange. Jobs wait in queues, depend on artifacts
+from other tools, modify persistent state, fail after producing partial output,
+and return out of order. The runtime must preserve those facts and the typed
+tool return. A method can derive a reward afterward when one is needed.
 
 The harness reaches a scheduler or execution backend through a *scheduler
 adapter*. The adapter maps stable harness operations such as submit, inspect
@@ -480,13 +485,22 @@ recovery retry is a new attempt authorized because prior execution failed or
 returned incompletely. The Recovery section later in the chapter develops the
 detailed retry policy.
 
-The harness maintains shared state for pending, running, completed, and
-canceled jobs and segments. It attaches each one to its attempt at submission,
-before a late result can arrive. The attempt retains the candidate and
-conditions. Dependencies are explicit. A compiler build may wait for a source
-artifact, RTL simulation may wait for elaboration, and physical implementation
-may wait for a mapped netlist. Independent jobs may run concurrently, but
-concurrency does not relax their identity or resource limits.
+The harness attaches every job or segment to its attempt at submission, before
+a late result can arrive. Dependencies remain explicit. A compiler build may
+wait for a source artifact, RTL simulation may wait for elaboration, and
+physical implementation may wait for a mapped netlist. Independent jobs may
+run concurrently, but concurrency does not relax their identity or resource
+limits.
+
+The scheduler may accept work before the harness records its job identifier.
+The harness therefore tags submitted work with the attempt identifier and
+reconciles its record with the scheduler before resubmitting. An *idempotency
+key* is a request identifier whose durable backend handling prevents a repeated
+submission from launching the same work twice. Here, `submission_token` serves
+that role. The backend records the key with the first admission result, and a
+later submission with the same key identifies the existing attempt or job. The
+harness retains the key through the retry window, reconciles it after a crash,
+and rejects its reuse for a different request [@Featonby2021IdempotentAPIs].
 
 A backend status of `running` does not establish useful progress. Where the
 tool or backend exposes them, the harness retains advisory fields such as the
@@ -502,10 +516,7 @@ executables, filesystem paths, network destinations, credentials, secrets,
 licensed features, and intellectual property needed for its declared action.
 Generated scripts, constraints, RTL, and compiler inputs are untrusted until
 validated and confined. Each attempt uses an isolated working area, resource
-limits, and a process boundary. Cancellation handling must request termination of
-descendants, then confirm termination and license release. Until confirmation,
-the harness quarantines uncertain outputs, keeps the status unconfirmed, and
-preserves enough partial state to explain what happened.
+limits, and a process boundary.
 
 Budgets apply independently to model calls, tool submissions, elapsed time,
 CPU and accelerator use, memory, storage, and license occupancy. Admission
@@ -521,14 +532,20 @@ and backpressure, which slows or refuses new work when queues or resources are
 saturated. It exposes pending work, accepted work, and remaining authorization
 so a method does not resubmit merely because a queued job is not yet visible.
 
-The harness therefore needs explicit states rather than one blocking call. A
-request is validated and admitted; each authorized attempt is then queued, run,
-and brought to a terminal process state. Terminal cause, artifact completeness,
-parser status, cancellation status, and retry eligibility are separate fields
-rather than additional scheduling states. A process can complete with partial
-artifacts, or time out after producing a parseable report. An infrastructure
-failure may be retryable, while a canceled job may not be. None of these
-fields should be collapsed into the scheduling state.
+Cancellation is not complete when a request to stop has been issued. The
+harness requests termination of descendants, then confirms process termination
+and license release. A process may stop after producing partial artifacts or
+may complete before cancellation takes effect. Any late return remains attached
+to its original attempt and stays out of live state until the current request
+revision and budget policy admit it.
+
+Every attempt has a finite deadline for confirming a terminal state. A timeout
+states whether it bounds queue wait, run time, one tool stage, or an absolute
+deadline. If scheduler and process states disagree or remain unknown past that
+deadline, the harness retains an unconfirmed attempt, quarantines uncertain
+outputs, and prevents late writers from changing live state. It also preserves
+enough partial state to explain what happened. This confirmation step is what
+turns a cancellation request or timeout into a controlled runtime outcome.
 
 ### Returned State and Realized Cost
 
@@ -537,24 +554,12 @@ admission, scheduling, termination, artifact inspection, and parsing. In the
 common case, one attempt produces one scheduler job, but the record keeps those
 stages and their outcomes distinct.
 
-Four lead-ins orient the runtime without collapsing its states:
-
-- **Requested:** The retained request and run specification identify the
-  candidate, permitted action, conditions, tool path, and budget.
-- **Ran:** Attempt, job, and execution-segment identifiers show which authorized
-  work actually reached a backend.
-- **Ended:** Terminal cause, artifact completeness, parser status, and
-  cancellation status show how each attempt finished.
-- **Cost:** Resource use and realized cost include failed, canceled, repeated,
-  and retried work as well as completed work.
-
-Those answers come from five related objects. A *request* states the desired
-action, and the *run specification* authorizes the conditions for executing it.
-One complete run may create linked authorized *attempts*, and each attempt may
-create scheduler *jobs* or execution *segments*. The *execution record* joins
-the request and run specification to those attempts, jobs, and segments. Keeping
-these objects separate prevents a retry from becoming a new candidate or a
-scheduler job from becoming an architecture result.
+The record must answer what was requested, what actually ran, how it ended, and
+what it cost. The request and run specification define the authorized work.
+Attempt, job, and segment identifiers show what reached a backend. The attempt
+record joins those objects to the returned material and realized cost. Keeping
+them separate prevents a retry from becoming a new candidate or a scheduler job
+from becoming an architecture result.
 
 `candidate_id` names the architecture candidate across tool paths.
 `configuration_id` names that candidate's declared tool-specific configuration
@@ -571,40 +576,7 @@ rather than disappearing from the record. Once the backend accepts the work,
 the harness links the job to the attempt while it is queued, running, and
 terminal. A terminal process still requires artifact inspection and parsing.
 The attempt record retains raw artifacts, typed fields, residual output,
-warnings, resources, cost, and lineage. If termination cannot be confirmed by
-the declared deadline, the harness quarantines uncertain outputs and leaves the
-attempt open rather than reporting completion.
-
-Recording candidate identity before submission prevents late returns from
-attaching to whichever candidate is current when a job finishes. The scheduler
-may accept work before the harness records its job identifier. The harness tags
-submitted work with the attempt identifier and reconciles its record with the
-scheduler before resubmitting. An *idempotency key* is a request identifier
-whose durable backend handling prevents a repeated submission from launching
-the same work twice; `submission_token` serves that role here. The backend
-records the key with the first admission result. A later submission with the
-same key returns or identifies the existing attempt or job instead of launching
-another one. The harness must retain the key through the retry window,
-reconcile it after a crash, and reject reuse for a different request
-[@Featonby2021IdempotentAPIs]. This closes the duplicate-work window without
-changing the retry policy.
-
-Cancellation also remains a request until termination is confirmed. A process
-may report cancellation, terminate after producing partial artifacts, or
-complete before the cancellation takes effect. The environment retains any
-late return under its original attempt. It does not expose that return as a
-live observation until the current request revision and budget policy admit
-it. Authorization alone does not stop a job. The harness requests termination
-only when an authorized cancellation request is pending or a declared timeout
-is reached. Admission supplies a finite deadline for confirming a terminal
-state even when no cancellation occurs. If the reported scheduler and process
-states become unknown or disagree, the harness records that condition and
-limits how long it will wait for them to reconcile. If they do not agree before
-the deadline, the harness retains an unconfirmed attempt record. A timeout
-states whether it bounds queue wait, run time, one tool
-stage, or an absolute deadline. After a timeout or cancellation, the harness
-keeps late writers and outputs out of live state or quarantines them until
-termination and job identity are confirmed.
+warnings, resources, cost, and lineage.
 
 After the process stops, the same attempt record retains the terminal cause,
 expected-artifact check, parser status, raw and structured output, retry
@@ -635,7 +607,9 @@ simulation, a physical-design run, and a model call as equivalent samples.
 Before choosing a retry, reset, checkpoint, or cached artifact, the harness must
 first determine what the attempt returned. Execution cause, artifact
 completeness, and parser status distinguish failed work from a complete return
-that reports a design limit.
+that reports a design limit. The runtime establishes what ran, what returned,
+and what the work cost. It does not establish that a returned value is valid or
+that the candidate should advance.
 
 ## Failure Returns and Tool-Output Parsing
 
@@ -824,22 +798,15 @@ At minimum, every attempt needs these fields:
 - **Realized cost:** Amounts and units actually spent, including failed,
   canceled, repeated, and retried work.
 
-The concrete fields expand when the tool or project infrastructure exposes more
-state. Applicable fields include job or execution-segment identifiers and
-per-stage status; validation, setup, admission, queue, process, cancellation,
-and timeout details; formal-tool returns; checkpoint and reset-state identity;
-libraries, PDK views, modes, corners, constraints, waivers, and environment
-variables; cache decisions and the next authorized consumer; and
-behavior-affecting identities or versions for the wrapper, harness, parser,
-tool, model, host, container, scheduler adapter, and execution policy. Seeds,
-thread counts, scheduler and parallelism settings, declared variable or
-nondeterministic behavior, and repetition index also belong in the record when
-they apply.
-Resource services may report model and tool calls, queue and run time, compute,
-memory, storage, license occupancy, retries, cancellations, and reserved,
-consumed, or billable amounts, with units and the scheduler, license server, or
-billing system that supplied each value. Human work may attach to a group of
-attempts when one setup or diagnosis supports several invocations.
+Tool-specific extensions retain the same attempt identity. A formal run adds
+its property, assumptions, bound, solver outcome, and proof or counterexample.
+A physical-design run adds libraries, PDK views, modes, corners, constraints,
+waivers, stage databases, and stage status. A sampled simulation adds its seed,
+region, warm-up, checkpoint, thread count, and declared sources of variation.
+Resource services may attach queue and run time, compute, memory, storage,
+license occupancy, and reserved, consumed, or billable amounts with their units
+and source. These extensions add needed tool meaning without turning a retry,
+stage, or resource report into a separate architecture result.
 
 Unknowns remain explicit. An unavailable or unobservable value is marked
 unreported or unknown, while a field that does not apply is marked separately.
@@ -909,8 +876,8 @@ retains each tool's model, inputs, conditions, stage, latency, and artifacts
 instead of collapsing several returns into one generic score.
 {#tbl-multi-fidelity-spectrum tbl-colwidths="[19,22,29,30]"}
 
-Fidelity comes first because heterogeneous latency and property coverage
-determine which authorized branches a study can afford to execute. A compiler
+Heterogeneous latency and property coverage determine which authorized branches
+a study can afford to execute. A compiler
 constructs an executable path but does not return hardware timing. Functional
 ISA execution returns software behavior without microarchitectural timing. A
 formal tool reports only the property and model it received, and FPGA-accelerated
@@ -949,8 +916,8 @@ basis for sampled simulation [@SherwoodEtAl2002SimPoint;
 weights, warm-up, fast-forward policy, and checkpoint parent. It does not decide
 whether those choices support the intended comparison.
 
-Shared candidate lineage comes next. Branches count as observations of the same
-candidate only when their recorded translations preserve the architecture
+Branches count as observations of the same candidate only when their recorded
+translations preserve the architecture
 meaning relevant to each returned property. The execution record retains
 transformation, calibration, and version identities together with
 branch-specific conditions so another architect can check that correspondence.
@@ -992,8 +959,8 @@ that each path consumes and returns. Shared configuration ancestry does not make
 branch returns comparable. A comparison still requires matched artifacts,
 conditions, and checks for the property at issue.
 
-Execution dependencies come last. Shared lineage identifies related artifacts,
-but it does not determine when a branch can run. ArchGym demonstrates that
+Shared lineage identifies related artifacts, but it does not determine when a
+branch can run. ArchGym demonstrates that
 several architecture simulators can share an interface under controlled budgets
 [@KrishnanEtAl2023ArchGym]. A project environment must additionally expose jobs
 that wait in queues, hold licenses, resume checkpoints, and return at different
@@ -1046,42 +1013,10 @@ the simulator dispatch depend on the declared SRAM return, sets attempt and
 time budgets, defines authorized resource and license use, and states the reset
 and retry policy. The harness then retains every return and its realized cost.
 
-Suppose the study compared three cache capacities. The 2\ MiB setting would be a
-rerun baseline, and 3\ MiB and 4\ MiB would be alternatives. Each candidate
-would first receive a cheap SRAM screen. The three calls would return areas of
-$1.2$, $1.4$, and $1.7\,\mathrm{mm}^2$ and access times of $2.1$, $2.4$, and
-$2.8\,\mathrm{ns}$, respectively. The numeric fields would place the 2\ MiB and
-3\ MiB candidates within the declared area and access-time thresholds and the
-4\ MiB candidate outside both. Suppose the record did not report the SRAM parse
-statuses or exact dispatch decisions. The values alone would not establish why
-no cycle-level request followed for 4\ MiB.
-
-Eligible candidates would enter matched cycle-level runs under a four-attempt
-budget. Suppose the baseline run returned subsystem dynamic plus leakage power
-of $2.90\,\mathrm{W}$ and the first 3\ MiB attempt encountered a stale-state
-setup failure. A clean reset would authorize its controlled recovery retry,
-followed by a separate planned repeat. Together these attempts would exhaust
-the budget. The recovery retry and planned repeat would return frame, cache,
-and power fields, but their values would remain unreported. A summary derived
-from them would be another artifact, not another tool call.
-
-The resulting record would need to connect the three candidates, their
-screening returns, the eligible cycle-level work, the failed attempt, the retry
-and reset links, the planned repeat, every artifact, and total realized cost.
-This example leaves the artifact identities, resource use, cost, output lineage,
-exact translated inputs and hashes, behavior-affecting versions, starting and
-reset-state identities, seeds and job times, parser and raw-artifact identities,
-and matched frame records unreported. The record is therefore incomplete under
-@tbl-environment-contract and the execution-record idea introduced in
-@sec-architecture-20-ontology. @sec-feedback-verification-trust determines
-whether any complete return can become a valid measurement, comparison, or
-basis for advancing a candidate.
-
-The formal run specification collects the responsibilities behind that sequence
-in one place (@tbl-environment-contract). Its dispatch condition authorizes a
-cycle-level attempt only after a complete, schema-valid SRAM return meets both
-thresholds. The condition neither validates a measurement nor rejects a
-candidate.
+The run specification collects those responsibilities before any tool starts
+(@tbl-environment-contract). Its dispatch condition authorizes a cycle-level
+attempt only after a complete, schema-valid SRAM return meets both thresholds.
+The condition neither validates a measurement nor rejects a candidate.
 
 | **Run field** | **Prospective Lighthouse cache-study run specification** |
 | --- | --- |
@@ -1098,6 +1033,35 @@ candidate.
 not an executed study record.** The request, translation, state, expected
 outputs, failure behavior, cost, and limits would be fixed before invocation.
 {#tbl-environment-contract tbl-colwidths="[24,76]"}
+
+The chronology starts with three SRAM screens. The 2\ MiB rerun baseline and
+the 3\ MiB and 4\ MiB alternatives would return areas of $1.2$, $1.4$, and
+$1.7\,\mathrm{mm}^2$ and access times of $2.1$, $2.4$, and
+$2.8\,\mathrm{ns}$, respectively. The first two candidates meet both declared
+thresholds. The 4\ MiB candidate does not, so the run specification authorizes
+no dependent cycle-level dispatch for it. The values alone would not establish
+that decision without the parse status and recorded dispatch outcome.
+
+The eligible candidates then enter matched cycle-level runs under the
+four-attempt budget. The baseline would return subsystem dynamic plus leakage
+power of $2.90\,\mathrm{W}$. The first 3\ MiB attempt would encounter a
+stale-state setup failure, which authorizes a controlled retry from a clean
+reset. A separate planned repeat follows. These attempts exhaust the budget.
+The recovery retry and planned repeat would return frame, cache, and power
+fields, but their values remain unreported. A summary derived from them would
+be another artifact, not another tool call.
+
+The resulting record would need to connect the three candidates, their
+screening returns, the eligible cycle-level work, the failed attempt, the retry
+and reset links, the planned repeat, every artifact, and total realized cost.
+This example leaves the artifact identities, resource use, cost, output lineage,
+exact translated inputs and hashes, behavior-affecting versions, starting and
+reset-state identities, seeds and job times, parser and raw-artifact identities,
+and matched frame records unreported. The record is therefore incomplete under
+@tbl-environment-contract and the execution-record idea introduced in
+@sec-architecture-20-ontology. @sec-feedback-verification-trust determines
+whether any complete return can become a valid measurement, comparison, or
+basis for advancing a candidate.
 
 Exact identity remains connected across candidate state, translation,
 execution, reuse, and return. Separating dispatch, budgets, deadlines, and study
@@ -1190,21 +1154,15 @@ harness coordinates attempts, jobs, resources, failures, and records across
 wrappers. The complete environment connects represented study state and
 permitted actions to those tools and returns.
 
-The run specification pins the request, state, budgets, authority, and expected
-returns. The execution record joins that specification to its attempt records,
-raw and structured artifacts, and realized cost. Invalid requests, execution
-failures, incomplete artifacts, formal outcomes, and reported design-limit
-violations remain distinct. Exact replay, repeatability, replicability, and
-reproducibility also remain distinct, and hashes establish byte identity
+The prospective run specification states what may run, under which state,
+authority, and budget. The execution record states what actually ran, returned,
+and cost. Neither is a supported architecture claim. That claim still requires
+the later checks that qualify a measurement, comparison, or decision. This
+distinction also keeps invalid requests, execution failures, incomplete
+artifacts, formal outcomes, and reported design-limit violations from being
+collapsed into one result. Exact replay, repeatability, replicability, and
+reproducibility remain separate claims, and hashes establish byte identity
 rather than semantic equivalence.
-
-The prospective Lighthouse scenario supposes three SRAM calls and four
-cycle-level attempts, including a stale-state setup failure, a post-reset
-attempt, and a planned repeat. It illustrates how a record would keep a summary
-derived from the final two attempts as a separate artifact. Missing
-starting and reset-state identities, attempt lineage, exact artifacts, and
-realized cost limit the fixture to illustrating chronology and budget use. It
-supports no execution fact, measurement, or architecture recommendation.
 
 Multi-tool and multi-fidelity execution extends the same discipline. Fidelity
 remains relative to a property, and branches describe the same candidate only
