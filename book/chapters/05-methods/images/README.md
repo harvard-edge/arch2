@@ -8,6 +8,9 @@ Static figures used by the chapter:
   feedback.
 - `F5d-role-method-map`: many-to-many relationship among engineering roles,
   method families, concrete techniques, inspectable outputs, and next checks.
+- `F5e-method-selection-guide`: the chapter's canonical conditional recipe for
+  choosing direct evaluation, a conventional method, prediction, generation,
+  optimization, or a justified composition from the limiting work.
 
 Executable Quarto figures in the chapter:
 
