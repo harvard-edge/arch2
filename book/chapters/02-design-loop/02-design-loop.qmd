@@ -62,12 +62,9 @@ the same spirit, but only when it addresses work that has become limiting.
 Generating more candidates is not progress when simulation, verification, or
 expert review cannot keep pace.
 
-This chapter develops that argument before considering any particular form of
-assistance. It first shows how architecture has absorbed complexity, then traces
-the changing technology dividend, hardware scale and specialization, the
-software path, physical constraints, evaluation, and verification. Only after
-those pressures are visible does it ask where assistance might reduce total
-engineering work without weakening the comparison.
+Architecture has faced widening complexity before. Its earlier responses show
+what a useful new form of assistance must preserve even when the scale and
+coupling of the design problem change.
 
 ::: {.callout-learning-objectives}
 After reading this chapter, you can:
@@ -420,9 +417,14 @@ follow.
 
 ## Hardware Scale, Specialization, and Composition
 
-The places where a comparison gets harder track the growth of what counts as the computer. Microarchitecture adds policies inside one core, specialization ties a block to one workload, composition puts many blocks in one package, and warehouse-scale deployment puts many packages behind one power budget. Each step multiplies the parameters an architect can set, and it multiplies the interactions a fair comparison cannot leave out. Those two do not grow at the same rate, which is where the section ends up.
+The places where a comparison gets harder track the growth of what counts as
+the computer. Microarchitecture adds policies inside one core, specialization
+ties a block to one workload, composition puts many blocks in one package, and
+wafer-scale integration extends one fabric across a new physical scale. Each
+step multiplies the parameters an architect can set and the interactions a fair
+comparison cannot leave out.
 
-### Microarchitecture Complexity
+### Microarchitecture Adds Interacting Costs and Corner Cases
 
 Start with the levers already in every architect's toolkit. A deeper pipeline, a more aggressive branch predictor, a speculative scheduler, or a larger cache hierarchy each recovers performance. That is the material of microarchitecture.
 
@@ -441,7 +443,7 @@ work each instruction requires and the energy the machine expends.
 
 That turn to multiple cores added a further layer. Coherence protocols, memory-ordering rules, synchronization costs, and workload partitioning all shape how a candidate behaves under a real workload, and none of them shows up in a single-thread proxy. Even here, before any specialized block is added, the information a comparison must carry has already outgrown a single number.
 
-### The Specialization Explosion
+### Specialization Widens the Hardware-Software Choice
 
 Specialization is a spectrum rather than a jump from a central processing unit
 (CPU) to one kind of accelerator. General-purpose cores can add vector and
@@ -705,203 +707,9 @@ much of the fabric is useful. A comparison that counts only peak compute can
 miss the power-delivery area, communication, repair, and mapping choices that
 determine usable capacity.
 
-None of these constraints stops at the package or wafer. The same limits
-reappear a level up as facility power and cooling constraints
-[@BarrosoHolzleRanganathan2019DatacenterAsComputer]. These constraints remove
-designs from the valid set and add checks the search must pay for before
-deployment.
-
-### Warehouse-Scale Computing and Distributed Systems
-
-Aggregate demand, availability targets, or service objectives can require many
-nodes even when one request fits on a single package. The boundary of the
-computer can then become the entire data center. Scale-out networks, coherent
-device and memory interconnects such as CXL,[^fn-cxl-c02] and cluster software
-make placement and resource sharing architectural questions. At this scale, we
-enter the domain of warehouse-scale computing (WSC)
-[@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem
-expands to encompass heterogeneous servers, shared cooling infrastructure,
-facility power, and cluster-level scheduling.
-
-[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect
-standard for processors, accelerators, and memory devices. Its memory semantics
-and switching support can make device-attached or pooled memory part of a
-system-level provisioning decision [@CXLConsortium2026CXL].
-
-Warehouse-scale systems are difficult to experiment with or simulate
-efficiently, and component failure is a continuous condition rather than an
-exceptional case [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Architects
-therefore
-combine trace-driven and discrete-event models, emulation, controlled
-deployment, and production measurements. Every model and measurement leaves
-something out. A trace may miss dynamic network congestion that creates
-severe "tail at scale" latency [@DeanBarroso2013TailAtScale], while a node that
-looks efficient in isolation can lose that benefit under stragglers or
-distributed coordination. The difficulty is choosing evidence at a scale the
-study can afford without reducing the system to a model that omits the behavior
-under review.
-
-### Scale Creates Large Search Spaces {#sec-evaluation-capacity-bounds-search}
-
-Each layer above widened the set of designs an architect can propose, and none of them widened the set that can be checked at the same rate. The two quantities are easy to conflate because only one of them is easy to count.
-
-Even a narrow comparison can contain many combinations, and the following
-arithmetic is illustrative rather than measured. Suppose an architect explores
-an accelerator and memory subsystem for one workload family and considers five
-compute organizations, four vector or accelerator interface choices, six
-memory hierarchy choices, four interconnect choices, three voltage/frequency
-policies, and three compiler/runtime policies. The product is
-
-```{python}
-#| echo: false
-toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
-toy_candidate_evaluations = toy_design_candidates * 3
-```
-
-$$
-5 \times 4 \times 6 \times 4 \times 3 \times 3
-$$
-That is `{python} f"{toy_design_candidates:,}"` candidate configurations before
-counting workload versions, process corners, thermal constraints, or reliability
-cases. Checking each candidate at three fidelity levels would create
-`{python} f"{toy_candidate_evaluations:,}"` candidate--evaluation combinations,
-even before rejecting a single invalid design. Real architecture studies can grow far larger
-or take far longer before silicon measurements are available.
-
-The count alone says little about how many candidates can be evaluated well
-enough to matter. If each surviving configuration needs an analytical model,
-simulator run, synthesis check, or human review, a larger choice set also
-increases the demand for feedback. Cheap models reduce evaluation cost, but
-they do not establish whether a choice is legal or whether stronger
-measurements will preserve its ranking. The practical limit is not how many
-configurations an architecture study can enumerate. It is how many it can evaluate well
-enough to support the next decision.
-
-
-
-Other architecture tasks create similar problems in different ways
-(@tbl-design-loop-scale-anchors). Mapping, design-space exploration (DSE),[^fn-dse-c02]
-physical design, and software tuning do not share one measurement scale, but
-each combines many possible choices with constraints that make only some of them
-useful.
-
-[^fn-dse-c02]: **Design-space exploration (DSE)**: The systematic search over a parameterized family of architectural configurations, such as cache capacities, issue widths, or accelerator array shapes, for the ones that best satisfy a stated objective under stated constraints. A trial may require a simulator run, analytical evaluation, synthesis run, or another architecture measurement, which is why the evaluation budget rather than the space size sets the practical limit.
-
-Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and
-evaluating deep-neural-network (DNN) accelerators, provides a concrete lower
-bound on this combinatorial growth. For a convolutional neural network (CNN)
-layer with seven nested loops and a four-level memory hierarchy, loop ordering
-and level-bypass choices alone produce $(7!)^4 \times (2^4)^3$ arrangements.
-The first factor permits a different ordering of the seven loops at each of four
-memory levels. The second permits a binary bypass choice at those four levels
-for each of three data spaces. Factorization choices enlarge the mapspace
-further. The formula is therefore not the complete count and not a count of
-useful mappings. It isolates two sources of growth before legality, capacity,
-and performance constraints remove most candidates.
-
-| **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
-| --- | --- | --- |
-| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
-| DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
-| TPU-block floorplanning | The AlphaChip paper reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
-| Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
-
-: **Large search spaces place different demands on evaluation.** Mapping, accelerator DSE, floorplanning, and tensor-program tuning combine candidate scale, validity constraints, feedback cost, and different evidence requirements. {#tbl-design-loop-scale-anchors tbl-colwidths="[25,36,28]"}
-
-The rows expose different parts of the same problem. Timeloop and MAESTRO show
-how quickly mapping and accelerator choices multiply. AutoTVM shows that the
-software schedule can create a large search space even after the hardware has
-been chosen. The floorplanning example shows that producing a candidate quickly
-does not establish its routed quality.
-
-MAESTRO makes the distinction especially
-clear. At 0.17M designs per second, its full 480M-candidate space can be examined
-in under an hour. Cheap analytical feedback is plentiful in that case. The
-difficult decision is which apparent winners justify more expensive evaluation.
-Placed on one logarithmic axis, the four anchors' candidate counts can be
-compared without treating equal counts as equal amounts of evaluation work
-(@fig-search-vs-eval-gap).
-
-```{python}
-#| label: fig-search-vs-eval-gap
-#| fig-cap: |
-#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
-#| out-width: "92%"
-#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
-
-from math import factorial
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style, row_axis, top_log_axis
-
-# Data provenance (all values transcribed or computed from this chapter's text):
-# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
-# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
-# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
-#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
-# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
-#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
-#   recomputed from sources.
-# As-of: 2026-07-14.
-
-toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
-timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
-
-rows = [
-    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
-    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
-    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
-    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
-]
-
-apply_style()
-fig, ax = plt.subplots(figsize=(4.95, 2.75))
-fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
-
-row_axis(ax, len(rows))
-top_log_axis(
-    ax,
-    xlim=(2e1, 4e19),
-    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
-    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
-    xlabel="search-space size (candidate configurations)",
-)
-
-for y, row in enumerate(rows):
-    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
-    if row["stated"]:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
-    else:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
-    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
-    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
-    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
-
-plt.show()
-plt.close(fig)
-```
-
-The toy count sits in the thousands,
-MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed lower bound
-lies almost ten orders of magnitude farther right. AutoTVM's hollow marker
-distinguishes its order-of-magnitude estimate from the stated or computed
-counts. The full span is nearly fifteen orders of magnitude, but horizontal
-position encodes only candidate count. It says nothing about the cost, fidelity,
-or decision strength of one evaluation. The architect must decide which choices
-are worth testing and how many reliable evaluations the architecture study can afford.
-
-Search capacity and evaluation capacity are separate budgets. ArchGym shows why
-exploration methods need fair, reproducible comparison under common
-environments and sample budgets [@KrishnanEtAl2023ArchGym]. This book applies a
-broader accounting rule: compare evaluation fidelity, tool cost, total compute,
-and engineering effort rather than equalizing candidate count alone. A fast
-estimator can increase the number of candidates receiving a score without
-increasing the number receiving a check strong enough to support commitment.
-
-Reliable evaluation also requires an executable software path. A candidate
-that cannot be compiled, scheduled, and exercised against a representative
-workload cannot support a system claim, regardless of how thoroughly its
-hardware proxy was explored.
+At each physical scale, the delivered benefit still depends on software
+placement, scheduling, and an executable path. The next pressure is therefore
+not another piece of hardware. It is the software required to use the machine.
 
 ## Software Is Part of the Machine
 
@@ -969,7 +777,7 @@ more hardware mechanism. It is re-establishing an executable, representative
 comparison when the compiler, runtime, libraries, workload, or deployment
 policy changes. The path can change while the hardware is still being designed.
 
-### Software Co-Evolution {#sec-software-changes-faster-than-silicon}
+### Software Change Can Invalidate Hardware Comparisons {#sec-software-changes-faster-than-silicon}
 
 Software and workloads can change while hardware is being designed. New models,
 precision formats, compilers, runtimes, and libraries may therefore invalidate
@@ -1234,6 +1042,211 @@ fixed name. Versioned traces, benchmark rules, compiler and runtime assumptions,
 and tool results allow reviewers to see whether a hardware claim still applies.
 The architecture study also needs a trigger for repeating the comparison when
 one of those inputs changes.
+
+When the machine spans a data center, that software path also determines how
+hardware, networks, and facility resources operate as one system.
+
+## Warehouse-Scale Computing Extends the Architecture Problem
+
+Warehouse scale brings the preceding hardware and software pressures into one
+architecture problem. Server and accelerator choices matter through network
+topology, collective communication, cluster scheduling, failure handling,
+deployment policy, and facility power and cooling. The comparison must therefore
+judge the delivered service and operating constraints of the whole system, not
+the efficiency of a node in isolation.
+
+Aggregate demand, availability targets, or service objectives can require many
+nodes even when one request fits on a single package. The boundary of the
+computer can then become the entire data center. Scale-out networks, coherent
+device and memory interconnects such as CXL,[^fn-cxl-c02] and cluster software
+make placement and resource sharing architectural questions. At this scale, we
+enter the domain of warehouse-scale computing (WSC)
+[@BarrosoHolzleRanganathan2019DatacenterAsComputer]. The architectural problem
+expands to encompass heterogeneous servers, shared cooling infrastructure,
+facility power, and cluster-level scheduling.
+
+[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect
+standard for processors, accelerators, and memory devices. Its memory semantics
+and switching support can make device-attached or pooled memory part of a
+system-level provisioning decision [@CXLConsortium2026CXL].
+
+Warehouse-scale systems are difficult to experiment with or simulate
+efficiently, and component failure is a continuous condition rather than an
+exceptional case [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Architects
+therefore
+combine trace-driven and discrete-event models, emulation, controlled
+deployment, and production measurements. Every model and measurement leaves
+something out. A trace may miss dynamic network congestion that creates
+severe "tail at scale" latency [@DeanBarroso2013TailAtScale], while a node that
+looks efficient in isolation can lose that benefit under stragglers or
+distributed coordination. The difficulty is choosing evidence at a scale the
+study can afford without reducing the system to a model that omits the behavior
+under review.
+
+Once hardware, software, network, and facility choices become part of one
+comparison, the number of possible combinations grows faster than the capacity
+to evaluate them.
+
+## Design Spaces Grow Faster Than Evaluation Capacity {#sec-evaluation-capacity-bounds-search}
+
+Each layer above widened the set of designs an architect can propose, and none of them widened the set that can be checked at the same rate. The two quantities are easy to conflate because only one of them is easy to count.
+
+Even a narrow comparison can contain many combinations, and the following
+arithmetic is illustrative rather than measured. Suppose an architect explores
+an accelerator and memory subsystem for one workload family and considers five
+compute organizations, four vector or accelerator interface choices, six
+memory hierarchy choices, four interconnect choices, three voltage/frequency
+policies, and three compiler/runtime policies. The product is
+
+```{python}
+#| echo: false
+toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
+toy_candidate_evaluations = toy_design_candidates * 3
+```
+
+$$
+5 \times 4 \times 6 \times 4 \times 3 \times 3
+$$
+That is `{python} f"{toy_design_candidates:,}"` candidate configurations before
+counting workload versions, process corners, thermal constraints, or reliability
+cases. Checking each candidate at three fidelity levels would create
+`{python} f"{toy_candidate_evaluations:,}"` candidate--evaluation combinations,
+even before rejecting a single invalid design. Real architecture studies can grow far larger
+or take far longer before silicon measurements are available.
+
+The count alone says little about how many candidates can be evaluated well
+enough to matter. If each surviving configuration needs an analytical model,
+simulator run, synthesis check, or human review, a larger choice set also
+increases the demand for feedback. Cheap models reduce evaluation cost, but
+they do not establish whether a choice is legal or whether stronger
+measurements will preserve its ranking. The practical limit is not how many
+configurations an architecture study can enumerate. It is how many it can evaluate well
+enough to support the next decision.
+
+
+
+Other architecture tasks create similar problems in different ways
+(@tbl-design-loop-scale-anchors). Mapping, design-space exploration (DSE),[^fn-dse-c02]
+physical design, and software tuning do not share one measurement scale, but
+each combines many possible choices with constraints that make only some of them
+useful.
+
+[^fn-dse-c02]: **Design-space exploration (DSE)**: The systematic search over a parameterized family of architectural configurations, such as cache capacities, issue widths, or accelerator array shapes, for the ones that best satisfy a stated objective under stated constraints. A trial may require a simulator run, analytical evaluation, synthesis run, or another architecture measurement, which is why the evaluation budget rather than the space size sets the practical limit.
+
+Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and
+evaluating deep-neural-network (DNN) accelerators, provides a concrete lower
+bound on this combinatorial growth. For a convolutional neural network (CNN)
+layer with seven nested loops and a four-level memory hierarchy, loop ordering
+and level-bypass choices alone produce $(7!)^4 \times (2^4)^3$ arrangements.
+The first factor permits a different ordering of the seven loops at each of four
+memory levels. The second permits a binary bypass choice at those four levels
+for each of three data spaces. Factorization choices enlarge the mapspace
+further. The formula is therefore not the complete count and not a count of
+useful mappings. It isolates two sources of growth before legality, capacity,
+and performance constraints remove most candidates.
+
+| **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
+| --- | --- | --- |
+| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
+| DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
+| TPU-block floorplanning | The AlphaChip paper reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
+| Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
+
+: **Large search spaces place different demands on evaluation.** Mapping, accelerator DSE, floorplanning, and tensor-program tuning combine candidate scale, validity constraints, feedback cost, and different evidence requirements. {#tbl-design-loop-scale-anchors tbl-colwidths="[25,36,28]"}
+
+The rows expose different parts of the same problem. Timeloop and MAESTRO show
+how quickly mapping and accelerator choices multiply. AutoTVM shows that the
+software schedule can create a large search space even after the hardware has
+been chosen. The floorplanning example shows that producing a candidate quickly
+does not establish its routed quality.
+
+MAESTRO makes the distinction especially
+clear. At 0.17M designs per second, its full 480M-candidate space can be examined
+in under an hour. Cheap analytical feedback is plentiful in that case. The
+difficult decision is which apparent winners justify more expensive evaluation.
+Placed on one logarithmic axis, the four anchors' candidate counts can be
+compared without treating equal counts as equal amounts of evaluation work
+(@fig-search-vs-eval-gap).
+
+```{python}
+#| label: fig-search-vs-eval-gap
+#| fig-cap: |
+#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
+#| out-width: "92%"
+#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
+
+from math import factorial
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style, row_axis, top_log_axis
+
+# Data provenance (all values transcribed or computed from this chapter's text):
+# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
+# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
+# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
+#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
+# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
+#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
+#   recomputed from sources.
+# As-of: 2026-07-14.
+
+toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
+timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
+
+rows = [
+    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
+    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
+    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
+    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
+]
+
+apply_style()
+fig, ax = plt.subplots(figsize=(4.95, 2.75))
+fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
+
+row_axis(ax, len(rows))
+top_log_axis(
+    ax,
+    xlim=(2e1, 4e19),
+    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
+    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
+    xlabel="search-space size (candidate configurations)",
+)
+
+for y, row in enumerate(rows):
+    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
+    if row["stated"]:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
+    else:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
+    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
+    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
+    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
+
+plt.show()
+plt.close(fig)
+```
+
+The toy count sits in the thousands,
+MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed lower bound
+lies almost ten orders of magnitude farther right. AutoTVM's hollow marker
+distinguishes its order-of-magnitude estimate from the stated or computed
+counts. The full span is nearly fifteen orders of magnitude, but horizontal
+position encodes only candidate count. It says nothing about the cost, fidelity,
+or decision strength of one evaluation. The architect must decide which choices
+are worth testing and how many reliable evaluations the architecture study can afford.
+
+Search capacity and evaluation capacity are separate budgets. ArchGym shows why
+exploration methods need fair, reproducible comparison under common
+environments and sample budgets [@KrishnanEtAl2023ArchGym]. This book applies a
+broader accounting rule: compare evaluation fidelity, tool cost, total compute,
+and engineering effort rather than equalizing candidate count alone. A fast
+estimator can increase the number of candidates receiving a score without
+increasing the number receiving a check strong enough to support commitment.
+
+An executable software path is necessary, but it does not establish how many
+candidates can be checked strongly enough to support a decision. The next limit
+is the capacity and fidelity of evaluation and verification.
 
 ## Evaluation and Verification Limit Progress
 
@@ -1737,7 +1750,7 @@ them, review queues grow and the team cannot close the decision. The team
 must turn scattered tool results into a comparison that reviewers can inspect
 and a decision can use.
 
-## When the Pressures Compound {#sec-compounding-design-loop-pressure}
+## Compounding Pressures Shift the Limiting Work {#sec-compounding-design-loop-pressure}
 
 The preceding pressures interact rather than merely accumulate. Specialization
 expands the choice set, each hardware choice creates software obligations,
@@ -1950,7 +1963,7 @@ scope, comparison, and decision.
 
 \FloatBarrier
 
-## Open Research Questions
+## Open Questions
 
 Modern architecture work creates research problems in diagnosing which work
 controls progress, detecting where an intervention moves that pressure, and
@@ -2000,6 +2013,9 @@ proportional frequency or single-thread performance automatically. Architects
 must obtain more of the benefit through parallelism, specialization, software,
 and composition, while the cost of evaluating and verifying those choices
 continues to rise.
+
+A large design space matters only when the team can evaluate enough of it, at
+sufficient fidelity, to change the pending architecture decision.
 
 That is why AI assistance is potentially useful. Retrieval can assemble
 scattered context, predictors can ration expensive evaluation, generators can
