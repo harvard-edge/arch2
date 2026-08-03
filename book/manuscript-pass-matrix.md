@@ -62,12 +62,12 @@ and `—` only when the pass genuinely does not apply.
 
 | Chapter | Shell | Technical | Lighthouse | Pitfalls | Principles | Questions |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1. Moonshot | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 2. Why assistance may help | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 3. Life cycle | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 4. Data, knowledge, and representation | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 5. Prediction, generation, and optimization | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 6. Tool-connected environments | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 1. Moonshot | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 2. Why assistance may help | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 3. Life cycle | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 4. Data, knowledge, and representation | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 5. Prediction, generation, and optimization | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 6. Tool-connected environments | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | 7. Verification, feedback, and learning | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | 8. Running the loop | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | 9. Transfer and generalization | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
