@@ -259,13 +259,17 @@ A generator may remove a shortage of candidates and expose expensive
 evaluation. A predictor may make screening cheap and expose overloaded review.
 The method that was useful before that change may no longer be useful after it.
 
-ArchGym gives an empirical reason not to canonize one search method. Under
-equal sample budgets, reinforcement learning[^fn-ml-reinforcement-learning-c05],
-Bayesian optimization, genetic algorithms, and a random walker traded places
-across architecture environments; no one method dominated every design space
-[@KrishnanEtAl2023ArchGym]. The
+Reinforcement-learning results can change with implementation details,
+hyperparameters, random seeds, and reporting choices, so one tuned run is not a
+stable comparison [@HendersonEtAl2018DeepRL]. Architecture studies add another
+constraint because each interaction may consume a simulator or tool run.
+ArchGym therefore gives an empirical reason not to canonize one search method:
+under matched sample budgets, reinforcement
+learning[^fn-ml-reinforcement-learning-c05], Bayesian optimization, genetic
+algorithms, and a random walker traded places across architecture environments;
+no one method dominated every design space [@KrishnanEtAl2023ArchGym]. The
 result is not a universal ranking. It shows that the design space, environment,
-tuning effort, and evaluation budget are part of method fit.
+tuning effort, random variation, and evaluation budget are part of method fit.
 
 [^fn-ml-reinforcement-learning-c05]: **Reinforcement learning (RL)**: A
 machine-learning technique that fits an action-selection policy from
@@ -583,6 +587,17 @@ blocked sites. Qualified placement and routing results provide the
 higher-fidelity observations used to assess congestion, timing, and
 routability.
 
+Model-based policy optimization provides a bounded precedent for this pattern.
+On continuous-control tasks, short model-generated rollouts branched from real
+observations reduced the accumulation of model error while retaining some of
+the sample-efficiency benefit of a learned dynamics model
+[@JannerEtAl2019MBPO]. That result does not establish a rollout horizon, state
+representation, or dynamics model for architecture. Placement, compilation,
+and microarchitecture tools have different state transitions and failure
+conditions. An architecture study must qualify the predictor on its own tool
+returns and send every selected action or surviving candidate back through the
+declared high-fidelity tool path before using it in a design decision.
+
 This composition differs from two simpler choices. Independent static scoring
 estimates each complete candidate without predicting how one action changes
 later choices. A model-free policy maps the observed state directly to an
@@ -840,10 +855,15 @@ actual missing capability with less work.
 The artifact determines which generative technique is plausible. Templates,
 grammars, rules, program synthesis, compiler passes, and parameterized
 generators fit precisely structured artifacts. An autoregressive code model
-constructs a sequence one token at a time from the preceding tokens, which fits
-specifications, RTL, tests, and scripts [@Chen2021Codex]. Constrained decoding
-blocks a next token when it would violate an encoded grammar or schema, reducing
-syntactically invalid work before compilation
+constructs a sequence one token at a time from the preceding tokens. Codex
+demonstrated this approach for general-purpose software and Python program
+generation [@Chen2021Codex]. RTL generation needs hardware-specific evidence:
+VerilogEval measures functional correctness of generated Verilog with an RTL
+testbench, while RTLLM includes simulation and post-synthesis area, delay, and
+power measures [@VerilogEval; @RTLLM]. Neither benchmark establishes signoff
+readiness or test generation. Constrained decoding blocks a next token when it
+would violate an encoded grammar or schema, reducing syntactically invalid work
+before compilation
 [@WillardLouf2023GuidedGeneration; @GengEtAl2023GrammarConstrained]. Retrieval
 can supply current project documents or examples to those techniques, but it
 remains a supporting capability rather than a generation family. Graph
@@ -858,7 +878,8 @@ The artifact structure narrows the choice
 | **Artifact or problem** | **Likely construction path** | **What the path can enforce or use** | **External check still required** |
 | --- | --- | --- | --- |
 | Precisely structured configuration or program | Template, grammar-guided generator, solver, compiler pass, or program synthesis | Encoded syntax, types, and stated constraints | Intended semantics and implementation behavior |
-| RTL, test, script, or compiler code | Autoregressive code model or LLM, optionally with constrained decoding | Supplied context and encoded token or schema restrictions | Elaboration, function, synthesis, timing, and other artifact-specific properties |
+| General-purpose software, script, or compiler code | Autoregressive code model or LLM, optionally with constrained decoding | Supplied context and encoded token or schema restrictions | Execution semantics, target behavior, and other artifact-specific properties |
+| RTL | Autoregressive code model or LLM evaluated with an RTL-specific benchmark [@VerilogEval; @RTLLM] | Supplied design context and encoded token, grammar, or schema restrictions | Elaboration, simulation, formal properties, synthesis, timing, power, and signoff checks required by the project |
 | Project-specific text or code | Retrieval-supported generation | Current retrieved documents and examples, subject to their provenance and coverage | Source consistency and the checks required by the generated artifact |
 | Netlist or connectivity object | Graph-generative or graph-conditioned method | Represented nodes, edges, and graph constraints | Electrical, functional, timing, and physical properties |
 | Placement or floorplan | Diffusion or another spatial generator | Spatial proposal distribution, fixed block geometry, and encoded placement constraints | Legalization, routing, timing, power, and manufacturability |
@@ -1304,13 +1325,15 @@ manufacturing effect. An optimizer can find a good answer to the objective it
 was given while that objective remains an incomplete stand-in for the
 architectural goal. The later check must address that gap.
 
-Architecture objectives often conflict. Using the Pareto-frontier concept
-introduced in @tbl-moonshot-decomposition, multiobjective optimization can
-expose the evaluated designs that are not dominated on power, performance,
-area, reliability, or cost instead of hiding those tradeoffs in one weighted
-score. The frontier does not choose the design. The architect still decides
-which tradeoff fits the
-system constraints and which unevaluated regions remain uncertain.
+Architecture objectives often conflict. One evaluated design *dominates*
+another when it is no worse on every declared objective and better on at least
+one. The Pareto frontier contains the evaluated designs that are not dominated
+[@Deb2001MultiObjective]. Multiobjective optimization can therefore expose
+tradeoffs among power, performance, area, reliability, or cost instead of
+hiding them in one weighted score. The frontier does not choose the design.
+The architect still decides which tradeoff fits the system constraints,
+whether the declared objectives capture what matters, and which unevaluated
+regions remain uncertain.
 
 The useful output may be a candidate, Pareto region, constraint boundary,
 sensitivity, ruled-out region, or next experiment. The study should not force
