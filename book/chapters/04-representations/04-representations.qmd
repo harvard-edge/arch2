@@ -204,6 +204,15 @@ reproduce. The release must state which claims can be checked from public
 material and which still depend on private evidence. A reproducible procedure
 is not a public replication of an unavailable measurement.
 
+*Datasheets for Datasets* provides a standard way to document why a dataset was
+created, what it contains, how it was collected, how it may be used, and how it
+will be maintained [@GebruEtAl2021Datasheets]. Architecture datasets need that
+baseline plus the identities that determine what a sample means. These include
+the artifact and tool versions, workload and physical conditions, failed or
+censored runs, access and license terms, and the exact claims that another team
+can reproduce. A dataset card can explain the collection without making every
+sample applicable to a new design.
+
 Field and fleet observations need further acquisition context. Record the
 deployed hardware and software versions, workload population, sampling policy,
 measurement conditions, privacy or redaction rules, and collection cost with
@@ -303,26 +312,35 @@ Verilog through this particular pipeline. Those derived ratios describe the
 authors' repository search, license policy, screen, and tool flow. They do not
 estimate how much public C/C++ is synthesizable in general. The example makes a
 narrower point. Collecting public source, deciding what is legally usable,
-screening it, executing a conversion tool, and retaining failures are distinct
-dataset-engineering steps.
+screening it, executing a conversion tool, and accounting for failures are
+distinct dataset-construction steps.
 
-Two other public datasets make the source difference concrete. RTL-Repo keeps full
-repository context around more than 4,000 public Verilog samples
-[@AllamShalan2024RTLRepo]. CircuitNet records graph and image representations
-from a declared synthesis and physical-design flow
-[@ChaiEtAl2022CircuitNet]. It attempted 12,960 back-end runs and retained
-10,242 layouts after excluding failed runs [@ChaiEtAl2022CircuitNet]. These
-datasets support different questions. Neither supplies the current state or
-complete history of a live design project. CircuitNet's retained layouts also
-illustrate a general dataset risk. A model trained only on the surviving
-layouts can learn the properties of completed runs without learning where the
-flow failed or why.
+Public architecture datasets also differ in their unit of observation and in
+the question they can answer (@tbl-public-architecture-data). Their counts are
+not comparable, and these four examples do not establish global coverage of
+architecture data. A Verilog module, a repository-context completion, a
+physical-design run, and a question-answer pair each expose a different part of
+the design problem.
 
-QuArch provides another public source with a different purpose. Its
-question-answer dataset tests access to knowledge about architecture concepts
-and prior designs [@PrakashEtAl2025QuArch]. It does not identify a current
-project revision, software image, workload, constraints, or responsible source,
-so it cannot supply live project state.
+| **Collection and Observation Unit** | **Supported Task** | **Key Missing Context** | **Failed or Rejected Data Status** |
+| --- | --- | --- | --- |
+| OpenRTLSet observes one extracted Verilog module from public Verilog, translated VHDL, or C/C++ passed through HLS [@WangEtAl2025OpenRTLSet]. | Fine-tuning and evaluating module-level Verilog generation. | Full project state, workload and software conditions, physical measurements, per-module functional checks, and a repository-disjoint split are not established. | Failed VHDL and Vitis HLS conversions are excluded. The source does not report a released corpus of failed artifacts and structured rejection reasons. |
+| RTL-Repo observes one target-line completion with the surrounding Verilog repository as context [@AllamShalan2024RTLRepo]. | Long-context, multi-file Verilog autocompletion measured with exact match and edit similarity. | Functional, synthesis, simulation, workload, power, performance, area, and physical-design evidence. The reported train and test counts do not establish a repository-disjoint split. | No design tool is executed for the observation. Repositories rejected by the collection filters are not reported as retained records. |
+| CircuitNet observes one back-end design run and retained layout under a declared synthesis and physical-design setting [@ChaiEtAl2022CircuitNet]. | Cross-stage congestion, design rule check violation, and IR-drop prediction from graph and image-like features. | Front-end software and workload behavior, live project history, and a canonical grouping rule for evaluation. | The authors attempted 12,960 runs and retained 10,242 layouts after excluding failed runs. Failure artifacts and causes are not reported as retained. |
+| QuArch v0.1 observes one expert-validated multiple-choice question-answer pair about a computer architecture topic [@PrakashEtAl2025QuArch]. | Evaluating architecture knowledge retrieval and fine-tuning language models for that task. | Executable design state, workload and software identity, tool returns, physical measurements, and signoff evidence. | Validation removes questions without definitive answers or with scope too narrow for the benchmark. Rejected questions and reasons are not reported as retained. |
+
+: **A dataset supports only the task and context carried by its observations:**
+Module code, repository context, executed layouts, and architecture questions
+are useful for different purposes and leave different parts of a design
+decision unobserved.
+{#tbl-public-architecture-data tbl-colwidths="[27,22,29,26]"}
+
+The table separates missing context from poor data quality. QuArch can be a
+well-validated test of architecture knowledge without describing a live design
+project. CircuitNet can provide executed physical-design observations without
+recording the behavior of the software that might eventually run on the chip.
+The architect must match the collection to the property and transfer claim
+rather than treat public availability or sample count as sufficient evidence.
 
 Public sources make comparison and reuse possible, but they usually omit
 proprietary design context. Community datasets can preserve declared
@@ -683,7 +701,40 @@ architecture claim:
 7. Check raw returns, derived fields, and representation limits separately.
 8. Record the claims that the acquired data does not support.
 
-The prospective, unexecuted Lighthouse cache comparison applies the sequence.
+OpenRTLSet provides an executed example of this sequence. The authors first
+collected public Verilog, VHDL, and C/C++ repositories under licenses they
+treated as permitting academic and commercial use. They screened the C/C++
+sources for constructs their flow treated as unsuitable for synthesis, then ran
+vhd2vl on VHDL and Vitis HLS on the screened C/C++ sources. Failed conversions
+were excluded. In the C/C++ path, approximately 103,000 repositories became
+approximately 12,000 after screening, and approximately 1,000 successfully
+produced about 24,000 Verilog modules [@WangEtAl2025OpenRTLSet]. The changing
+unit matters. Repository attrition and final module count do not form one yield
+ratio.
+
+The authors decomposed multi-module files so that one Verilog module became the
+dataset unit. Released rows preserve the source repository URL and original
+license name, pair the module with a generated description, and support model
+fine-tuning followed by evaluation on VerilogEval
+[@WangEtAl2025OpenRTLSet]. The source does not report a repository-disjoint
+split or a released corpus of failed conversions, and the resulting row does
+not certify functional correctness or preserve the full state of its source
+project. This example therefore supports a bounded claim. It shows how a
+licensed public-code collection became a module-level Verilog training corpus
+through filtering, tool execution, cleaning, and labeling. It does not measure
+the general synthesizability of public code or the coverage of industrial
+architecture projects.
+
+CircuitNet makes the missing failures visible from another direction. Its
+authors attempted 12,960 back-end runs and retained 10,242 layouts after
+excluding failed runs [@ChaiEtAl2022CircuitNet]. The reported exclusion does
+not prove that a learned model will be biased. It does make survivor-only
+coverage a reasonable concern, which is an inference from the retention policy
+rather than a result measured in the CircuitNet paper.
+
+The executed examples establish what a published construction can report. The
+Lighthouse cache comparison applies the same sequence prospectively, before any
+source package or tool return exists.
 `XR-COMPUTE-A` is the prospective specification identity for the design
 revision under consideration. It does not identify a retained source package,
 artifact, or execution. The decision is whether a 3 or 4\ MiB L2 candidate
