@@ -8,6 +8,9 @@ Active hand-authored figures:
   in design practice, and an enabling technical advance.
 - `F1-moonshot-stack`: the architecture and engineering work hidden by the
   compact Lighthouse prompt.
+- `F1a-foundation-system`: the optional learned component, current project
+  state, conventional methods, tools, checks, architecture role, and separate
+  commitment authority that make up the larger design system.
 - `F2a-design-loop-breaks`: the design state needed for human-orchestrated and
   AI-assisted architecture studies.
 
