@@ -2,6 +2,9 @@
 
 Image-backed figures currently used by the chapter:
 
+- `F4-architecture-data-progression`: the chapter's progression from
+  heterogeneous source artifacts through checked data, durable knowledge and
+  current state, linked representations, and method handoff.
 - `F4-data-pyramid`: property-specific observation paths that preserve source,
   coverage, cost, conditions, and blind spots without imposing a universal
   fidelity order.
