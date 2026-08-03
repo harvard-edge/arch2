@@ -614,11 +614,11 @@ Real SoCs are often brownfield systems. An architect may have to integrate a new
 accelerator with legacy controllers and proprietary physical-interface blocks
 whose vendor does not provide the source RTL. Undocumented interface behavior,
 mismatched reset sequences, and clock-domain crossing (CDC) constraints resist
-analytical modeling. Coherence-protocol mismatches, unstated timing constraints,
-and system-level deadlocks can emerge when the full SoC is
-assembled.[^fn-soc-deadlocks-c02] Composition can create a dependency cycle
-that was absent from the block-level tests. Such a bug may remain latent until
-integration-level verification or bring-up.
+analytical modeling. Coherence-protocol mismatches [@Arm2020AXI] and unstated
+timing constraints can emerge when the full SoC is assembled. NoC routing can
+also deadlock when its channel-dependency graph contains a cycle.
+[^fn-soc-deadlocks-c02] Such problems may remain latent until integration-level
+verification or bring-up.
 
 Each added block narrows the set of valid designs. Moving a function across a
 chiplet boundary changes the available interfaces, software path, and tools
@@ -629,7 +629,7 @@ network-on-chip (NoC) may have to arbitrate between bursty accelerator traffic
 and a real-time client with a fixed deadline. Average bandwidth can look
 adequate while contention still violates the deadline.
 
-[^fn-soc-deadlocks-c02]: **System-level deadlocks**: Independently tested IP blocks can create a cyclic dependency when composed because their flow-control mechanisms, such as credit counters or memory consistency assumptions, interact in a way that no block-level test exercised.
+[^fn-soc-deadlocks-c02]: **Routing deadlocks**: A routing function is deadlock-free when its channel-dependency graph has no cycles. Virtual channels can remove those cycles [@DallySeitz1987DeadlockFree].
 
 The search can fail in two opposite ways. If its choices are broad but poorly
 constrained, it spends evaluations on combinations that cannot be implemented.
@@ -1355,7 +1355,8 @@ Interconnect costs deserve the same attention as memory movement. On-chip
 networks, package links, memory interfaces, collectives, and host-device
 protocols limit what a design can sustain. Early logical synthesis and
 architecture models use approximate interconnect estimates, while placement and
-routing expose the actual topology, congestion, and parasitic delays. A highly
+routing expose the actual topology, congestion, and parasitic delays
+[@KahngEtAl2011VLSIPhysicalDesign]. A highly
 parallel accelerator can therefore score well in an early model and fail timing
 or routing after physical implementation. The failure is not that early tools
 ignore wires entirely. It is that an optimizer can exploit whatever the
@@ -1373,10 +1374,11 @@ valid comparison. Power and thermal density can flag a dense accelerator
 mapping as risky before implementation, even when its average power clears an
 early limit.
 
-Later IR-drop and thermal signoff can confirm or clear that risk once a placed
-netlist and current profile exist. Thermal design power (TDP), a target for
-sizing the cooling solution rather than a measure of sustained draw, is not the
-only limit. A large specialized vector unit can create a rapid current change
+Later IR-drop analysis [@XieEtAl2020PowerNet] and thermal signoff can confirm or
+clear that risk once a placed netlist and current profile exist. Thermal design
+power (TDP), a target for sizing the cooling solution rather than a measure of
+sustained draw, is not the only limit [@Intel2014QuarkThermalGuide]. A large
+specialized vector unit can create a rapid current change
 when many lanes become active, producing voltage droop that constrains safe
 operation. Early physical estimates, workload-aware power models, and closer
 coordination between microarchitecture and physical design can expose that risk
@@ -1396,20 +1398,19 @@ itself. The architect must measure the active-frequency policy and the mix of
 vector and nonvector work on the processor being evaluated.
 :::
 
-Signoff runs these checks across multiple process, voltage, temperature, and
-operating-mode combinations. A design may clear one multicorner, multimode
-(MCMM) scenario and fail another, and which corner is critical depends on the
-process, cell library, voltage, and path. Because physical-design tools use
-heuristic optimization, one failed closure attempt may not reveal whether the
-candidate or the tool setup caused the failure. Comparing constraints, seeds,
-and repeated outcomes helps separate the two.
+Timing signoff evaluates multiple analysis views that pair operating modes with
+process corners [@Cadence2021Tempus]. A design may clear one view and fail
+another. Because physical-design tools use heuristic optimization, one failed
+closure attempt may not reveal whether the candidate or the tool setup caused
+the failure. Comparing constraints, seeds, and repeated outcomes helps separate
+the two.
 
-Design Rule Checks (DRC) add another physical constraint. Advanced-node rule
-decks contain many geometrical requirements, including coloring, via enclosure,
-and metal spacing. Moving one macro can create many violations, and repairing
-one can change neighboring routes and expose others. An automated flow that
-cannot interpret those markers leaves repeated cleanup and rerouting work for
-the implementation team.
+Design Rule Checks (DRC) add another physical constraint. Routing must satisfy
+restricted design rules, including minimum wire and via spacing
+[@KahngEtAl2011VLSIPhysicalDesign]. Moving one macro can create many violations,
+and repairing one can change neighboring routes and expose others. An automated
+flow that cannot interpret those markers leaves repeated cleanup and rerouting
+work for the implementation team.
 
 Artifact-producing flows add a traceability problem to each of these physical
 constraints. If a high-level tool emits RTL and a physical-design tool reports a
