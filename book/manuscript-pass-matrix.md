@@ -68,11 +68,11 @@ and `—` only when the pass genuinely does not apply.
 | 4. Data, knowledge, and representation | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | 5. Prediction, generation, and optimization | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | 6. Tool-connected environments | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 7. Verification, feedback, and learning | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 8. Running the loop | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 9. Transfer and generalization | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 10. Evaluation and red teaming | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
-| 11. The architect's role | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 7. Verification, feedback, and learning | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 8. Running the loop | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 9. Transfer and generalization | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 10. Evaluation and red teaming | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| 11. The architect's role | ✓ | ☐ | ☐ | ☐ | ☐ | ☐ |
 
 | Chapter | Citations | Media | Microflow | Final recheck |
 |---|:---:|:---:|:---:|:---:|
