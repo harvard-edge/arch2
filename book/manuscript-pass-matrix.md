@@ -5,7 +5,7 @@
 This checklist reorganizes the detailed findings in
 `manuscript-audit-and-improvement-plan.md` into repeatable editorial passes.
 The current planning baseline is commit `840adab9`. The author approved the
-Pass 0 decisions on 2026-08-03. Passes 0–6 are complete, and Pass 7 is next.
+Pass 0 decisions on 2026-08-03. Passes 0–7 are complete, and Pass 8 is next.
 
 The detailed plan remains the source for individual findings, candidate models,
 and reviewer rationale. This file owns execution order, pass boundaries,
@@ -75,17 +75,17 @@ and `—` only when the pass genuinely does not apply.
 
 | Chapter | Citations | Media | Microflow | Final recheck |
 |---|:---:|:---:|:---:|:---:|
-| 1. Moonshot | ☐ | ☐ | ☐ | ☐ |
-| 2. Why assistance may help | ☐ | ☐ | ☐ | ☐ |
-| 3. Life cycle | ☐ | ☐ | ☐ | ☐ |
-| 4. Data, knowledge, and representation | ☐ | ☐ | ☐ | ☐ |
-| 5. Prediction, generation, and optimization | ☐ | ☐ | ☐ | ☐ |
-| 6. Tool-connected environments | ☐ | ☐ | ☐ | ☐ |
-| 7. Verification, feedback, and learning | ☐ | ☐ | ☐ | ☐ |
-| 8. Running the loop | ☐ | ☐ | ☐ | ☐ |
-| 9. Transfer and generalization | ☐ | ☐ | ☐ | ☐ |
-| 10. Evaluation and red teaming | ☐ | ☐ | ☐ | ☐ |
-| 11. The architect's role | ☐ | ☐ | ☐ | ☐ |
+| 1. Moonshot | ✓ | ☐ | ☐ | ☐ |
+| 2. Why assistance may help | ✓ | ☐ | ☐ | ☐ |
+| 3. Life cycle | ✓ | ☐ | ☐ | ☐ |
+| 4. Data, knowledge, and representation | ✓ | ☐ | ☐ | ☐ |
+| 5. Prediction, generation, and optimization | ✓ | ☐ | ☐ | ☐ |
+| 6. Tool-connected environments | ✓ | ☐ | ☐ | ☐ |
+| 7. Verification, feedback, and learning | ✓ | ☐ | ☐ | ☐ |
+| 8. Running the loop | ✓ | ☐ | ☐ | ☐ |
+| 9. Transfer and generalization | ✓ | ☐ | ☐ | ☐ |
+| 10. Evaluation and red teaming | ✓ | ☐ | ☐ | ☐ |
+| 11. The architect's role | ✓ | ☐ | ☐ | ☐ |
 
 ### Later-pass candidates from current discussion
 
