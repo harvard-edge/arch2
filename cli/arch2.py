@@ -280,12 +280,17 @@ LAYOUT_MAJOR_UNIT_OPENING_LINES = 12
 DEFAULT_SPARSE_CLEARANCE = 170.0
 DEFAULT_MAX_CONTENT_OCCUPANCY = 0.72
 DEFAULT_SPARSE_MIN_BODY_WORDS = 80
-CONTENT_ROOTS = (BOOK_DIR / "chapters", BOOK_DIR / "appendices")
+CONTENT_ROOTS = (
+    BOOK_DIR / "chapters",
+    BOOK_DIR / "parts",
+    BOOK_DIR / "appendices",
+)
 BOOK_FRONTMATTER = (
     BOOK_DIR / "index.qmd",
     BOOK_DIR / "foreword.qmd",
     BOOK_DIR / "acknowledgments.qmd",
     BOOK_DIR / "about-the-author.qmd",
+    BOOK_DIR / "disclosure.qmd",
 )
 CANONICAL_CROSSREF_PREFIXES = ("fig", "tbl", "eq", "sec", "lst", "pri")
 REQUIRED_REFERENCED_LABEL_PREFIXES = ("fig-", "tbl-", "eq-", "lst-")
@@ -864,33 +869,11 @@ def book_ordered_qmd_files() -> list[Path]:
     if not manifest.exists():
         return sorted(content_paths)
 
-    ordered: list[Path] = []
-    in_book = False
-    in_content_section = False
-    for line in manifest.read_text(encoding="utf-8").splitlines():
-        if re.match(r"^\S", line):
-            in_book = line.strip() == "book:"
-            in_content_section = False
-            continue
+    config, findings = _load_quarto_config()
+    if findings:
+        return sorted(content_paths)
 
-        if not in_book:
-            continue
-
-        section_match = re.match(r"^  (?P<section>chapters|appendices):\s*$", line)
-        if section_match:
-            in_content_section = True
-            continue
-        if re.match(r"^  \S", line):
-            in_content_section = False
-            continue
-
-        item_match = re.match(r"^    -\s+(?P<path>\S.*?)\s*$", line)
-        if not (in_content_section and item_match):
-            continue
-
-        candidate = (BOOK_DIR / item_match.group("path")).resolve()
-        if candidate in content_paths:
-            ordered.append(candidate)
+    ordered = [path for path in _manifest_qmd_entries(config) if path in content_paths]
 
     ordered_set = set(ordered)
     ordered.extend(sorted(content_paths - ordered_set))
@@ -1631,15 +1614,32 @@ def _load_quarto_config() -> tuple[dict, list[Finding]]:
         ]
 
 
-def _extract_qmds(items: list) -> list[Path]:
-    entries = []
+def _flatten_manifest_items(items: list) -> list[str]:
+    """Flatten Quarto chapter items, including QMD-backed part openers."""
+    flat: list[str] = []
     for item in items:
-        if isinstance(item, dict) and "chapters" in item:
-            if isinstance(item["chapters"], list):
-                entries.extend(_extract_qmds(item["chapters"]))
-        elif isinstance(item, str) and item.strip() != "---" and item.endswith(".qmd"):
-            entries.append((BOOK_DIR / item).resolve())
-    return entries
+        if isinstance(item, str):
+            flat.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+
+        part = item.get("part")
+        if isinstance(part, str) and part.endswith(".qmd"):
+            flat.append(part)
+
+        chapters = item.get("chapters")
+        if isinstance(chapters, list):
+            flat.extend(_flatten_manifest_items(chapters))
+    return flat
+
+
+def _extract_qmds(items: list) -> list[Path]:
+    return [
+        (BOOK_DIR / item).resolve()
+        for item in _flatten_manifest_items(items)
+        if item.strip() != "---" and item.endswith(".qmd")
+    ]
 
 
 def _manifest_qmd_entries(config: dict) -> list[Path]:
@@ -1718,17 +1718,7 @@ def manifest_findings() -> list[Finding]:
             )
         )
 
-    def _flatten_items(items):
-        flat = []
-        for item in items:
-            if isinstance(item, dict) and "chapters" in item:
-                if isinstance(item["chapters"], list):
-                    flat.extend(_flatten_items(item["chapters"]))
-            else:
-                flat.append(item)
-        return flat
-
-    chapter_items = _flatten_items(book_config.get("chapters") or [])
+    chapter_items = _flatten_manifest_items(book_config.get("chapters") or [])
     chapter_qmds = [
         item
         for item in chapter_items

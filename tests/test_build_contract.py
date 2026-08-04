@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
 
@@ -7,6 +9,96 @@ import cli.arch2 as arch2_cli
 
 
 runner = CliRunner()
+
+
+def _write_part_manifest_fixture(tmp_path) -> Path:
+    book = tmp_path / "book"
+    files = (
+        "index.qmd",
+        "acknowledgments.qmd",
+        "about-the-author.qmd",
+        "disclosure.qmd",
+        "parts/part-i.qmd",
+        "chapters/01-one.qmd",
+        "appendices/appendix-a.qmd",
+    )
+    for relative in files:
+        path = book / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# {path.stem}\n", encoding="utf-8")
+
+    (book / "_quarto.yml").write_text(
+        "book:\n"
+        "  chapters:\n"
+        "    - index.qmd\n"
+        "    - acknowledgments.qmd\n"
+        "    - about-the-author.qmd\n"
+        "    - disclosure.qmd\n"
+        "    - ---\n"
+        "    - part: parts/part-i.qmd\n"
+        "      chapters:\n"
+        "        - chapters/01-one.qmd\n"
+        "  appendices:\n"
+        "    - appendices/appendix-a.qmd\n",
+        encoding="utf-8",
+    )
+    return book
+
+
+def _point_cli_at_book(monkeypatch: pytest.MonkeyPatch, root: Path, book: Path) -> None:
+    monkeypatch.setattr(arch2_cli, "ROOT", root)
+    monkeypatch.setattr(arch2_cli, "BOOK_DIR", book)
+    monkeypatch.setattr(
+        arch2_cli,
+        "CONTENT_ROOTS",
+        (book / "chapters", book / "parts", book / "appendices"),
+    )
+    monkeypatch.setattr(
+        arch2_cli,
+        "BOOK_FRONTMATTER",
+        (
+            book / "index.qmd",
+            book / "foreword.qmd",
+            book / "acknowledgments.qmd",
+            book / "about-the-author.qmd",
+            book / "disclosure.qmd",
+        ),
+    )
+
+
+def test_manifest_includes_qmd_backed_part_opener(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    book = _write_part_manifest_fixture(tmp_path)
+    _point_cli_at_book(monkeypatch, tmp_path, book)
+
+    findings = arch2_cli.manifest_findings()
+
+    assert not [finding for finding in findings if finding.code == "orphan-qmd"]
+    assert (book / "parts" / "part-i.qmd").resolve() in arch2_cli._manifest_qmd_entries(
+        arch2_cli._load_quarto_config()[0]
+    )
+
+
+def test_book_order_places_part_opener_before_its_chapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    book = _write_part_manifest_fixture(tmp_path)
+    _point_cli_at_book(monkeypatch, tmp_path, book)
+
+    ordered = [
+        path.relative_to(book).as_posix() for path in arch2_cli.book_ordered_qmd_files()
+    ]
+
+    assert ordered == [
+        "index.qmd",
+        "acknowledgments.qmd",
+        "about-the-author.qmd",
+        "disclosure.qmd",
+        "parts/part-i.qmd",
+        "chapters/01-one.qmd",
+        "appendices/appendix-a.qmd",
+    ]
 
 
 def test_release_render_restores_version_source(tmp_path) -> None:
