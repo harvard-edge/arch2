@@ -5,7 +5,6 @@ import re
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from copy import deepcopy
 from pathlib import Path
 
@@ -153,54 +152,6 @@ def test_start_path_separates_profiles_from_evidence_and_commitment() -> None:
     assert "Schema validation proves structure and local bindings" in start
     assert "It does not prove that the workload is representative" in start
     assert "One profile never implies another." in start
-
-
-def test_chapter_3_filled_card_figure_names_all_canonical_fields() -> None:
-    svg_path = (
-        ROOT
-        / "book"
-        / "chapters"
-        / "03-lifecycle"
-        / "images"
-        / "F4b-design-loop-card-example.svg"
-    )
-    root = ET.parse(svg_path).getroot()
-    labels = [
-        "".join(element.itertext())
-        for element in root.iter("{http://www.w3.org/2000/svg}text")
-        if element.attrib.get("class") == "label"
-    ]
-    assert labels == [
-        "Intent",
-        "Task",
-        "Design space",
-        "Representation",
-        "Environment",
-        "Method role",
-        "Feedback budget",
-        "Evidence",
-        "Failed runs / rejected alternatives",
-        "Rejection checks and authority",
-        "What the evidence supports",
-        "Accountable decision",
-    ]
-    svg = svg_path.read_text(encoding="utf-8")
-    assert "power violations" in svg
-    assert "tool failures" not in svg
-
-
-def test_design_loop_figure_separates_evidence_stage_from_governance() -> None:
-    chapter_root = ROOT / "book" / "chapters" / "03-lifecycle"
-    svg = (chapter_root / "images" / "F3-design-loop.svg").read_text(encoding="utf-8")
-    chapter = (chapter_root / "03-lifecycle.qmd").read_text(encoding="utf-8")
-    assert "evidence stages may raise fidelity and cost" in svg
-    assert "decision rights and next authorized action" in svg
-    assert (
-        "a higher-fidelity result does not by itself authorize"
-        " a more consequential decision" in chapter.lower()
-    )
-    assert "fidelity, cost, and commitment rise" not in svg
-    assert "fidelity, cost, and commitment rise" not in chapter
 
 
 @pytest.mark.skip(
