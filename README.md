@@ -126,3 +126,18 @@ datasets, or artifact pointers help make Architecture 2.0 useful to the field.
 Contributor guidance, environment setup, local build commands, branch policy,
 and validation checks live in [CONTRIBUTING.md](CONTRIBUTING.md). The public
 site is published at [arch2.mlsysbook.ai](https://arch2.mlsysbook.ai).
+
+## Citation
+
+Cite the tagged version you used rather than the development branch. The
+repository carries a [`CITATION.cff`](CITATION.cff) entry, which GitHub renders
+through the **Cite this repository** control in the sidebar. Tagged snapshots
+are listed under [Tags](https://github.com/harvard-edge/arch2/tags).
+
+## License
+
+Copyright 2026 Vijay Janapa Reddi. The manuscript, figures, and supporting
+materials are readable in public so that claims and teaching material can be
+inspected, but that visibility is not a grant of reuse rights. See
+[LICENSE.md](LICENSE.md) for the terms that currently apply before copying,
+redistributing, or building on this material.
