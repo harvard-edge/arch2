@@ -18,11 +18,11 @@ applications, not every occurrence.
 | Term | Canonical owner or definition | Material applications |
 | --- | --- | --- |
 | ablation | ch10 § Defining the Evaluation Objects and Workflow Under Test | ch07 § Separating the Outcome From the Mechanism; ch10 § Separating Workflow Effects From Component Contributions |
-| accountable organization | ch11 § The Architect's Role | appA § Technical Ownership and Decision Boundaries; appB § Design Principles, principle 11 |
+| accountable organization | ch11 § The Architect's Role | appA § Technical Ownership and Decision Boundaries; appB § Design Principles, core principle 8 |
 | active learning | ch04 § Acquiring Samples Across Cost and Fidelity | ch07 § Updating a Learned Component |
 | agent | ch01 § AI as Design Automation | ch05 § Roles and Methods Answer Different Questions; ch10 § Defining the Evaluation Objects and Workflow Under Test |
 | AI (artificial intelligence) | ch01 § AI as Design Automation | preface § What This Book Teaches; ch05 § Roles and Methods Answer Different Questions |
-| AI-assisted design life cycle | ch03 § The AI-Assisted Design Life Cycle | appB § Design Principles, principle 3 |
+| AI-assisted design life cycle | ch03 § The AI-Assisted Design Life Cycle | appB § Design Principles, core principle 5 |
 | AlphaChip | ch01 § What Current Systems Establish | ch02 § Design Spaces Grow Faster Than Evaluation Capacity; ch05 § Selecting a Search Procedure; ch07 § Qualifying a Proxy for the Decision |
 | Amdahl's law | ch01 § An Artifact Is Not an Architecture Result | ch03 § Formulating the Architecture Question and Intended Decision; ch09 § Break-Even Bounds for Offload |
 | ArchGym | ch02 § Design Spaces Grow Faster Than Evaluation Capacity | ch05 § Method Choice Begins With the Limiting Work; ch06 § Multi-Tool and Multi-Fidelity Environments |
@@ -31,8 +31,8 @@ applications, not every occurrence.
 | architecture | ch01 § The Lighthouse Request | ch11 § Framing the Architecture Problem |
 | Architecture 1.0 | ch01 § Architecture 2.0 Extends Established Practice | — |
 | Architecture 2.0 | preface § Preface, definition | ch01 § Architecture 2.0 Extends Established Practice; ch03 § The AI-Assisted Design Life Cycle; ch11 § Closing the Moonshot |
-| architecture commitment | ch11 § Making and Limiting a Design Commitment | appA § Technical Ownership and Decision Boundaries; appB § Design Principles, principle 11 |
-| architecture data | ch04 § Architecture Data, Knowledge, and Representation | appA § Environment, State, and Provenance; appB § Design Principles, principle 4 |
+| architecture commitment | ch11 § Making and Limiting a Design Commitment | appA § Technical Ownership and Decision Boundaries; appB § Design Principles, core principle 8 |
+| architecture data | ch04 § Architecture Data, Knowledge, and Representation | appA § Environment, State, and Provenance; appB § Design Principles, core principles 3 and 4 |
 | architecture foundation model | ch01 § A Foundation Model for System and Chip Design | ch04 § From Data to Architecture Knowledge and Current State; ch10 § Separating Workflow Effects From Component Contributions |
 | architecture moonshot | ch01 § When New Methods Changed What Engineers Could Design | preface § Preface; ch11 § Closing the Moonshot |
 | architecture result | ch01 § An Artifact Is Not an Architecture Result | preface § What This Book Teaches; ch10 § Architecture Result; appA § Claim Support and Reopening Conditions |
@@ -49,7 +49,7 @@ applications, not every occurrence.
 | censored observation | ch04 § Retaining Failed and Censored Observations | ch10 § A Complete-Workflow Evaluation Protocol; appA § Variation and Statistical Support |
 | challenge capacity | ch11 § Maintaining the Capacity to Challenge | appA § Technical Ownership and Decision Boundaries |
 | Circuit IR Compilers and Tools (CIRCT) | ch04 § From Architecture Artifacts to Learned Representations | ch06 § Interfaces and Tool Wrappers |
-| commitment authority | ch11 § The Architect's Role | ch01 § The Lighthouse Request; appA § Technical Ownership and Decision Boundaries; appB § Design Principles, principle 11 |
+| commitment authority | ch11 § The Architect's Role | ch01 § The Lighthouse Request; appA § Technical Ownership and Decision Boundaries; appB § Design Principles, core principle 8 |
 | complete human-plus-technical workflow | ch10 § Defining the Evaluation Objects and Workflow Under Test | preface § What This Book Teaches; ch01 § Two Independent Tests for the Moonshot; ch11 § Closing the Moonshot |
 | complete-workflow evaluation protocol | ch10 § A Complete-Workflow Evaluation Protocol | appA § The Architecture 2.0 Reviewer's Checklist |
 | configured technical system | ch09 § A Five-Step Transfer Test | ch10 § Defining the Evaluation Objects and Workflow Under Test; ch10 § Identifying the System Under Test |
@@ -59,7 +59,7 @@ applications, not every occurrence.
 | dataset construction | ch04 § Building and Checking a Usable Dataset | ch09 § Transfer Units, Dependencies, and Actions; appA § Environment, State, and Provenance |
 | decision margin | ch07 § Differences and Their Uncertainty | ch10 § A Complete-Workflow Evaluation Protocol; appA § Variation and Statistical Support |
 | design automation | ch01 § AI as Design Automation | preface § What This Book Teaches |
-| design loop | ch03 § Iteration, Revision, and State | ch08 § Running the Design Loop; appB § Design Principles, principles 3 and 8 |
+| design loop | ch03 § Iteration, Revision, and State | ch08 § Running the Design Loop; appB § Design Principles, core principles 5 and 6 |
 | design-loop card | ch03 § A Design-Loop Card for Review | appA § The Architecture 2.0 Reviewer's Checklist |
 | design problem | ch09 § The Target Change Determines What Reopens | ch03 § Formulating the Architecture Question and Intended Decision; ch11 § Framing the Architecture Problem |
 | design space | ch02 § Design Spaces Grow Faster Than Evaluation Capacity | ch03 § Exploring Alternatives Within the Declared Space; ch05 § Selecting a Search Procedure |
@@ -77,19 +77,19 @@ applications, not every occurrence.
 | execution record | ch06 § Returned Records and Reproducibility | ch03 § Implementing a Testable Candidate; ch10 § A Complete-Workflow Evaluation Protocol; appA § Execution Provenance and Replay |
 | failure record | ch04 § Retaining Failed and Censored Observations | ch08 § The Retained Chronology; appA § Independent Checks and Failure Records |
 | fault injection | ch10 § Fault Injection, Interruption, and Recovery | ch06 § Interfaces and Tool Wrappers |
-| feedback | ch07 § Verification, Feedback, and Learning | ch03 § Iteration, Revision, and State; ch09 § Changed Conditions Create Test Obligations; appB § Design Principles, principle 7 |
+| feedback | ch07 § Verification, Feedback, and Learning | ch03 § Iteration, Revision, and State; ch09 § Changed Conditions Create Test Obligations; appB § Design Principles, core principles 5 and 6 |
 | fidelity | ch06 § Multi-Tool and Multi-Fidelity Environments | ch04 § Cost and Coverage of a Sample; ch10 § Pinning the Task, Action Space, and Fidelity |
 | formal verification and result statuses | ch07 § Formal Verification and Its Scope | ch06 § Failure Returns and Tool-Output Parsing; appA § Independent Checks and Failure Records |
 | generation | ch01 § AI as Design Automation | ch05 § Generation Constructs Missing Artifacts; ch10 § Separating Workflow Effects From Component Contributions |
 | Goodhart's problem | ch07 § Qualifying a Proxy for the Decision | ch10 § Exposing Proxy Failure |
 | hardware-software version pair | ch09 § Hardware and Software Results Remain Version-Bound | ch04 § Workload State Determines What a Sample Means; ch11 § Integrating Across Layers and Disciplines |
 | harness | ch06 § Tools, Wrappers, Harnesses, and Environments | ch10 § Identifying the System Under Test; ch10 § Total Cost |
-| independent check | ch01 § Coordinating Methods, Tools, and Independent Checks | ch07 § Matching Checks to Claims; appA § Independent Checks and Failure Records; appB § Design Principles, principles 5 and 7 |
+| independent check | ch01 § Coordinating Methods, Tools, and Independent Checks | ch07 § Matching Checks to Claims; appA § Independent Checks and Failure Records; appB § Design Principles, core principle 6 |
 | integration check | ch09 § Integration and Operating Conditions Still Need Checks | ch11 § Integrating Across Layers and Disciplines |
 | legal action space | ch10 § Identifying the System Under Test | ch03 § Exploring Alternatives Within the Declared Space; ch05 § Method Choice Begins With the Limiting Work |
 | Lighthouse cache study | ch08 § Preparing the Lighthouse Cache Study for Execution | ch03 § Formulating the Architecture Question and Intended Decision; ch04 § Applying the Representation to the Lighthouse Cache Study |
 | Lighthouse request (Lighthouse prompt) | ch01 § The Lighthouse Request | preface § What This Book Teaches; ch11 § Closing the Moonshot |
-| limiting work | ch02 § Compounding Pressures Shift the Limiting Work | ch05 § Method Choice Begins With the Limiting Work; appB § Design Principles, principle 2 |
+| limiting work | ch02 § Compounding Pressures Shift the Limiting Work | ch05 § Method Choice Begins With the Limiting Work; appB § Design Principles, core principle 2 |
 | live project state | ch04 § From Data to Architecture Knowledge and Current State | ch06 § Setup, State, and Lineage; ch09 § Transfer Units, Dependencies, and Actions |
 | LogCA | ch09 § Break-Even Bounds for Offload | ch09 § The Executable Software Path |
 | matched architecture comparison | ch07 § Building Matched Architecture Comparisons | ch08 § The Local Results; appA § Matched Baselines and Declared Budgets |
@@ -105,12 +105,12 @@ applications, not every occurrence.
 | Pareto frontier | ch01 § From a Few Lines to a Full-Stack Problem | ch05 § Selecting a Search Procedure; ch10 § Architecture Result; ch11 § Integrating Across Layers and Disciplines |
 | prediction | ch01 § AI as Design Automation | ch05 § Prediction and World Models; ch10 § Separating Workflow Effects From Component Contributions |
 | program claim | ch10 § Matching Complete Workflows | ch11 § Architecture Result, Program Claim, and Commitment; appA § The Architecture 2.0 Reviewer's Checklist |
-| project learning and model learning | ch07 § How Returned Signals Change the Work | ch04 § From Data to Architecture Knowledge and Current State; appB § Design Principles, principle 7 |
+| project learning and model learning | ch07 § How Returned Signals Change the Work | ch04 § From Data to Architecture Knowledge and Current State; appB § Design Principles, core principles 5 and 6 |
 | proxy | ch07 § Qualifying a Proxy for the Decision | ch05 § Method Choice Begins With the Limiting Work; ch10 § Exposing Proxy Failure; appA § Proxy Metrics and Claim-Specific Checks |
 | proxy qualification | ch07 § Qualifying a Proxy for the Decision | ch09 § Cheap Checks Help Only Within Validated Coverage; ch10 § Exposing Proxy Failure; appA § Proxy Metrics and Claim-Specific Checks |
 | pseudoreplication | ch10 § A Complete-Workflow Evaluation Protocol | appA § Variation and Statistical Support |
 | recovery retry | ch06 § Recovery, Reuse, and Isolation | ch08 § The Run Declaration and Remaining Work; ch10 § Total Cost |
-| red teaming | ch10 § Red-Teaming the Candidate Design and Workflow | appB § Design Principles, principle 10 |
+| red teaming | ch10 § Red-Teaming the Candidate Design and Workflow | appB § Design Principles, core principles 6 and 8 |
 | reinforcement learning | ch05 § Method Choice Begins With the Limiting Work | ch01 § AI as Design Automation; ch10 § Reliability Across Conditions |
 | repeatability, replicability, and reproducibility | ch06 § Returned Records and Reproducibility | ch10 § Reliability Across Conditions; appA § Execution Provenance and Replay |
 | representation | ch04 § Architecture Data, Knowledge, and Representation | ch03 § Formulating the Architecture Question and Intended Decision; ch09 § Transfer Units, Dependencies, and Actions; appA § Environment, State, and Provenance |
@@ -125,7 +125,7 @@ applications, not every occurrence.
 | selection bias | ch07 § Controlling Confounding and Selection | ch10 § Exposing Proxy Failure; appA § Variation and Statistical Support |
 | selective requalification | ch09 § The Target Change Determines What Reopens | ch07 § Reopening and Requalifying |
 | service work | ch09 § Validated Coverage and Service-Work Cost | ch10 § Total Cost |
-| smallest sufficient approach | ch05 § Roles and Methods Answer Different Questions | ch08 § The Decision and Fixed State; appB § Design Principles, principle 5 |
+| smallest sufficient approach | ch05 § Roles and Methods Answer Different Questions | ch08 § The Decision and Fixed State; appB § Design Principles, core principle 2 |
 | specialization | ch02 § Specialization Couples the Stack | ch09 § Product-Path Conditions for Specialization |
 | study record | ch03 § A Design-Loop Card for Review | ch08 § The Retained Chronology; appA § The Architecture 2.0 Reviewer's Checklist |
 | support region | ch09 § The Target Change Determines What Reopens | ch05 § Predictor Support and Qualification; ch07 § Qualifying a Proxy for the Decision |
@@ -139,12 +139,12 @@ applications, not every occurrence.
 | tool | ch06 § Tools, Wrappers, Harnesses, and Environments | preface § What This Book Teaches; ch03 § Implementing a Testable Candidate |
 | tool interface | ch06 § Interfaces and Tool Wrappers | ch05 § Combining Methods Without a Fixed Order; appA § Environment, State, and Provenance |
 | tool wrapper | ch06 § Tools, Wrappers, Harnesses, and Environments | ch10 § Identifying the System Under Test; appA § Environment, State, and Provenance |
-| total cost | ch10 § Total Cost | ch01 § Two Independent Tests for the Moonshot; appA § Realized Human and Machine Cost; appB § Design Principles, principle 10 |
-| transfer test | ch09 § A Five-Step Transfer Test | preface § How to Read This Book; appB § Design Principles, principle 9 |
+| total cost | ch10 § Total Cost | ch01 § Two Independent Tests for the Moonshot; appA § Realized Human and Machine Cost; appB § Design Principles, core principle 7 |
+| transfer test | ch09 § A Five-Step Transfer Test | preface § How to Read This Book; appB § Design Principles, core principle 4 |
 | transfer unit | ch09 § Transfer Units, Dependencies, and Actions | appA § Environment, State, and Provenance |
 | transition model | ch05 § Prediction and World Models | ch09 § Transfer Units, Dependencies, and Actions |
 | validated coverage | ch09 § Validated Coverage and Service-Work Cost | ch07 § Qualifying a Proxy for the Decision; ch10 § Exposing Proxy Failure |
-| verification | ch07 § Verification, Feedback, and Learning | ch02 § Evaluation and Verification Limit Progress; appA § Independent Checks and Failure Records; appB § Design Principles, principle 7 |
+| verification | ch07 § Verification, Feedback, and Learning | ch02 § Evaluation and Verification Limit Progress; appA § Independent Checks and Failure Records; appB § Design Principles, core principle 6 |
 | verification capacity | ch02 § Verification Capacity | ch05 § Method Cost and Evaluation Capacity; ch07 § Verification, Feedback, and Learning |
 | waiver | ch07 § Routing the Next Technical Action | ch04 § Retaining Failed and Censored Observations; ch11 § Stating Residual Risk; appA § Claim Support and Reopening Conditions |
 | workload state | ch04 § Workload State Determines What a Sample Means | ch06 § Setup, State, and Lineage; ch09 § The Target Change Determines What Reopens; appA § Environment, State, and Provenance |
