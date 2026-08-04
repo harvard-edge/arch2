@@ -37,29 +37,41 @@ MANUSCRIPT_UNITS = {
 PROJECT_OWNER = "Vijay Janapa Reddi / Harvard Edge project"
 
 COMPANION_METADATA: dict[str, dict[str, str]] = {
-    "https://arch2.mlsysbook.ai/design-loop-card/template.md": {
-        "purpose": "downloadable companion form",
-        "owner": PROJECT_OWNER,
-        "nature": "download",
-        "description": "Markdown form for completing and reviewing a design-loop card.",
-    },
-    "https://arch2.mlsysbook.ai/design-loop-card/template.yaml": {
-        "purpose": "downloadable machine-readable companion template",
-        "owner": PROJECT_OWNER,
-        "nature": "download",
-        "description": "YAML template for a machine-checkable design-loop card.",
-    },
-    "https://github.com/harvard-edge/arch2/blob/main/labs/examples/ai_systolic_array_study/README.md": {
-        "purpose": "replayable study companion",
+    "https://github.com/harvard-edge/arch2/tree/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study": {
+        "purpose": "frozen study package",
         "owner": PROJECT_OWNER,
         "nature": "example",
-        "description": "README for the retained systolic-array study, including its recorded inputs, execution path, results, and replay instructions.",
+        "description": "Commit-pinned package for the retained systolic-array study, including its preregistration, provenance, configurations, and results.",
     },
-    "https://arch2.mlsysbook.ai/schemas/design-loop-card.v2.schema.json": {
-        "purpose": "machine-readable companion contract",
+    "https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/context/pre_registration.yaml": {
+        "purpose": "frozen study preregistration",
         "owner": PROJECT_OWNER,
-        "nature": "schema",
-        "description": "Published JSON Schema for design-loop card version 2.0.",
+        "nature": "record",
+        "description": "Commit-pinned preregistration that fixes the retained study's question, comparison, and interpretation rules.",
+    },
+    "https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/model/provenance.json": {
+        "purpose": "retained model provenance",
+        "owner": PROJECT_OWNER,
+        "nature": "record",
+        "description": "Commit-pinned provenance for the model-assisted proposal step in the retained systolic-array study.",
+    },
+    "https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/reference/execution_provenance.json": {
+        "purpose": "retained execution provenance",
+        "owner": PROJECT_OWNER,
+        "nature": "record",
+        "description": "Commit-pinned environment and tool provenance for the retained SCALE-Sim executions.",
+    },
+    "https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/reference/study_results.json": {
+        "purpose": "retained study results",
+        "owner": PROJECT_OWNER,
+        "nature": "data",
+        "description": "Commit-pinned machine-readable outcomes for the retained systolic-array comparison and mechanism test.",
+    },
+    "https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/reference/runs/probe_transposed_16x64/scalesim-results/probe_transposed_16x64/BANDWIDTH_REPORT.csv": {
+        "purpose": "retained simulator bandwidth report",
+        "owner": PROJECT_OWNER,
+        "nature": "data",
+        "description": "Commit-pinned SCALE-Sim bandwidth output used to document an unresolved simulator-semantics question.",
     },
     # start.html removed 2026-07-25: it was referenced only by
     # appendix-a-bootstrapping, deleted in 356e66f. No manuscript text points at
