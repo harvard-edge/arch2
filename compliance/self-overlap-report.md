@@ -5,17 +5,18 @@ screening aid, not a legal opinion or a substitute for the Publisher's similarit
 review.
 
 - Last verified: 2026-08-04 against manuscript content commit
-  `3d6882f9252493717944ca9172b86db350262d72`
+  `d77fdec1a031dbd42ed2411e06e62fdad8da9051`
 - July 15 screening scope: 14 units (the then-current Preface, Chapters 1–10, and Appendices
   A–C recorded in the manifest at `f5516e52`)
 - Current manuscript structure: 14 units (Preface, Chapters 1–11, and Appendices A–B)
-- Current exact-passage result: no reuse detected from the comparison sources below at the
-  stated thresholds; this rerun includes Chapter 11 and the current Appendix B
+- Current exact-passage result: no substantive reuse detected from the comparison sources below;
+  one generic 12-word definition matched at the MLSysBook threshold, as documented below. This
+  rerun includes Chapter 11 and the current Appendix B.
 - Cited prior-author-work disclosures: 6 grouped disclosures
 - Current third-party epigraphs: 10 across Chapters 1–7 and 9–11
-- Epigraphs with source-level text and metadata fully verified in this record: 9. Chapter 11's
-  exact text is verified in the MIT Press third edition, and multiple page-specific records support
-  the first-edition page, but direct primary-image verification of the cited 1969 page remains open.
+- Epigraphs with source-level text and metadata fully verified in this record: 10. Chapter 11 now
+  cites the directly inspected MIT Press third edition (1996), p. 111; this record makes no claim
+  that the first-edition page was directly verified.
 
 ## Screening Method and Results
 
@@ -33,7 +34,7 @@ but it does not detect paraphrase, translation, conceptual inheritance, or a red
 | “Architecture 2.0: Why Computer Architects Need a Data-Centric AI Gymnasium” | Public SIGARCH post fetched 2026-08-04 | 10 consecutive normalized words | No exact match. Chapter 5 cites and paraphrases the post. |
 | “Architecture 2.0 Workshop: How Machine Learning Will Redefine Computer Architecture and Systems” | Public SIGARCH post fetched 2026-08-04 | 10 consecutive normalized words | No exact match. Chapter 5 cites and summarizes the workshop agenda. |
 | “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” | Final nine-page IEEE *Computer* PDF, document 10857820, DOI `10.1109/MC.2024.3521641`, SHA-256 `eefa6ce0340f0a1178ba25856e3bf3bc867f5f5a7034c5b4ed1a50b41900852b` | 10 consecutive normalized words, checked with PDF hyphens both separated and joined | No exact match of 10 or more words in either normalization. The book cites and develops the article's concepts in new prose. |
-| MLSysBook media | 3,079 source-controlled image, vector, and PDF assets compared by SHA-256 with 139 source-controlled book assets | Byte identity | No identical cross-repository asset. This does not rule out independently redrawn figures that use the same cited facts. |
+| MLSysBook media | 3,079 source-controlled image, vector, and PDF assets compared by SHA-256 with 143 source-controlled book assets | Byte identity | No identical cross-repository asset. This does not rule out independently redrawn figures that use the same cited facts. |
 
 The media counts in this rerun use `git ls-files` so generated build artifacts and untracked files
 cannot change the comparison scope. The 2025 foundations comparison used the final IEEE PDF
@@ -92,14 +93,12 @@ law is currently paraphrased and cited rather than quoted.
 | 7 | “Program testing can be used to show the presence of bugs, but never to show their absence!” — Edsger W. Dijkstra, *Notes on Structured Programming* (1970) | 17 | Exact text verified in EWD249, “On the reliability of mechanisms,” in *Notes on Structured Programming* (1970), using the University of Texas at Austin E. W. Dijkstra Archive. Publisher quotation disposition remains open. |
 | 9 | “There is no single development … one order of magnitude improvement …” — Fred Brooks, “No Silver Bullet” (1986) | 27 | Exact text verified in Frederick P. Brooks Jr., UNC technical report TR86-020 (September 1986), p. 1. The preceding sentence supplies the decade horizon; the epigraph does not silently combine it with later abstract wording. Obtain Publisher clearance or replace it with author-written prose. |
 | 10 | “Measurements are key.” — H. James Harrington, *Business Process Improvement* (1991) | 3 | Exact text verified on p. 82 through the digitized 1991 McGraw-Hill edition, ISBN `0-07-026768-5`. Publisher quotation disposition remains open. |
-| 11 | “Everyone designs who devises courses of action aimed at changing existing situations into preferred ones.” — Herbert A. Simon, *The Sciences of the Artificial* (1969) | 15 | Exact text verified in the MIT Press third edition (1996), p. 111. MIT Press verifies the 1969 first-edition metadata, and multiple page-specific scholarly records cite the same sentence to the first edition, p. 55, but a directly inspectable primary image of that page was not available for this audit. Primary verification of the first-edition page and Publisher quotation disposition remain open. |
+| 11 | “Everyone designs who devises courses of action aimed at changing existing situations into preferred ones.” — Herbert A. Simon, *The Sciences of the Artificial*, 3rd ed. (1996) | 15 | Exact text and page verified in the directly inspected MIT Press third edition, p. 111, ISBN `9780262193740`. Publisher quotation disposition remains open. |
 
 ## Delivery Actions
 
 1. Obtain and record the Publisher's quotation disposition for every retained external epigraph.
-2. Obtain or inspect a primary copy of the 1969 first edition of Simon's *The Sciences of the
-   Artificial* and confirm the Chapter 11 page attribution.
-3. Rerun the recorded comparisons if manuscript prose changes after content commit
-   `3d6882f9252493717944ca9172b86db350262d72`.
-4. Give this disclosure, the permissions ledger, and any written permissions to the series editor
+2. Rerun the recorded comparisons if manuscript prose changes after content commit
+   `d77fdec1a031dbd42ed2411e06e62fdad8da9051`.
+3. Give this disclosure, the permissions ledger, and any written permissions to the series editor
    with the manuscript.
