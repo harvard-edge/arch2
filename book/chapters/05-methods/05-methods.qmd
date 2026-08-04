@@ -44,6 +44,7 @@ After reading this chapter, we can:
 - Appropriately match prediction, generation, and optimization to the required limiting work.
 - Compose discrete components while maintaining explicit tool checks and viable fallbacks.
 :::
+
 ## Roles vs. Method Families
 
 When we tackle architecture work, we often need to construct a missing artifact, estimate an expensive consequence, select an experiment, or check a claimed property. Our first decision is whether the task actually needs a new component. If we already know the candidates and can evaluate them affordably, adding a predictor, generator, or optimizer merely creates setup and review work without removing the true bottleneck.
@@ -72,6 +73,7 @@ This careful separation also preserves our direct-tool path. When we decide on *
 The many-to-many links in @fig-role-method-map show exactly why we cannot use a role to select a method family all by itself. Our proposals do not necessarily need generation, our screening processes do not always demand prediction, and our searches do not require a learned optimizer. We can even use a single technique to perform several distinct roles. What truly matters is whether the output we generate remains inspectable and whether our named check can reliably reject or redirect it.
 
 We find that our costs always follow the missing work. When a generator proposes missing RTL or a testbench, it inherently adds checking work to our plate. When a predictor screens existing candidates, it introduces new qualification and confirmation tasks. If an optimizer selects among too many legal configurations, we must give it a declared objective and spend part of our evaluation budget on the search itself. While these conditions might suggest a particular family, they do not automatically select a concrete technique for us. Our limiting work and its specific conditions determine the best fit; once we make that work clearly visible, we can confidently choose our approach without letting an arbitrary component name drive our decision.
+
 ## Anchoring Method Selection
 
 We can justify adding a new method only when it removes limiting work without making
@@ -380,6 +382,7 @@ Recorded evaluation cost and the active-stage calculation supply the evidence we
 our limiting-work and saturated-checking tests above. If expensive
 evaluation is our active limit, a predictor earns a role only when screening
 saves more of that capacity than our qualification and confirmation consume.
+
 ## Cost Models and Simulators {#sec-prediction-estimating-behavior-before-full-evaluation}
 
 We use prediction when we already have design candidates, but evaluating their consequences directly is too expensive. We can build a predictor to estimate performance, power, congestion, feasibility risk, candidate rank, or the effect of a proposed action without subjecting every candidate to our heaviest evaluation tools. We relied on regression and predictive design-space models for this job long before large language models became common [@IpekEtAl2006PredictiveDSE; @LeeBrooks2006RegressionModeling]. Estimating the direction miss rate of a TAGE branch predictor or a Perceptron branch predictor across complex instruction streams often requires long trace executions in gem5, a cycle-accurate architectural simulator, or Sniper, a fast multi-core x86 simulator. Similarly, evaluating an NPU matrix execution engine across systolic array dimensions and memory tiling factors requires extensive runs in SCALE-Sim, a cycle-level systolic array simulator, or analytical evaluation in MAESTRO, an analytical accelerator dataflow framework, and Timeloop, an infrastructure for modeling spatial tensor accelerator architectures. Fast regression or neural surrogates let us screen thousands of microarchitectural configurations before committing scarce simulation hours.
@@ -433,6 +436,7 @@ consequence model and a separate tool path. The prediction and tool observation
 remain distinct and both enter a versioned study record."}
 
 Our consequence model merely estimates behavior within stated limits, whereas our actual environment invokes the tool to return a hard observation. We design our study record to retain both. When we see qualified agreement between the two, we can confidently continue using the model within its stated support region; however, we never take this as general validation of the model across the discipline. When we encounter disagreement, it immediately signals a model error, a support boundary failure, or mismatched tool conditions that we must aggressively investigate before allowing the prediction to guide another action.
+
 ## Predictor Support Boundaries {#sec-support-limits}
 
 We should always assess our predictors based on how we plan to use them. When we deploy a screening surrogate, it must preserve the correct ordering near our decision boundaries. This means that rank correlation and top-k recall[^fn-ml-top-k-recall-c05] often matter much more than a model's global average error. However, we still care deeply about point accuracy whenever a hard limit, such as an area constraint or maximum access time, dictates a design's feasibility. Ultimately, our assessment criteria must align directly with the specific decisions, candidate regions, workloads, and thresholds at play, rather than collapsing everything into a single aggregate score.
@@ -475,20 +479,28 @@ from _python.plots import COLORS, apply_style
 apply_style()
 
 # Constructed illustration: every value is synthetic, generated in this cell
+
 # with a fixed seed; no real system was measured. The split-conformal recipe
+
 # (calibration residual quantile -> fixed-width band) follows the conformal
+
 # prediction pattern cited in the text.
+
 rng = random.Random(20260713)
 SHIFT_X = 6.0
 NOISE = 0.32
 X_MAX = 10.0
 
 def surrogate(x):
+
     # The pattern the surrogate learned inside the calibrated region.
+
     return 4.0 + 1.8 * math.sin(0.9 * x) + 0.25 * x
 
 def truth(x):
+
     # Beyond the calibrated region the workload regime changes.
+
     drift = 1.1 * (x - SHIFT_X) ** 1.25 if x > SHIFT_X else 0.0
     return surrogate(x) + drift
 
@@ -496,7 +508,9 @@ def observe(x):
     return truth(x) + rng.gauss(0.0, NOISE)
 
 # Split conformal: the 90% quantile of absolute calibration residuals from the
+
 # supported region sets a fixed band half-width q.
+
 cal_x = [rng.uniform(0.0, SHIFT_X) for _ in range(60)]
 cal_scores = sorted(abs(observe(x) - surrogate(x)) for x in cal_x)
 q = cal_scores[math.ceil(0.9 * (len(cal_scores) + 1)) - 1]
@@ -564,6 +578,7 @@ Before deploying any predictor, we must define a strict audit window. We can fra
 We must halt a predictor whenever we can no longer qualify its planned use, when our candidate escapes its stated support region, when the error grows too large to support our decision, or quite simply, when direct evaluation becomes cheaper than maintaining the model itself. Because our predictor merely estimates a result, rather than fully replacing the robust tool or measurement our study originally requested,we must ensure our planned downstream checks remain highly visible and consistently enforced.
 
 Ultimately, our predictions can only estimate consequences for candidates that actually exist within our defined input space. Whenever a required artifact or candidate is completely missing, our limiting work shifts away from merely estimating an existing option; instead, we must pivot to physically constructing a new option that our later checks can properly evaluate.
+
 ## Synthesizing Artifacts
 
 Generation steps in when we need a candidate or artifact that does not yet exist. We might use a generator to propose a simulator configuration, an RTL fragment, a testbench, a compiler schedule, a kernel, a placement, or an experiment. However, we should not treat it as the default method for every design task. When candidates already exist, we can often rely on prediction, optimization, a conventional method, or direct evaluation to address our actual missing capability with much less work.
@@ -617,13 +632,21 @@ from _python.plots import COLORS, apply_style
 apply_style()
 
 # Source receipt: data/source-receipts/chapter6-kernelbench-funnel.csv
+
 # KernelBench [@OuyangEtAl2025KernelBench], single greedy attempt on NVIDIA
+
 # L40S: one-shot correctness (fast_0, Tables 8 and 9) and correct-and-faster-
+
 # than-PyTorch-Eager (fast_1, Table 1), percent of tasks per level.
+
 # Per-model compile/execution rates are not printed in the paper (its Figure 3
+
 # is unlabeled), so no compile-stage bars; the source record includes the paper's
+
 # 100-kernel supplementary sample (83 compile / 73 execute / 50 correct) as
+
 # context only.
+
 _root = Path(_ap.__file__).resolve().parents[2]
 
 with open(
@@ -718,6 +741,7 @@ We can transfer this exact same test to RTL. We should compare a learned RTL gen
 Chip-Chat, an interactive hardware design study, brings this same role separation directly into RTL design [@BlockloveEtAl2023ChipChat]. In this project, a language model drafted Verilog for a small 8-bit processor that successfully reached tapeout only after a human guided it through many revisions. Open-source simulation and synthesis tools returned strict errors that could reject or redirect drafts, while the human designer ultimately decided when a candidate was ready to advance. This example clearly shows us why we can never separate our generation cost from our checking cost. Whether we find that total cost acceptable depends heavily on the artifact in question, our tool latency, and our available review capacity.
 
 While our construction methods can remove a shortage of candidates, they often end up creating an entirely new bottleneck. Whenever candidates arrive faster than our scarce tool runs can possibly evaluate them, our selection process, rather than the construction itself, becomes our limiting work.
+
 ## Budget Allocation in Search
 
 Optimization becomes our most powerful tool when our legal design space grows too large to enumerate, forcing us to carefully ration our evaluation budget and choose exactly which candidate to try next. While we can always fall back on reduced-space enumeration as a conventional baseline, we have many other options at our disposal. These include deterministic heuristics, random search, Bayesian optimization, evolutionary search, reinforcement learning, and constraint-based procedures. Ultimately, we must choose the procedure that best fits the specific structure of our parameter space and the cost of acquiring feedback.
@@ -746,8 +770,11 @@ import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
 
 # Illustrative 1-D Gaussian-process posterior with a radial-basis-function
+
 # kernel and a small observation-noise term. Deterministic, with no random
+
 # sampling. The acquisition is an upper-confidence bound (mean + 1.6 sigma).
+
 apply_style()
 
 def rbf_kernel(a, b, length_scale=1.35):
@@ -864,6 +891,7 @@ Every time we deploy a learned optimizer, we must benchmark it against a strong,
 PrefixRL illustrates a much tighter sequential formulation. It explicitly casts parallel-prefix circuits as a reinforcement-learning problem, pulling logic synthesis directly into its evaluation path [@RoyEtAl2021PrefixRL]. Combining a clearly declared circuit space with rigorous synthesis feedback, the authors make their method highly inspectable. Even so, the final result still relies entirely on the quality of their objective, their tool conditions, and their matched baseline.
 
 Our optimizer should finally stop when its budget is spent, when our decision stabilizes, when required inputs become unavailable, when the feasible region turns out to be empty under our declared constraints, or when another evaluation is simply unlikely to change our decision enough to justify the cost. In our execution request, we should always ask the environment to retain the rationale for why it selected each evaluation, as well as how the advanced method compared against our simpler baseline. If our selected optimizer relies on a generator to build legal candidates or a predictor to avoid expensive evaluations, those distinct jobs should dictate how we compose our final search architecture, rather than following a fixed method order.
+
 ## Heterogeneous Methods {#sec-one-model-specialists-hybrid}
 
 We do not prescribe a universal prediction-to-generation-to-optimization order. Instead, we suggest starting wherever the missing capability in your problem lies, allowing tool feedback to guide the workflow organically. We can rely on deterministic schemas and scripts to enforce legal formats, use analytical models to estimate consequences, let compilers construct transformations, and deploy direct tools to evaluate candidates. We should only introduce another component when it performs necessary work that our existing path cannot handle economically.
@@ -905,6 +933,7 @@ We should let method fit, rather than the raw number of roles, define our compon
 : **We ensure each component earns its place by performing necessary work that another component cannot.** Simply adding more models or agents to our pipelines does not automatically yield a stronger method. {#tbl-method-organization tbl-colwidths="[24,38,38]"}
 
 Ultimately, neither size nor order makes our composition stronger. The combination we choose must fit the specific limiting work our study actually faces.
+
 ## Case Studies
 
 To demonstrate how prediction, generation, and search methods operate in practice, we examine detailed hardware design case studies. These studies illustrate how different optimization techniques scale across compiler heuristics, memory hierarchy tuning, and physical layout.
@@ -944,6 +973,7 @@ Our evaluation environment must receive far more than just a selected method. We
 : **Direct evaluation serves as our defensible starting choice for the Lighthouse cache study.** Our declared problem features three proposed settings, lacks any live history from matching conditions, and carries a strict budget for both the SRAM screen and cycle-level comparison. We have no total-cost comparison proving that an added method would be cheaper. {#tbl-lighthouse-approach-decision tbl-colwidths="[21,69]"}
 
 While our SRAM screen may protect scarce cycle-level evaluations, it cannot interpret the eventual system-level results. We should revisit our choice to skip an added method only if our legal cache space expands, direct evaluation becomes our limiting cost, and observations from matching conditions finally become available. In making this choice, our study merely rejects an unnecessary method; it does not reject AI-assisted architecture as a whole.
+
 ## Architectural Method Pitfalls
 
 When we deploy new methods, our failures rarely stem from underlying algorithmic weaknesses. Instead, we typically stumble when our theoretical assumptions collide with practical engineering realities.
@@ -953,6 +983,7 @@ When we deploy new methods, our failures rarely stem from underlying algorithmic
 - **Ignoring the checking bottleneck:** We guarantee a stalled pipeline if we generate thousands of candidate solutions, only to hand them off to a downstream simulator or human reviewer capable of processing just a few dozen.
 
 - **The optimizer's curse:** If we select a candidate purely based on a surrogate model's predicted score while ignoring inherent prediction errors and variance, we almost invariably guarantee disappointing real-world performance.
+
 ## Frontier Research Questions
 
 Moving from treating learned techniques as an automatic upgrade to justifying them as deliberate engineering choices defines our current research frontier in architecture methods. While we broadly understand the underlying mechanics of prediction, generation, and optimization, we still struggle with how to compose them safely, economically, and dynamically. The following questions isolate critical gaps where our existing heuristics break down and formal guarantees remain absent. Resolving any of these challenges,such as prospectively quantifying a method's realized cost before deployment, enforcing rigid constraints without collapsing design diversity, or reliably identifying when to abandon a learned surrogate for direct evaluation,would represent a substantial contribution worthy of a major publication. These are not mere implementation details; they are the fundamental barriers we must cross to make learned components as accountable and predictable as the conventional evaluation paths they aim to augment.
@@ -980,6 +1011,7 @@ Our composition strategies must change whenever an added method shifts the perfo
 - **How can an automated flow adapt its own method composition as the bottleneck moves?** Adding a generator might instantly shift our limiting work over to the simulator, while a fast predictor might just build up a massive queue for expert review. The open challenge here is to build systems that recognize these shifts and dynamically reconfigure their component mix to minimize total work. They must do this without abandoning our necessary cost accounting, fallback paths, and stopping conditions.
 
 - **What signals should trigger an architecture flow to drop a learned component and fall back to a simpler tool?** A learned component ceases to be useful when its support assumptions fail, when direct evaluation becomes cheaper, or when checking costs rise too high. The truly difficult part is distinguishing a fundamental structural shift in our limiting work from a temporary setback. We need mechanisms that trigger a fallback early enough to prevent wasted effort, while still retaining the components that actively improve our decisions.
+
 ## Conclusion
 
 ::: {.callout-design-principle title="Choose the smallest sufficient approach"}
