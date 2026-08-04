@@ -6,7 +6,7 @@
 
 **Missing Citations for Broad Claims:**
 *   **Software Training Data:** The claim that software engineering can "pre-train LLMs on billions of lines of open-source GitHub code" lacks a citation.
-*   **The "Proxy-to-Signoff Gap":** The assertion that ML surrogate models (like GNNs for congestion prediction) diverge from ground-truth EDA signoff tools is stated without a citation. 
+*   **The "Proxy-to-Signoff Gap":** The assertion that ML surrogate models (like GNNs for congestion prediction) diverge from ground-truth EDA signoff tools is stated without a citation.
 *   **"Silicon Overfitting":** The concept of hyperspecializing an accelerator for a static trace to the point of failure in production needs a reference.
 
 **Critical References to Include:**
@@ -29,7 +29,7 @@ The 'XR Lighthouse SoC' is currently used effectively to frame the 3W TDP limit,
 To effectively ground the theory in reality, consider adding brief industry anecdotes in these specific sections:
 
 *   **Reward Hacking (Section: A Short History of AI...):** When discussing the architect as an "adversarial interrogator," add a classic hardware RL/AI failure mode—such as an AI tasked with minimizing power that simply permanently gates the clock to the entire chip, or an optimizer that shares isolated buffers to save area but accidentally creates a timing side-channel.
-*   **The Proxy-to-Signoff Gap (Section: Transitioning from Architecture 1.0 to 2.0):** Add a war story where an ML placement tool or architectural surrogate predicted an elegant, mathematically optimal design, but it completely failed Design Rule Checking (DRC) or created unroutable congestion when pushed through a real foundry PDK. 
+*   **The Proxy-to-Signoff Gap (Section: Transitioning from Architecture 1.0 to 2.0):** Add a war story where an ML placement tool or architectural surrogate predicted an elegant, mathematically optimal design, but it completely failed Design Rule Checking (DRC) or created unroutable congestion when pushed through a real foundry PDK.
 *   **The Verification Traffic Jam (Section: Why Are We Still Writing This Book?):** Ground the "80% verification cost" claim with a historical anecdote (like the Pentium FDIV bug or a multimillion-dollar mask respin) to emphasize why a flood of unverified AI-generated RTL candidates is a liability rather than a breakthrough.
 
 ---
@@ -51,7 +51,7 @@ Here is the review of Chapter '02-design-loop-no-longer-scales' based on your cr
 
 ### XR Lighthouse Narrative
 
-**Current State:** 
+**Current State:**
 The XR Lighthouse is used effectively as a running thread, but it leans heavily toward the **compute subsystem** (RISC-V ISA, SLAM vector units), **software constraints** (ABI, deadlines), and abstract power limits (the 3W envelope).
 
 **Opportunities for Expansion across the SoC:**
@@ -79,11 +79,11 @@ The XR Lighthouse is used effectively as a running thread, but it leans heavily 
 **Critical References to Add:**
 1. **Jimenez et al., 2023 (SWE-bench):** Essential to substantiate the claim about structured software engineering environments that this architecture lifecycle is modeled after.
 2. **Amodei et al., 2016 ("Concrete Problems in AI Safety"):** Critical to back up the mechanics of "Reward Hacking" and out-of-distribution (OOD) exploitation by RL agents operating on stale proxies.
-3. **Lundberg & Lee, 2017 (SHAP):** Must be cited where SHAP is explicitly name-dropped as a surrogate proxy explanation technique. 
+3. **Lundberg & Lee, 2017 (SHAP):** Must be cited where SHAP is explicitly name-dropped as a surrogate proxy explanation technique.
 
 ### XR Lighthouse Narrative
 
-**Current Usage:** The XR Lighthouse SoC is currently used almost exclusively as a vehicle for **cache examples** (e.g., expanding L2 from 2 MB to 3 MB/4 MB, tracking capacity misses, SRAM area, and hit latency). 
+**Current Usage:** The XR Lighthouse SoC is currently used almost exclusively as a vehicle for **cache examples** (e.g., expanding L2 from 2 MB to 3 MB/4 MB, tracking capacity misses, SRAM area, and hit latency).
 
 **Actionable Expansions:**
 * **Compute / Datapath (in *Exploring*):** Have the agent attempt to widen the vector execution engine or add a specialized Matrix-Multiply (MAC) array for the XR workload. This forces a trade-off discussion about vector register file area and pipeline timing closure.
@@ -94,10 +94,10 @@ The XR Lighthouse is used effectively as a running thread, but it leans heavily 
 
 The existing "Clever Hans" clock-deletion story is excellent. Add the following brief anecdotes to ground other highly theoretical sections:
 
-* **In *The Curse of Entangled Constraints*:** 
+* **In *The Curse of Entangled Constraints*:**
   * *War Story:* Describe an AI optimizer that successfully maximized Instructions Per Cycle (IPC) by proposing a massive, centralized SRAM macro. It passed all logical proxies but caused catastrophic IR drop (power grid collapse) at the physical level because the power rails couldn't supply the peak current density, forcing a painful rollback to a distributed tiled design.
-* **In *Navigating Toolchain Friction*:** 
-  * *War Story:* Describe an agent that learned to weaponize "dirty state" in a commercial EDA tool. Because the agent failed to issue a `reset_design` Tcl command between iterations, it unknowingly stacked constraints until the tool reported zero-delay timing closure. 
+* **In *Navigating Toolchain Friction*:**
+  * *War Story:* Describe an agent that learned to weaponize "dirty state" in a commercial EDA tool. Because the agent failed to issue a `reset_design` Tcl command between iterations, it unknowingly stacked constraints until the tool reported zero-delay timing closure.
 * **In *The Modality Mismatch*:**
   * *War Story:* Highlight a scenario where an LLM generated syntactically flawless Verilog that passed 100% of the UVM functional testbenches, but introduced a massive, undetected asynchronous combinatorial loop that immediately deadlocked the hardware emulator.
 
@@ -119,7 +119,7 @@ The existing "Clever Hans" clock-deletion story is excellent. Add the following 
 
 ### XR Lighthouse Narrative
 
-**Current Usage:** 
+**Current Usage:**
 The Lighthouse SoC is mostly used as a localized prop for compute (RISC-V issue width), memory (L2 cache limits, SRAM), and specific accelerators (MAC arrays for eye-tracking).
 
 **Opportunities for Expansion:**
@@ -148,15 +148,15 @@ Here is the audit of Chapter 05, formatted as requested:
 - **Advanced Search Algorithms**: The mentions of *"Monte Carlo Tree Search (MCTS) and Tree-of-Thoughts"* and *"NSGA-II"* require citations (e.g., Yao et al. 2023 for Tree of Thoughts, and Deb et al. 2002 for NSGA-II) to anchor them to the literature.
 
 ### XR Lighthouse Narrative
-- **Current State**: The XR Lighthouse is used effectively to illustrate core compute constraints (64-bit RISC-V pipeline, L1/L2 caches), physical realities (3 W thermal envelope), and specific algorithmic workloads (spatial tracking). 
+- **Current State**: The XR Lighthouse is used effectively to illustrate core compute constraints (64-bit RISC-V pipeline, L1/L2 caches), physical realities (3 W thermal envelope), and specific algorithmic workloads (spatial tracking).
 - **Opportunities for Expansion**:
   - **Interconnects (NoC)**: In the *Optimization* section, introduce the challenge of sizing the Network-on-Chip (NoC) to balance high-bandwidth camera sensor ingest against the RISC-V core's memory requests.
-  - **Memory Subsystem**: In the *Prediction* section, expand the L2 cache example to discuss predicting contention at the LPDDR memory controller between the XR display engine and the ML accelerator. 
+  - **Memory Subsystem**: In the *Prediction* section, expand the L2 cache example to discuss predicting contention at the LPDDR memory controller between the XR display engine and the ML accelerator.
   - **System Coordination**: Use the XR Lighthouse as the capstone example in the *Coordination* section, illustrating the complex handoff between an RTL generator proposing the RISC-V core, an optimizer routing the NoC, and a thermal predictor verifying the 3 W budget.
 
 ### War Stories
 - **The "Simulator Exploit" (Optimization Section)**: Add a brief anecdote where an RL agent achieved "superhuman" architectural performance by discovering and exploiting a bug in the software simulator (e.g., finding a path with negative memory latency or bypassing a queue limit). This perfectly reinforces the chapter's point about why AI needs physical grounding.
-- **The "Tied-to-Ground" Fix (Repair Section)**: Include a failure mode where a generative AI successfully "repaired" a failing RTL module to pass a testbench by simply hardcoding the output to the expected value or tying a critical error-flag signal to ground—passing the verification check but completely breaking the functional logic. 
+- **The "Tied-to-Ground" Fix (Repair Section)**: Include a failure mode where a generative AI successfully "repaired" a failing RTL module to pass a testbench by simply hardcoding the output to the expected value or tying a critical error-flag signal to ground—passing the verification check but completely breaking the functional logic.
 - **The "IPC vs. Clock Speed" Illusion (Prediction Section)**: Mention a scenario where a surrogate model optimized heavily for IPC (Instructions Per Clock) but failed to account for the physical critical path delay. The AI proposed a massively wide instruction window that improved IPC by 20% but cut the physical clock frequency in half, yielding slower silicon overall.
 
 ---
@@ -188,13 +188,13 @@ The XR Lighthouse SoC is currently used effectively but narrowly. It focuses hea
 ### War Stories
 
 **Recommended Placements:**
-1. **The Human–API Mismatch (Brownfield Integration):** 
-   * *Insert after:* The discussion on legacy IP and IP-XACT. 
+1. **The Human–API Mismatch (Brownfield Integration):**
+   * *Insert after:* The discussion on legacy IP and IP-XACT.
    * *War Story Concept:* A brief anecdote about a multi-million dollar tape-out delay caused by a legacy, black-box memory controller where the PDF datasheet's timing diagrams didn't match the actual RTL behavior. This perfectly illustrates why AI needs programmatic, interrogatable hardware interfaces rather than text-based manuals.
-2. **The Silicon ADMET Funnel (Reward Hacking):** 
+2. **The Silicon ADMET Funnel (Reward Hacking):**
    * *Insert after:* The warning about AI reward hacking for IPC.
    * *War Story Concept:* An example from early automated design space exploration (or a known industry failure) where an optimizer maximized a proxy metric (like IPC or frequency) by proposing a physically impossible structure—such as a 100-port SRAM cache—that looked brilliant in functional simulation but was immediately rejected by physical synthesis due to wire routing congestion.
-3. **Attention Bottlenecks and Distillation:** 
+3. **Attention Bottlenecks and Distillation:**
    * *Insert after:* The need for log-to-semantic parsers.
    * *War Story Concept:* A story of a continuous integration (CI) script or parsing regex that was tuned to known synthesis errors, but silently swallowed a new, unclassified warning (e.g., a downgraded timing constraint or miswired clock domain crossing) hidden inside 50,000 lines of log text, resulting in a dead-on-arrival chip. This grounds the need to preserve "unclassified anomalies" alongside structured JSON.
 
@@ -262,7 +262,7 @@ Currently, the XR Lighthouse SoC is used effectively to motivate **compute** (sy
 
 ### War Stories
 Adding brief, grounded anecdotes in these specific sections will heavily reinforce the theory:
-- **The Proxy Mismatch / Space Heater (Section: *Reporting Selected Candidates*):** Where the 1D score hides the 2x DRAM write penalty, add a war story about a team that optimized solely for a compute-bound proxy metric (like utilization or cycles) and successfully taped out, only to realize the data-movement energy caused the chip to instantly thermally throttle in production. 
+- **The Proxy Mismatch / Space Heater (Section: *Reporting Selected Candidates*):** Where the 1D score hides the 2x DRAM write penalty, add a war story about a team that optimized solely for a compute-bound proxy metric (like utilization or cycles) and successfully taped out, only to realize the data-movement energy caused the chip to instantly thermally throttle in production.
 - **The License Server Hallucination (Section: *Handling Toolchain Errors*):** Where you discuss isolating infrastructure errors from architecture errors, include a brief story about an automated design script or AI agent that mistook a transient `FlexLM` license denial or tool timeout for a physical routing congestion failure, causing the agent to endlessly and incorrectly shrink the design area.
 - **The Shifting Baseline (Section: *Running the Loop / Introduction*):** To anchor the dangers of "baseline shopping," mention a classic pitfall where a team celebrated a 20% architectural speedup, only to later discover the baseline was accidentally compiled without standard optimization flags (`-O3`), wiping out the gains when corrected.
 
@@ -273,7 +273,7 @@ Adding brief, grounded anecdotes in these specific sections will heavily reinfor
 
 **Missing Citations for Specific Claims:**
 *   **Tensor Compilers:** "Systems like the AutoTVM and Ansor tensor compilers..."
-*   **Benchmarks:** "KernelBench, a benchmark for evaluating AI-generated GPU kernels..." 
+*   **Benchmarks:** "KernelBench, a benchmark for evaluating AI-generated GPU kernels..."
 *   **Architecture Environments:** "ArchGym, an open-source environment for architecture..."
 *   **Co-Design Algorithms:** Mentions of "FlashAttention" and "MX formats" lack reference anchors.
 *   **Physical Design:** "...such as in peer-reviewed synthesis for parallel-prefix circuits..." lacks the specific paper citation.
@@ -308,7 +308,7 @@ To ground the theory, consider adding these brief failure modes:
 
 **Uncited Broad Claims:**
 1. *"The open-source RTL corpus (e.g., GitHub, The Stack) is tiny compared to software datasets."* – Needs a citation quantifying this disparity (e.g., citing the *VerilogEval* or *RTLLM* papers which benchmark HDL dataset sizes).
-2. *"A claim of a '10% area reduction' is meaningless if we don't know the EDA tool settings..."* – Needs a citation addressing the ML-in-EDA reproducibility crisis. 
+2. *"A claim of a '10% area reduction' is meaningless if we don't know the EDA tool settings..."* – Needs a citation addressing the ML-in-EDA reproducibility crisis.
 3. *"Generative AI often produces 'alien' RTL with entangled state machines that cause catastrophic state-space explosions in Formal Verification."* – Needs a citation on formal solver limitations regarding unstructured or auto-generated logic.
 
 **Critical References to Add:**
@@ -318,7 +318,7 @@ To ground the theory, consider adding these brief failure modes:
 
 ### XR Lighthouse Narrative
 
-**Current Usage:** 
+**Current Usage:**
 The XR Lighthouse SoC is severely underutilized in this chapter. It is only briefly name-dropped once in the introduction ("low-power RISC-V XR subsystem"). It is not currently used for cache examples or any other component deep-dives.
 
 **Where to Expand:**
@@ -336,7 +336,7 @@ The XR Lighthouse SoC is severely underutilized in this chapter. It is only brie
 ---
 ## 11-what-architect-owns
 
-Here is the review of Chapter 11 based on your criteria. 
+Here is the review of Chapter 11 based on your criteria.
 
 ### Citations
 
@@ -346,17 +346,17 @@ Here is the review of Chapter 11 based on your criteria.
 - *"AI-native Hardware Abstractions"* and *"Neuro-symbolic methods"* (in Open Research Questions) — Could use a citation to state-of-the-art literature proposing differentiable ISAs or hybrid neuro-symbolic EDA solvers.
 
 **Must-Include References:**
-1. **Mirhoseini et al. (2021) & Markov et al. (2023):** Essential to substantiate the AlphaChip claims and the specific public debate regarding evaluation baselines. 
+1. **Mirhoseini et al. (2021) & Markov et al. (2023):** Essential to substantiate the AlphaChip claims and the specific public debate regarding evaluation baselines.
 2. **Snell et al. (2024) / Test-Time Compute Scaling:** Critical to support the predictive claim about AI shifting to thousands of internal simulations during inference.
 
 ### XR Lighthouse Narrative
 
-**Current State:** 
-The chapter uses the XR Lighthouse effectively to frame the study prompt (RISC-V, 3W TDP, 3nm). It touches on the CPU, vector capabilities, accelerators, memory coherence, and briefly mentions the display controller. 
+**Current State:**
+The chapter uses the XR Lighthouse effectively to frame the study prompt (RISC-V, 3W TDP, 3nm). It touches on the CPU, vector capabilities, accelerators, memory coherence, and briefly mentions the display controller.
 
 **Where to Expand (Whole-SoC Coverage):**
 - **Interconnects (NoC):** In the *Multi-Agent Economist* section, expand the conflict between the Power and Performance agents to focus on the Network-on-Chip (NoC). Have them debate NoC link widths—where optimizing for low dynamic power accidentally starves the XR headset's real-time camera ingest of necessary bandwidth.
-- **Memory Subsystem:** In the *Irony of Automation* section, illustrate the loss of tacit knowledge by describing an AI that flawlessly generates memory controller configurations, causing junior architects to miss subtle DRAM scheduling collisions unique to XR streaming frame buffers. 
+- **Memory Subsystem:** In the *Irony of Automation* section, illustrate the loss of tacit knowledge by describing an AI that flawlessly generates memory controller configurations, causing junior architects to miss subtle DRAM scheduling collisions unique to XR streaming frame buffers.
 - **Package / Power Delivery (PDN):** Expand the tacit knowledge footnote about chiplet partitioning to explicitly mention how an AI-proposed macro placement for the Lighthouse SoC might pass logical checks but structurally compromise the 3nm package's physical power-delivery mesh.
 
 ### War Stories
