@@ -9,7 +9,7 @@ format:
 ::: {.epigraph}
 > *"[F]eedback is the control of a system by reinserting into the system the results of its performance. If these results are merely used as numerical data for the criticism of the system and its regulation, we have the simple feedback of the control engineers."*
 >
-> —  Norbert Wiener, *The Human Use of Human Beings* (1950) [@Wiener1950HumanUse, p. 71]
+> –  Norbert Wiener, *The Human Use of Human Beings* (1950) [@Wiener1950HumanUse, p. 71]
 :::
 
 ::: {.column-margin}
@@ -40,13 +40,13 @@ After reading this chapter, we can:
 - Distinguish the size of a design space from the evaluation and verification capacity required to search it.
 - Identify where AI assistance can relieve bottlenecks without displacing authoritative software and physical checks.
 :::
-## How Architecture Has Absorbed Complexity
+## How Architecture Explicitly Absorbed Historical Complexity
 
 We have historically absorbed rising complexity in architecture by elevating the level at which we describe our designs, and by making our interfaces, rules, tool paths, and comparisons explicit. Constraints do not simply vanish in this process. Instead, we empower our people and tools to manipulate larger design objects, while relying on lower-level checks to catch and reject choices that fail during implementation. This established history sets the baseline standard for any new form of design assistance we introduce.
 
 Our architectural work has always progressed through relentless cycles of analysis and revision. When we kick off a typical study, we start with a clear aim: improving latency, reducing energy, raising throughput, supporting a specific workload, or fitting a system neatly within a power and cost envelope. From there, we choose an abstraction, build or select a model, run our analyses or simulations, and study the results. We iteratively revise the design until the surviving concepts eventually reach implementation, validation, verification, and signoff. Both our textbooks and our daily industrial practice faithfully follow this fundamental pattern.
 
-Consider a traditional SPEC CPU study. We begin by selecting workloads and proposing a change, perhaps to the cache hierarchy or the branch predictor. We then run our simulators or performance models to inspect instructions per cycle (IPC), miss rates, branch-misprediction rates, and initial area and power estimates. When we find candidates that help one workload but harm others, we must either revise or discard them. Our human judgment shapes this comparison every step of the way, guiding everything from workload selection and proxy choice to the ultimate decision that a candidate deserves deeper analysis.
+Consider a traditional SPEC CPU study. We begin by selecting workloads and proposing a change, perhaps to the cache hierarchy or the branch predictor. We then run our architectural simulators – such as gem5 for full-system timing [@BinkertEtAl2011Gem5], Sniper for fast parallel multi-core sweeps, or compiled Verilator models for cycle-accurate RTL verification – to inspect instructions per cycle (IPC), miss rates, branch-misprediction rates, and initial area and power estimates. When we find candidates that help one workload but harm others, we must either revise or discard them. Our human judgment shapes this comparison every step of the way, guiding everything from workload selection and proxy choice to the ultimate decision that a candidate deserves deeper analysis.
 
 We rely on SPEC CPU 2017 as our industry-standard suite for measuring compute-intensive performance across processor, memory-system, and compiler behaviors [@SPEC2017CPU]. What truly matters here is how we bound the comparison. By strictly defining the workloads, run rules, and reporting conventions, we make it much easier to compare different candidates fairly under clearly stated conditions.
 
@@ -60,7 +60,7 @@ Whenever informal coordination stops being sufficient, we turn our implicit know
 | Mead--Conway VLSI and MOSIS | Design rules, layout abstractions, and fabrication access turned custom-chip design into a shareable and reusable loop [@MeadConway1980VLSI; @USCISI2025MOSISFirstYear]. | Shared representations and fabrication access broaden participation in architecture work. |
 | Reduced instruction set computer (RISC) | The RISC argument linked ISA choices to compiler behavior, Very Large-Scale Integration (VLSI) implementation, workloads, and quantitative cost/performance [@PattersonDitzel1980RISC]. | A complete comparison includes the workload, compiler, and implementation cost. |
 | SPEC-style benchmarking | Workload selection, run rules, reporting conventions, and comparability became community infrastructure [@SPEC2017CPU]. | Benchmarks govern workload choice, execution, and comparison. |
-| Logic synthesis and timing closure | Hardware Description Language (HDL), libraries, constraints, and timing reports let downstream checks reject upstream choices [@DeMicheli1994SynthesisOptimization]. | Implementation checks can rule out architecture candidates before the design team commits to them. |
+| Logic synthesis and timing closure | Hardware Description Language (HDL), libraries, constraints, and timing reports let downstream checks reject upstream choices [@DeMicheli1994SynthesisOptimization]. | Implementation checks in tools like Yosys or Synopsys VCS can rule out architecture candidates before the design team commits to them. |
 | CUDA-style graphics processing unit (GPU) programming | Kernels, thread hierarchies, memory spaces, libraries, and toolchains made specialized hardware programmable [@NickollsEtAl2008CUDA]. | Specialized hardware needs a usable programming model and toolchain. |
 
 : **Six changes that made architecture work easier to inspect.** Each one established a shared representation, interface, tool path, benchmark, or decision criterion where informal coordination no longer sufficed. {#tbl-historical-loop-transformations tbl-colwidths="[22,39,28]"}
@@ -78,25 +78,27 @@ None of these historical changes eliminated iteration. Instead, they made our de
 However, these artifacts simply do not explain themselves. Our architectural knowledge still remains heavily distributed across sprawling specifications, intricate constraints, scripts, traces, tool versions, and countless review decisions. We find that a shared interface or representation only truly helps when our entire team knows which assumptions are strictly fixed, which choices are free to change, and exactly which downstream checks might reject a new proposal. Because of modern specialization, we now require several of these complex boundaries to remain perfectly consistent all at once.
 
 While this history provides us with a clear pattern, it offers absolutely no guarantee that our existing abstractions will remain sufficient. In the past, earlier process generations reliably supplied us with broadly reusable gains, and our new abstractions helped our teams manage the flood of added transistors. Today, however, we extract much more of our benefit from highly workload-specific architectural, software, and physical choices. We must confront the reality that the underlying technology dividend has fundamentally changed.
-## The Technology Dividend Has Changed
+## The Fracturing Technology Dividend: From Free Scaling to Co-Design
 
 While making more of the design explicit helped us coordinate larger systems, today's pressure pushes us even further. Process and device technology still supply essential improvements, but we can no longer count on them to automatically deliver the broadly reusable gains we once expected from each new generation. Instead, we have to extract more of our performance benefits from choices that tightly bind architecture, software, and physical implementation together.
 
-### Scaling No Longer Supplies the Same Gains
+### The Collapse of Dennard Scaling and the Shift to Specialization
 
-Process technology remains fundamental, yet it no longer automatically converts density into the same broadly reusable combination of frequency, single-thread performance, and energy efficiency. For roughly fifty years, processor generations improved through a familiar progression. Transistor density continued to rise while voltage scaling made it possible, for a time, for us to use more transistors without a proportional increase in power [@Moore1965Cramming; @DennardEtAl1974Scaling]. Quantitative analysis gave us a way to compare the resulting design choices. As voltage and frequency scaling slowed, our focus shifted: microarchitecture, parallelism, and eventually domain specialization had to carry more of the burden [@HennessyPatterson2017QuantitativeApproach; @HennessyPatterson2019GoldenAge]. Fifty years of frontier microprocessor data show the resulting divergence. We see clock frequency plateau in the mid-2000s, even as transistor counts continue to rise, hardware-thread counts turn upward, and the CPU power frontier in the dataset reaches hundreds of watts (@fig-microprocessor-trends).
+Process technology remains fundamental, yet it no longer automatically converts density into the same broadly reusable combination of frequency, single-thread performance, and energy efficiency. For roughly fifty years, processor generations improved through a familiar progression. Transistor density continued to rise while voltage scaling made it possible, for a time, for us to use more transistors without a proportional increase in power [@Moore1965Cramming; @DennardEtAl1974Scaling]. Under classical Dennard scaling, scaling dimensions by a factor $k$ reduced gate area by $1/k^2$, while supply voltage $V_{dd}$ and threshold voltage $V_{th}$ scaled down by $1/k$. This kept the electric fields constant, increased switching frequency by $k$, and maintained constant power density ($P/A \approx \text{const}$). Quantitative analysis gave us a way to compare the resulting design choices [@HennessyPatterson2017QuantitativeApproach].
+
+However, when supply voltage dropped near $0.7\text{--}0.9\,\text{V}$, threshold voltage $V_{th}$ could no longer be reduced without triggering exponential increases in subthreshold leakage current ($I_{\text{sub}} \propto e^{-V_{th}/V_T}$), creating severe thermal runaway risks. As voltage scaling ground to a halt around 2005, dynamic power consumption ($P_{\text{dyn}} = C \cdot V_{dd}^2 \cdot f$) surged whenever frequency increased. Fifty years of frontier microprocessor data show the resulting divergence. We see clock frequency plateau near $3\text{--}4\,\text{GHz}$ in the mid-2000s, even as transistor counts continue to rise, hardware-thread counts turn upward, and the CPU power frontier in the dataset reaches hundreds of watts (@fig-microprocessor-trends).
 
 ```{python}
 #| label: fig-microprocessor-trends
 #| fig-cap: |
-#|   **Frequency stalls while transistor and parallelism budgets keep growing:** CPU data from Karl Rupp's public microprocessor dataset are summarized as the highest value in each four-year interval [@Rupp2022MicroprocessorTrendData]. Clock frequency plateaus in the mid-2000s, while transistor counts and hardware-thread counts continue upward and the CPU power frontier reaches hundreds of watts. The post-Dennard power constraint increased the importance of parallelism and specialization [@EsmaeilzadehEtAl2011DarkSilicon; @HennessyPatterson2019GoldenAge]. The five curves use different units and show trend shape rather than a common magnitude. GPU and Xeon Phi records are excluded from the CPU frontiers; the era boundaries are approximate.
+#|   **Frequency stalls while transistor and parallelism budgets keep growing:** the end of Dennard scaling closed one road and opened the modern design problem. CPU data from Karl Rupp's public microprocessor dataset are summarized as the highest value in each four-year interval [@Rupp2022MicroprocessorTrendData]. Clock frequency plateaus in the mid-2000s, while transistor counts and hardware-thread counts continue upward and the CPU power frontier reaches hundreds of watts [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon]. The five curves use different units and show trend shape rather than a common magnitude. GPU and Xeon Phi records are excluded from the CPU frontiers; the era boundaries are approximate [@HennessyPatterson2019GoldenAge].
 #| out-width: "100%"
 #| fig-alt: "Log-scale line chart of CPU frontier trends from 1971 to 2021 with five differently scaled series. Transistors per chip rise from a few thousand to tens of billions by 2021. Single-thread performance rises steeply until the mid-2000s and then slows. Clock frequency plateaus near 3 to 5 GHz after about 2005, while the CPU power frontier rises to hundreds of watts and logical hardware-thread counts climb from one to more than one hundred. GPU and Xeon Phi records are excluded. Dashed vertical lines mark the approximate end of Dennard scaling around 2005 and the specialization turn around 2016."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, add_note_box, apply_style
 
----
+apply_style()
 
 # Fifty-year CPU trend data; per-series frontier points (per-4-year-bucket
 # maxima) transcribed from the public dataset
@@ -216,11 +218,11 @@ plt.close(fig)
 
 These diverging curves mark the end of the "free lunch" [@Sutter2005FreeLunch]. Although transistor counts kept climbing, once Dennard scaling ended around 2005, the single-thread gains we historically associated with each generation slowed from roughly 50 percent a year to just a few percent [@HennessyPatterson2017QuantitativeApproach]. We now have to fit any further gains within the power a package can dissipate. We also need to read the power trend carefully. The value near 300\ W represents the highest entry in the final four-year interval of the public dataset, rather than a typical processor's thermal design power. Like the other series, it highlights the frontier represented in the dataset so we can compare the directions of change on one chart.
 
-Maintaining constant electrical properties during scaling depended on lowering voltage as transistor dimensions shrank [@DennardEtAl1974Scaling]. Once voltage scaling slowed, power limits dictated how many transistors we could operate at full frequency at the same time [@EsmaeilzadehEtAl2011DarkSilicon]. This constraint helps explain both the frequency plateau in @fig-microprocessor-trends and the dark-silicon fraction that followed, the share of our chips that must remain inactive to fit within a tight power budget. Our discipline responded increasingly with parallelism and specialization. These responses handed us more of the machine to manage, rather than letting us simply inherit benefits from the next process node.
+Maintaining constant electrical properties during scaling depended on lowering voltage as transistor dimensions shrank [@DennardEtAl1974Scaling]. Once voltage scaling slowed, power limits dictated how many transistors we could operate at full frequency at the same time [@EsmaeilzadehEtAl2011DarkSilicon]. This constraint helps explain both the frequency plateau in @fig-microprocessor-trends and the dark-silicon fraction that followed, the share of our chips that must remain inactive or unpowered to fit within a strict Thermal Design Power (TDP) budget. Our discipline responded increasingly with parallelism and domain specialization. These responses handed us more of the machine to manage, rather than letting us simply inherit benefits from the next process node.
 
 Although our measured history does not guarantee what comes next, technology continues to supply transistors without automatically turning them into proportional frequency or single-thread performance. As architects, we must carve out those benefits ourselves through parallelism, specialization, software, and system structure. These design choices expand our comparisons and increase the workload that any new tools or assistance must help us improve.
 
-### Specialization Couples the Stack
+### Domain Specialization Tightens Cross-Layer Stack Coupling
 
 Technology, architecture, workloads, compilers, and implementation were never truly independent. As our RISC history above demonstrated, any hardware claim relies on its corresponding workload, compiler, and quantitative implementation cost. The layered stack remains a useful abstraction because it helps us separate different kinds of reasoning: device technology supplies transistor characteristics, architecture organizes the machine, and the optimization layer covers the mapping, scheduling, and tuning that connect software to our hardware. Specialization does not create this coupling. Instead, it tightens the coupling, raises the stakes of a mismatch, and makes our joint comparisons significantly harder (@fig-tao-vs-taos).
 
@@ -231,23 +233,23 @@ Our layered view keeps optimization, architecture, and technology distinct enoug
 When we lean harder on caches, speculation, vector units, multicore processors, accelerators, and system-level optimization, we successfully recovered efficiency. However, every one of those choices introduced a new way for an early model to rank the wrong candidate. This comparison problem only compounds as we integrate those mechanisms into even larger systems.
 
 A larger design space proves useful only when we have the precise information needed to compare our choices. Ultimately, this requirement connects the changing technology dividend directly to the hardware, software, and evaluation pressures that we face next.
-## Hardware Scale, Specialization, and Composition
+## Balancing Microarchitectural Scaling, Specialization, and Composition
 
 As our designs evolve from a single core to a massive system, our methods of comparison must scale alongside them. Microarchitecture weaves intricate policies within a core, specialization binds a block to a specific workload, composition integrates diverse blocks into a single package, and wafer-scale integration stretches a unified fabric across new physical dimensions. Every step multiplies the parameters we can tune and the complex interactions our comparisons must account for.
 
-### Microarchitecture Adds Interacting Costs and Corner Cases
+### Pipeline Depth, Issue-Window Complexity, and Speculative Corner Cases
 
 Consider the familiar levers already in our architectural toolkit: extending a pipeline, deploying a more aggressive branch predictor, widening a speculative scheduler, or scaling out the cache hierarchy can all claw back performance.
 
-However, each of these levers introduces corner cases that our benchmarks must carefully navigate. A prefetcher that perfectly anticipates one access pattern might blindly pollute the cache for another. Ramping up speculation can dramatically increase throughput, but it burns more energy and, as Spectre and Meltdown starkly reminded us, can shatter protection boundaries to leak data [@KocherEtAl2019Spectre; @LippEtAl2018Meltdown]. The gains we measure on one workload often obscure hidden costs that only surface elsewhere.
+However, each of these levers introduces corner cases that our benchmarks must carefully navigate. A prefetcher that perfectly anticipates one access pattern might blindly pollute the cache for another. Ramping up speculation can dramatically increase throughput, but it burns more energy and, as Spectre and Meltdown starkly reminded us, can shatter protection boundaries to leak speculative transient data [@KocherEtAl2019Spectre; @LippEtAl2018Meltdown]. The gains we measure on one workload often obscure hidden costs that only surface elsewhere.
 
-We have long known that these mechanisms hit fundamental limits. Palacharla, Jouppi, and Smith demonstrated that the wakeup, selection, and bypass logic of a wide issue window scales poorly enough to eventually cap the clock speed it can sustain [@PalacharlaEtAl1997ComplexityEffective]. Agarwal and colleagues subsequently projected that the lethal combination of wire delay and relentless clock scaling would ultimately close out the frequency-first era for conventional microarchitectures [@AgarwalEtAl2000ClockRateVersusIPC].
+We have long known that these microarchitectural mechanisms hit fundamental physical limits. Palacharla, Jouppi, and Smith demonstrated that dynamic out-of-order execution cores face steep complexity bounds: the delay of wakeup logic (tag broadcast lines across reservation station entries), selection logic (arbiter trees selecting ready instructions for execution ports), and result bypass/forwarding networks (crossbar wires spanning execution units) scales quadratically as $O(W^2)$ or $O(N^2 \cdot W)$ with issue width $W$ and window size $N$ [@PalacharlaEtAl1997ComplexityEffective]. Wire delay on these critical paths eventually dominates the clock cycle, capping achievable frequency. Agarwal and colleagues subsequently projected that the lethal combination of interconnect delay and relentless clock scaling would ultimately close out the frequency-first era for conventional microarchitectures [@AgarwalEtAl2000ClockRateVersusIPC].
 
-These costs translate into concrete engineering realities. Intel's Pentium 4, leveraging the NetBurst microarchitecture, stretched to 31 pipeline stages in its 90\ nm Prescott generation to chase aggressive frequency targets [@BoggsEtAl2004Pentium4NinetyNm]. While deepening the pipeline reduces the work per cycle, it severely penalizes branch mispredictions by inflating refill latency and piling on overhead. This classic example clarifies our central tradeoff: frequency is never an isolated design objective. The very mechanisms we use to push clock speeds fundamentally alter the work required per instruction and the energy our machines consume.
+These microarchitectural costs translate into concrete engineering realities. Intel's Pentium 4, leveraging the NetBurst microarchitecture, stretched to 31 pipeline stages in its 90\ nm Prescott generation (up from Willamette's 20 stages) to chase aggressive 4\ GHz frequency targets [@BoggsEtAl2004Pentium4NinetyNm]. While deepening the pipeline reduces the logic depth per cycle, it severely penalizes branch mispredictions by inflating refill latency to over 30 cycles. When a branch predictor misses, the entire 31-stage pipeline drains, creating massive execution bubbles and burning dynamic power ($P = C \cdot V^2 \cdot f$) while Instruction Per Cycle (IPC) collapses on branch-heavy workloads. This classic example clarifies our central tradeoff: frequency is never an isolated design objective. The very mechanisms we use to push clock speeds fundamentally alter the work required per instruction and the energy our machines consume.
 
 Scaling out to multiple cores piles on yet another layer of complexity. Coherence protocols, memory-ordering rules, synchronization overheads, and workload partitioning all dictate how our designs behave in the wild, and absolutely none of these effects register in a single-threaded proxy metric. Even at this stage, before we bolt on a single specialized block, the sheer volume of data required for a fair comparison has already outgrown any single summary number.
 
-### Specialization Widens the Hardware-Software Choice
+### Specialization Traps: Amdahl's Law and the Hardware-Software Spectrum
 
 We should view specialization as a broad spectrum, not simply a binary leap from a general-purpose central processing unit (CPU) to a custom accelerator. We can bolt vector and matrix instructions onto standard cores, leverage GPUs for massive parallel execution, craft domain-specific accelerators with custom dataflows and memory hierarchies, or strip away flexibility entirely with fixed-function application-specific integrated circuits (ASICs). As we slide along this spectrum, we trade the breadth of workloads and software paths our hardware can run for raw efficiency.
 
@@ -260,7 +262,7 @@ This drive for specialization has already spawned a staggering diversity of desi
 ```{python}
 #| label: fig-accelerator-landscape
 #| fig-cap: |
-#|   **The AI-accelerator landscape spans seven orders of magnitude in power.** Each point is a publicly announced accelerator from the MIT Lincoln Laboratory survey [@ReutherEtAl2025LAICS]: color marks form factor (chip, card, or system), filled versus hollow marks training versus inference, and the dashed diagonals are constant energy-efficiency contours. The "Cambrian explosion" (fueled by landmark designs like the Google TPU [@JouppiEtAl2017TPU]) is a dense, heterogeneous cloud rather than a single design point.
+#|   **The AI-accelerator landscape spans seven orders of magnitude in power.** Each point is a publicly announced accelerator from the MIT Lincoln Laboratory survey [@ReutherEtAl2025LAICS]: color marks form factor (chip, card, or system), filled versus hollow marks training versus inference, and the dashed diagonals are constant energy-efficiency contours. The "Cambrian explosion" is a dense, heterogeneous cloud rather than a single design point.
 #| out-width: "100%"
 #| fig-alt: "Log-log scatter of about 180 AI accelerators, peak performance in giga-operations per second versus peak power in watts. Points span from sub-watt embedded chips at the lower left to multi-kilowatt data-center systems at the upper right, roughly seven orders of magnitude in power and six in performance. Dashed diagonal lines mark constant energy efficiency from 100 giga-ops per watt to 100 tera-ops per watt. Chips, cards, and systems are colored distinctly; training parts are filled and inference parts hollow."
 
@@ -274,7 +276,7 @@ import _python.plots as _ap
 from _python.plots import COLORS, apply_style
 from _python.labels import place_labels
 
----
+apply_style()
 
 # Data: MIT Lincoln Laboratory AI accelerator survey, 2025 edition
 # [@ReutherEtAl2025LAICS], one row per publicly announced accelerator with a
@@ -343,11 +345,11 @@ In practice, specialization offloads the heaviest computational lifting to a het
 
 Ultimately, specialization binds the value of our hardware directly to the efficiency of a targeted workload. Before we carve out die area for a specialized block, we must confront Amdahl's law and ask what fraction of the deployed workload we are actually accelerating. If our targeted kernels only consume half the total execution time, an accelerator that crushes them ten times faster will still yield a total speedup of less than 1.8x, simply because the unaccelerated half now dominates the critical path [@Amdahl1967ValiditySingleProcessor]. The stubborn work we leave behind on the general-purpose core rigidly defines the ceiling of our specialized gains. Therefore, we cannot evaluate a specialized block in isolation; we must judge it alongside the compiler, the runtime, the memory traffic, and the residual workload that collectively determine its true delivered benefit.
 
-### SoC and Chiplet Composition
+### Packaging and Chiplet Composition: UCIe, Yield Economics, and Integration Landmines
 
-Specialized IP blocks rarely ship in isolation. We actively weave them into complex systems-on-chip (SoCs) and, increasingly, distribute them across multiple discrete chiplets. Manufacturing yield heavily drives this shift. Under basic random-defect models, the ratio of viable silicon plummets as die area and defect density climb, meaning we can rescue our yields by fracturing a monolithic die into smaller pieces [@Murphy1964CostSize]. However, this strategy does not miraculously linearize our costs, since advanced packaging, chiplet reuse, and heterogeneous process nodes completely rewrite the underlying economic model [@FengMa2022ChipletActuary]. Beyond yield, chiplets allow us to freely mix process nodes, third-party IP blocks, and specialized memory arrays on a single substrate. While open standards like UCIe elegantly stabilize the physical interface, they leave the brutal partitioning and implementation choices entirely in our hands [@UCIeConsortium2026Spec].
+Specialized IP blocks rarely ship in isolation. We actively weave them into complex systems-on-chip (SoCs) and, increasingly, distribute them across multiple discrete chiplets. Manufacturing yield heavily drives this shift. Under basic random-defect models, die yield plummets exponentially with area ($Y = e^{-\sqrt{A \cdot D_0}}$ under Murphy's model), meaning we can rescue our yields by fracturing a massive monolithic die into smaller compute and I/O chiplets [@Murphy1964CostSize]. However, this strategy does not miraculously linearize our costs, since advanced packaging, chiplet reuse, and heterogeneous process nodes completely rewrite the underlying economic model [@FengMa2022ChipletActuary]. Beyond yield, chiplets allow us to freely mix process nodes, third-party IP blocks, and specialized memory arrays on a single substrate. Open standards like Universal Chiplet Interconnect Express (UCIe) elegantly stabilize the physical layer – achieving sub-picojoule energy efficiency ($<0.5\text{ pJ/bit}$) and high shoreline bandwidth density ($>1.3\text{ TB/s/mm}$) across micro-bump pitches ($25\text{--}55\,\mu\text{m}$) [@UCIeConsortium2026Spec] – yet they leave the brutal partitioning and implementation choices entirely in our hands.
 
-Naturally, these advantages demand that we navigate a dense minefield of coupled design choices. A multi-chiplet system is far more volatile than just a miniaturized motherboard shoved into a package. The advanced package profoundly alters our latency, bandwidth, and energy budgets while introducing severe thermal coupling and rigid physical constraints. Furthermore, a modern SoC typically acts as a melting pot for heterogeneous IP blocks, often sourced from an ecosystem of wildly different vendors.
+Naturally, these advantages demand that we navigate a dense minefield of coupled design choices. A multi-chiplet system is far more volatile than just a miniaturized motherboard shoved into a package. Advanced packaging (such as 2.5D silicon interposers or 3D micro-bump arrays) profoundly alters our latency, bandwidth, and energy budgets while introducing severe thermal coupling and rigid physical constraints. Furthermore, a modern SoC typically acts as a melting pot for heterogeneous IP blocks, often sourced from an ecosystem of wildly different vendors.
 
 In the real world, our SoCs are almost always legacy-burdened deployments. We frequently find ourselves forced to integrate a pristine new accelerator alongside legacy controllers and proprietary physical-interface blocks from vendors who refuse to share their source RTL. We have to wrestle with undocumented interface quirks, conflicting reset sequences, and nasty clock-domain crossing (CDC) constraints that gleefully defy clean analytical modeling. When we finally assemble the full SoC, we routinely uncover subtle coherence-protocol mismatches [@Arm2020AXI] and hidden timing violations. Even our networks-on-chip (NoCs) can spontaneously deadlock if a subtle cycle slips into the channel-dependency graph. [^fn-soc-deadlocks-c02] Terrifyingly, these integration landmines often lie dormant until late-stage verification or physical silicon bring-up.
 
@@ -361,15 +363,15 @@ When we attempt to automate the search across this compositional minefield, our 
 
 Worse yet, across a fragmented multi-vendor package, some of those answers simply do not exist to be formalized. The Semiconductor Research Corporation's Microelectronics and Advanced Packaging Technologies (MAPT) roadmap bluntly argues that design automation for packaged multi-vendor systems is currently paralyzed by the utter lack of standard data formats, syntax, and semantics across suppliers. They rightly point out that we cannot automate a non-existent process [@SemiconductorResearchCorporation2023MAPT]. Our best optimizers cannot possibly enforce an integration rule if no supplier has bothered to write it down in a machine-readable format.
 
-Composition aggressively multiplies the physical and economic constraints our candidates must satisfy, and we cannot safely skip the evaluation of a single one. Long software bring-up sequences routinely crush the practical limits of detailed software simulators like gem5 [@BinkertEtAl2011Gem5], forcing our teams to pivot to massively expensive hardware emulation or FPGA prototyping. Tools like FireSim offer a concrete, highly capable FPGA-accelerated simulation environment to bridge this gap [@KarandikarEtAl2018FireSim]. Yet, each of these platforms forces us into a brutal compromise between raw execution throughput, debugging observability, hardware cost, and excruciating setup effort.
+Composition aggressively multiplies the physical and economic constraints our candidates must satisfy, and we cannot safely skip the evaluation of a single one. Long software bring-up sequences routinely crush the practical limits of detailed software simulators like gem5 [@BinkertEtAl2011Gem5] or heterogeneous CPU-GPU simulators like MacSIM, forcing our teams to pivot to massively expensive hardware emulation or FPGA prototyping. Tools like FireSim offer a concrete, highly capable FPGA-accelerated simulation environment to bridge this gap [@KarandikarEtAl2018FireSim]. Yet, each of these platforms forces us into a brutal compromise between raw execution throughput, debugging observability, hardware cost, and excruciating setup effort.
 
-Beyond basic functional correctness, chiplet manufacturing, security, power integrity, and IP interfaces each demand rigorous, independent verification. In advanced 2.5D and 3D integration schemes, like TSMC's CoWoS [@TSMCCoWoS] or Intel's Foveros [@IntelFoveros], discovering a single defective die after packaging will instantly brick the surrounding components in the assembly. While pre-bond screening mitigates this financial disaster, it cannot mathematically guarantee that every fragile die will survive the violence of assembly and operation. Consequently, any partition we propose must fiercely protect adequate test access and aggressively support the pre-bond screening required to establish Known-Good-Die status.[^fn-known-good-die-c02]
+Beyond basic functional correctness, chiplet manufacturing, security, power integrity, and IP interfaces each demand rigorous, independent verification. In advanced 2.5D and 3D integration schemes, like TSMC's CoWoS [@TSMCCoWoS] or Intel's Foveros [@IntelFoveros], discovering a single defective die after packaging will instantly brick the surrounding components in the assembly. While pre-bond screening mitigates this financial disaster, it cannot mathematically guarantee that every fragile die will survive the violence of assembly and operation. Consequently, any partition we propose must fiercely protect adequate test access and aggressively support the pre-bond screening (such as IEEE 1838 test access architecture) required to establish Known-Good-Die status.[^fn-known-good-die-c02]
 
 [^fn-known-good-die-c02]: **Known-Good-Die (KGD)**: KGD is the screening status assigned to a bare die judged suitable for assembly. Test-access work for three-dimensional stacks covers both pre-stacking die tests and post-stacking tests because screening one die does not establish the behavior of the completed assembly [@MarinissenEtAl2010PrePostBond; @IEEE2020Std1838].
 
 Security adds yet another unforgiving constraint. Carelessly sharing speculative-state buffers or execution units across secure and non-secure domains might save power, but it effortlessly blows open devastating side channels. We must validate these boundaries using rigorous formal methods or aggressive penetration testing, our standard performance proxies are completely useless here. Furthermore, pumping massive currents through a dense, multi-chiplet package inevitably induces nasty voltage droops across the power network (IR drop) and creates aggressive localized hotspots. Therefore, our layout signoff relies entirely on deep power delivery network (PDN) and thermomechanical modeling, rather than some naive aggregate-power estimate. Compounding this, much of the SoC remains aggressively opaque. To illustrate this reality, look no further than official product documentation: Arm has shipped processor IP as completely baked, process-specific hard macros [@Arm2013CortexA15HardMacro], while Intel rigorously locks down its encrypted RTL to enforce strict licensing limits [@Intel2024EncryptedRTLIP]. In these pervasive scenarios, our architectural studies actually have far less access to a block's internal state than we would with an in-house design, massively amplifying our reliance on exhaustively testing the integration interfaces.
 
-### Wafer-Scale Systems
+### Wafer-Scale Fabrics: Conquering Communication Latency at Physical Bounds
 
 Inevitably, some systems demand more raw compute, memory capacity, or internal bandwidth than any conventional package can ever deliver within a sane power envelope. Wafer-scale integration solves this by exploding the machine out to an entirely new physical scale, all while preserving the illusion of a single tightly coupled fabric [@PalEtAl2019WaferscaleGPU]. While behemoth machine-learning accelerators make this breaking point incredibly visible today, we face these exact same architectural tradeoffs far beyond the domain of AI workloads.
 
@@ -378,7 +380,7 @@ When we trap dozens of compute and memory regions on a single wafer-scale fabric
 Consequently, wafer-scale engineering exposes brutal realities that normally only haunt the long, messy path from the package out to the rack. Faulty dies or shattered links demand dynamic redundancy and aggressive rerouting, while sheer physical communication distances and software mapping determine how much of the massive fabric is actually usable. If our architectural comparisons obsess only over peak compute, we will completely ignore the power-delivery silicon, communication overheads, defect repair limits, and software mapping choices that dictate the machine's true, usable capacity.
 
 At every physical scale, from a single core out to an entire wafer, our delivered benefit fundamentally hinges on software placement, dynamic scheduling, and an unbroken executable path. As we scale up, the next great pressure we face is not designing yet another piece of hardware. Instead, we must confront the immense software stack required to actually keep the machine fed.
-## Software Is Part of the Machine
+## Software as Silicon
 
 Our hardware does nothing useful without the compilers, runtimes, libraries, and applications that map a workload onto it. This dependency can fail in two directions. We gain nothing from a mechanism that no compiler can target, and we might see diminishing returns if we optimize against a software stack that later changes.
 
@@ -396,7 +398,7 @@ As we scale to distributed systems, our software path grows even more complex. C
 
 We should view the instruction set architecture (ISA) as just one boundary within a much larger software path. Whenever we introduce a new vector or accelerator interface, we must preserve the relevant application binary interface, memory model, operating-system assumptions, compiler lowering, runtime behavior, and compatibility tests. We also need our compiled programs to demonstrate that data movement and software overheads do not consume our predicted benefits. We must not advance a design based on a favorable hardware proxy if we cannot compile, schedule, and test it. Furthermore, establishing an executable path once does not freeze it for the life of the hardware. In many of our modern comparisons, proposing another hardware mechanism is no longer the limiting factor. Instead, our real challenge is re-establishing an executable, representative comparison every time our compilers, runtimes, libraries, workloads, or deployment policies change. This software path often evolves while we are still designing the hardware.
 
-### Software Change Can Invalidate Hardware Comparisons {#sec-software-changes-faster-than-silicon}
+### Software Speed vs. Silicon {#sec-software-changes-faster-than-silicon}
 
 Our software and workloads constantly evolve while we design hardware. Consequently, our architectural comparisons can become stale long before the silicon ships, even if the hardware design remains entirely unchanged.
 
@@ -415,9 +417,194 @@ We can see one bounded example of this in AI workloads, where model scale and co
 [^fn-mixture-of-experts-c02]: **Mixture-of-experts (MoE) routing**: A sparsely gated model activates only a subset of its expert subnetworks for each input [@ShazeerEtAl2017MoE]. Because this input-dependent routing forces memory traffic to vary from token to token instead of following one fixed schedule, we must design our hardware to serve highly dynamic memory demands.
 
 ```{python}
+#| echo: false
+toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
+toy_candidate_evaluations = toy_design_candidates * 3
+```
+
+When we look across the horizontal date axis, the hollow notable-model records and filled frontier records rise by orders of magnitude on the logarithmic compute axis. Our fitted line summarizes that scattered cloud as more than fourfold annual growth. We do not use this fit to establish a universal rate, and we know that a larger model does not automatically constitute a different workload. Instead, it provides us with a bounded example of how rapidly model scale and the software stack can evolve while a hardware project is still underway. The specific model we sized our comparison against may ultimately differ from the model that eventually runs in production. For this reason, we must rigorously record the software and model versions behind our comparisons rather than taking them for granted.
+
+While product announcements reveal the interval between commercial releases, they do not show the actual period during which an architecture decision remains exposed to software change. The two product lines we chart in @fig-apple-silicon-cadence simply highlight how drastically announcement intervals can differ across the industry.
+
+```{python}
+#| label: fig-search-vs-eval-gap
+#| fig-cap: |
+#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
+#| out-width: "92%"
+#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
+
+from math import factorial
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style, row_axis, top_log_axis
+
+# Data provenance (all values transcribed or computed from this chapter's text):
+# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
+# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
+# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
+#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
+# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
+#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
+#   recomputed from sources.
+# As-of: 2026-07-14.
+
+toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
+timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
+
+rows = [
+    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
+    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
+    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
+    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
+]
+
+apply_style()
+fig, ax = plt.subplots(figsize=(4.95, 2.75))
+fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
+
+row_axis(ax, len(rows))
+top_log_axis(
+    ax,
+    xlim=(2e1, 4e19),
+    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
+    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
+    xlabel="search-space size (candidate configurations)",
+)
+
+for y, row in enumerate(rows):
+    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
+    if row["stated"]:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
+    else:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
+    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
+    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
+    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
+
+plt.show()
+plt.close(fig)
+```
+
+Apple's gaps in the upper row shrink rapidly from 19 to 16 to 7 months. Conversely, NVIDIA's data-center GPU gaps in the lower row remain near two years, at 22 and 24 months. We cannot use these announcement dates to bound a silicon program or to identify exactly when an architecture choice became too hard to change. They do not measure the pace of software change, rank release strategies, isolate any specific architecture contribution, or prove that AI tools caused a release to arrive sooner. Neither plot establishes a definitive design-cycle mismatch. Together, they illustrate why our comparisons must record the actual hardware, workload, and software exposure, rather than attempting to infer these details from public release dates.
+
+We often use benchmarks to keep our changing workloads comparable. For example, MLPerf defines shared tasks and reporting rules for machine-learning systems [@MattsonEtAl2020MLPerf]. Within the same benchmark version, division, scenario, and accuracy target, its strict inference rules allow us to meaningfully compare results from vastly different systems [@ReddiEtAl2020MLPerfInference], all while giving submitters the freedom to optimize their software toolchains [@ReddiEtAl2021VisionBehindMLPerf]. However, this comparability is actively maintained rather than inherent to the workloads themselves. The comparison only holds true as long as our community actively maintains the tasks and run rules.[^fn-metrology-calibration-c02] Whenever those underlying rules change, we may find that an earlier comparison no longer answers the same question.
+
+[^fn-metrology-calibration-c02]: **Metrological traceability**: A measurement result is traceable when we can relate it to a reference through a documented, unbroken chain of calibrations, each contributing uncertainty [@NIST2021MetrologicalTraceability]. While our architecture benchmarks do not create this kind of formal calibration chain, we still need explicit versions for their tasks, run rules, and measurement procedures so that reviewers can verify when two results remain genuinely comparable.
+
+For a target like Lighthouse mobile extended-reality (XR), the term "XR" remains far too broad to define a concrete workload, as it combines complex sensing, perception, graphics, display, interaction, latency, quality-of-experience, and energy constraints into a single concept. Even when we employ a dedicated benchmark like XRBench, we must still independently decide which specific traces, model versions, deadlines, input distributions, and quality targets truly matter for our design [@KwonEtAl2023XRBench].
+
+We must therefore treat our workload description as a precisely versioned input rather than a static name. When we document versioned traces, benchmark rules, compiler and runtime assumptions, and tool results, we allow our reviewers to independently verify whether a hardware claim still holds true. Our architecture studies also need explicit triggers that prompt us to repeat the comparison the moment one of those inputs changes. Ultimately, when our machines span an entire data center, the executable software path dictates exactly how our hardware, networks, and facility resources successfully operate as a single, unified system.
+## Machine Boundary Expansion
+
+Warehouse scale pulls all our preceding hardware and software pressures into a single, massive architecture problem. Our server and accelerator choices no longer exist in a vacuum; they ripple outward through network topology, collective communication, cluster scheduling, failure handling, deployment policies, and even facility power and cooling. When we compare systems at this level, we must judge the delivered service and operating constraints of the entire infrastructure, rather than just admiring the efficiency of an isolated node.
+
+Even if a single user request fits perfectly on one package, our aggregate demand, availability targets, and stringent service objectives often force us to deploy thousands of nodes. The boundary of "the computer" expands until it swallows the entire data center. As we adopt scale-out networks, sophisticated cluster software, and coherent device and memory interconnects like CXL,[^fn-cxl-c02] resource placement and sharing turn into fundamental architectural questions. We have officially entered the domain of warehouse-scale computing (WSC) [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Our architectural problem now encompasses everything from heterogeneous servers and shared cooling infrastructure to facility power limits and cluster-wide scheduling.
+
+[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect standard for processors, accelerators, and memory devices. Its memory semantics and switching support allow us to treat device-attached or pooled memory as a system-level provisioning decision [@CXLConsortium2026CXL].
+
+Experimenting with or simulating warehouse-scale systems is notoriously difficult, largely because component failure is a constant reality rather than an exceptional case [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. As architects, we have to piece together evidence by combining trace-driven and discrete-event models, emulation, controlled deployments, and raw production measurements. Yet, every model and measurement inevitably leaves something out. A simple trace might entirely miss the dynamic network congestion that drives crippling "tail at scale" latency [@DeanBarroso2013TailAtScale]. Similarly, a node that appears blazingly efficient in isolation can quickly lose that edge when bogged down by stragglers or heavy distributed coordination. Our core challenge is choosing evidence at a scale our study can actually afford, without dumbing down the system into a model that strips away the very behavior we want to review.
+
+As we traverse these scales, we never get a clean slate, our architecture comparisons do not reset just because the system boundary expands. A single core contributes baseline policies and tricky corner cases. An accelerator brings along its own workload mapping and software interfaces. SoCs and chiplets pile on strict integration, packaging, and testing constraints. When we step up to wafer-scale and warehouse-scale systems, we inherit all those previous obligations while stacking on new burdens like repair, placement, networking, failure handling, deployment logistics, and harsh facility limits (@fig-architecture-levers).
+
+![**A wider system boundary accumulates comparison obligations:** A credible comparison carries forward our constraints, interfaces, software paths, tool feedback, failures, and rejected alternatives established at smaller scales while adding the obligations introduced by accelerators, package composition, wafer-scale fabrics, and warehouse-scale operation.](images/F2-architecture-levers){#fig-architecture-levers width="100%" fig-alt="Five architecture scales run from core through accelerator, system-on-chip or chiplet, wafer-scale system, and warehouse-scale system. Each scale adds named obligations to a common comparison path, which carries constraints, interfaces, workload and software paths, tool feedback, failures, and rejected alternatives into one cross-scale architecture comparison."}
+
+This progression is cumulative, though we aren't claiming every architectural study must simulate an entire data center. If we are comparing cores, we might legitimately stop after our microarchitecture and physical checks. But a warehouse-scale comparison can't stop there; our node's behavior only reaches the delivered service through thick layers of software, complex networks, deployment policies, and rigid facility constraints. The appropriate boundary for our study is always the smallest one that captures the effects capable of flipping our final decision. Once we pull hardware, software, network, and facility choices into a single comparison, the sheer number of possible combinations explodes far faster than our capacity to evaluate them.
+## Search Space Explosion {#sec-evaluation-capacity-bounds-search}
+
+We must treat our capacity to produce candidate designs and our capacity to evaluate them as distinct resources. A mismatch often appears when hardware and software coupling expands the set of designs we can generate, yet our ability to check those designs fails to keep pace. We can easily conflate these two quantities simply because counting candidate production is much easier.
+
+Even a narrow comparison can yield a staggering number of combinations. Let's look at some illustrative rather than measured arithmetic. Suppose we explore an accelerator and memory subsystem for a single workload family. If we consider five compute organizations, four vector or accelerator interface choices, six memory hierarchy choices, four interconnect choices, three voltage/frequency policies, and three compiler/runtime policies, the product is:
+
+```{python}
+#| label: fig-apple-silicon-cadence
+#| fig-cap: |
+#|   **Announcement dates show different product-release intervals.** Apple's M-series intervals shorten from 19 to 7 months while NVIDIA's data-center GPUs hold a roughly two-year cycle in the period shown. Labels give the month gap between consecutive announced parts. The dates establish product-release timing only; they do not measure software change, development duration, or decision-to-release latency.
+#| out-width: "100%"
+#| fig-alt: "Two-row timeline. Apple's M1 (Nov 2020), M2 (Jun 2022), M3 (Oct 2023), and M4 (May 2024) fall 19, then 16, then 7 months apart, a shrinking interval; NVIDIA's A100 (May 2020), H100 (Mar 2022), and B100 (Mar 2024) fall 22 and 24 months apart."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+
+# Release dates transcribed from public product announcements (as fractional
+# year); month gaps computed between consecutive parts. Same data as the prior
+# static figure, restyled to the house chart family. As-of: 2026-07-19.
+apply_style()
+
+apple = {
+    "y": 1.0, "color": COLORS["workload"], "ink": COLORS["workload_ink"],
+    "label": "Apple Silicon",
+    "pts": [("M1", "Nov 2020", 2020.83), ("M2", "Jun 2022", 2022.42),
+            ("M3", "Oct 2023", 2023.75), ("M4", "May 2024", 2024.33)],
+    "gaps": ["19 mo", "16 mo", "7 mo"],
+}
+nvidia = {
+    "y": 0.0, "color": COLORS["designspace"], "ink": COLORS["designspace_ink"],
+    "label": "NVIDIA datacenter",
+    "pts": [("A100", "May 2020", 2020.33), ("H100", "Mar 2022", 2022.17),
+            ("B100", "Mar 2024", 2024.17)],
+    "gaps": ["22 mo", "24 mo"],
+}
+
+fig, ax = plt.subplots(figsize=(5.3, 2.35))
+for s in (apple, nvidia):
+    xs = [p[2] for p in s["pts"]]
+    y = s["y"]
+    ax.plot([xs[0], xs[-1]], [y, y], color=s["color"], linewidth=1.8, zorder=1,
+            solid_capstyle="round")
+    ax.scatter(xs, [y] * len(xs), s=42, marker="o", facecolor=s["color"],
+               edgecolor=s["color"], linewidth=1.2, zorder=3)
+    for name, date, x in s["pts"]:
+        ax.text(x, y + 0.30, name, ha="center", va="bottom", fontsize=6.6,
+                fontweight="bold", color=COLORS["ink"])
+        ax.text(x, y + 0.155, date, ha="center", va="bottom", fontsize=5.6,
+                color=COLORS["muted"])
+    for i, gap in enumerate(s["gaps"]):
+        xm = (xs[i] + xs[i + 1]) / 2
+        ax.text(xm, y - 0.135, gap, ha="center", va="top", fontsize=5.8,
+                fontweight="bold", color=s["ink"])
+    ax.text(2018.7, y, s["label"], ha="left", va="center", fontsize=6.8,
+            fontweight="bold", color=COLORS["ink"])
+
+ax.set_xlim(2018.6, 2025.3)
+ax.set_ylim(-0.7, 1.85)
+for sp in ax.spines.values():
+    sp.set_visible(False)
+ax.set_yticks([])
+ax.set_xticks([])
+fig.subplots_adjust(left=0.01, right=0.99, top=0.98, bottom=0.04)
+```
+
+$$
+5 \times 4 \times 6 \times 4 \times 3 \times 3
+$$
+
+We suddenly face `{python} f"{toy_design_candidates:,}"` candidate configurations before we even begin counting workload versions, process corners, thermal constraints, or reliability cases. If we check each candidate at three fidelity levels, we create `{python} f"{toy_candidate_evaluations:,}"` candidate--evaluation combinations, all before we reject a single invalid design. In our real architecture studies, these numbers grow far larger and the process takes far longer before we ever see silicon measurements.
+
+However, this raw count tells us little about how many candidates we can actually evaluate well enough to matter. Because each surviving configuration requires an analytical model, simulator run, synthesis check, or human review, our larger choice set dramatically increases the demand for feedback. We know that cheap models reduce evaluation cost, but they cannot establish whether a choice is truly legal or whether stronger measurements will preserve its ranking. Ultimately, our practical limit is not how many configurations we can enumerate in an architecture study. Rather, it is how many we can evaluate rigorously enough to support our next design decision.
+
+We see similar problems arise in different ways across other architecture tasks (@tbl-design-loop-scale-anchors). Mapping, design-space exploration (DSE),[^fn-dse-c02] physical design, and software tuning do not share a single measurement scale. Instead, each task combines a massive array of possible choices with strict constraints that render only a fraction of them genuinely useful.
+
+[^fn-dse-c02]: **Design-space exploration (DSE)**: The systematic search over a parameterized family of architectural configurations, such as cache capacities, issue widths, or accelerator array shapes, for the ones that best satisfy a stated objective under stated constraints. A trial may require a simulator run, analytical evaluation, synthesis run, or another architecture measurement, which is why the evaluation budget rather than the space size sets the practical limit.
+
+When we look at Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and evaluating deep-neural-network (DNN) accelerators, we find a concrete lower bound on this combinatorial growth. For a convolutional neural network (CNN) layer with seven nested loops and a four-level memory hierarchy, our loop ordering and level-bypass choices alone produce $(7!)^4 \times (2^4)^3$ arrangements. The first factor gives us a different ordering of the seven loops at each of our four memory levels. The second factor gives us a binary bypass choice at those four levels for each of three data spaces. Our factorization choices enlarge this mapspace even further. This formula, therefore, represents neither the complete count nor a count of useful mappings. It simply isolates two sources of growth before our legality, capacity, and performance constraints step in to remove most of the candidates.
+
+| **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
+| --- | --- | --- |
+| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
+| DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
+| TPU-block floorplanning | The AlphaChip paper reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
+| Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
+
+: **Large search spaces place different demands on evaluation.** Mapping, accelerator DSE, floorplanning, and tensor-program tuning combine candidate scale, validity constraints, feedback cost, and different evidence requirements. {#tbl-design-loop-scale-anchors tbl-colwidths="[25,36,28]"}
+
+We see candidate scale emerging from entirely different parts of the system. While Timeloop and MAESTRO show us just how quickly our mapping and accelerator choices multiply, AutoTVM reminds us that our software schedule can create a massive search space even after we have locked in our hardware. Meanwhile, our floorplanning example exposes the other limit: just because we can produce a candidate quickly does not mean we have established its routed quality.
+
+MAESTRO makes this distinction especially clear. When we process 0.17M designs per second, we can examine its full 480M-candidate space in under an hour. In this scenario, we have access to plentiful, cheap analytical feedback. Our most difficult decision then becomes figuring out which apparent winners justify a more expensive evaluation. When we place our four anchors' candidate counts on a single logarithmic axis, we can compare them directly without making the mistake of treating equal counts as equal amounts of evaluation work (@fig-search-vs-eval-gap).
+
+```{python}
 #| label: fig-training-compute-growth
 #| fig-cap: |
-#|   **This chapter's fit to the displayed database snapshot yields about 4.4-fold annual growth in training compute.** Each point comes from a frozen July 19, 2026 snapshot of Epoch AI's model database [@EpochAI2025AIModels]. The red line is a least-squares fit over the 2010--2026 records shown; it is separate from Epoch AI's reported 4--5-fold analysis through May 2024 [@SevillaRoldan2024ComputeGrowth]. The fitted rate describes this displayed snapshot rather than a universal rate, and it does not measure how changes in model scale overlap a hardware design program.
+#|   **A fit to the displayed notable-model records yields about 4.4-fold annual growth in training compute.** Each point is a record from Epoch AI's database [@SevillaRoldan2024ComputeGrowth]; the red line is a least-squares fit over the 2010--2026 points shown, which run past the cited analysis's May 2024 window. The growth factor describes the displayed records rather than a universal rate, and it does not measure how changes in model scale overlap a hardware project.
 #| out-width: "92%"
 #| fig-alt: "Log-scale scatter of AI training compute in FLOP versus publication date from 2010 to 2026. Points rise from about ten to the fifteenth FLOP in 2010 to over ten to the twenty-sixth by 2025, frontier models tracing the upper edge. A fitted line marks roughly 4.4-fold growth per year. AlexNet, AlphaGo Zero, GPT-3, and GPT-4 are labeled along the rising frontier."
 
@@ -431,13 +618,12 @@ import matplotlib.pyplot as plt
 import _python.plots as _ap
 from _python.plots import COLORS, apply_style
 
----
+apply_style()
 
 # Data: Epoch AI "Notable AI Models" database, restricted to models carrying a
 # publication date and a training-compute (FLOP) estimate. Values are
-# dataset-transcribed, not recomputed; the growth factor is this chapter's
-# least-squares log-linear fit to the displayed snapshot (2010-2026)
-# [@EpochAI2025AIModels].
+# dataset-transcribed, not recomputed; the growth factor is a least-squares
+# log-linear fit to the points shown (2010-2026) [@SevillaRoldan2024ComputeGrowth].
 # Accessed 2026-07-19. Receipt: data/source-receipts/chapter2-training-compute.csv
 _root = Path(_ap.__file__).resolve().parents[2]
 
@@ -502,201 +688,16 @@ ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, lab
 fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.12)
 ```
 
-When we look across the horizontal date axis, the hollow notable-model records and filled frontier records rise by orders of magnitude on the logarithmic compute axis. Our fitted line summarizes that scattered cloud as more than fourfold annual growth. We do not use this fit to establish a universal rate, and we know that a larger model does not automatically constitute a different workload. Instead, it provides us with a bounded example of how rapidly model scale and the software stack can evolve while a hardware project is still underway. The specific model we sized our comparison against may ultimately differ from the model that eventually runs in production. For this reason, we must rigorously record the software and model versions behind our comparisons rather than taking them for granted.
-
-While product announcements reveal the interval between commercial releases, they do not show the actual period during which an architecture decision remains exposed to software change. The two product lines we chart in @fig-apple-silicon-cadence simply highlight how drastically announcement intervals can differ across the industry.
-
-```{python}
-#| label: fig-apple-silicon-cadence
-#| fig-cap: |
-#|   **Announcement intervals do not establish architecture or AI effects.** Apple's M-series intervals shorten from 19 to 7 months while NVIDIA's data-center GPUs hold a roughly two-year cycle in the period shown [@Apple2020M1; @Apple2022M2; @Apple2023M3; @Apple2024M4; @NVIDIA2020A100; @NVIDIA2022H100; @NVIDIA2024B100]. Labels give the month gap between consecutive announced parts. The dates establish release timing only; they do not measure software change, development duration, per-generation architecture contribution, or a causal effect from AI assistance.
-#| out-width: "100%"
-#| fig-alt: "Two-row timeline. Apple's M1 (Nov 2020), M2 (Jun 2022), M3 (Oct 2023), and M4 (May 2024) fall 19, then 16, then 7 months apart, a shrinking interval; NVIDIA's A100 (May 2020), H100 (Mar 2022), and B100 (Mar 2024) fall 22 and 24 months apart."
-
-import matplotlib.pyplot as plt
----
-
-# Release dates transcribed from public product announcements (as fractional
-# year); month gaps computed between consecutive parts. Same data as the prior
-# static figure, restyled to the house chart family. As-of: 2026-07-19.
-apply_style()
-
-apple = {
-    "y": 1.0, "color": COLORS["workload"], "ink": COLORS["workload_ink"],
-    "label": "Apple Silicon",
-    "pts": [("M1", "Nov 2020", 2020.83), ("M2", "Jun 2022", 2022.42),
-            ("M3", "Oct 2023", 2023.75), ("M4", "May 2024", 2024.33)],
-    "gaps": ["19 mo", "16 mo", "7 mo"],
-}
-nvidia = {
-    "y": 0.0, "color": COLORS["designspace"], "ink": COLORS["designspace_ink"],
-    "label": "NVIDIA datacenter",
-    "pts": [("A100", "May 2020", 2020.33), ("H100", "Mar 2022", 2022.17),
-            ("B100", "Mar 2024", 2024.17)],
-    "gaps": ["22 mo", "24 mo"],
-}
-
-fig, ax = plt.subplots(figsize=(5.3, 2.35))
-for s in (apple, nvidia):
-    xs = [p[2] for p in s["pts"]]
-    y = s["y"]
-    ax.plot([xs[0], xs[-1]], [y, y], color=s["color"], linewidth=1.8, zorder=1,
-            solid_capstyle="round")
-    ax.scatter(xs, [y] * len(xs), s=42, marker="o", facecolor=s["color"],
-               edgecolor=s["color"], linewidth=1.2, zorder=3)
-    for name, date, x in s["pts"]:
-        ax.text(x, y + 0.30, name, ha="center", va="bottom", fontsize=6.6,
-                fontweight="bold", color=COLORS["ink"])
-        ax.text(x, y + 0.155, date, ha="center", va="bottom", fontsize=5.6,
-                color=COLORS["muted"])
-    for i, gap in enumerate(s["gaps"]):
-        xm = (xs[i] + xs[i + 1]) / 2
-        ax.text(xm, y - 0.135, gap, ha="center", va="top", fontsize=5.8,
-                fontweight="bold", color=s["ink"])
-    ax.text(2018.7, y, s["label"], ha="left", va="center", fontsize=6.8,
-            fontweight="bold", color=COLORS["ink"])
-
-ax.set_xlim(2018.6, 2025.3)
-ax.set_ylim(-0.7, 1.85)
-for sp in ax.spines.values():
-    sp.set_visible(False)
-ax.set_yticks([])
-ax.set_xticks([])
-fig.subplots_adjust(left=0.01, right=0.99, top=0.98, bottom=0.04)
-```
-
-Apple's gaps in the upper row shrink rapidly from 19 to 16 to 7 months. Conversely, NVIDIA's data-center GPU gaps in the lower row remain near two years, at 22 and 24 months. We cannot use these announcement dates to bound a silicon program or to identify exactly when an architecture choice became too hard to change. They do not measure the pace of software change, rank release strategies, isolate any specific architecture contribution, or prove that AI tools caused a release to arrive sooner. Neither plot establishes a definitive design-cycle mismatch. Together, they illustrate why our comparisons must record the actual hardware, workload, and software exposure, rather than attempting to infer these details from public release dates.
-
-We often use benchmarks to keep our changing workloads comparable. For example, MLPerf defines shared tasks and reporting rules for machine-learning systems [@MattsonEtAl2020MLPerf]. Within the same benchmark version, division, scenario, and accuracy target, its strict inference rules allow us to meaningfully compare results from vastly different systems [@ReddiEtAl2020MLPerfInference], all while giving submitters the freedom to optimize their software toolchains [@ReddiEtAl2021VisionBehindMLPerf]. However, this comparability is actively maintained rather than inherent to the workloads themselves. The comparison only holds true as long as our community actively maintains the tasks and run rules.[^fn-metrology-calibration-c02] Whenever those underlying rules change, we may find that an earlier comparison no longer answers the same question.
-
-[^fn-metrology-calibration-c02]: **Metrological traceability**: A measurement result is traceable when we can relate it to a reference through a documented, unbroken chain of calibrations, each contributing uncertainty [@NIST2021MetrologicalTraceability]. While our architecture benchmarks do not create this kind of formal calibration chain, we still need explicit versions for their tasks, run rules, and measurement procedures so that reviewers can verify when two results remain genuinely comparable.
-
-For a target like Lighthouse mobile extended-reality (XR), the term "XR" remains far too broad to define a concrete workload, as it combines complex sensing, perception, graphics, display, interaction, latency, quality-of-experience, and energy constraints into a single concept. Even when we employ a dedicated benchmark like XRBench, we must still independently decide which specific traces, model versions, deadlines, input distributions, and quality targets truly matter for our design [@KwonEtAl2023XRBench].
-
-We must therefore treat our workload description as a precisely versioned input rather than a static name. When we document versioned traces, benchmark rules, compiler and runtime assumptions, and tool results, we allow our reviewers to independently verify whether a hardware claim still holds true. Our architecture studies also need explicit triggers that prompt us to repeat the comparison the moment one of those inputs changes. Ultimately, when our machines span an entire data center, the executable software path dictates exactly how our hardware, networks, and facility resources successfully operate as a single, unified system.
-## Warehouse-Scale Computing Extends the Architecture Problem
-
-Warehouse scale pulls all our preceding hardware and software pressures into a single, massive architecture problem. Our server and accelerator choices no longer exist in a vacuum; they ripple outward through network topology, collective communication, cluster scheduling, failure handling, deployment policies, and even facility power and cooling. When we compare systems at this level, we must judge the delivered service and operating constraints of the entire infrastructure, rather than just admiring the efficiency of an isolated node.
-
-Even if a single user request fits perfectly on one package, our aggregate demand, availability targets, and stringent service objectives often force us to deploy thousands of nodes. The boundary of "the computer" expands until it swallows the entire data center. As we adopt scale-out networks, sophisticated cluster software, and coherent device and memory interconnects like CXL,[^fn-cxl-c02] resource placement and sharing turn into fundamental architectural questions. We have officially entered the domain of warehouse-scale computing (WSC) [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. Our architectural problem now encompasses everything from heterogeneous servers and shared cooling infrastructure to facility power limits and cluster-wide scheduling.
-
-[^fn-cxl-c02]: **Compute Express Link (CXL)**: A cache-coherent interconnect standard for processors, accelerators, and memory devices. Its memory semantics and switching support allow us to treat device-attached or pooled memory as a system-level provisioning decision [@CXLConsortium2026CXL].
-
-Experimenting with or simulating warehouse-scale systems is notoriously difficult, largely because component failure is a constant reality rather than an exceptional case [@BarrosoHolzleRanganathan2019DatacenterAsComputer]. As architects, we have to piece together evidence by combining trace-driven and discrete-event models, emulation, controlled deployments, and raw production measurements. Yet, every model and measurement inevitably leaves something out. A simple trace might entirely miss the dynamic network congestion that drives crippling "tail at scale" latency [@DeanBarroso2013TailAtScale]. Similarly, a node that appears blazingly efficient in isolation can quickly lose that edge when bogged down by stragglers or heavy distributed coordination. Our core challenge is choosing evidence at a scale our study can actually afford, without dumbing down the system into a model that strips away the very behavior we want to review.
-
-As we traverse these scales, we never get a clean slate, our architecture comparisons do not reset just because the system boundary expands. A single core contributes baseline policies and tricky corner cases. An accelerator brings along its own workload mapping and software interfaces. SoCs and chiplets pile on strict integration, packaging, and testing constraints. When we step up to wafer-scale and warehouse-scale systems, we inherit all those previous obligations while stacking on new burdens like repair, placement, networking, failure handling, deployment logistics, and harsh facility limits (@fig-architecture-levers).
-
-![**A wider system boundary accumulates comparison obligations:** A credible comparison carries forward our constraints, interfaces, software paths, tool feedback, failures, and rejected alternatives established at smaller scales while adding the obligations introduced by accelerators, package composition, wafer-scale fabrics, and warehouse-scale operation.](images/F2-architecture-levers){#fig-architecture-levers width="100%" fig-alt="Five architecture scales run from core through accelerator, system-on-chip or chiplet, wafer-scale system, and warehouse-scale system. Each scale adds named obligations to a common comparison path, which carries constraints, interfaces, workload and software paths, tool feedback, failures, and rejected alternatives into one cross-scale architecture comparison."}
-
-This progression is cumulative, though we aren't claiming every architectural study must simulate an entire data center. If we are comparing cores, we might legitimately stop after our microarchitecture and physical checks. But a warehouse-scale comparison can't stop there; our node's behavior only reaches the delivered service through thick layers of software, complex networks, deployment policies, and rigid facility constraints. The appropriate boundary for our study is always the smallest one that captures the effects capable of flipping our final decision. Once we pull hardware, software, network, and facility choices into a single comparison, the sheer number of possible combinations explodes far faster than our capacity to evaluate them.
-## Design Spaces Grow Faster Than Evaluation Capacity {#sec-evaluation-capacity-bounds-search}
-
-We must treat our capacity to produce candidate designs and our capacity to evaluate them as distinct resources. A mismatch often appears when hardware and software coupling expands the set of designs we can generate, yet our ability to check those designs fails to keep pace. We can easily conflate these two quantities simply because counting candidate production is much easier.
-
-Even a narrow comparison can yield a staggering number of combinations. Let's look at some illustrative rather than measured arithmetic. Suppose we explore an accelerator and memory subsystem for a single workload family. If we consider five compute organizations, four vector or accelerator interface choices, six memory hierarchy choices, four interconnect choices, three voltage/frequency policies, and three compiler/runtime policies, the product is:
-
-```{python}
-#| echo: false
-toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
-toy_candidate_evaluations = toy_design_candidates * 3
-```
-
-$$
-5 \times 4 \times 6 \times 4 \times 3 \times 3
-$$
-
-We suddenly face `{python} f"{toy_design_candidates:,}"` candidate configurations before we even begin counting workload versions, process corners, thermal constraints, or reliability cases. If we check each candidate at three fidelity levels, we create `{python} f"{toy_candidate_evaluations:,}"` candidate--evaluation combinations, all before we reject a single invalid design. In our real architecture studies, these numbers grow far larger and the process takes far longer before we ever see silicon measurements.
-
-However, this raw count tells us little about how many candidates we can actually evaluate well enough to matter. Because each surviving configuration requires an analytical model, simulator run, synthesis check, or human review, our larger choice set dramatically increases the demand for feedback. We know that cheap models reduce evaluation cost, but they cannot establish whether a choice is truly legal or whether stronger measurements will preserve its ranking. Ultimately, our practical limit is not how many configurations we can enumerate in an architecture study. Rather, it is how many we can evaluate rigorously enough to support our next design decision.
-
-We see similar problems arise in different ways across other architecture tasks (@tbl-design-loop-scale-anchors). Mapping, design-space exploration (DSE),[^fn-dse-c02] physical design, and software tuning do not share a single measurement scale. Instead, each task combines a massive array of possible choices with strict constraints that render only a fraction of them genuinely useful.
-
-[^fn-dse-c02]: **Design-space exploration (DSE)**: The systematic search over a parameterized family of architectural configurations, such as cache capacities, issue widths, or accelerator array shapes, for the ones that best satisfy a stated objective under stated constraints. A trial may require a simulator run, analytical evaluation, synthesis run, or another architecture measurement, which is why the evaluation budget rather than the space size sets the practical limit.
-
-When we look at Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and evaluating deep-neural-network (DNN) accelerators, we find a concrete lower bound on this combinatorial growth. For a convolutional neural network (CNN) layer with seven nested loops and a four-level memory hierarchy, our loop ordering and level-bypass choices alone produce $(7!)^4 \times (2^4)^3$ arrangements. The first factor gives us a different ordering of the seven loops at each of our four memory levels. The second factor gives us a binary bypass choice at those four levels for each of three data spaces. Our factorization choices enlarge this mapspace even further. This formula, therefore, represents neither the complete count nor a count of useful mappings. It simply isolates two sources of growth before our legality, capacity, and performance constraints step in to remove most of the candidates.
-
-| **Architecture task** | **Scale anchor** | **Why candidate count is not enough** |
-| --- | --- | --- |
-| DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
-| DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
-| TPU-block floorplanning | The AlphaChip paper reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
-| Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
-
-: **Large search spaces place different demands on evaluation.** Mapping, accelerator DSE, floorplanning, and tensor-program tuning combine candidate scale, validity constraints, feedback cost, and different evidence requirements. {#tbl-design-loop-scale-anchors tbl-colwidths="[25,36,28]"}
-
-We see candidate scale emerging from entirely different parts of the system. While Timeloop and MAESTRO show us just how quickly our mapping and accelerator choices multiply, AutoTVM reminds us that our software schedule can create a massive search space even after we have locked in our hardware. Meanwhile, our floorplanning example exposes the other limit: just because we can produce a candidate quickly does not mean we have established its routed quality.
-
-MAESTRO makes this distinction especially clear. When we process 0.17M designs per second, we can examine its full 480M-candidate space in under an hour. In this scenario, we have access to plentiful, cheap analytical feedback. Our most difficult decision then becomes figuring out which apparent winners justify a more expensive evaluation. When we place our four anchors' candidate counts on a single logarithmic axis, we can compare them directly without making the mistake of treating equal counts as equal amounts of evaluation work (@fig-search-vs-eval-gap).
-
-```{python}
-#| label: fig-search-vs-eval-gap
-#| fig-cap: |
-#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
-#| out-width: "92%"
-#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
-
-from math import factorial
-
-import matplotlib.pyplot as plt
----
-
-# Data provenance (all values transcribed or computed from this chapter's text):
-# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
-# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
-# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
-#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
-# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
-#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
-#   recomputed from sources.
-# As-of: 2026-07-14.
-
-toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
-timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
-
-rows = [
-    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
-    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
-    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
-    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
-]
-
-apply_style()
-fig, ax = plt.subplots(figsize=(4.95, 2.75))
-fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
-
-row_axis(ax, len(rows))
-top_log_axis(
-    ax,
-    xlim=(2e1, 4e19),
-    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
-    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
-    xlabel="search-space size (candidate configurations)",
-)
-
-for y, row in enumerate(rows):
-    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
-    if row["stated"]:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
-    else:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
-    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
-    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
-    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
-
-plt.show()
-plt.close(fig)
-```
-
 Notice how our toy count sits in the thousands, MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed lower bound lies almost ten orders of magnitude farther to the right. We use AutoTVM's hollow marker to distinguish its order-of-magnitude estimate from the explicitly stated or computed counts. While this full span covers nearly fifteen orders of magnitude, the horizontal position only encodes our candidate count. It tells us absolutely nothing about the cost, fidelity, or decision strength of a single evaluation. As architects, we must decide which choices are truly worth testing and exactly how many reliable evaluations our architecture study can afford.
 
 We must always remember that our search capacity and evaluation capacity draw from completely separate budgets. ArchGym clearly shows us why our exploration methods require fair, reproducible comparisons under common environments and shared sample budgets [@KrishnanEtAl2023ArchGym]. Throughout this book, we apply an even broader accounting rule: we compare evaluation fidelity, tool cost, total compute, and engineering effort, rather than simply equalizing candidate counts alone. Although a fast estimator can drastically increase the number of candidates receiving a quick score, it does not increase the number of candidates receiving a check strong enough to support our final commitment.
 
 While an executable software path is absolutely necessary, it still fails to establish how many candidates we can check strongly enough to support a robust decision. Our next real limit is the actual capacity and fidelity of our evaluation and verification.
-## Evaluation and Verification Limit Progress
+## Physical Limits and Throughput
 
 We can keep growing our design space, but physics, budgets, and schedules still bound our comparisons. Physics dictates what we can actually build, power, and cool, while fixed program budgets and schedules dictate how much we can check before we commit to a tapeout. Though more resources might expand our evaluation capacity, they never remove underlying physical limits nor make our available time and money unbounded.
 
-### Physical and Measurement Limits {#sec-physical-constraints-move-into-architecture}
+### Physical Constraints {#sec-physical-constraints-move-into-architecture}
 
 When we compare architectures, physical effects introduce two distinct problems. First, our early models might omit an effect that later overturns our initial rankings. Second, the definitive measurements that would settle the question often cost too much to run on every candidate. Consequently, a design that looks sound at our architectural abstraction can still fail due to a thermal hotspot or severe IR drop, revealing that our comparison masked a consequential physical effect. Furthermore, reliability narrows our viable space even further. Phenomena like soft errors, process variation [@Borkar2005ReliableSystems], and silicon aging, including Negative Bias Temperature Instability (NBTI) and Hot Carrier Injection (HCI), directly affect viability in demanding domains like automotive systems governed by ISO 26262 [@ISO2018Iso26262]. To build confidence, we must often look to evidence from fault injection, aging simulation, physical and circuit analysis, accelerated testing, and production data.
 
@@ -712,7 +713,7 @@ When we plot the gap between arithmetic and memory-access energy on a logarithmi
 #| fig-alt: "Log-scale plot comparing arithmetic and memory-access energy, showing a 32-bit integer add at 0.1 picojoules, SRAM accesses from 10 to 100 picojoules, and an off-chip DRAM access range from 1.3 to 2.6 nanojoules."
 
 import matplotlib.pyplot as plt
----
+from _python.plots import COLORS, add_note_box, apply_style, draw_range_rows, row_axis, top_log_axis
 
 # Source receipt: data/source-receipts/chapter2-horowitz-energy.csv
 rows = [
@@ -798,11 +799,11 @@ The evolution of AMD's Bulldozer architecture, its later FX-9590 product, and th
 
 Because physical constraints and reliability concerns define a massive search space, no early model will ever eliminate our need for the robust physical tools required to validate our final claims. As architects, we must intuitively understand exactly which lower-cost estimates are safe for broad screening, and which rigorous checks retain the power to overturn our rankings.
 
-### Evaluation Capacity {#sec-stronger-evaluation-expensive}
+### Simulation Throughput and Fidelity {#sec-stronger-evaluation-expensive}
 
 As we design larger systems, we expose vastly more candidate configurations, software states, physical corners, and failure modes. Expanding our choice space inherently drives up our demand for simulator runs, synthesis runs, physical-design tools, verification passes, and expert review. We simply cannot run every candidate through every available tool. Since these evaluations consume varying mixtures of compute clusters, software licenses, project schedule, and human attention, our feedback loop starves whenever an architectural study demands more checking capacity than our available people and tools can possibly provide.
 
-Our evaluation tools form a broad spectrum where adjacent tiers often sit orders of magnitude apart in throughput, cost, and setup time. Suppose we have a simulator that sustains ten to one hundred thousand instructions per second. At those agonizing rates, simulating just one real-time second of a workload retiring one billion instructions per second takes roughly three to twenty-eight hours. While emulation and FPGA prototypes can run much faster, they demand entirely different hardware, complex compilation flows, and substantial bring-up costs. Since actual rates always depend on the model, workload, host, tool, and platform, our fundamental budgeting question isn't just whether a candidate *can* be measured, but rather which candidates have actually earned the right to consume an expensive evaluation tier.
+Our evaluation tools form a broad spectrum where adjacent tiers often sit orders of magnitude apart in throughput, cost, and setup time. Suppose we have a simulator like gem5 that sustains ten to one hundred thousand instructions per second. At those agonizing rates, simulating just one real-time second of a workload retiring one billion instructions per second takes roughly three to twenty-eight hours. Fast parallel simulators like Sniper or compiled C++ RTL models generated via Verilator run significantly faster, while hardware emulation (such as Cadence Palladium or Synopsys ZeBu) and FPGA prototypes (like FireSim [@KarandikarEtAl2018FireSim]) accelerate execution even further. Yet, each step up the fidelity spectrum demands different hardware, complex logic synthesis (via open-source engines like Yosys or industrial suites), and substantial bring-up costs. Since actual rates always depend on the model, workload, host, tool, and platform, our fundamental budgeting question isn't just whether a candidate *can* be measured, but rather which candidates have actually earned the right to consume an expensive evaluation tier.
 
 To cope, we have long rationed our expensive evaluations through clever abstraction and statistical sampling. For example, SimPoint helps us isolate highly representative program regions [@SherwoodEtAl2002SimPoint], while SMARTS gives us rigorous error bounds for sampled simulation [@WunderlichEtAl2003SMARTS]. We employ analytical models, reduced workloads, and multifidelity evaluation to serve this exact same purpose across different design levels. Because every one of these techniques trades some fidelity for capacity, we must clearly state what our cheaper evaluations preserve and explicitly flag which candidates still mandate a stronger check.
 
@@ -812,15 +813,15 @@ The staggering costs of leading-edge chip development perfectly illustrate the s
 
 If we force a respin, we add massive fabrication, validation, and schedule penalties before we even learn whether our correction actually worked. Ultimately, our heavy investments in simulation, emulation, and rigorous signoff exist precisely to minimize the terrifying probability of ever paying for that iteration again.
 
-### Verification Capacity
+### Verification Bottlenecks
 
 We all know that verification faces a terrifying exponential state-space upper bound, even though smart structuring, clever abstractions, and advanced verification methods ultimately govern how much work we actually perform. Adding just a single state-holding bit doubles our number of encoded states, meaning a design with $n$ such bits can technically encode up to $2^n$ states. Thankfully, the reachable subset is usually far smaller because it depends tightly on our reset and next-state logic; this is precisely why our verification jobs don't just blindly enumerate every encoded state.
 
-However, that theoretical upper bound absolutely rules out verifying every relevant property through brute-force enumeration. Instead, we must artfully combine coverage goals, hardware assertions, formal proofs, constrained-random testing, deep regressions, unresolved-defect reviews, and hard-earned engineering judgment. We view a flattening bug-discovery curve as just one key input to our tapeout decision, rather than a standalone, infallible rule. Crucially, a sudden flood of novel architectural candidates forces our team to repeat substantial portions of this incredibly exhausting work.
+However, that theoretical upper bound absolutely rules out verifying every relevant property through brute-force enumeration. Instead, we must artfully combine coverage goals, SystemVerilog Assertions (SVA), formal proofs, constrained-random testing with production simulators like Synopsys VCS, fast compiled C++ simulation using Verilator, deep regressions, unresolved-defect reviews, and hard-earned engineering judgment. We view a flattening bug-discovery curve as just one key input to our tapeout decision, rather than a standalone, infallible rule. Crucially, a sudden flood of novel architectural candidates forces our team to repeat substantial portions of this incredibly exhausting work.
 
 For these reasons, our architectural evaluations must explicitly weigh verification effort alongside the classic pillars of Power, Performance, and Area (PPA). For instance, a highly speculative cache-coherence protocol might demonstrate a superb measured performance gain, yet it remains a terrible choice if we cannot thoroughly check its complex new states and interactions within our given design-program budget.
 
-We rely on formal verification and simulation to attack entirely different parts of this problem. When we simulate, we exercise selected behaviors under highly specific stimuli. When we use formal methods, we mathematically prove a stated property across all possible behaviors covered by our model and its baseline assumptions, though our formal capacity drops sharply depending on the property, abstraction level, and sequential state. To manage this, we often use bounded model checking (BMC) to search behavior only up to a chosen cycle depth. We also lean heavily on combinational equivalence checking, which elegantly skirts the sequential state explosion by merely proving that two combinational descriptions implement the exact same Boolean function. Despite these tools, intricate sequential protocols, liveness guarantees, and broad system interactions will always require us to deploy a carefully balanced mix of formal checking and robust simulation [@Clarke2018ModelChecking].
+We rely on formal verification and simulation to attack entirely different parts of this problem. When we simulate using engines like VCS or Verilator, we exercise selected behaviors under highly specific stimuli. When we use formal methods (supported by tools like Yosys for formal checking), we mathematically prove a stated property across all possible behaviors covered by our model and its baseline assumptions, though our formal capacity drops sharply depending on the property, abstraction level, and sequential state. To manage this, we often use bounded model checking (BMC) to search behavior only up to a chosen cycle depth. We also lean heavily on combinational equivalence checking, which elegantly skirts the sequential state explosion by merely proving that two combinational descriptions implement the exact same Boolean function. Despite these tools, intricate sequential protocols, liveness guarantees, and broad system interactions will always require us to deploy a carefully balanced mix of formal checking and robust simulation [@Clarke2018ModelChecking].
 
 Our industry has grappled publicly with this intense verification pressure for over a quarter of a century. As far back as 2001, the ITRS Design chapter famously declared verification "a bottleneck that has now reached crisis proportions" [@ITRS2001Design]. Today, the Semiconductor Research Corporation's MAPT roadmap still explicitly warns of a widening verification gap looming across our future transitions [@SemiconductorResearchCorporation2023MAPT]. While this rich history makes verification an indispensable constraint to check whenever someone proposes generating architectural candidates faster, it doesn't automatically imply that verification will be the absolute limiting constraint in every single design program.
 
@@ -838,7 +839,7 @@ Looking at the workforce, Foster's summary of the 2022 Wilson Research Group fun
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
 
----
+apply_style()
 
 # Mean peak engineers per IC/ASIC project, Wilson Research Group / Siemens EDA
 # functional-verification studies (Foster's published summaries). 2007-2020
@@ -907,7 +908,7 @@ This harsh reality actually predates the advanced nodes that produced these numb
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
 
----
+apply_style()
 
 # Sourced constants: IBS estimates as reported in Arm's Form 424B4
 # [@ArmHoldings2023Prospectus]. The filing reports only the combined 71 percent
@@ -958,7 +959,7 @@ plt.close(fig)
 Looking at the bar lengths, we see the estimate leaping from \$249M at 7\ nm to \$725M at 2\ nm. Within that massive 2\ nm bar, we use the blue segment to combine software development, verification, and IP qualification simply because our source reports only their combined 71 percent share. The hatched remainder represents the rest of the budget rather than a specifically measured activity, and unfortunately, the source leaves the 7\ nm composition entirely unstated. Therefore, we use this figure strictly to support these high-level cost and composition claims, not to boldly argue which individual engineering activity grew the fastest.
 
 Ultimately, these staggering costs fundamentally alter what we should consider a true architectural improvement. Simply producing more architectural candidates offers us no real value if every surviving design dumps massive simulation, synthesis, physical-design, verification, and code-review workloads onto an already overflowing queue. To succeed, our team must cleanly distill an ocean of scattered tool results into a crisp, undeniable comparison that our expert reviewers can actually inspect, and that our leadership can confidently use to make the final tapeout decision.
-## Compounding Pressures Shift the Limiting Work {#sec-compounding-design-loop-pressure}
+## Compounding Loop Pressures {#sec-compounding-design-loop-pressure}
 
 These pressures interact rather than merely accumulate. As we specialize our designs, we expand the choice set; each hardware choice creates new software obligations. Our software changes can easily make the original workload description stale, while physical effects might reverse whatever rankings remain. Every candidate that survives this gauntlet then heaps more work onto our plates, demanding simulation, implementation tools, verification, and expert review.
 
@@ -983,7 +984,7 @@ The scissors in @fig-scissors-gap has a well-established ancestor in our discipl
 While a growing evaluation or review queue makes one type of mismatch painfully visible, not every constraint manifests as a neat queue. An architecture study might simply be missing a workload trace, a packaging constraint, or a software model that would otherwise completely reverse our findings. We might find that our available choices exclude the specific interface or memory organization we need to hit our targets. Sometimes the decisive tool is just too expensive to run broadly, or our results are fully baked but still sitting idle, waiting for expert judgment. Ultimately, the most useful question is not what category label we slap on our whole effort. The real question is what specific work is currently blocking our next architectural decision, and which checks must remain absolutely authoritative if we decide to accelerate that work.
 
 This nuance explains why the widening region in @fig-scissors-gap is conditional rather than universal. We might find our design programs limited by candidate production, while others are choked by evaluation, verification, missing information, or even a fundamentally infeasible design space. The figure only transforms into a local diagnosis when our own programmatic measurements prove that the work awaiting our evaluation or review is genuinely growing faster than we can complete it.
-## Where AI Assistance Might Help {#sec-feedback-and-verification-become-the-bottleneck}
+## Targeting AI Assistance {#sec-feedback-and-verification-become-the-bottleneck}
 
 When we consider applying AI to our design process, we first need to identify the specific bottlenecks holding back our decisions. If our design context is stale, we need tools that can reconcile conflicting information; if strong evaluations are too costly, we need predictive screening before invoking expensive simulators. Sometimes, we lack an executable artifact altogether and need automated construction, or our choice space simply exceeds our evaluation budget and requires guided search. Even mundane tasks like repeated tool operation and triage place enormous pressure on our attention. To choose the right assistance, we must ask which specific limit is slowing progress in our current architecture study.
 
@@ -1003,8 +1004,7 @@ Of course, every form of assistance incurs a distinct cost and introduces new wa
 | The choice space exceeds the budget | Search mappings, schedules, parameters, or topologies under stated objectives and constraints. | Manual sweeps and repeated selection among large numbers of choices. | A complete objective, legal choices, matched evaluation budgets, and stronger evaluation of the selected result. |
 | Tool operation or triage consumes attention | Configure tools, launch runs, classify failures, compare reports, and route uncertain cases. | Repeated tool operation and initial result triage. | Clean tool state, reproducible commands, authoritative tool verdicts, and expert review where required. |
 
-: **Each use retains an independent check.** While AI may reduce our manual work in information search, evaluation, artifact creation, design-space exploration, or tool-operation, it never replaces the provenance, calibration, engineering tools, or architectural judgment that establishes our final result.
-{#tbl-ai-contributions-by-bound tbl-colwidths="[20,29,23,28]"}
+: **Each use retains an independent check.** While AI may reduce our manual work in information search, evaluation, artifact creation, design-space exploration, or tool-operation, it never replaces the provenance, calibration, engineering tools, or architectural judgment that establishes our final result. {#tbl-ai-contributions-by-bound tbl-colwidths="[20,29,23,28]"}
 
 We often deploy several forms of assistance to address different bottlenecks within the same design program. However, combining them does not magically make our results self-validating. If every component in our pipeline depends on the same incomplete workload description or flawed model, our complete system might look internally consistent while being completely wrong.
 
