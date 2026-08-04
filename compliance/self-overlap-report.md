@@ -5,11 +5,12 @@ screening aid, not a legal opinion or a substitute for the Publisher's similarit
 review.
 
 - Last verified: 2026-07-15 against the revised worktree; exact release commit pending
-- Manuscript units audited: 14 (Preface, Chapters 1-10, and Appendices A-C)
+- Manuscript units audited: 14 (Preface, Chapters 1–11, and Appendices A–B)
 - Exact passage reuse detected from the comparison sources below: none at the stated thresholds
 - Cited prior-author-work disclosures: 6 grouped disclosures
-- Current third-party epigraphs: 8
-- Epigraphs with source-level metadata verified: 8
+- Current third-party epigraphs: 10 across Chapters 1–7 and 9–11
+- Epigraphs with source-level text and metadata verified in this record: 8; verification remains
+  open for Chapters 10 and 11
 
 ## Screening Method and Results
 
@@ -39,21 +40,20 @@ third-party source.
 
 | Book location | Prior author work | Relationship | Editorial disposition |
 | --- | --- | --- | --- |
-| Chapters 1, 3, and 10 | Reddi and Yazdanbakhsh, “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” (2025) | The book cites the article when introducing the Architecture 2.0 vision, the five-part execution view, and the balance between autonomy and human expertise. Chapter 1's open-research-questions section organizes its five themes along the article's named challenges and ecosystem components, covering datasets, methods, tools, verification, and benchmarks, and cites the article at that point. The book's bounded-study, claim-review, evidence, and decision-rights framework is a substantial further development. | Disclose as the book's cited conceptual predecessor. The final-PDF screen found no exact sequence of 10 or more normalized words in the manuscript. |
+| Preface and Chapter 1 | Reddi and Yazdanbakhsh, “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” (2025) | The Preface cites the article as the source of the broad Architecture 2.0 vision and distinguishes the book's formulation from the article. Chapter 1 cites it when distinguishing established, human-directed architecture practice from broader participation by learned methods. The book's bounded-study, claim-review, evidence, and decision-rights framework is a substantial further development. | Disclose as the book's cited conceptual predecessor. The final-PDF screen found no exact sequence of 10 or more normalized words in the manuscript. |
 | Chapter 5 | Reddi and Yazdanbakhsh, “Architecture 2.0: Why Computer Architects Need a Data-Centric AI Gymnasium” (2023) | Chapter 5 cites and restates the need for data-centric, shared architecture environments. | Disclose as a cited conceptual predecessor. No exact sequence of 10 or more normalized words was found. |
 | Chapter 5 | Architecture 2.0 SIGARCH workshop outcome report (2023), coauthored by Reddi | Chapter 5 condenses the report's six-part community agenda into the environment and infrastructure argument. | Disclose as a cited summary. No exact sequence of 10 or more normalized words was found. |
-| Chapters 1-3, 5, 9, and Appendices B-C | MLPerf papers coauthored by Reddi | The book uses MLPerf as precedent for benchmark governance, fixed scenarios, provenance, and comparable reporting. Chapter 2 also paraphrases published participation and scale statistics. | Keep the citations and disclose the recurring precedent. No passage-level reuse from MLSysBook was found. |
-| Chapters 3-6, 9-10, and Appendix C | ArchGym, QuArch, and related papers from the author's research collaborations | The book summarizes the published systems and uses them as worked precedents for environments, architecture question answering, and bounded evaluation. | Treat as cited descriptions of coauthored or author-affiliated research. Confirm the final author lists in the bibliography rather than leaving “and others” where delivery metadata requires complete credits. |
+| Chapters 1–2 and 10 | MLPerf papers coauthored by Reddi | The book uses MLPerf as precedent for benchmark governance, fixed scenarios, provenance, and comparable reporting. Chapter 2 also paraphrases published participation and scale statistics. | Keep the citations and disclose the recurring precedent. No passage-level reuse from MLSysBook was found. |
+| Chapters 1, 2, 4–6, and 8 | ArchGym, QuArch, and related papers from the author's research collaborations | The book summarizes the published systems and uses them as worked precedents for environments, architecture question answering, and bounded evaluation. | Treat as cited descriptions of coauthored or author-affiliated research. Confirm the final author lists in the bibliography rather than leaving “and others” where delivery metadata requires complete credits. |
 | Chapters 1-2, 5, 7, and 9 | MLSysBook themes and examples | Benchmarking discipline, multidimensional efficiency, data movement, reward gaming, reliability incidents, and system-level evidence also appear in the author's ML-systems teaching. | Disclose thematic continuity. The screen found no passage reuse of 13 or more normalized words and no byte-identical media. |
 
 ## Direct Third-Party Quotations
 
-Eight of the ten numbered chapters currently open with an epigraph. Chapters 8
-and 10 use author-written openings after their unverifiable attributed
-quotations were removed. The retained epigraphs are the only third-party
-passages found by the direct-quotation inventory. The lighthouse prompt, captions,
-definition blocks, listings, and callout prose are author-written. Goodhart's law is currently
-paraphrased and cited rather than quoted.
+Ten of the eleven numbered chapters currently open with an epigraph. Chapter 8
+alone uses an author-written opening. The retained epigraphs are the only
+third-party passages found by the direct-quotation inventory. The lighthouse prompt,
+captions, definition blocks, listings, and callout prose are author-written. Goodhart's
+law is currently paraphrased and cited rather than quoted.
 
 | Chapter | Quotation and stated source | Words | Delivery status |
 | --- | --- | ---: | --- |
@@ -65,6 +65,8 @@ paraphrased and cited rather than quoted.
 | 6 | “But they are useless. They can only give you answers.” — Pablo Picasso, *The Paris Review* (1964) | 10 | Exact text and calculating-machine context verified in William Fifield, “Pablo Picasso—A Composite Interview,” *The Paris Review* 32 (Summer–Fall 1964), p. 62. Publisher quotation disposition remains open. |
 | 7 | “Program testing can be used to show the presence of bugs, but never to show their absence!” — Edsger W. Dijkstra, *Notes on Structured Programming* (1970) | 17 | Exact text verified in EWD249, “On the reliability of mechanisms,” in *Notes on Structured Programming* (1970), using the University of Texas at Austin E. W. Dijkstra Archive. Publisher quotation disposition remains open. |
 | 9 | “There is no single development … one order of magnitude improvement …” — Fred Brooks, “No Silver Bullet” (1986) | 27 | Exact text verified in Frederick P. Brooks Jr., UNC technical report TR86-020 (September 1986), p. 1. The preceding sentence supplies the decade horizon; the epigraph does not silently combine it with later abstract wording. Obtain Publisher clearance or replace it with author-written prose. |
+| 10 | “Measurements are key.” — H. James Harrington, *Business Process Improvement* (1991) | 3 | The manuscript cites p. 82 of the 1991 McGraw-Hill book. Exact-text verification and Publisher quotation disposition remain open. |
+| 11 | “Everyone designs who devises courses of action aimed at changing existing situations into preferred ones.” — Herbert A. Simon, *The Sciences of the Artificial* (1969) | 15 | The manuscript cites p. 55 of the 1969 MIT Press book. Exact-text verification and Publisher quotation disposition remain open. |
 
 ## Delivery Actions
 
