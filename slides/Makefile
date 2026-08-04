@@ -1,14 +1,14 @@
 SHELL := /bin/sh
 
-DECK := architecture-2.0
+DECKS := architecture-2.0 workshop-slides
 LATEXMK := latexmk
 
 .PHONY: all clean
 
-all: $(DECK).pdf
+all: $(addsuffix .pdf, $(DECKS))
 
-$(DECK).pdf: $(DECK).tex
-	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error $(DECK).tex
+%.pdf: %.tex
+	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error $<
 
 clean:
-	$(LATEXMK) -C $(DECK).tex
+	$(LATEXMK) -C $(addsuffix .tex, $(DECKS))
