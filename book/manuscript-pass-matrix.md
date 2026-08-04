@@ -354,9 +354,9 @@ Pass 8 owns any decision to create, redraw, reuse, or omit a figure.
 
 ## Approved Pass 0 Decisions
 
-1. Use three parts with short opening blurbs: *Ambition and Need* (Chapters
-   1–2), *Technical Foundations* (Chapters 3–7), and *Operation, Evaluation,
-   and Responsibility* (Chapters 8–11).
+1. Use three parts with short opening blurbs: *The Moonshot and Its
+   Motivation* (Chapters 1–2), *Technical Foundations* (Chapters 3–7), and
+   *Operation, Evaluation, and Responsibility* (Chapters 8–11).
 2. Use the book-wide Lighthouse policy above. Brief grounding references may
    remain in prose; detailed studies and settings belong in callouts or a
    dedicated application section.
