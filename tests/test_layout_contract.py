@@ -149,6 +149,31 @@ def test_sparse_page_detector_looks_past_blank_recto_verso_page() -> None:
     assert findings == []
 
 
+def test_sparse_page_detector_does_not_skip_sparse_part_opener() -> None:
+    profiles = [
+        _profile(1, starts_chapter=True, major_unit_kind="chapter"),
+        _profile(2, bottom_whitespace=218.0, occupancy=0.56),
+        _profile(
+            3,
+            bottom_whitespace=None,
+            occupancy=None,
+            word_count=0,
+        ),
+        _profile(
+            4,
+            bottom_whitespace=None,
+            occupancy=None,
+            word_count=5,
+            major_unit_kind="part",
+        ),
+        _profile(5),
+    ]
+
+    findings = arch2_cli.sparse_page_findings(Path("book.pdf"), profiles=profiles)
+
+    assert findings == []
+
+
 def test_major_unit_detection_only_uses_opening_lines() -> None:
     opening = ["Running header", "References", "First entry"]
     late_heading = [

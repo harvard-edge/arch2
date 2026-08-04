@@ -3380,7 +3380,8 @@ def _profile_occupancy(profile: LayoutPageProfile) -> float | None:
 def _is_layout_interstitial(profile: LayoutPageProfile) -> bool:
     occupancy = _profile_occupancy(profile)
     return (
-        not (profile.has_figure or profile.has_table)
+        not _starts_major_unit(profile)
+        and not (profile.has_figure or profile.has_table)
         and profile.word_count <= 12
         and (occupancy is None or occupancy <= 0.08)
     )
