@@ -5,8 +5,13 @@ screening aid, not a legal opinion or a substitute for the Publisher's similarit
 review.
 
 - Last verified: 2026-07-15 against the revised worktree; exact release commit pending
-- Manuscript units audited: 14 (Preface, Chapters 1–11, and Appendices A–B)
-- Exact passage reuse detected from the comparison sources below: none at the stated thresholds
+- July 15 screening scope: 14 units (the then-current Preface, Chapters 1–10, and Appendices
+  A–C recorded in the manifest at `f5516e52`)
+- July 15 exact-passage result: no reuse detected from the comparison sources below at the
+  stated thresholds
+- Current manuscript structure: 14 units (Preface, Chapters 1–11, and Appendices A–B)
+- Current units outside the July 15 screening scope: Chapter 11 and the new Appendix B; both
+  remain unscreened until the recorded comparison is rerun
 - Cited prior-author-work disclosures: 6 grouped disclosures
 - Current third-party epigraphs: 10 across Chapters 1–7 and 9–11
 - Epigraphs with source-level text and metadata verified in this record: 8; verification remains
@@ -17,20 +22,23 @@ review.
 The manuscript prose was normalized by removing markup, code blocks, citations, URLs, and
 punctuation before exact token-sequence comparison. This method can find copied passages, but it
 does not detect paraphrase, translation, conceptual inheritance, or a redrawn figure.
+All results in this section apply only to the July 15 manuscript snapshot. They do not establish
+a no-match result for current Chapter 11 or the new Appendix B.
 
 | Comparison source | Scope | Threshold | Result |
 | --- | --- | --- | --- |
 | *Machine Learning Systems* | 80 current Volume 1, Volume 2, and shared-front-matter `.qmd` files in the author's local source tree | 12 consecutive normalized words | No match of 13 or more words. One generic 12-word sequence, “data that can be adapted to a wide range of downstream tasks,” appears in Chapter 1 and the MLSysBook glossary. It is not a distinctive passage. |
 | “Architecture 2.0: Why Computer Architects Need a Data-Centric AI Gymnasium” | Public SIGARCH post fetched 2026-07-14 | 10 consecutive normalized words | No exact match. Chapter 5 cites and paraphrases the post. |
 | “Architecture 2.0 Workshop: How Machine Learning Will Redefine Computer Architecture and Systems” | Public SIGARCH post fetched 2026-07-14 | 10 consecutive normalized words | No exact match. Chapter 5 cites and summarizes the workshop agenda. |
-| “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” | Final nine-page IEEE *Computer* PDF, document 10857820, DOI `10.1109/MC.2024.3521641`, SHA-256 `eefa6ce0340f0a1178ba25856e3bf3bc867f5f5a7034c5b4ed1a50b41900852b` | 10 consecutive normalized words, checked with PDF hyphens both separated and joined | No exact match of 10 or more words in the 14 manuscript units. The longest match in either normalization was five generic words. The book cites and develops the article's concepts in new prose. |
+| “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” | Final nine-page IEEE *Computer* PDF, document 10857820, DOI `10.1109/MC.2024.3521641`, SHA-256 `eefa6ce0340f0a1178ba25856e3bf3bc867f5f5a7034c5b4ed1a50b41900852b` | 10 consecutive normalized words, checked with PDF hyphens both separated and joined | No exact match of 10 or more words in the July 15 snapshot's 14 manuscript units. The longest match in either normalization was five generic words. The book cites and develops the article's concepts in new prose. |
 | MLSysBook media | 10,511 current image, vector, and PDF assets compared by SHA-256 with 150 current book assets | Byte identity | No identical cross-repository asset. This does not rule out independently redrawn figures that use the same cited facts. |
 
 The 2025 foundations comparison used the final IEEE PDF retained in the author's local archive.
 OpenAlex and Semantic Scholar both classify the public article as closed access, so the delivery
 record identifies the checked file by document number, DOI, page count, and hash without
 redistributing it. The exact-sequence screen does not detect paraphrase or conceptual inheritance;
-the disclosure below therefore remains necessary even though no passage-level reuse was found.
+the disclosure below therefore remains necessary even though the July 15 screen found no
+passage-level reuse.
 
 ## Disclosures of Prior Author Work
 
@@ -40,12 +48,12 @@ third-party source.
 
 | Book location | Prior author work | Relationship | Editorial disposition |
 | --- | --- | --- | --- |
-| Preface and Chapter 1 | Reddi and Yazdanbakhsh, “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” (2025) | The Preface cites the article as the source of the broad Architecture 2.0 vision and distinguishes the book's formulation from the article. Chapter 1 cites it when distinguishing established, human-directed architecture practice from broader participation by learned methods. The book's bounded-study, claim-review, evidence, and decision-rights framework is a substantial further development. | Disclose as the book's cited conceptual predecessor. The final-PDF screen found no exact sequence of 10 or more normalized words in the manuscript. |
-| Chapter 5 | Reddi and Yazdanbakhsh, “Architecture 2.0: Why Computer Architects Need a Data-Centric AI Gymnasium” (2023) | Chapter 5 cites and restates the need for data-centric, shared architecture environments. | Disclose as a cited conceptual predecessor. No exact sequence of 10 or more normalized words was found. |
-| Chapter 5 | Architecture 2.0 SIGARCH workshop outcome report (2023), coauthored by Reddi | Chapter 5 condenses the report's six-part community agenda into the environment and infrastructure argument. | Disclose as a cited summary. No exact sequence of 10 or more normalized words was found. |
-| Chapters 1–2 and 10 | MLPerf papers coauthored by Reddi | The book uses MLPerf as precedent for benchmark governance, fixed scenarios, provenance, and comparable reporting. Chapter 2 also paraphrases published participation and scale statistics. | Keep the citations and disclose the recurring precedent. No passage-level reuse from MLSysBook was found. |
+| Preface and Chapter 1 | Reddi and Yazdanbakhsh, “Architecture 2.0: Foundations of Artificial Intelligence Agents for Modern Computer System Design” (2025) | The Preface cites the article as the source of the broad Architecture 2.0 vision and distinguishes the book's formulation from the article. Chapter 1 cites it when distinguishing established, human-directed architecture practice from broader participation by learned methods. The book's bounded-study, claim-review, evidence, and decision-rights framework is a substantial further development. | Disclose as the book's cited conceptual predecessor. The July 15 final-PDF screen found no exact sequence of 10 or more normalized words in that manuscript snapshot. |
+| Chapter 5 | Reddi and Yazdanbakhsh, “Architecture 2.0: Why Computer Architects Need a Data-Centric AI Gymnasium” (2023) | Chapter 5 cites and restates the need for data-centric, shared architecture environments. | Disclose as a cited conceptual predecessor. The July 15 screen found no exact sequence of 10 or more normalized words. |
+| Chapter 5 | Architecture 2.0 SIGARCH workshop outcome report (2023), coauthored by Reddi | Chapter 5 condenses the report's six-part community agenda into the environment and infrastructure argument. | Disclose as a cited summary. The July 15 screen found no exact sequence of 10 or more normalized words. |
+| Chapters 1–2 and 10 | MLPerf papers coauthored by Reddi | The book uses MLPerf as precedent for benchmark governance, fixed scenarios, provenance, and comparable reporting. Chapter 2 also paraphrases published participation and scale statistics. | Keep the citations and disclose the recurring precedent. The July 15 screen found no passage-level reuse from MLSysBook. |
 | Chapters 1, 2, 4–6, and 8 | ArchGym, QuArch, and related papers from the author's research collaborations | The book summarizes the published systems and uses them as worked precedents for environments, architecture question answering, and bounded evaluation. | Treat as cited descriptions of coauthored or author-affiliated research. Confirm the final author lists in the bibliography rather than leaving “and others” where delivery metadata requires complete credits. |
-| Chapters 1-2, 5, 7, and 9 | MLSysBook themes and examples | Benchmarking discipline, multidimensional efficiency, data movement, reward gaming, reliability incidents, and system-level evidence also appear in the author's ML-systems teaching. | Disclose thematic continuity. The screen found no passage reuse of 13 or more normalized words and no byte-identical media. |
+| Chapters 1-2, 5, 7, and 9 | MLSysBook themes and examples | Benchmarking discipline, multidimensional efficiency, data movement, reward gaming, reliability incidents, and system-level evidence also appear in the author's ML-systems teaching. | Disclose thematic continuity. The July 15 screen found no passage reuse of 13 or more normalized words and no byte-identical media. |
 
 ## Direct Third-Party Quotations
 
