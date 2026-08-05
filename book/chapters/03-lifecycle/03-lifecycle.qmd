@@ -28,8 +28,6 @@ Because each pitfall demands a different repair, we must organize workflows to c
 After reading this chapter, we can achieve the following objectives. We contrast ad hoc AI prompts with rigorous architecture methods across hardware and software subsystems. We define the six life-cycle responsibilities, outputs, and targeted repair paths. We manage iterative design loops without relying on rigid waterfall schedules. We distinguish a complete life cycle, scoped study, design loop, and study record. We preserve design context to keep all evidence, tool executions, and failures reviewable.
 :::
 
-We already know how difficult it is to reconstruct ordinary architecture work after the fact. Our simulator configurations often live in one repository and workload selections in another. Human teams naturally bridge these gaps through shared history and repeated discussion. AI systems have no reliable access to this implicit knowledge. If we want an AI to effectively assist us, we must make our context explicit throughout the design process.
-
 ## Common Pitfalls
 
 Applying unconstrained AI prompts to complex architecture studies without formal lifecycle boundaries introduces severe operational risks. As design teams scale automated generation across System-on-Chip (SoC) components, ad hoc prompting without explicit artifact lifecycles, versioned contracts, or structured records leads to recurring failure modes. The following pitfalls detail how lifecycle omissions distort architectural progress.
@@ -157,72 +155,7 @@ We must confirm that each tool actually used our requested parameters. A syntact
 
 We can evaluate a candidate only after checking our implementation record to confirm the intended work actually ran. Once verified, we compare returned measurements against the requirements, objectives, and validity conditions we established during formulation. The outcome explicitly details which checks passed, failed, or remain unresolved, showing precisely how much confidence our measurements justify.
 
-As we shape our order of evaluation, we balance tool cost and fidelity across a multi-fidelity evaluation spectrum spanning all eight layers. Handoffs to physical signoff exchange cell timing, dynamic power, leakage, and pin capacitance tables via Liberty (`.lib`) library schemas for TSMC N7 and 3\ nm-class LP mobile nodes. Architectural simulation runs in `gem5` report cycle counts, cache miss ratios, NoC bisection bandwidth congestion, and memory queueing latencies under strict DRAM timing parameters. Fast CACTI SRAM models filter out candidates violating physical area bounds. Integrated runs using `SCALE-Sim`, `gem5`, and `Ramulator` capture dynamic queueing and frame-time latency over millions of cycles under XRBench, SPEC2026, and MLPerf workloads. High-speed SystemVerilog simulation in `Verilator` verifies bit-exact functional correctness and SVA protocol assertions. Gate-level simulation in commercial `VCS` paired with static timing signoff (STA) and power signoff (UPF) tools extracts true dynamic power under gate-level switching activity within our 3\ W TDP target.
-
-While higher fidelity strengthens our answer to the declared question, it never widens our decision scope. A cycle-level result in `gem5` does not authorize full silicon fabrication if our study only promised a recommendation for gate-level RTL evaluation. Our evaluation can end in several legitimate states. We must keep invalid executions, unresolved comparisons, and rejected candidates fully visible for subsequent review.
-
-### Stage 5 Interpreting Empirical Results
-
-Even if a favorable number clears all declared checks, we might still struggle to explain why the design actually improved. Evaluation establishes whether a result passes basic checks, whereas interpretation tells us what the result means. Explanation tests whether our proposed hardware-software mechanism truly accounts for that outcome.
-
-A larger cache capacity might improve average latency but degrade tail latency due to NoC contention or compiler thread scheduling. We connect measured outcomes to a concrete physical account rather than just telling a plausible story. Simulator loopholes exist across all subsystem domains. An optimizer in `SCALE-Sim` might achieve throughput by omitting weight buffer sync barriers, causing data hazards. A compiler pass in TVM might eliminate vector spill code in simulation by assuming unconstrained register file capacity, failing when compiled for target hardware in `Verilator`.
-
-Improving a metric and proving a mechanism are two entirely different claims. We should choose required observations before we trigger an expensive run. A top-line score cannot recover miss classifications or per-frame histories discarded along the way. While fluent prose can organize our final account, it can never replace the hard measurements that support it.
-
-### Stage 6 Reviewing Decision Handoffs
-
-The review brings our scoped plan and all subsequent work back together. We ask whether we explored the legal alternatives adequately, whether our intended tools successfully ran, and whether our measurements satisfy declared checks. We must verify that our explanation is credible and whether the accumulated work supports our intended decision.
-
-Through review, we might advance one candidate, reject another, or request an entirely new comparison. We may revise the original question, narrow our conclusion, or simply stop because we exhausted our budget. An honest, unresolved result remains a useful outcome provided our study record clearly explains why the question remains open.
-
-When a result is missing, we must know whether to propose another candidate, repair a tool run, collect another measurement, or narrow our decision. That choice depends on what each stage of our responsibility received, what it produced, and where our failed work should return (@tbl-stage-contracts).
-
-| **Stage** | **Receives** | **Produces and checks** | **Repair and handoff** |
-| --- | --- | --- | --- |
-| **Formulate** | Product intent, a design question, and known requirements. | A scoped plan whose question, comparator, and exclusions agree. | Repair our question or scope. |
-| **Explore** | Our scoped plan and declared legal changes. | One or more legal candidates and their selection history. | Repair our design space or search approach. |
-| **Implement** | A candidate, requested tool work, and required inputs. | An execution record showing the requested work ran on our intended state. | Repair our request or tool setup. |
-| **Evaluate** | Completed tool returns, planned metrics, and validity conditions. | A comparison stating which checks passed, failed, or remain unresolved. | Repair our measurement plan, rerun within budget, or reject the candidate. |
-| **Interpret and Explain** | The checked result and proposed mechanism. | An account supported, revised, or contradicted by a direct physical reason. | Repair our hypothesis or request missing observations. |
-| **Review and Decide** | The scoped plan and study record. | A decision within the declared scope, a narrower conclusion, or an honest stop. | Reopen the work that owns the missing result or close our study. |
-
-: **Each responsibility produces an artifact we can inspect.** Our inputs, outputs, and repair paths remain distinct. {#tbl-stage-contracts tbl-colwidths="[15,25,34,26]"}
-
-During review, we choose actions solely within our assigned authority. While our system might propose a candidate, it cannot override human judgment. When review calls for revision, we name the responsibility that reopens the task, taking care to preserve the requirements and tool conditions from which the repaired work proceeds.
-
-## Managing Revisions
-
-How do targeted return paths route inadequate outputs back to specific life-cycle responsibilities without corrupting global study state? We do not treat revision as a separate seventh stage. When we produce an inadequate output, we simply return the work to the responsibility that owns the repair. If we generate a malformed tool request for `SCALE-Sim`, we route it back to Implement without altering the candidate itself. When a product requirement changes, we reopen Formulate.
-
-We rely on a design loop to keep each change tightly connected to our original question and our next decision. The path we illustrate in @fig-design-loop shows how our scoped study can revisit the responsibility that owns each repair while preserving valid work.
-
-![**Our design loop revisits the life-cycle responsibility that owns each repair.** We return a named repair to the responsible stage, while we push a supported result toward a scoped outcome.](images/F3-design-loop){#fig-design-loop width="82%" fig-alt="Six life-cycle responsibilities shown as our recurrent path through a scoped plan, legal candidate, execution record, checked result, supported account, and next action."}
-
-We start each pass with our current scoped plan and a legal candidate. As we run the tool, we add either an execution record or note an infrastructure failure. We use declared checks to turn valid outputs into a measured result, allowing us to determine exactly what mechanism those measurements support. During Review, we explicitly name our next action. If we find a result inadequate, we record our return path to show which responsibility must act next and why.
-
-When we conduct parallel work, we must rigorously preserve the same study state. We ensure each branch names the specific study revision it used, and we record our actions strictly against that revision. We merge results only after verifying that their assumptions, interfaces, and permitted changes remain perfectly compatible. If we change a shared requirement, we revalidate affected results in all other branches.
-
-We preserve crucial learning by keeping every result permanently attached to its study revision. When a change invalidates a result, we do not erase the data, but we prevent that outdated result from silently carrying forward as current evidence.
-
-## Design-Loop Cards {#sec-design-loop-card}
-
-How do Design-Loop Cards structure and index design state to ensure transparent architectural provenance and accountability? The Design-Loop Card acts as an essential, structured index that binds automated execution data directly to architectural intent and accountability. Rather than prescribing a universal format, this card elevates the preservation of design state, constraints, and failures into a core engineering requirement. It provides a compact index into the specific artifacts that bear on a single, scoped architecture question and the decision our work supports.
-
-We borrow the core reporting instinct behind model cards and datasheets for datasets, tools that make intended use and known limits readily reviewable [@MitchellEtAl2019ModelCards; @GebruEtAl2021Datasheets]. Because our designs evolve rapidly, our architecture studies must preserve the changing design state, tool conditions, failed checks, and the explicit authority for the next action. A static description of a model simply cannot carry those responsibilities by itself.
-
-To manage these dynamic requirements, we need a study record that makes our architectural state and its revisions fully inspectable.
-
-> **Study record.** The cumulative account of one scoped architecture study. It retains the plan, stage outputs, failed or unevaluated work, unresolved questions, stopping reason, and supported decision, with links to the detailed artifacts needed for review or replay.
-
-For every consequential transition, our study record explicitly names the revision. It details exactly who or what proposed and approved the action, what executed it across our tool flows, what checked the result, and what later change might invalidate it. We capture the specific decision being supported, the physical assumptions bounding our results, and the named authority empowered to act on them.
-
-To be truly useful, this index must directly connect our overarching project goals and constraints to our specific comparisons, tool work, returns, findings, and next actions. We establish this critical connection through a scoped study (@fig-structured-layer-above-rtl).
-
-![**Our scoped architecture study connects intent to implementation evidence.** The study container binds our question and decision to the scope, claim, linked artifacts, tool returns, supported finding, limits, and named owner.](images/F4d-structured-layer-above-rtl){#fig-structured-layer-above-rtl width="85%" fig-alt="Three-layer diagram showing our architecture intent and judgment above a scoped architecture study container. Returns from all our implementation tools join a common path back to the study."}
-
-While project requirements and overarching rationale set high-level goals, they rarely tell us which specific subsystem capacities we should compare. We use the study question to pinpoint the exact comparison, while our intended decision explains precisely why we are running it. We rely on the scope and architectural claim to declare what our results must test explicitly.
-
-Our study tightly binds our methods and tool returns directly to that claim. We lean on cycle-level simulators to evaluate architectural behavior, while our compilers and runtimes expose critical software interactions, and our RTL generators produce executable implementations. Finally, we turn to RTL and gate-level EDA flows to assess physical properties and exact execution (@fig-eval-fidelity-latency). The returns from all four tool families flow back into our study, allowing us to judge the supported finding against our original question.
+As we shape our order of evaluation, we balance tool cost and fidelity across a multi-fidelity evaluation spectrum spanning all eight layers (@fig-eval-fidelity-latency). Handoffs to physical signoff exchange cell timing, dynamic power, leakage, and pin capacitance tables via Liberty (`.lib`) library schemas for TSMC N7 and 3\ nm-class LP mobile nodes. Architectural simulation runs in `gem5` report cycle counts, cache miss ratios, NoC bisection bandwidth congestion, and memory queueing latencies under strict DRAM timing parameters. Fast CACTI SRAM models filter out candidates violating physical area bounds. Integrated runs using `SCALE-Sim`, `gem5`, and `Ramulator` capture dynamic queueing and frame-time latency over millions of cycles under XRBench, SPEC2026, and MLPerf workloads. High-speed SystemVerilog simulation in `Verilator` verifies bit-exact functional correctness and SVA protocol assertions. Gate-level simulation in commercial `VCS` paired with static timing signoff (STA) and power signoff (UPF) tools extracts true dynamic power under gate-level switching activity within our 3\ W TDP target.
 
 ```{python}
 #| label: fig-eval-fidelity-latency
@@ -322,6 +255,71 @@ ax.spines["left"].set_color(COLORS["ink"])
 ax.spines["bottom"].set_color(COLORS["ink"])
 plt.show()
 ```
+
+While higher fidelity strengthens our answer to the declared question, it never widens our decision scope. A cycle-level result in `gem5` does not authorize full silicon fabrication if our study only promised a recommendation for gate-level RTL evaluation. Our evaluation can end in several legitimate states. We must keep invalid executions, unresolved comparisons, and rejected candidates fully visible for subsequent review.
+
+### Stage 5 Interpreting Empirical Results
+
+Even if a favorable number clears all declared checks, we might still struggle to explain why the design actually improved. Evaluation establishes whether a result passes basic checks, whereas interpretation tells us what the result means. Explanation tests whether our proposed hardware-software mechanism truly accounts for that outcome.
+
+A larger cache capacity might improve average latency but degrade tail latency due to NoC contention or compiler thread scheduling. We connect measured outcomes to a concrete physical account rather than just telling a plausible story. Simulator loopholes exist across all subsystem domains. An optimizer in `SCALE-Sim` might achieve throughput by omitting weight buffer sync barriers, causing data hazards. A compiler pass in TVM might eliminate vector spill code in simulation by assuming unconstrained register file capacity, failing when compiled for target hardware in `Verilator`.
+
+Improving a metric and proving a mechanism are two entirely different claims. We should choose required observations before we trigger an expensive run. A top-line score cannot recover miss classifications or per-frame histories discarded along the way. While fluent prose can organize our final account, it can never replace the hard measurements that support it.
+
+### Stage 6 Reviewing Decision Handoffs
+
+The review brings our scoped plan and all subsequent work back together. We ask whether we explored the legal alternatives adequately, whether our intended tools successfully ran, and whether our measurements satisfy declared checks. We must verify that our explanation is credible and whether the accumulated work supports our intended decision.
+
+Through review, we might advance one candidate, reject another, or request an entirely new comparison. We may revise the original question, narrow our conclusion, or simply stop because we exhausted our budget. An honest, unresolved result remains a useful outcome provided our study record clearly explains why the question remains open.
+
+When a result is missing, we must know whether to propose another candidate, repair a tool run, collect another measurement, or narrow our decision. That choice depends on what each stage of our responsibility received, what it produced, and where our failed work should return (@tbl-stage-contracts).
+
+| **Stage** | **Receives** | **Produces and checks** | **Repair and handoff** |
+| --- | --- | --- | --- |
+| **Formulate** | Product intent, a design question, and known requirements. | A scoped plan whose question, comparator, and exclusions agree. | Repair our question or scope. |
+| **Explore** | Our scoped plan and declared legal changes. | One or more legal candidates and their selection history. | Repair our design space or search approach. |
+| **Implement** | A candidate, requested tool work, and required inputs. | An execution record showing the requested work ran on our intended state. | Repair our request or tool setup. |
+| **Evaluate** | Completed tool returns, planned metrics, and validity conditions. | A comparison stating which checks passed, failed, or remain unresolved. | Repair our measurement plan, rerun within budget, or reject the candidate. |
+| **Interpret and Explain** | The checked result and proposed mechanism. | An account supported, revised, or contradicted by a direct physical reason. | Repair our hypothesis or request missing observations. |
+| **Review and Decide** | The scoped plan and study record. | A decision within the declared scope, a narrower conclusion, or an honest stop. | Reopen the work that owns the missing result or close our study. |
+
+: **Each responsibility produces an artifact we can inspect.** Our inputs, outputs, and repair paths remain distinct. {#tbl-stage-contracts tbl-colwidths="[15,25,34,26]"}
+
+During review, we choose actions solely within our assigned authority. While our system might propose a candidate, it cannot override human judgment. When review calls for revision, we name the responsibility that reopens the task, taking care to preserve the requirements and tool conditions from which the repaired work proceeds.
+
+## Managing Revisions
+
+How do targeted return paths route inadequate outputs back to specific life-cycle responsibilities without corrupting global study state? We do not treat revision as a separate seventh stage. When we produce an inadequate output, we simply return the work to the responsibility that owns the repair. If we generate a malformed tool request for `SCALE-Sim`, we route it back to Implement without altering the candidate itself. When a product requirement changes, we reopen Formulate.
+
+We rely on a design loop to keep each change tightly connected to our original question and our next decision. The path we illustrate in @fig-design-loop shows how our scoped study can revisit the responsibility that owns each repair while preserving valid work.
+
+![**Our design loop revisits the life-cycle responsibility that owns each repair.** We return a named repair to the responsible stage, while we push a supported result toward a scoped outcome.](images/F3-design-loop){#fig-design-loop width="82%" fig-alt="Six life-cycle responsibilities shown as our recurrent path through a scoped plan, legal candidate, execution record, checked result, supported account, and next action."}
+
+We start each pass with our current scoped plan and a legal candidate. As we run the tool, we add either an execution record or note an infrastructure failure. We use declared checks to turn valid outputs into a measured result, allowing us to determine exactly what mechanism those measurements support. During Review, we explicitly name our next action. If we find a result inadequate, we record our return path to show which responsibility must act next and why.
+
+When we conduct parallel work, we must rigorously preserve the same study state. We ensure each branch names the specific study revision it used, and we record our actions strictly against that revision. We merge results only after verifying that their assumptions, interfaces, and permitted changes remain perfectly compatible. If we change a shared requirement, we revalidate affected results in all other branches.
+
+We preserve crucial learning by keeping every result permanently attached to its study revision. When a change invalidates a result, we do not erase the data, but we prevent that outdated result from silently carrying forward as current evidence.
+
+## Design-Loop Cards {#sec-design-loop-card}
+
+How do Design-Loop Cards structure and index design state to ensure transparent architectural provenance and accountability? The Design-Loop Card acts as an essential, structured index that binds automated execution data directly to architectural intent and accountability. Rather than prescribing a universal format, this card elevates the preservation of design state, constraints, and failures into a core engineering requirement. It provides a compact index into the specific artifacts that bear on a single, scoped architecture question and the decision our work supports.
+
+We borrow the core reporting instinct behind model cards and datasheets for datasets, tools that make intended use and known limits readily reviewable [@MitchellEtAl2019ModelCards; @GebruEtAl2021Datasheets]. Because our designs evolve rapidly, our architecture studies must preserve the changing design state, tool conditions, failed checks, and the explicit authority for the next action. A static description of a model simply cannot carry those responsibilities by itself.
+
+To manage these dynamic requirements, we need a study record that makes our architectural state and its revisions fully inspectable.
+
+> **Study record.** The cumulative account of one scoped architecture study. It retains the plan, stage outputs, failed or unevaluated work, unresolved questions, stopping reason, and supported decision, with links to the detailed artifacts needed for review or replay.
+
+For every consequential transition, our study record explicitly names the revision. It details exactly who or what proposed and approved the action, what executed it across our tool flows, what checked the result, and what later change might invalidate it. We capture the specific decision being supported, the physical assumptions bounding our results, and the named authority empowered to act on them.
+
+To be truly useful, this index must directly connect our overarching project goals and constraints to our specific comparisons, tool work, returns, findings, and next actions. We establish this critical connection through a scoped study (@fig-structured-layer-above-rtl).
+
+![**Our scoped architecture study connects intent to implementation evidence.** The study container binds our question and decision to the scope, claim, linked artifacts, tool returns, supported finding, limits, and named owner.](images/F4d-structured-layer-above-rtl){#fig-structured-layer-above-rtl width="85%" fig-alt="Three-layer diagram showing our architecture intent and judgment above a scoped architecture study container. Returns from all our implementation tools join a common path back to the study."}
+
+While project requirements and overarching rationale set high-level goals, they rarely tell us which specific subsystem capacities we should compare. We use the study question to pinpoint the exact comparison, while our intended decision explains precisely why we are running it. We rely on the scope and architectural claim to declare what our results must test explicitly.
+
+Our study tightly binds our methods and tool returns directly to that claim. We lean on cycle-level simulators to evaluate architectural behavior, while our compilers and runtimes expose critical software interactions, and our RTL generators produce executable implementations. Finally, we turn to RTL and gate-level EDA flows to assess physical properties and exact execution. The returns from all four tool families flow back into our study, allowing us to judge the supported finding against our original question.
 
 We must remember that a raw tool output is not a decision. A supported finding requires explicit limits and a designated owner responsible for the next action. If our results expose a faulty assumption, we step back and deliberately revise our study question or claim. We never allow disconnected tool outputs to blindly stand in for our professional engineering judgment.
 
