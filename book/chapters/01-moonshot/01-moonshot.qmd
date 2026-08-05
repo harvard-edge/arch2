@@ -326,7 +326,78 @@ must still verify the mapping and resulting design for surviving candidates.
 cannot establish that the final design works.
 :::
 
-Analytical bounds, proxy scores, simulator results, and EDA reports provide very different kinds of evidence, at sharply different costs. We often see a proxy rank candidates one way, only for a simulator to completely overturn that ranking, while an EDA run might give us complex timing paths and congestion heatmaps rather than a convenient single score. For instance, BOOM-Explorer highlights that some implementation evaluations can take hours to run [@BaiEtAl2021BOOMExplorer]. In physical hardware, tools like Cadence Joules or Synopsys PrimePower, industry-standard gate-level power estimation engines, expose dynamic voltage drops and peak thermal hot spots that fast surrogate models completely miss. Iterative searches demand many trials before we can confidently distinguish the best actions. When our evaluation capacity cannot cover those trials, brute-force approaches simply blow past our budget. Statistical overfitting[^fn-overfitting-c01] provides a useful analogy here, though our specific failure mode is more acute. If we run a repeated search against a fast proxy, the search can exploit the proxy's omissions or errors. This produces apparent design gains that instantly evaporate when our surviving candidates finally hit a higher-fidelity tool.
+```{python}
+#| label: fig-jevons-verification-paradox
+#| fig-cap: |
+#|   Jevons' paradox of hardware verification across AI candidate proposal scales. As AI foundation models reduce proposal cost per candidate by two to three orders of magnitude, total verification compute demand explodes exponentially if every candidate is pushed to full signoff. Early rejection-bound filters (Amdahl caps, Roofline limits, SRAM bounds) tame this Jevons explosion, constraining total verification cost within a fixed project budget envelope. Grounded analytical formulation.
+#| out-width: "100%"
+#| fig-alt: "Log-log line plot illustrating Jevons' paradox in hardware verification. Unfiltered candidate verification demand scales linearly with proposal volume, blowing past a fixed project budget envelope at 100 candidates per day. Rejection-bound early screening filters prune non-viable candidates, constraining total verification compute within the project budget up to 100,000 candidates per day."
+
+import matplotlib.pyplot as plt
+import numpy as np
+from _python.plots import apply_style, COLORS
+
+apply_style()
+fig, ax = plt.subplots(figsize=(6.5, 3.8))
+
+N = np.logspace(0, 5, 200)  # 1 to 100,000 candidates
+unfiltered_cost = N * 5.0  # Linear scaling in candidates
+rejection_bounded_cost = 5.0 + 15.0 * np.log10(N) + 0.005 * N  # Early analytical screening
+
+ax.set_xscale("log")
+ax.set_yscale("log")
+
+ax.plot(
+    N,
+    unfiltered_cost,
+    color=COLORS["constraints"],
+    linewidth=2.2,
+    label="Unfiltered Verification Demand (Jevons Explosion)",
+)
+ax.plot(
+    N,
+    rejection_bounded_cost,
+    color=COLORS["evidence"],
+    linewidth=2.2,
+    linestyle="--",
+    label="Rejection-Bound Tamed Demand (Early Screening Filters)",
+)
+
+ax.axhline(
+    500,
+    color=COLORS["muted"],
+    linestyle=":",
+    linewidth=1.0,
+    label="Fixed Project Verification Budget Envelope",
+)
+
+ax.set_xlabel(
+    "AI Candidate Proposal Velocity (candidates / day, log scale)",
+    fontsize=8,
+    labelpad=4,
+)
+ax.set_ylabel(
+    "Total Verification & Simulation Demand (GPU-hours, log scale)",
+    fontsize=8,
+    labelpad=4,
+)
+
+ax.legend(
+    loc="upper left",
+    fontsize=7,
+    frameon=True,
+    facecolor=COLORS["note_fill"],
+    edgecolor=COLORS["note_edge"],
+)
+ax.grid(True, which="both", color=COLORS["grid"], linestyle="-", linewidth=0.5, alpha=0.7)
+
+plt.tight_layout()
+plt.show()
+plt.close(fig)
+```
+
+
+Analytical bounds, proxy scores, simulator results, and EDA reports provide very different kinds of evidence, at sharply different costs (@fig-jevons-verification-paradox). We often see a proxy rank candidates one way, only for a simulator to completely overturn that ranking, while an EDA run might give us complex timing paths and congestion heatmaps rather than a convenient single score. For instance, BOOM-Explorer highlights that some implementation evaluations can take hours to run [@BaiEtAl2021BOOMExplorer]. In physical hardware, tools like Cadence Joules or Synopsys PrimePower, industry-standard gate-level power estimation engines, expose dynamic voltage drops and peak thermal hot spots that fast surrogate models completely miss. Iterative searches demand many trials before we can confidently distinguish the best actions. When our evaluation capacity cannot cover those trials, brute-force approaches simply blow past our budget. Statistical overfitting[^fn-overfitting-c01] provides a useful analogy here, though our specific failure mode is more acute. If we run a repeated search against a fast proxy, the search can exploit the proxy's omissions or errors. This produces apparent design gains that instantly evaporate when our surviving candidates finally hit a higher-fidelity tool.
 
 [^fn-overfitting-c01]: **Overfitting**: The machine-learning failure of fitting the noise of a training sample so closely that performance does not generalize to new data [@HastieTibshiraniFriedman2009Elements]. Proxy exploitation is analogous but not identical; it can occur when search uses omissions or errors in an evaluator even without fitting a statistical model.
 
