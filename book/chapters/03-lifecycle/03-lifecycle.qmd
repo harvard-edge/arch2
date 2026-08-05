@@ -28,8 +28,6 @@ Because each pitfall demands a different repair, we must organize workflows to c
 After reading this chapter, we can achieve the following objectives. We contrast ad hoc AI prompts with rigorous architecture methods across hardware and software subsystems. We define the six life-cycle responsibilities, outputs, and targeted repair paths. We manage iterative design loops without relying on rigid waterfall schedules. We distinguish a complete life cycle, scoped study, design loop, and study record. We preserve design context to keep all evidence, tool executions, and failures reviewable.
 :::
 
-### The Six Core Responsibilities {#sec-arch2-ontology}
-
 We already know how difficult it is to reconstruct ordinary architecture work after the fact. Our simulator configurations often live in one repository and workload selections in another. Human teams naturally bridge these gaps through shared history and repeated discussion. AI systems have no reliable access to this implicit knowledge. If we want an AI to effectively assist us, we must make our context explicit throughout the design process.
 
 ## Common Pitfalls
@@ -48,7 +46,7 @@ Software engineering provides a useful comparison. SWE-bench strictly bounds a s
 
 Ultimately, we have to declare comparability study by study. Consider two teams analyzing the exact same system trade-off. One team might choose `gem5`, a modular simulator built on a discrete-event platform, while the other relies on `FireSim`, an FPGA-accelerated full-system RTL platform [@BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim]. Either team can successfully compare subsystem throughput and execution times. If we want energy estimates or physical area metrics, we must attach a separate model and state our underlying assumptions. Simply picking a tool does not tell us which workload phases we count or whether we faithfully reran the same baseline. Explicit declarations dictate whether our two teams performed the identical study. As architects working alongside automated methods, we must carry these declarations clearly through candidate selection, tool requests, execution, and verification checks.
 
-## Six Core Responsibilities
+## Six Core Responsibilities {#sec-arch2-ontology}
 
 When we repair a bad question, we take a fundamentally different path than when we fix an illegal candidate or an invalid comparison. We route unsupported explanations and incomplete decisions to completely different places. These distinct repair paths give our six core responsibilities their fundamental purpose. Each responsibility keeps a specific type of failure attached to the job that can fix it.
 
@@ -94,7 +92,7 @@ Systematic design automation requires structuring the architecture lifecycle int
 
 ### Stage 1 Formulating Core Architecture Questions
 
-We begin formulation with intent, though intent alone rarely provides a testable architecture problem. A system-level goal must translate into concrete workload requirements, architecture choices, and strict interface obligations across subsystems. When we define a hardware-software interface, we constrain what software can safely assume and what hardware must reliably provide. Every step of this refinement adds necessary detail without changing the original goal.
+We begin formulation with intent, though intent alone rarely provides a testable architecture problem. A system-level goal must translate into concrete workload requirements, architecture choices, and strict interface obligations across subsystems. Handoffs from formulation to exploration formalize component metadata, bus interfaces, register maps, and memory-mapped address spaces using machine-readable IP-XACT (IEEE 1685) schemas. When we define a hardware-software interface, we constrain what software can safely assume and what hardware must reliably provide. Every step of this refinement adds necessary detail without changing the original goal.
 
 Before we choose a search method, our plan must lock in the comparator, the legal changes, the checks, the budget, the stopping conditions, and the intended decision (@tbl-bounded-study-contract). We use hard constraints to rule out a candidate unequivocally. An objective allows us to rank candidates that remain feasible. Clear declarations allow our Explore phase to return the Pareto set of feasible alternatives where we cannot improve one objective without worsening another. We embrace this approach to preserve necessary tradeoffs rather than falsely declaring a single universal winner [@Deb2001MultiObjective].
 
@@ -129,7 +127,7 @@ Legal does not mean independent. Increasing capacity in one subsystem can alter 
 
 ### Stage 3 Implementing Testable Representations
 
-When we implement a selected candidate, we make it executable by our intended tools. Our essential outcome is a robust candidate that specialized tools can reliably test under declared conditions. Every time we issue a tool request, we must preserve both the candidate identity and the overall study state across our heterogeneous tool suite.
+When we implement a selected candidate, we make it executable by our intended tools. Transaction-level interconnect handoffs between IP blocks rely on SystemC TLM-2.0 (Transaction-Level Modeling) socket and generic payload schemas to model memory-mapped bus transactions across heterogeneous subsystems. Every time we issue a tool request, we must preserve both the candidate identity and the overall study state across our heterogeneous tool suite.
 
 We must confirm that each tool actually used our requested parameters. A syntactically valid configuration can easily deceive us by selecting the wrong top-level module or skipping the precise workload region that defines our comparison. This reality highlights a crucial distinction between an infrastructure failure and a candidate failure. If a simulator crashes or a script is malformed, we only know that our requested test failed to run correctly. These glitches tell us absolutely nothing about the quality of our architectural candidate. Only a valid execution produces a result we can trust to ultimately evaluate or reject a design.
 
@@ -145,7 +143,7 @@ We must confirm that each tool actually used our requested parameters. A syntact
 
 We can evaluate a candidate only after checking our implementation record to confirm the intended work actually ran. Once verified, we compare returned measurements against the requirements, objectives, and validity conditions we established during formulation. The outcome explicitly details which checks passed, failed, or remain unresolved, showing precisely how much confidence our measurements justify.
 
-As we shape our order of evaluation, we balance tool cost and fidelity across a multi-fidelity evaluation spectrum. Fast CACTI SRAM models filter out candidates that violate fundamental physical area bounds. Integrated runs using `SCALE-Sim`, `gem5`, and `Ramulator` capture dynamic queueing and frame-time latency over millions of cycles. High-speed SystemVerilog simulation in `Verilator` verifies bit-exact functional correctness. Gate-level simulation in commercial `VCS` paired with static timing signoff tools extracts true dynamic power under gate-level switching activity.
+As we shape our order of evaluation, we balance tool cost and fidelity across a multi-fidelity evaluation spectrum. Handoffs to physical signoff exchange cell timing, dynamic power, leakage, and pin capacitance tables via Liberty (`.lib`) library schemas. Architectural simulation runs yield structured `gem5 stats` schemas reporting cycle counts, instruction breakdowns, cache miss ratios, and memory queueing latencies. Fast CACTI SRAM models filter out candidates that violate fundamental physical area bounds. Integrated runs using `SCALE-Sim`, `gem5`, and `Ramulator` capture dynamic queueing and frame-time latency over millions of cycles. High-speed SystemVerilog simulation in `Verilator` verifies bit-exact functional correctness. Gate-level simulation in commercial `VCS` paired with static timing signoff tools extracts true dynamic power under gate-level switching activity.
 
 While higher fidelity strengthens our answer to the declared question, it never widens our decision scope. A cycle-level result in `gem5` does not authorize full silicon fabrication if our study only promised a recommendation for gate-level RTL evaluation. Our evaluation can end in several legitimate states. We must keep invalid executions, unresolved comparisons, and rejected candidates fully visible for subsequent review.
 

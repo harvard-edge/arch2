@@ -290,7 +290,7 @@ Evaluating candidate architectures requires transforming raw generator outputs i
 
 A request doesn't become an architecture result in a single step. Instead, our work moves through a deliberate progression, starting from an initial request to requirements and specifications, into generating candidate artifacts, taking measurements, performing checks, and finally producing a comparative architecture result. From there, we build a technical recommendation that drives a commitment decision. These stages must remain distinct. We define an *artifact* as anything produced during the work (such as code, RTL, a model, a layout, a report, or a testbench). A *candidate* is a proposed design or configuration we want to compare. A *measurement* (or *observation*) gives us information about a candidate under stated conditions. Crucially, an *architecture result* is a supported comparison or finding where our assumptions, conditions, checks, alternatives, and limits are clear enough to inform our next action. A valid architecture result doesn't always mean a breakthrough; it can reject every candidate, support retaining our current design, narrow the scope of the question, or simply conclude that our available measurements cannot decide the issue.
 
-These distinctions help us determine how to allocate our scarce evaluation feedback. As architects, we might begin with a memory-trace slice collected from a fixed XRBench workload and configuration, alongside its software pipeline. We might propose alternatives, such as varying vector widths, swapping CPUs, or adding accelerators, and screen them with a cheap proxy. We reserve our expensive compiler, simulator, RTL, and physical-design effort, we ensure we only evaluate candidates whose results could actually alter our next action or technical recommendation. To do this rigorously, we must state our selection rules and the specific claim each check supports before we ever run the tools.
+These distinctions help us determine how to allocate our scarce evaluation feedback. As architects, we might begin with a memory-trace slice collected from a fixed XRBench workload and configuration, alongside its software pipeline. We might propose alternatives, such as varying vector widths, swapping CPUs, or adding accelerators, and screen them with a cheap proxy. We reserve our expensive compiler, simulator, RTL, and physical-design effort for candidates whose results could actually alter our next action or technical recommendation. To do this rigorously, we must state our selection rules and the specific claim each check supports before we ever run the tools.
 
 The distance between an artifact and a result is especially large in hardware. A generator might produce a mathematically elegant instruction extension that perfectly passes behavioral simulation, only to fail logic equivalence checking, design-rule checks, timing, power, or thermal limits during implementation. We can use a surrogate model[^fn-surrogate-model-c01] to cheaply screen candidates, but a design selected by the surrogate may still fail once a more faithful tool exposes properties the surrogate missed. This gap is our version of the simulation-to-real problem extensively studied in machine learning [@TobinEtAl2017DomainRandomization].
 
@@ -422,92 +422,7 @@ Across these systems, we see that any given result only truly supports the speci
 
 We present this table as a set of scoped claims, not as a definitive ranking of systems. We embrace shared tasks, we make it vastly easier to inspect exactly where each claim stops. For example, ImageNet [@RussakovskyEtAl2015ImageNet] armed computer vision with a transformative common benchmark, while CASP (Critical Assessment of Structure Prediction) [@MoultEtAl1995CASP] forced AlphaFold's [@JumperEtAl2021AlphaFold] structure predictions to face a rigorous community-held assessment. These powerful precedents prove the immense value of common tasks and checks, yet they never absolve us from the need to carefully qualify what our domain-specific checks actually establish.
 
-We can draw a useful contrast with software engineering, where a public test harness can return a task-level result much faster than our hardware designs can ever obtain physical evidence. We turn real GitHub-issue fixes into a shared task graded by automated repository tests, SWE-bench gives our coding systems a relatively quick and repeatable signal (@fig-swebench-progress) [@JimenezEtAl2024SWEBench]. When a system passes those tests, it supports a claim about resolving the specific issue under benchmark conditions, rather than guaranteeing complete software correctness. While our hardware processes also enjoy fast checks for specific properties, our complete system-and-chip claims must painstakingly connect functional verification with synthesis, timing, power, physical-design, and thermal evidence, each varying wildly in cost and fidelity.
-
-```{python}
-#| label: fig-swebench-progress
-#| fig-cap: |
-#|   **Standardized task-level checks support rapid iteration on SWE-bench Verified.** Best reported SWE-bench Verified score [@JimenezEtAl2024SWEBench] for each model name in a dated snapshot of Epoch AI's benchmarking hub [@EpochAI2025AIModels]; the line traces the best result to date. Reported configurations and test harnesses can differ, so the plot shows the pace of benchmark progress rather than a controlled comparison among models. Scores climbed from roughly a third of this human-filtered 500-task subset to over four-fifths in about seventeen months. Repository tests provide a quick, repeatable signal for the defined task, while a complete architecture claim must combine functional and physical evidence from several tools.
-#| out-width: "88%"
-#| fig-alt: "Scatter of the best reported SWE-bench Verified resolved percentage for each model name versus model release date from late 2024 to 2026. Points climb from about 31 percent to about 84 percent, with a solid line tracing the best-to-date frontier."
-
-import csv
-import datetime
-from pathlib import Path
-
-import matplotlib.pyplot as plt
-import _python.plots as _ap
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Data. SWE-bench Verified results [@JimenezEtAl2024SWEBench] tracked in Epoch
-# AI's benchmarking hub [@EpochAI2025AIModels]; best score per model name in
-# the dated snapshot. Values dataset-transcribed. Accessed 2026-07-19.
-# Receipt. data/source-receipts/chapter1-swebench-verified.csv
-
-_root = Path(_ap.__file__).resolve().parents[2]
-
-def _yfrac(text):
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-        try:
-            d = datetime.datetime.strptime(text.strip(), fmt)
-            return d.year + (d.timetuple().tm_yday - 1) / 365.25
-        except ValueError:
-            continue
-    return None
-
-pts = []
-with open(_root / "data" / "source-receipts" / "chapter1-swebench-verified.csv", encoding="utf-8") as fh:
-    for row in csv.DictReader(fh):
-        x = _yfrac(row["release_date"])
-        try:
-            score = float(row["resolved_fraction"])
-        except ValueError:
-            continue
-        if x is None:
-            continue
-        pts.append({"model": row["model"], "score": score * 100 if score <= 1 else score, "x": x})
-
-# The snapshot can contain several configurations under the same model name.
-# Retain only the best reported score for each name rather than presenting
-# those configurations as distinct model releases.
-
-best_by_name = {}
-for p in pts:
-    name = (p["model"] or "").strip()
-    if name not in best_by_name or p["score"] > best_by_name[name]["score"]:
-        best_by_name[name] = p
-pts = list(best_by_name.values())
-pts.sort(key=lambda p: p["x"])
-best = -1.0
-frontier = []
-for p in pts:
-    if p["score"] > best:
-        best = p["score"]
-        frontier.append(p)
-
-fig, ax = plt.subplots(figsize=(5.4, 3.2))
-ax.scatter([p["x"] for p in pts], [p["score"] for p in pts], s=16, marker="o",
-           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.7, zorder=2, label="Named models")
-ax.plot([p["x"] for p in frontier], [p["score"] for p in frontier], color=COLORS["evidence"], lw=1.6, zorder=3)
-ax.scatter([p["x"] for p in frontier], [p["score"] for p in frontier], s=22, marker="o",
-           facecolor=COLORS["evidence"], edgecolor=COLORS["evidence_ink"], linewidth=0.5, zorder=4, label="Best to date")
-ax.set_xlim(2024.8, 2026.55)
-ax.set_ylim(20, 92)
-ax.set_xlabel("Model release date", fontsize=7.2)
-ax.set_ylabel("SWE-bench Verified resolved (%)", fontsize=7.2)
-ax.set_xticks([2025.0, 2025.5, 2026.0, 2026.5])
-ax.set_xticklabels(["2025", "mid-25", "2026", "mid-26"], fontsize=6.4)
-ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
-for _sp in ("top", "right"):
-    ax.spines[_sp].set_visible(False)
-ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
-ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
-fig.subplots_adjust(left=0.10, right=0.97, top=0.98, bottom=0.12)
-```
-
-We cannot isolate model, harness, or system effects from this trend (@fig-swebench-progress), because our retained receipt only records reported values rather than a controlled evaluation protocol, and a later OpenAI audit ultimately withdrew SWE-bench Verified from frontier capability measurement [@OpenAI2026SWEBenchLimits]. Nevertheless, it brilliantly demonstrates how a standardized, automated task-level check can support rapid iteration across our models and engineering systems. In our architectural work, we also use fast analytical, structural, and functional checks, but no single check ever closes a complete system-and-chip claim. Our early screens routinely leave timing, design-rule, power, and thermal feasibility roughly estimated or entirely untested. To confidently assert physical feasibility, we must eventually run the relevant implementation-facing checks. While our static analysis and calibrated proxies can reduce these costs by actively screening candidates, they can never fully replace them.
+A useful contrast exists with software engineering evaluation frameworks such as SWE-bench [@JimenezEtAl2024SWEBench]. Software issue harnesses execute unit and integration tests rapidly, yielding immediate pass-fail feedback for candidate fixes. Hardware design evaluation operates under a fundamentally different velocity regime. While early analytical or functional screens run quickly, full hardware signoff requires expensive physical synthesis, formal equivalence verification, static timing analysis, and thermal modeling. Fast proxies can prune infeasible designs, but only rigorous physical and formal checks can validate a candidate before hardware commitment.
 
 Fortunately, our discipline already has shared checks at individual layers. We have seen SPEC-style benchmarks make performance claims far more comparable through common workloads, strict run rules, and precise reporting standards, effectively steering which improvements we choose to pursue as a community [@Patterson2012Benchmarks; @SPEC2017CPU]. We rely on gem5 and FireSim to provide shared simulation platforms at different costs and fidelities [@BinkertEtAl2011Gem5; @KarandikarEtAl2018FireSim]. We also rely on Verilator for fast functional verification of custom RISC-V vector extensions. Similarly, MLPerf defines rigorous benchmark suites and submission rules for our machine-learning systems [@MattsonEtAl2020MLPerf]. These vital resources ensure that we as outside researchers can rerun, compare, and challenge any scoped result. However, they do not render our results automatically correct, nor do they connect all the diverse evidence we require for the Lighthouse. We must therefore view our current systems as establishing bounded progress toward our moonshot, rather than delivering a definitive, end-to-end verdict.
 
