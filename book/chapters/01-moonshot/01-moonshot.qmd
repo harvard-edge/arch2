@@ -443,7 +443,100 @@ Moreover, technical fit isn't our only hurdle when using project data, our candi
 
 Fortunately, we do not have to rely on training data alone to fill these information gaps. As architects, we can actively supply specifications and analytical models, encode our own machine-checkable constraints, pull in live documentation, and use tool feedback to refine our candidates iteratively. For example, RTLFixer showcases how we can use tool-guided repair following syntax and compiler feedback [@TsaiEtAl2024RTLFixer]. Similarly, Chipyard bridges shareable RISC-V designs to simulation and implementation paths [@chipyard], and OpenROAD offers us an open digital physical-design flow [@AjayiEtAl2019OpenROAD]. In large-scale verification, we combine Verilator for rapid C++ co-simulation with FireSim for FPGA-accelerated cycle-exact verification of full 64-bit RISC-V SoC cores and NPU matrix engines under realistic XRBench trace inputs, alongside formal tools like Synopsys Formality for equivalence checking. While these platforms brilliantly illustrate how we can expose constraints and harness feedback, they cannot magically recover the proprietary information that lies beyond their reach. We dive deeper into the mechanisms for building and representing this critical project knowledge in @sec-data-representations-world-models.
 
-Even if we perfect candidate generation, we still face the massive hurdle of verification. A first-pass RTL candidate might look completely plausible while hiding subtle, fatal errors. In fact, industry surveys show that verification eats up roughly half of our total engineering effort, with our design engineers dedicating nearly half of their own time just to verification tasks [@Foster2022WilsonVerificationStudy]. We can certainly leverage reusable UVM[^fn-uvm-c01] environments across multiple related candidates, but our stimulus, checkers, assertions, coverage models, and debug capacity must constantly evolve to match the new behaviors our generated candidates introduce. If our candidate production speeds past our ability to test, our primary bottleneck simply shifts directly to verification. Ultimately, generating hardware faster only matters if we retain the ability to rigorously identify and reject bad candidates at that same accelerated pace.
+Even if we perfect candidate generation, we still face the massive hurdle of verification. A first-pass RTL candidate might look completely plausible while hiding subtle, fatal errors. In fact, industry surveys show that verification eats up roughly half of our total engineering effort, with our design engineers dedicating nearly half of their own time just to verification tasks [@Foster2022WilsonVerificationStudy]. We can certainly leverage reusable UVM[^fn-uvm-c01] environments across multiple related candidates, but our stimulus, checkers, assertions, coverage models, and debug capacity must constantly evolve to match the new behaviors our generated candidates introduce. If our candidate production speeds past our ability to test, our primary bottleneck simply shifts directly to verification (@fig-verification-scaling). Ultimately, generating hardware faster only matters if we retain the ability to rigorously identify and reject bad candidates at that same accelerated pace.
+
+```python
+#| label: fig-verification-scaling
+#| fig-cap: |
+#|   **Candidate generation velocity diverges from verification check time across design scales.** As we move from tensor operator autotuning to full SoC signoff, physical synthesis, formal equivalence, and gate-level timing checks require up to five orders of magnitude more time per candidate than AI proposal generation [@Foster2022WilsonVerificationStudy; @AjayiEtAl2019OpenROAD].
+#| out-width: "100%"
+#| fig-alt: "Horizontal bar chart comparing AI candidate proposal latency against hardware verification check time across five design scales from tensor operators to full SoC signoff. Verification check time scales from milliseconds to days/weeks, while AI candidate generation remains under one minute."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+import numpy as np
+
+apply_style()
+
+categories = [
+    "Tensor Operator\n(AutoTVM / MAESTRO)",
+    "Core Microarch\n(gem5 / Spike)",
+    "RTL Block Signoff\n(Verilator / Yosys)",
+    "Subsystem Macro\n(OpenROAD 7nm)",
+    "Full SoC Signoff\n(Cadence / Formality)",
+]
+y_pos = np.arange(len(categories))
+eval_latency_min = np.array([0.001, 10.0, 300.0, 3600.0, 86400.0])
+eval_latency_max = np.array([0.1, 300.0, 3600.0, 28800.0, 604800.0])
+gen_latency = np.array([0.5, 2.0, 5.0, 15.0, 45.0])
+
+fig, ax = plt.subplots(figsize=(6.2, 3.4))
+fig.subplots_adjust(left=0.28, right=0.94, top=0.88, bottom=0.18)
+
+for i in range(len(categories)):
+    ax.barh(
+        y_pos[i] + 0.15,
+        eval_latency_max[i] - eval_latency_min[i],
+        left=eval_latency_min[i],
+        height=0.35,
+        color=COLORS["constraints"],
+        alpha=0.85,
+        edgecolor=COLORS["constraints_ink"],
+        linewidth=0.8,
+        label="Hardware verification check time" if i == 0 else "",
+        zorder=2,
+    )
+
+ax.scatter(
+    gen_latency,
+    y_pos - 0.15,
+    color=COLORS["workload"],
+    s=48,
+    zorder=4,
+    edgecolor="white",
+    linewidth=0.8,
+    label="AI candidate proposal latency",
+)
+
+ax.set_xscale("log")
+ax.set_yticks(y_pos)
+ax.set_yticklabels(categories, fontsize=6.2, color=COLORS["ink"])
+ax.invert_yaxis()
+
+ax.set_title(
+    "Candidate generation velocity versus verification check time",
+    fontsize=7.8,
+    pad=10,
+    fontweight="bold",
+    color=COLORS["ink"],
+)
+ax.set_xlabel("Time per candidate (seconds, log scale)", fontsize=6.5, color=COLORS["ink"])
+ax.set_xlim(1e-4, 1e6)
+
+xticks = [1e-3, 1e-1, 10, 3600, 86400, 604800]
+xtick_labels = ["1 ms", "100 ms", "10 s", "1 hour", "1 day", "1 week"]
+ax.set_xticks(xticks)
+ax.set_xticklabels(xtick_labels, fontsize=5.8)
+
+ax.legend(frameon=False, fontsize=6.0, loc="lower right")
+ax.grid(True, which="both", axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
+
+ax.annotate(
+    "5-order-of-magnitude\nverification gap",
+    xy=(1e4, 3.85),
+    xytext=(3e1, 3.2),
+    arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
+    fontsize=6.0,
+    fontweight="bold",
+    color=COLORS["constraints_ink"],
+    bbox=dict(boxstyle="round,pad=0.3", facecolor=COLORS["note_fill"], edgecolor=COLORS["constraints"], lw=0.6),
+)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+```
 
 [^fn-uvm-c01]: **UVM (Universal Verification Methodology)**: A standardized methodology and class library for building reusable SystemVerilog verification environments, including stimulus, monitors, scoreboards, and coverage components [@IEEE2020UVM].
 
