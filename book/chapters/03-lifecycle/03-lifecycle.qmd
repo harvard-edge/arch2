@@ -220,7 +220,105 @@ To be truly useful, this index must directly connect our overarching project goa
 
 While project requirements and overarching rationale set high-level goals, they rarely tell us which specific subsystem capacities we should compare. We use the study question to pinpoint the exact comparison, while our intended decision explains precisely why we are running it. We rely on the scope and architectural claim to declare what our results must test explicitly.
 
-Our study tightly binds our methods and tool returns directly to that claim. We lean on cycle-level simulators to evaluate architectural behavior, while our compilers and runtimes expose critical software interactions, and our RTL generators produce executable implementations. Finally, we turn to RTL and gate-level EDA flows to assess physical properties and exact execution. The returns from all four tool families flow back into our study, allowing us to judge the supported finding against our original question.
+Our study tightly binds our methods and tool returns directly to that claim. We lean on cycle-level simulators to evaluate architectural behavior, while our compilers and runtimes expose critical software interactions, and our RTL generators produce executable implementations. Finally, we turn to RTL and gate-level EDA flows to assess physical properties and exact execution (@fig-eval-fidelity-latency). The returns from all four tool families flow back into our study, allowing us to judge the supported finding against our original question.
+
+```python
+#| label: fig-eval-fidelity-latency
+#| fig-cap: |
+#|   **Evaluation tool fidelity versus turn-around latency across life-cycle stages.** Early analytical models (SCALE-Sim, Timeloop) yield rapid feedback (~1 ms to 100 ms) with moderate physical fidelity, while full physical signoff (OpenROAD, Cadence, Synopsys Formality) requires hours to days per candidate to reach physical accuracy.
+#| out-width: "100%"
+#| fig-alt: "Scatter plot showing physical and architectural fidelity (0.25 to 1.0) versus turn-around latency per candidate (1 ms to 1 day log scale) across analytical models, gem5, Verilator, FireSim, and Cadence/Synopsys EDA flows."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+import numpy as np
+
+apply_style()
+
+tools = [
+    {"name": "Analytical / roofline", "latency": 0.001, "fidelity": 0.35, "color": COLORS["methods"]},
+    {"name": "SCALE-Sim / Timeloop", "latency": 0.1, "fidelity": 0.62, "color": COLORS["methods"]},
+    {"name": "gem5 / Spike", "latency": 15.0, "fidelity": 0.78, "color": COLORS["workload"]},
+    {"name": "Verilator C++ Sim", "latency": 180.0, "fidelity": 0.88, "color": COLORS["workload"]},
+    {"name": "FireSim (FPGA)", "latency": 1200.0, "fidelity": 0.94, "color": COLORS["evidence"]},
+    {"name": "Yosys / OpenROAD", "latency": 7200.0, "fidelity": 0.96, "color": COLORS["evidence"]},
+    {"name": "Synopsys / Cadence Signoff", "latency": 86400.0, "fidelity": 0.99, "color": COLORS["constraints"]},
+]
+
+fig, ax = plt.subplots(figsize=(6.4, 3.3))
+fig.subplots_adjust(left=0.14, right=0.95, top=0.88, bottom=0.18)
+
+latencies = [t["latency"] for t in tools]
+fidelities = [t["fidelity"] for t in tools]
+colors = [t["color"] for t in tools]
+
+ax.scatter(
+    latencies,
+    fidelities,
+    c=colors,
+    s=70,
+    zorder=3,
+    edgecolor="white",
+    linewidth=0.9,
+)
+
+sorted_idx = np.argsort(latencies)
+ax.plot(
+    np.array(latencies)[sorted_idx],
+    np.array(fidelities)[sorted_idx],
+    color=COLORS["ink"],
+    linestyle="--",
+    linewidth=1.0,
+    alpha=0.7,
+    zorder=2,
+)
+
+offsets = [
+    (0.0012, 0.33),
+    (0.12, 0.60),
+    (18.0, 0.76),
+    (220.0, 0.86),
+    (1400.0, 0.92),
+    (8500.0, 0.97),
+    (100000.0, 0.97),
+]
+for i, t in enumerate(tools):
+    ax.text(
+        offsets[i][0],
+        offsets[i][1],
+        t["name"],
+        fontsize=5.8,
+        fontweight="bold",
+        color=COLORS["ink"],
+        va="center",
+    )
+
+ax.set_xscale("log")
+ax.set_xlim(5e-4, 5e5)
+ax.set_ylim(0.25, 1.05)
+
+xticks = [1e-3, 1e-1, 10, 3600, 86400]
+xtick_labels = ["1 ms", "100 ms", "10 s", "1 hour", "1 day"]
+ax.set_xticks(xticks)
+ax.set_xticklabels(xtick_labels, fontsize=5.8)
+
+ax.set_title(
+    "Evaluation tool fidelity versus turn-around latency",
+    fontsize=7.8,
+    pad=10,
+    fontweight="bold",
+    color=COLORS["ink"],
+)
+ax.set_xlabel("Evaluation latency per candidate (seconds, log scale)", fontsize=6.5, color=COLORS["ink"])
+ax.set_ylabel("Physical & architectural fidelity (normalized)", fontsize=6.5, color=COLORS["ink"])
+
+ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+```
 
 We must remember that a raw tool output is not a decision. A supported finding requires explicit limits and a designated owner responsible for the next action. If our results expose a faulty assumption, we step back and deliberately revise our study question or claim. We never allow disconnected tool outputs to blindly stand in for our professional engineering judgment.
 
