@@ -435,6 +435,88 @@ We can see one bounded example of this in AI workloads, where model scale and co
 [^fn-mixture-of-experts-c02]: **Mixture-of-experts (MoE) routing**: A sparsely gated model activates only a subset of its expert subnetworks for each input [@ShazeerEtAl2017MoE]. Because this input-dependent routing forces memory traffic to vary from token to token instead of following one fixed schedule, we must design our hardware to serve highly dynamic memory demands.
 
 ```{python}
+#| label: fig-training-compute-growth
+#| fig-cap: |
+#|   **A fit to the displayed notable-model records yields about 4.4-fold annual growth in training compute.** Each point is a record from Epoch AI's database [@SevillaRoldan2024ComputeGrowth]; the red line is a least-squares fit over the 2010--2026 points shown, which run past the cited analysis's May 2024 window. The growth factor describes the displayed records rather than a universal rate, and it does not measure how changes in model scale overlap a hardware project.
+#| out-width: "92%"
+#| fig-alt: "Log-scale scatter of AI training compute in FLOP versus publication date from 2010 to 2026. Points rise from about ten to the fifteenth FLOP in 2010 to over ten to the twenty-sixth by 2025, frontier models tracing the upper edge. A fitted line marks roughly 4.4-fold growth per year. AlexNet, AlphaGo Zero, GPT-3, and GPT-4 are labeled along the rising frontier."
+
+import csv
+import datetime
+import math
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+import _python.plots as _ap
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+_root = Path(_ap.__file__).resolve().parents[2]
+
+def _year(text):
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+        try:
+            d = datetime.datetime.strptime(text.strip(), fmt)
+            return d.year + (d.timetuple().tm_yday - 1) / 365.25
+        except ValueError:
+            continue
+    return None
+
+pts = []
+with open(_root / "data" / "source-receipts" / "chapter2-training-compute.csv", encoding="utf-8") as fh:
+    for row in csv.DictReader(fh):
+        yr = _year(row["publication_date"])
+        try:
+            flop = float(row["training_compute_flop"])
+        except ValueError:
+            flop = None
+        if yr and flop and flop > 0 and 2010 <= yr <= 2026.6:
+            pts.append({"yr": yr, "flop": flop, "name": row["model"], "frontier": row["frontier"] == "1"})
+
+years = np.array([p["yr"] for p in pts])
+logf = np.array([math.log10(p["flop"]) for p in pts])
+slope, intercept = np.polyfit(years, logf, 1)
+growth = 10 ** slope
+
+fig, ax = plt.subplots(figsize=(5.2, 3.3))
+other = [p for p in pts if not p["frontier"]]
+front = [p for p in pts if p["frontier"]]
+ax.scatter([p["yr"] for p in other], [p["flop"] for p in other], s=8, marker="o",
+           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.6, zorder=2, label="Notable models")
+ax.scatter([p["yr"] for p in front], [p["flop"] for p in front], s=12, marker="o",
+           facecolor=COLORS["workload"], edgecolor=COLORS["workload_ink"], linewidth=0.4, zorder=3, label="Frontier models")
+xline = np.array([2010, 2026.5])
+ax.plot(xline, 10 ** (intercept + slope * xline), color=COLORS["constraints"], lw=1.5, zorder=4)
+ax.text(2013.2, 10 ** (intercept + slope * 2016.0), f"×{growth:.1f} per year", fontsize=6.6,
+        fontweight="bold", color=COLORS["constraints_ink"], rotation=29, rotation_mode="anchor")
+
+by_name = {p["name"]: p for p in pts}
+landmarks = {"AlexNet": ("AlexNet", 6, -12), "AlphaGo Zero": ("AlphaGo Zero", -8, 11),
+             "GPT-3 175B (davinci)": ("GPT-3", -8, 11), "GPT-4 (Jun 2023)": ("GPT-4", 6, 10)}
+for key, (label, dx, dy) in landmarks.items():
+    p = by_name.get(key)
+    if p:
+        ax.annotate(label, (p["yr"], p["flop"]), textcoords="offset points", xytext=(dx, dy),
+                    fontsize=5.0, fontweight="bold", color=COLORS["ink"],
+                    arrowprops=dict(arrowstyle="-", color=COLORS["muted"], lw=0.45))
+
+ax.set_yscale("log")
+ax.set_xlim(2010, 2026.7)
+ax.set_ylim(1e14, 3e27)
+ax.set_xlabel("Publication date", fontsize=7.2)
+ax.set_ylabel("Training compute (FLOP)", fontsize=7.2)
+ax.set_xticks([2010, 2013, 2016, 2019, 2022, 2025])
+ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
+for _spine in ("top", "right"):
+    ax.spines[_spine].set_visible(False)
+ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
+ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
+fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.12)
+```
+
+```{python}
 #| echo: false
 toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
 toy_candidate_evaluations = toy_design_candidates * 3
@@ -590,73 +672,6 @@ plt.show()
 plt.close(fig)
 ```
 
-```{python}
-#| label: fig-search-vs-eval-gap
-#| fig-cap: |
-#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
-#| out-width: "92%"
-#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
-
-from math import factorial
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style, row_axis, top_log_axis
-
-# Data provenance (all values transcribed or computed from this chapter's text):
-
-# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
-
-# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
-
-# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
-
-#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
-
-# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
-
-#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
-
-#   recomputed from sources.
-
-# As-of: 2026-07-14.
-
-toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
-timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
-
-rows = [
-    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
-    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
-    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
-    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
-]
-
-apply_style()
-fig, ax = plt.subplots(figsize=(4.95, 2.75))
-fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
-
-row_axis(ax, len(rows))
-top_log_axis(
-    ax,
-    xlim=(2e1, 4e19),
-    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
-    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
-    xlabel="search-space size (candidate configurations)",
-)
-
-for y, row in enumerate(rows):
-    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
-    if row["stated"]:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
-    else:
-        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
-    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
-    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
-    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
-
-plt.show()
-plt.close(fig)
-```
-
 Apple's gaps in the upper row shrink rapidly from 19 to 16 to 7 months. Conversely, NVIDIA's data-center GPU gaps in the lower row remain near two years, at 22 and 24 months. We cannot use these announcement dates to bound a silicon program or to identify exactly when an architecture choice became too hard to change. They do not measure the pace of software change, rank release strategies, isolate any specific architecture contribution, or prove that AI tools caused a release to arrive sooner. Neither plot establishes a definitive design-cycle mismatch. Together, they illustrate why our comparisons must record the actual hardware, workload, and software exposure, rather than attempting to infer these details from public release dates.
 
 We often use benchmarks to keep our changing workloads comparable. For example, MLPerf, an industry-standard machine learning benchmarking suite [@MattsonEtAl2020MLPerf], defines shared tasks and reporting rules for machine-learning systems. Within the same benchmark version, division, scenario, and accuracy target, its strict inference rules allow us to meaningfully compare results from vastly different systems [@ReddiEtAl2020MLPerfInference], all while giving submitters the freedom to optimize their software toolchains [@ReddiEtAl2021VisionBehindMLPerf]. However, this comparability is actively maintained rather than inherent to the workloads themselves. The comparison only holds true as long as our community actively maintains the tasks and run rules.[^fn-metrology-calibration-c02] Whenever those underlying rules change, we may find that an earlier comparison no longer answers the same question.
@@ -716,95 +731,62 @@ We see candidate scale emerging from entirely different parts of the system. Whi
 MAESTRO makes this distinction especially clear. When we process 0.17M designs per second, we can examine its full 480M-candidate space in under an hour. In this scenario, we have access to plentiful, cheap analytical feedback. Our most difficult decision then becomes figuring out which apparent winners justify a more expensive evaluation. When we place our four anchors' candidate counts on a single logarithmic axis, we can compare them directly without making the mistake of treating equal counts as equal amounts of evaluation work (@fig-search-vs-eval-gap).
 
 ```{python}
-#| label: fig-training-compute-growth
+#| label: fig-search-vs-eval-gap
 #| fig-cap: |
-#|   **A fit to the displayed notable-model records yields about 4.4-fold annual growth in training compute.** Each point is a record from Epoch AI's database [@SevillaRoldan2024ComputeGrowth]; the red line is a least-squares fit over the 2010--2026 points shown, which run past the cited analysis's May 2024 window. The growth factor describes the displayed records rather than a universal rate, and it does not measure how changes in model scale overlap a hardware project.
+#|   **Architecture search spaces span many orders of magnitude.** The scale anchors appear on one log axis, from the toy SoC design-candidate count computed above to a lower bound on Timeloop's mapspace from loop-ordering and bypass choices [@ParasharEtAl2019Timeloop; @KwonEtAl2019MAESTRO]. Filled markers are stated or computed counts; the hollow marker is AutoTVM's order-of-magnitude estimate. Candidate count does not measure evaluation cost or evidence strength.
 #| out-width: "92%"
-#| fig-alt: "Log-scale scatter of AI training compute in FLOP versus publication date from 2010 to 2026. Points rise from about ten to the fifteenth FLOP in 2010 to over ten to the twenty-sixth by 2025, frontier models tracing the upper edge. A fitted line marks roughly 4.4-fold growth per year. AlexNet, AlphaGo Zero, GPT-3, and GPT-4 are labeled along the rising frontier."
+#| fig-alt: "Log-scale strip chart plotting four search-space sizes as points: a toy SoC design space with 4,320 candidate configurations, MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements."
 
-import csv
-import datetime
-import math
-from pathlib import Path
+from math import factorial
 
-import numpy as np
 import matplotlib.pyplot as plt
-import _python.plots as _ap
-from _python.plots import COLORS, apply_style
+from _python.plots import COLORS, apply_style, row_axis, top_log_axis
+
+# Data provenance (all values transcribed or computed from this chapter's text):
+# - Toy SoC design candidates: 5*4*6*4*3*3 = 4,320, computed earlier in this chapter.
+# - MAESTRO accelerator DSE: 480M candidates, stated [@KwonEtAl2019MAESTRO].
+# - AutoTVM tensor programs: "on the order of billions" per GPU operator, stated
+#   qualitatively (order-of-magnitude, hollow marker) [@ChenEtAl2018AutoTVM].
+# - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
+#   computed from the stated expression [@ParasharEtAl2019Timeloop]. Values not
+#   recomputed from sources.
+# As-of: 2026-07-14.
+
+toy_candidates = 5 * 4 * 6 * 4 * 3 * 3
+timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
+
+rows = [
+    {"label": "Toy SoC design candidates", "note": "computed in this chapter", "value": toy_candidates, "right": "$4.3\\times10^{3}$", "stated": True},
+    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
+    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
+    {"label": "Timeloop ordering + bypass lower bound", "note": "$(7!)^{4}\\times(2^{4})^{3}$, computed", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
+]
 
 apply_style()
+fig, ax = plt.subplots(figsize=(4.95, 2.75))
+fig.subplots_adjust(left=0.42, right=0.82, top=0.79, bottom=0.22)
 
-# Data: Epoch AI "Notable AI Models" database, restricted to models carrying a
+row_axis(ax, len(rows))
+top_log_axis(
+    ax,
+    xlim=(2e1, 4e19),
+    xticks=[1e2, 1e5, 1e8, 1e11, 1e14, 1e17],
+    xticklabels=["$10^{2}$", "$10^{5}$", "$10^{8}$", "$10^{11}$", "$10^{14}$", "$10^{17}$"],
+    xlabel="search-space size (candidate configurations)",
+)
 
-# publication date and a training-compute (FLOP) estimate. Values are
+for y, row in enumerate(rows):
+    ax.axhline(y, color=COLORS["row"], linewidth=0.65, zorder=0)
+    if row["stated"]:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolor=COLORS["designspace"], edgecolor=COLORS["designspace"], linewidth=1.0, zorder=3)
+    else:
+        ax.scatter([row["value"]], [y], s=26, marker="o", facecolors="white", edgecolors=COLORS["designspace"], linewidth=1.2, zorder=3)
+    ax.text(-0.86, y - 0.17, row["label"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.6, fontweight="bold", color=COLORS["ink"], clip_on=False)
+    ax.text(-0.86, y + 0.23, row["note"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=5.4, color=COLORS["muted"], clip_on=False)
+    ax.text(1.04, y, row["right"], transform=ax.get_yaxis_transform(), ha="left", va="center", fontsize=6.1, fontweight="bold", color=COLORS["designspace_ink"], clip_on=False)
 
-# dataset-transcribed, not recomputed; the growth factor is a least-squares
-
-# log-linear fit to the points shown (2010-2026) [@SevillaRoldan2024ComputeGrowth].
-
-# Accessed 2026-07-19. Receipt: data/source-receipts/chapter2-training-compute.csv
-
-_root = Path(_ap.__file__).resolve().parents[2]
-
-def _year(text):
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-        try:
-            d = datetime.datetime.strptime(text.strip(), fmt)
-            return d.year + (d.timetuple().tm_yday - 1) / 365.25
-        except ValueError:
-            continue
-    return None
-
-pts = []
-with open(_root / "data" / "source-receipts" / "chapter2-training-compute.csv", encoding="utf-8") as fh:
-    for row in csv.DictReader(fh):
-        yr = _year(row["publication_date"])
-        try:
-            flop = float(row["training_compute_flop"])
-        except ValueError:
-            flop = None
-        if yr and flop and flop > 0 and 2010 <= yr <= 2026.6:
-            pts.append({"yr": yr, "flop": flop, "name": row["model"], "frontier": row["frontier"] == "1"})
-
-years = np.array([p["yr"] for p in pts])
-logf = np.array([math.log10(p["flop"]) for p in pts])
-slope, intercept = np.polyfit(years, logf, 1)
-growth = 10 ** slope
-
-fig, ax = plt.subplots(figsize=(5.2, 3.3))
-other = [p for p in pts if not p["frontier"]]
-front = [p for p in pts if p["frontier"]]
-ax.scatter([p["yr"] for p in other], [p["flop"] for p in other], s=8, marker="o",
-           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.6, zorder=2, label="Notable models")
-ax.scatter([p["yr"] for p in front], [p["flop"] for p in front], s=12, marker="o",
-           facecolor=COLORS["workload"], edgecolor=COLORS["workload_ink"], linewidth=0.4, zorder=3, label="Frontier models")
-xline = np.array([2010, 2026.5])
-ax.plot(xline, 10 ** (intercept + slope * xline), color=COLORS["constraints"], lw=1.5, zorder=4)
-ax.text(2013.2, 10 ** (intercept + slope * 2016.0), f"×{growth:.1f} per year", fontsize=6.6,
-        fontweight="bold", color=COLORS["constraints_ink"], rotation=29, rotation_mode="anchor")
-
-by_name = {p["name"]: p for p in pts}
-landmarks = {"AlexNet": ("AlexNet", 6, -12), "AlphaGo Zero": ("AlphaGo Zero", -8, 11),
-             "GPT-3 175B (davinci)": ("GPT-3", -8, 11), "GPT-4 (Jun 2023)": ("GPT-4", 6, 10)}
-for key, (label, dx, dy) in landmarks.items():
-    p = by_name.get(key)
-    if p:
-        ax.annotate(label, (p["yr"], p["flop"]), textcoords="offset points", xytext=(dx, dy),
-                    fontsize=5.0, fontweight="bold", color=COLORS["ink"],
-                    arrowprops=dict(arrowstyle="-", color=COLORS["muted"], lw=0.45))
-
-ax.set_yscale("log")
-ax.set_xlim(2010, 2026.7)
-ax.set_ylim(1e14, 3e27)
-ax.set_xlabel("Publication date", fontsize=7.2)
-ax.set_ylabel("Training compute (FLOP)", fontsize=7.2)
-ax.set_xticks([2010, 2013, 2016, 2019, 2022, 2025])
-ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
-for _spine in ("top", "right"):
-    ax.spines[_spine].set_visible(False)
-ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
-ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
-fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.12)
+plt.show()
+plt.close(fig)
 ```
 
 Notice how our toy count sits in the thousands, MAESTRO and AutoTVM cluster near $10^9$, and Timeloop's computed lower bound lies almost ten orders of magnitude farther to the right. We use AutoTVM's hollow marker to distinguish its order-of-magnitude estimate from the explicitly stated or computed counts. While this full span covers nearly fifteen orders of magnitude, the horizontal position only encodes our candidate count. It tells us absolutely nothing about the cost, fidelity, or decision strength of a single evaluation. As architects, we must decide which choices are truly worth testing and exactly how many reliable evaluations our architecture study can afford.
