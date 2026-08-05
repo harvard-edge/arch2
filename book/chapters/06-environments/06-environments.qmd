@@ -310,7 +310,7 @@ We organize these evaluation options along a *multi-fidelity spectrum*, establis
 | --- | --- | --- | --- |
 | Analytical or circuit model | Spreadsheet, CACTI SRAM model, or NPU analytical energy estimator [@MuralimanoharEtAl2009CACTI]. | Encoded equations or circuit and technology assumptions, without workload execution. | Model version, organization, technology assumptions, units, and limits. |
 | Compiler and software build | Target compiler (TVM, IREE, LLVM), lowering passes, assembler, linker, libraries, and runtime image. | Whether the declared source and mapping produce expected executable artifacts; no hardware timing or physical result. | Source and intermediate representations, target features, flags, mapping, library and compiler versions, diagnostics, and binary identity. |
-| Functional instruction-set architecture (ISA) execution | Spike or QEMU ISA-level functional execution. | Instruction and software behavior under our implemented ISA model, without microarchitectural timing. | Binary, ISA options, input, termination state, and functional output. |
+| Functional instruction-set architecture (ISA) execution | Spike (a RISC-V ISA simulator) or QEMU (a generic machine emulator and virtualizer) ISA-level functional execution. | Instruction and software behavior under our implemented ISA model, without microarchitectural timing. | Binary, ISA options, input, termination state, and functional output. |
 | Timing-model simulation | gem5 processor, NoC interconnect, and LPDDR5 memory controller timing simulation [@BinkertEtAl2011Gem5]. | Modeled pipeline, cache, interconnect, and memory timing under a chosen configuration. | Workload, software, warm-up, region, seed, configuration, event counts, and traces. |
 | RTL simulation and verification harness | Verilator C++ model execution [@Veripool2026Verilator], Cocotb Python testbenches, or Synopsys VCS gate-level simulation with SDF timing back-annotation. | Cycle behavior under our supplied RTL and simulator/testbench semantics; no routed-delay result unless we explicitly supply such timing. | RTL identity, testbench, compile flags, reset, waves, assertions, and logs. |
 | Formal property or equivalence tool | SystemVerilog Assertions and Bounded Model Checking (SVA/BMC via SymbiYosys or JasperGold) [@Clarke2018ModelChecking]. | The stated property or equivalence relation within our declared assumptions, abstraction, and bound where applicable; no general correctness result. | Property and model identities, assumptions, abstraction, bound, solver version and outcome, proof or counterexample artifact, and cost. |
@@ -321,7 +321,7 @@ We organize these evaluation options along a *multi-fidelity spectrum*, establis
 
 We must carefully weigh cost and property coverage to determine which authorized branches our study can realistically afford to execute. These tool paths differ significantly not only in what they observe, but also in their underlying resource regimes. We can often reconstruct analytical models and compiler checks quite cheaply from our declared inputs. However, our cycle-level (gem5), RTL (Verilator/VCS), and formal (SVA/BMC) runs might prove lengthy, heavily resource-constrained, or even inconclusive. As we move to implementation flows in Yosys, Vivado, and OpenROAD, we take on persistent databases, stage dependencies, and licensed features. Meanwhile, our FireSim FPGA paths introduce complex image or build steps, deployment queues, calibration routines, and the bottleneck of scarce hardware access. To manage this complexity, our environment records the actual realized conditions and costs, rather than trying to infer them from the tool class alone.
 
-ZSim and FireSim clearly illustrate an important operational consequence, where throughput depends on our realized configuration, not just the tool class we choose. In one published setup, ZSim ran a detailed Westmere-class out-of-order model at 20 million simulated instructions per second, roughly $200\times$ slower than the modeled core. That same study noted conventional detailed simulators running at around 200 thousand simulated instructions per second [@ZSim]. FireSim operates in an entirely different regime. When we use FPGA-accelerated simulation, individual target nodes can run at tens to hundreds of megahertz; one notable 1,024-node configuration ran at 3.4\ MHz for 3.2\ GHz targets, achieving a slowdown of less than $1{,}000\times$ [@KarandikarEtAl2018FireSim]. We must remember that these rates are merely examples, not universal constants. Our modeled system, host or FPGA allocation, workload, instrumentation, accuracy target, and scale will all shift these numbers. Because of this variability, our environment records the observed throughput alongside its specific conditions, allowing our method to build budgets based on that precisely scoped rate.
+ZSim (a fast x86 simulator) and FireSim clearly illustrate an important operational consequence, where throughput depends on our realized configuration, not just the tool class we choose. In one published setup, ZSim ran a detailed Westmere-class out-of-order model at 20 million simulated instructions per second, roughly $200\times$ slower than the modeled core. That same study noted conventional detailed simulators running at around 200 thousand simulated instructions per second [@ZSim]. FireSim operates in an entirely different regime. When we use FPGA-accelerated simulation, individual target nodes can run at tens to hundreds of megahertz; one notable 1,024-node configuration ran at 3.4\ MHz for 3.2\ GHz targets, achieving a slowdown of less than $1{,}000\times$ [@KarandikarEtAl2018FireSim]. We must remember that these rates are merely examples, not universal constants. Our modeled system, host or FPGA allocation, workload, instrumentation, accuracy target, and scale will all shift these numbers. Because of this variability, our environment records the observed throughput alongside its specific conditions, allowing our method to build budgets based on that precisely scoped rate.
 
 SimPoint and SMARTS teach us a separate but equally crucial lesson about sampling identity. While SimPoint helps us select representative program regions, SMARTS provides us with a robust statistical basis for sampled simulation [@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. Our environment faithfully records our chosen regions, weights, warm-up periods, fast-forward policies, and checkpoint parents. However, it leaves the critical decision of whether those choices actually support our intended comparison entirely up to us.
 
@@ -337,7 +337,192 @@ Although our common configuration and generated hardware description give us a s
 
 The choice of hardware evaluation environment establishes a fundamental tradeoff between simulation throughput and microarchitectural cycle accuracy (@fig-ch06-simulation-spectrum). Across hardware verification platforms, simulation performance spans seven orders of magnitude, ranging from software RTL simulators (Verilator/VCS executing at $4.5\text{ KIPS}$) to functional ISA emulators (Spike at $48,000\text{ KIPS}$) and analytical models ($8.5\text{ MIPS}$). FPGA-accelerated execution through FireSim occupies a crucial Pareto sweet spot, delivering cycle-exact RTL fidelity ($0\%$ cycle error) at $24,000\text{ KIPS}$, which is over $5,300\times$ faster than software RTL simulation despite requiring a four-hour FPGA compilation build overhead.
 
-![**Simulation speedup versus microarchitectural fidelity spectrum across hardware verification environments.** Evaluation platforms exhibit a wide trade-off between throughput and cycle accuracy, from slow software RTL simulators ($4.5\text{ KIPS}$) to fast functional ISA emulators ($48,000\text{ KIPS}$). FireSim FPGA acceleration provides a key Pareto sweet spot, executing cycle-exact RTL at $24,000\text{ KIPS}$ ($0\%$ cycle error), delivering over $5,300\times$ speedup compared to software RTL simulation.](images/fig-ch06-simulation-spectrum.svg){#fig-ch06-simulation-spectrum width="95%" fig-alt="Scatter plot with log-scale horizontal axis showing simulation throughput in KIPS versus microarchitectural cycle error rate on the vertical axis. Bubbles are sized by setup and build overhead time. FireSim FPGA achieves 24,000 KIPS with 0 percent error, VCS RTL simulation achieves 4.5 KIPS with 0 percent error, gem5 achieves 280 KIPS with 4.2 percent error, and Spike achieves 48,000 KIPS with 18.5 percent error."}
+```{python}
+#| label: fig-ch06-simulation-spectrum
+#| fig-cap: |
+#|   **Simulation speedup versus microarchitectural fidelity spectrum across hardware verification environments.** Evaluation platforms exhibit a wide trade-off between throughput and cycle accuracy, from slow software RTL simulators ($4.5\text{ KIPS}$) to fast functional ISA emulators ($48,000\text{ KIPS}$). FireSim FPGA acceleration provides a key Pareto sweet spot, executing cycle-exact RTL at $24,000\text{ KIPS}$ ($0\%$ cycle error), delivering over $5,300\times$ speedup compared to software RTL simulation.
+#| out-width: "100%"
+#| fig-alt: "Scatter plot with log-scale horizontal axis showing simulation throughput in KIPS versus microarchitectural cycle error rate on the vertical axis. Bubbles are sized by setup and build overhead time. FireSim FPGA achieves 24,000 KIPS with 0 percent error, VCS RTL simulation achieves 4.5 KIPS with 0 percent error, gem5 achieves 280 KIPS with 4.2 percent error, and Spike achieves 48,000 KIPS with 18.5 percent error."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+import numpy as np
+
+apply_style()
+
+environments = [
+    (
+        "VCS / Verilator\n(Cycle-exact RTL)",
+        4.5,
+        0.0,
+        1.5,
+        COLORS["red"],
+        "left",
+        "bottom",
+        (8, 0.6),
+    ),
+    (
+        "FireSim FPGA\n(Cycle-exact @ 25 MHz)",
+        24000.0,
+        0.0,
+        4.0,
+        COLORS["green"],
+        "center",
+        "bottom",
+        (0, 1.2),
+    ),
+    (
+        "gem5 / SST\n(Detailed microarch)",
+        280.0,
+        4.2,
+        0.1,
+        COLORS["blue"],
+        "left",
+        "top",
+        (8, -1.2),
+    ),
+    (
+        "Spike / QEMU\n(Functional ISA)",
+        48000.0,
+        18.5,
+        0.01,
+        COLORS["orange"],
+        "left",
+        "center",
+        (8, 0),
+    ),
+    (
+        "Analytical Roofline\n(Bound model)",
+        8500000.0,
+        26.0,
+        0.001,
+        COLORS["muted"],
+        "right",
+        "top",
+        (-8, -1.0),
+    ),
+    (
+        "Fabricated Silicon\n(Physical chip)",
+        2200000.0,
+        0.0,
+        720.0,
+        COLORS["magenta"],
+        "right",
+        "bottom",
+        (-10, 0.8),
+    ),
+]
+
+fig, ax = plt.subplots(figsize=(5.6, 3.4))
+fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
+
+pareto_x = [4.5, 24000.0, 2200000.0]
+pareto_y = [0.0, 0.0, 0.0]
+ax.plot(
+    pareto_x,
+    pareto_y,
+    color=COLORS["grid"],
+    linewidth=1.2,
+    linestyle="--",
+    zorder=1,
+)
+
+tradeoff_x = [4.5, 280.0, 48000.0, 8500000.0]
+tradeoff_y = [0.0, 4.2, 18.5, 26.0]
+ax.plot(
+    tradeoff_x,
+    tradeoff_y,
+    color=COLORS["grid"],
+    linewidth=1.2,
+    linestyle=":",
+    zorder=1,
+)
+
+for name, kips, error, setup_h, color, ha, va, offset in environments:
+    bubble_size = 45 + 25 * np.log10(max(0.01, setup_h * 60) + 1.0)
+    ax.scatter(
+        kips,
+        error,
+        s=bubble_size * 2.2,
+        color=color,
+        alpha=0.85,
+        edgecolor=COLORS["ink"],
+        linewidth=0.8,
+        zorder=4,
+    )
+
+    ax.annotate(
+        name,
+        xy=(kips, error),
+        xytext=(offset[0], offset[1] * 1.8),
+        textcoords="offset points",
+        fontsize=5.8,
+        fontweight="bold",
+        color=color if color != COLORS["muted"] else COLORS["ink"],
+        ha=ha,
+        va=va,
+        zorder=5,
+    )
+
+ax.annotate(
+    "FireSim FPGA Sweet Spot\n(5,300x faster than VCS @ 0% RTL error)",
+    xy=(24000.0, 0.0),
+    xytext=(150, 8.5),
+    arrowprops=dict(
+        arrowstyle="->",
+        color=COLORS["ink"],
+        lw=0.8,
+        connectionstyle="arc3,rad=-0.2",
+    ),
+    fontsize=6.0,
+    fontweight="bold",
+    color=COLORS["evidence_ink"],
+)
+
+ax.set_xscale("log")
+ax.set_xlim(1.0, 20000000.0)
+ax.set_ylim(-1.5, 30.0)
+
+ax.set_title(
+    "Simulation Speedup versus Fidelity Spectrum Across Hardware Environments",
+    fontsize=8.0,
+    pad=9,
+    fontweight="bold",
+)
+ax.set_xlabel(
+    "Simulation Throughput (Kilo-Instructions Per Second, log scale)", fontsize=6.8
+)
+ax.set_ylabel(
+    "Microarchitectural Cycle Error Rate (%) (lower is better)", fontsize=6.8
+)
+
+ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
+ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
+
+ax.text(
+    0.03,
+    0.92,
+    "Bubble size indicates setup & build overhead time",
+    transform=ax.transAxes,
+    fontsize=5.6,
+    color=COLORS["muted"],
+    fontweight="bold",
+    bbox=dict(
+        boxstyle="round,pad=0.3",
+        facecolor=COLORS["note_fill"],
+        edgecolor=COLORS["note_edge"],
+        lw=0.5,
+    ),
+)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+plt.show()
+plt.close(fig)
+```
 
 While shared lineage successfully identifies related artifacts for us, it doesn't dictate exactly when a branch is ready to run. ArchGym elegantly demonstrates how several architecture simulators can share a common interface under strict, controlled budgets [@KrishnanEtAl2023ArchGym]. However, our project environment must go a step further. We need it to expose jobs that wait in queues, hold precious licenses, resume from checkpoints, and return results asynchronously, rather than obscuring all of this complex reality behind a single `step()` call.
 

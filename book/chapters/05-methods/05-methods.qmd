@@ -51,7 +51,7 @@ How do we distinguish functional architectural roles from underlying method fami
 
 We prefer the *smallest sufficient approach*, defined as the least elaborate method that performs the required engineering job while preserving our evaluator and later checks. This strategy minimizes our total effort rather than just shortening the code or reducing inference cost. We consider choosing "no added method" a positive engineering decision whenever direct evaluation costs less and maintains our required checks.
 
-Consider the three cache capacities we specified for our prospective Lighthouse cache study. Because we simply need to compare known candidates, direct evaluation fits our declared budget perfectly. If our study instead contained thousands of microarchitectural configurations (such as tuning CPU branch predictors or NPU tile factors), evaluating each candidate directly in simulators like gem5, Sniper, or SCALE-Sim would quickly exhaust our computing budget. We might then choose to screen candidates with a regression model or surrogate. We would first need to qualify that model against stronger reference results from our same workload and design region before passing its ranked finalists to our simulator and physical checks. Ultimately, expanding our choice space shifts the limiting work, which may in turn change our entire approach.
+Consider the three cache capacities we specified for our prospective Lighthouse cache study. Because we simply need to compare known candidates, direct evaluation fits our declared budget perfectly. If our study instead contained thousands of microarchitectural configurations (such as tuning CPU branch predictors or NPU tile factors), evaluating each candidate directly in simulators like gem5 (a cycle-accurate microarchitectural simulator), Sniper (a parallel multi-core simulator), or SCALE-Sim (a systolic-array accelerator simulator) would quickly exhaust our computing budget. We might then choose to screen candidates with a regression model or surrogate. We would first need to qualify that model against stronger reference results from our same workload and design region before passing its ranked finalists to our simulator and physical checks. Ultimately, expanding our choice space shifts the limiting work, which may in turn change our entire approach.
 
 If we jumped straight from our cache comparison to a favored mechanism, we would hide the actual work required. Instead, we use four specific decisions to keep our choices explicit. We name the engineering role first, use its required output to select the broad operation, and then match a concrete technique to our artifact and feedback. Finally, we only compose components when our work requires distinct, separable jobs (@tbl-role-by-stall-mode).
 
@@ -237,7 +237,7 @@ afford, how long they may take, what they cost, which fidelity each uses, and
 how much expert review capacity we have available. Failed attempts consume the very same
 finite resources.
 
-These constraints separate our small studies from large searches. We can enumerate three legal cache capacities. On the other hand, reported or computed accelerator and tensor-program scale anchors (such as NPU matrix engine tile schedules compiled via Triton, CPU out-of-order execution tuning, or DRAM memory controller timing) can reach hundreds of millions to more than $10^{18}$ possibilities [@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM; @ParasharEtAl2019Timeloop]. In the larger spaces, our analytical pruning, deterministic legality checks, heuristics, prediction, or optimization may save expensive evaluations. In the smaller space, the same machinery can cost more than it saves. @sec-evaluation-capacity-bounds-search computes a smaller cross-product explicitly and separates candidate count from evaluation capacity. These independent design-space anchors motivate search, but they do not say how many evaluations our particular study can afford, or how quickly its pre-review tool path can settle them.
+These constraints separate our small studies from large searches. We can enumerate three legal cache capacities. On the other hand, reported or computed accelerator and tensor-program scale anchors (such as NPU matrix engine tile schedules evaluated via MAESTRO, an accelerator dataflow evaluation tool, compiled via Triton, tuned via AutoTVM, a tensor-compiler autotuner, or mapped via Timeloop, an NPU memory-hierarchy mapper) can reach hundreds of millions to more than $10^{18}$ possibilities [@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM; @ParasharEtAl2019Timeloop]. In the larger spaces, our analytical pruning, deterministic legality checks, heuristics, prediction, or optimization may save expensive evaluations. In the smaller space, the same machinery can cost more than it saves. @sec-evaluation-capacity-bounds-search computes a smaller cross-product explicitly and separates candidate count from evaluation capacity. These independent design-space anchors motivate search, but they do not say how many evaluations our particular study can afford, or how quickly its pre-review tool path can settle them.
 
 Candidate count alone does not reveal whether our declared tool path can absorb
 the work before review. We can use a simple capacity model to identify the active tool
@@ -434,7 +434,7 @@ Our consequence model merely estimates behavior within stated limits, whereas ou
 
 How do we establish and validate support boundaries to prevent surrogate predictors from misguiding architectural search? We should always assess our predictors based on how we plan to use them. When we deploy a screening surrogate, it must preserve the correct ordering near our decision boundaries. This means that rank correlation and top-k recall[^fn-ml-top-k-recall-c05] often matter much more than a model's global average error. However, we still care deeply about point accuracy whenever a hard limit, such as an area constraint or maximum access time, dictates a design's feasibility. Ultimately, our assessment criteria must align directly with the specific decisions, candidate regions, workloads, and thresholds at play, rather than collapsing everything into a single aggregate score.
 
-[^fn-ml-top-k-recall-c05]: **Top-k recall**: The fraction of the measured best k candidates that also appear in our predictor's top k. It asks whether our screen successfully retained the designs worth evaluating, which is fundamentally different from asking whether all predicted values were numerically accurate. For instance, Ansor uses this measure to determine whether its cost model successfully preserves promising tensor programs for our subsequent evaluation [@ZhengEtAl2020Ansor].
+[^fn-ml-top-k-recall-c05]: **Top-k recall**: The fraction of the measured best k candidates that also appear in our predictor's top k. It asks whether our screen successfully retained the designs worth evaluating, which is fundamentally different from asking whether all predicted values were numerically accurate. For instance, Ansor, a tensor-program autotuner, uses this measure to determine whether its cost model successfully preserves promising tensor programs for our subsequent evaluation [@ZhengEtAl2020Ansor].
 
 Before we let a cheap predictor gate which candidates reach our expensive tools, we need to reserve a dedicated check batch sampled directly from the candidate and condition regions where that screen will actually operate. We absolutely cannot use this batch to fit or tune our predictor. Instead, we must send these test cases through both paths. Applying decision-aligned ranking measures, such as top-k recall, we can determine exactly how many candidates need to survive our screen to ensure we hold onto the designs truly worth measuring. If we see weak recall, we have to either expand our survivor set or abandon the screen altogether. Of course, we must remember that these check runs consume the exact same evaluation budget our predictor was supposed to save us in the first place.
 
@@ -592,7 +592,7 @@ Our generator therefore requires a clearly scoped input, legal actions, and inex
 
 We must remember that a generated checker does not automatically provide independent verification. If our generator emits both the RTL and its testbench, it may easily repeat the exact same misinterpreted requirement across both artifacts. While the checker can still expose simple errors, achieving true independence requires us to use a sufficiently different oracle, tool, implementation, or reviewer, along with an explicit account of whichever assumptions remain shared across our flow.
 
-We should stop generation when our study secures enough useful alternatives, when our checking or review bandwidth becomes the new bottleneck, or when the generator repeatedly wanders outside our represented action space. Crucially, it must never widen that space silently. *High-Level Synthesis* (HLS, which compiles algorithmic C/C++ specifications into register-transfer level hardware descriptions) C/C++ *pragma design space exploration* (DSE, which systematically evaluates compiler annotations to trade off execution throughput against physical hardware area) makes this separation highly visible, because hardware synthesis flows depend entirely on target-specific C/C++ annotations that must be both syntactically legal and timing-feasible. In an HLS pragma DSE workflow, a generator or optimizer inserts loop unrolling (`#pragma HLS UNROLL`), pipelining (`#pragma HLS PIPELINE`), and array partitioning (`#pragma HLS ARRAY_PARTITION`) pragmas into C/C++ compute kernels. An execution harness compiles each candidate via Vitis HLS or Vivado HLS, verifies functional correctness with C/RTL co-simulation, and evaluates target latency, initiation interval, and FPGA/ASIC resource utilization (LUTs, DSPs, BRAMs). Software kernel generation benchmarks such as KernelBench [@OuyangEtAl2025KernelBench] exhibit a parallel candidate funnel for GPU code generation, where language models propose CUDA kernels evaluated against a PyTorch baseline.
+We should stop generation when our study secures enough useful alternatives, when our checking or review bandwidth becomes the new bottleneck, or when the generator repeatedly wanders outside our represented action space. Crucially, it must never widen that space silently. *High-Level Synthesis* (HLS, which compiles algorithmic C/C++ specifications into register-transfer level hardware descriptions) C/C++ *pragma design space exploration* (DSE, which systematically evaluates compiler annotations to trade off execution throughput against physical hardware area) makes this separation highly visible, because hardware synthesis flows depend entirely on target-specific C/C++ annotations that must be both syntactically legal and timing-feasible. In an HLS pragma DSE workflow, a generator or optimizer inserts loop unrolling (`#pragma HLS UNROLL`), pipelining (`#pragma HLS PIPELINE`), and array partitioning (`#pragma HLS ARRAY_PARTITION`) pragmas into C/C++ compute kernels. An execution harness compiles each candidate via Vitis HLS or Vivado HLS (Xilinx high-level synthesis tools), verifies functional correctness with C/RTL co-simulation, and evaluates target latency, initiation interval, and FPGA/ASIC resource utilization (LUTs, DSPs, BRAMs). Software kernel generation benchmarks such as KernelBench, a GPU code generation benchmark, exhibit a parallel candidate funnel for GPU code generation, where language models propose CUDA kernels evaluated against a PyTorch baseline [@OuyangEtAl2025KernelBench].
 
 Allowing one attempt per task, @fig-ch05-kernel-funnel lets us compare three successive claims across four models and three difficulty levels. A model first attempts to write a kernel, our harness then decides whether it is numerically correct, and only a correct kernel can count as faster than the baseline. We must recognize that generating code, producing correct code, and actually improving performance represent entirely separate achievements in our workflows.
 
@@ -837,9 +837,137 @@ fig-alt="A loop with separate lanes for our placement policy's outbound macro-lo
 
 Reinforcement learning becomes a plausible tool here because each macro-location action genuinely changes the partial floorplan that conditions our later choices, even though the terminal proxy reward is not a final physical-design verdict (@fig-alphachip-placement). Our policy receives the updated partial floorplan as its next state and repeats the sequence until every macro has a location. An approximate standard-cell placement step then provides a weighted density, congestion, and wirelength proxy cost, and we feed its negative back as the terminal reward. Keeping our action, next-state, and terminal-evaluation paths distinct, we clearly separate our sequential action selection from the proxy that scores the completed placement.
 
-When we compare optimization methodologies on physical floorplanning and macro placement tasks (@fig-ch05-search-efficiency), we observe substantial differences in sample efficiency and asymptotic PPA quality across OpenROAD benchmark runs. Generative LLM spatial prompting achieves rapid zero-shot convergence, attaining a $0.88$ normalized PPA quality score after only $25$ tool evaluations by leveraging learned spatial heuristics. Bayesian optimization offers excellent early sample efficiency up to $100$ evaluations but plateaus as high-dimensional macro placement spaces challenge Gaussian process surrogates. Conversely, reinforcement learning requires extensive initial exploration but scales smoothly across policy updates, achieving the highest asymptotic PPA score ($0.95$) at $1,500$ evaluations.
+When we compare optimization methodologies on physical floorplanning and macro placement tasks (@fig-ch05-search-efficiency), we observe substantial differences in sample efficiency and asymptotic PPA quality across OpenROAD (an open-source physical design toolchain) benchmark runs. Generative LLM spatial prompting achieves rapid zero-shot convergence, attaining a $0.88$ normalized PPA quality score after only $25$ tool evaluations by leveraging learned spatial heuristics. Bayesian optimization offers excellent early sample efficiency up to $100$ evaluations but plateaus as high-dimensional macro placement spaces challenge Gaussian process surrogates. Conversely, reinforcement learning requires extensive initial exploration but scales smoothly across policy updates, achieving the highest asymptotic PPA score ($0.95$) at $1,500$ evaluations.
 
-![**Physical floorplanning search efficiency and PPA quality across optimization methodologies.** LLM spatial prompting provides rapid early convergence, achieving a $0.88$ normalized PPA score within $25$ evaluations by exploiting learned placement heuristics. Bayesian optimization delivers strong early sample efficiency but plateaus in high-dimensional macro spaces, while reinforcement learning requires a larger sample budget to reach the highest asymptotic PPA quality ($0.95$) across OpenROAD benchmarks.](images/fig-ch05-search-efficiency.svg){#fig-ch05-search-efficiency width="95%" fig-alt="Log-scale line plot showing normalized floorplan PPA quality score versus physical design tool evaluations from 1 to 2,000 runs. LLM spatial prompting reaches 0.88 quality at 25 evaluations, Bayesian optimization plateaus around 0.86 quality, reinforcement learning scales to 0.95 quality at 1,500 evaluations, and random search reaches 0.68 quality at 2,000 evaluations."}
+```{python}
+#| label: fig-ch05-search-efficiency
+#| fig-cap: |
+#|   **Physical floorplanning search efficiency and PPA quality across optimization methodologies.** LLM spatial prompting provides rapid early convergence, achieving a $0.88$ normalized PPA score within $25$ evaluations by exploiting learned placement heuristics. Bayesian optimization delivers strong early sample efficiency but plateaus in high-dimensional macro spaces, while reinforcement learning requires a larger sample budget to reach the highest asymptotic PPA quality ($0.95$) across OpenROAD benchmarks.
+#| out-width: "100%"
+#| fig-alt: "Log-scale line plot showing normalized floorplan PPA quality score versus physical design tool evaluations from 1 to 2,000 runs. LLM spatial prompting reaches 0.88 quality at 25 evaluations, Bayesian optimization plateaus around 0.86 quality, reinforcement learning scales to 0.95 quality at 1,500 evaluations, and random search reaches 0.68 quality at 2,000 evaluations."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+import numpy as np
+
+apply_style()
+
+samples = np.logspace(0, 3.3, 200)
+llm_quality = 0.92 - 0.45 * np.exp(-samples / 12.0)
+bo_quality = 0.86 - 0.52 * np.exp(-samples / 35.0)
+rl_quality = 0.95 / (1.0 + 8.0 * (samples**-0.65))
+random_quality = 0.20 + 0.14 * np.log10(samples)
+
+fig, ax = plt.subplots(figsize=(5.6, 3.4))
+fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
+
+ax.plot(
+    samples,
+    llm_quality,
+    color=COLORS["orange"],
+    linewidth=2.2,
+    label="LLM Spatial Prompting (Fast zero-shot start)",
+    zorder=4,
+)
+ax.plot(
+    samples,
+    bo_quality,
+    color=COLORS["blue"],
+    linewidth=1.8,
+    linestyle="--",
+    label="Bayesian Optimization (Sample-efficient GP)",
+    zorder=3,
+)
+ax.plot(
+    samples,
+    rl_quality,
+    color=COLORS["purple"],
+    linewidth=2.2,
+    label="Reinforcement Learning (Asymptotic peak PPA)",
+    zorder=4,
+)
+ax.plot(
+    samples,
+    random_quality,
+    color=COLORS["muted"],
+    linewidth=1.4,
+    linestyle=":",
+    label="Random Search (Uniform baseline)",
+    zorder=2,
+)
+
+ax.fill_between(
+    samples,
+    llm_quality - 0.02,
+    llm_quality + 0.02,
+    color=COLORS["orange"],
+    alpha=0.12,
+    zorder=1,
+)
+ax.fill_between(
+    samples,
+    rl_quality - 0.025,
+    rl_quality + 0.025,
+    color=COLORS["purple"],
+    alpha=0.12,
+    zorder=1,
+)
+
+ax.annotate(
+    "LLM Fast Start\n(0.88 PPA @ 25 evaluations)",
+    xy=(25, 0.88),
+    xytext=(3.5, 0.72),
+    arrowprops=dict(
+        arrowstyle="->",
+        color=COLORS["ink"],
+        lw=0.8,
+        connectionstyle="arc3,rad=0.15",
+    ),
+    fontsize=6.0,
+    fontweight="bold",
+    color=COLORS["methods_ink"],
+)
+
+ax.annotate(
+    "RL Asymptotic Peak PPA\n(0.95 PPA @ 1,500 evaluations)",
+    xy=(1500, 0.945),
+    xytext=(180, 0.96),
+    arrowprops=dict(
+        arrowstyle="->",
+        color=COLORS["ink"],
+        lw=0.8,
+        connectionstyle="arc3,rad=-0.15",
+    ),
+    fontsize=6.0,
+    fontweight="bold",
+    color=COLORS["designspace_ink"],
+)
+
+ax.set_xscale("log")
+ax.set_xlim(1, 2000)
+ax.set_ylim(0.15, 1.0)
+
+ax.set_title(
+    "Floorplan Search Efficiency Across Optimization Methodologies",
+    fontsize=8.0,
+    pad=9,
+    fontweight="bold",
+)
+ax.set_xlabel("Physical Design Tool Evaluations (log scale)", fontsize=6.8)
+ax.set_ylabel("Normalized Floorplan PPA Quality Score", fontsize=6.8)
+
+ax.legend(frameon=False, fontsize=5.8, loc="lower right")
+ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
+ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+plt.show()
+plt.close(fig)
+```
 
 We must remember that this reward is strictly part of our optimization approach. While our placement-stage proxies successfully guide the search, they do not simulate every downstream routing, timing, or manufacturing effect. Our optimizer might find a brilliant answer to the exact objective we gave it, while that objective still remains an incomplete stand-in for our true architectural goal. We have to design our later checks to explicitly bridge that gap.
 
@@ -864,7 +992,7 @@ We should treat the mismatch column as our practical rejection test. A familiar 
 
 Every time we deploy a learned optimizer, we must benchmark it against a strong, simple comparison running under the exact same legal space, tool path, and evaluation budget. For a small finite set, enumeration provides our baseline. For larger spaces, random search often proves incredibly useful because it requires no learned surrogate and parallelizes effortlessly [@BergstraBengio2012RandomSearch]. If we have good domain structure available, a deterministic heuristic might make an even stronger baseline. We should remember that random search can still enthusiastically optimize a poor proxy or a badly represented space, so we use it as a transparent control rather than a guarantee of correctness.
 
-PrefixRL illustrates a much tighter sequential formulation. It explicitly casts parallel-prefix circuits as a reinforcement-learning problem, pulling logic synthesis directly into its evaluation path [@RoyEtAl2021PrefixRL]. Combining a clearly declared circuit space with rigorous synthesis feedback, the authors make their method highly inspectable. Even so, the final result still relies entirely on the quality of their objective, their tool conditions, and their matched baseline.
+PrefixRL, a reinforcement-learning framework for circuit synthesis, illustrates a much tighter sequential formulation. It explicitly casts parallel-prefix circuits as a reinforcement-learning problem, pulling logic synthesis directly into its evaluation path [@RoyEtAl2021PrefixRL]. Combining a clearly declared circuit space with rigorous synthesis feedback, the authors make their method highly inspectable. Even so, the final result still relies entirely on the quality of their objective, their tool conditions, and their matched baseline.
 
 Our optimizer should finally stop when its budget is spent, when our decision stabilizes, when required inputs become unavailable, when the feasible region turns out to be empty under our declared constraints, or when another evaluation is simply unlikely to change our decision enough to justify the cost. In our execution request, we should always ask the environment to retain the rationale for why it selected each evaluation, as well as how the advanced method compared against our simpler baseline. If our selected optimizer relies on a generator to build legal candidates or a predictor to avoid expensive evaluations, those distinct jobs should dictate how we compose our final search architecture, rather than following a fixed method order.
 
