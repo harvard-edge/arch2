@@ -71,7 +71,18 @@ quarto render tools
 cp -r tools/_site/* _site/tools/
 
 echo "==> Rendering landing + about"
-quarto render www
+# Measure the manuscript at build time and pass the numbers in as metadata, so
+# the landing page reports exact figures without a runtime request. A failure
+# here must not break the site: the strip degrades to empty values.
+stat_args=()
+if stats_output="$(python3 .github/scripts/manuscript_stats.py 2>/dev/null)"; then
+  while IFS= read -r stat_line; do
+    [[ -n "$stat_line" ]] && stat_args+=("-M" "$stat_line")
+  done <<< "$stats_output"
+else
+  echo "warning: manuscript stats unavailable; landing strip will be empty" >&2
+fi
+quarto render www "${stat_args[@]}"
 cp -r www/_site/* _site/
 
 echo "==> Rewriting assembled-site links"
