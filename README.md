@@ -37,7 +37,7 @@ constructing alternatives to testing mechanisms and defending a bounded
 recommendation. A design loop organizes that work around architectural state,
 tool feedback, evidence, and human judgment. The card records the question,
 inputs, tool runs, results, and decision for one study; it does not define the
-field.
+discipline.
 
 Architecture 2.0 is part of the [mlsysbook.ai](https://mlsysbook.ai) family.
 
@@ -111,7 +111,8 @@ screen readers.
 ## Contributors
 
 People who contribute tools, readings, workshops, corrections, examples,
-datasets, or artifact pointers help make Architecture 2.0 useful to the field.
+datasets, or artifact pointers help make Architecture 2.0 useful to the
+discipline.
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
@@ -131,7 +132,7 @@ site is published at [arch2.mlsysbook.ai](https://arch2.mlsysbook.ai).
 
 Cite the tagged version you used rather than the development branch. The
 repository carries a [`CITATION.cff`](CITATION.cff) entry, which GitHub renders
-through the **Cite this repository** control in the sidebar. Tagged snapshots
+through the *Cite this repository* control in the sidebar. Tagged snapshots
 are listed under [Tags](https://github.com/harvard-edge/arch2/tags).
 
 ## License
