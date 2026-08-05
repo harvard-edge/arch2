@@ -60,7 +60,7 @@ def generate_nre_mask_cost_productivity_plot(output_dir: Path) -> None:
     )
     ax1.set_xticks(x)
     ax1.set_xticklabels(nodes, fontsize=6.2)
-    ax1.set_ylim(0.08, 400)
+    ax1.set_ylim(0.08, 500)
     ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
     ax1.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
 
@@ -82,7 +82,8 @@ def generate_nre_mask_cost_productivity_plot(output_dir: Path) -> None:
         fontsize=6.8,
         color=COLORS["constraints_ink"],
     )
-    ax2.set_ylim(0.8, 400)
+    ax2.set_ylim(0.08, 500)
+
     ax2.tick_params(
         axis="y",
         labelsize=6.0,

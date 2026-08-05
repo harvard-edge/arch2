@@ -196,9 +196,7 @@ Underneath this brief prompt lies a complete hardware-and-software SoC architect
 
 Mobile XR is an ideal target because it forces us to juggle tight latency, thermal, and energy constraints alongside complex cross-layer behavior. We simply cannot optimize a single kernel or hardware block while turning a blind eye to the software pipeline, the memory system, or the rigid frame deadlines that users actually experience [@HuzaifaEtAl2021ILLIXR]. Early bringup of this software stack and ISA contract relies on tools like Spike, the canonical RISC-V ISA functional simulator, and Renode, an open-source multi-node system emulator, to verify compiler behavior before hardware implementation begins.
 
-When we bring industrial integration into the picture, the stakes get even higher. We know that an accelerator in a modern system-on-chip (SoC) isn't a clean-sheet island; it has to plug into existing intellectual property using strict protocols like AMBA AXI.[^fn-axi-c01] If we design a candidate that boasts amazing power, performance, and area (PPA) metrics but botches a simple AXI handshake, we haven't built something we can actually integrate.
-
-[^fn-axi-c01]: **AMBA AXI**: An Arm-defined on-chip interface protocol with separate channels and strict valid-ready handshake requirements [@Arm2020AXI]. A block that violates the protocol cannot be integrated into a system that depends on that interface, no matter how good its isolated power and performance numbers look.
+When we bring industrial integration into the picture, the stakes get even higher. We know that an accelerator in a modern system-on-chip (SoC) isn't a clean-sheet island; it has to plug into existing intellectual property using strict protocols like AMBA AXI (an Arm-defined on-chip interface protocol with separate channels and strict valid-ready handshake requirements [@Arm2020AXI]). If we design a candidate that boasts amazing power, performance, and area (PPA) metrics but botches a simple AXI handshake, we haven't built something we can actually integrate.
 
 We use the word *prompt* here for a reason, it's intentionally modest. A prompt expresses our high-level, compact intent. From there, we derive requirements that interpret the prompt's obligations and highlight the choices we still need to make. A true specification goes further, locking down enough behavior, interfaces, workloads, software semantics, constraints, and acceptance criteria to make our implementation testable. We then craft a study plan that pins down the reference design, alternative options, tools, budgets, and stopping conditions for a specific comparison. Right now, our Lighthouse request isn't a specification. Terms like "XRBench-class," "3\ W," "3\ nm-class," and the broad compute options we've allowed still demand concrete versioned workloads, software paths, reference designs, process assumptions, and verification checks. As architects, we have to pull those open choices out into the light before this request can drive real engineering, deciding exactly which interpretation makes it into the spec and what a successful result looks like.
 
@@ -235,9 +233,8 @@ Of course, architecture requirements cannot magically run a compiler or simulato
 \FloatBarrier
 ```
 
-Let us start with the prompt itself. We must translate high-level intent into guiding questions and coupled design choices long before we ever see a generated chip artifact. The prompt asks us to compare several compute organizations for a real-time mobile XR workload, ensuring we respect a 3\ W TDP[^fn-tdp-c01] budget and the realities of an LP process. As we break it down, individual phrases bound different parts of our study.
+Let us start with the prompt itself. We must translate high-level intent into guiding questions and coupled design choices long before we ever see a generated chip artifact. The prompt asks us to compare several compute organizations for a real-time mobile XR workload, ensuring we respect a 3\ W thermal design power (TDP) sustained thermal envelope that our declared form factor and cooling assumptions must remove, alongside the realities of an LP process. As we break it down, individual phrases bound different parts of our study.
 
-[^fn-tdp-c01]: **TDP (thermal design power)**: This book treats the Lighthouse target as a 3\ W sustained thermal envelope that the declared form factor and cooling assumptions must be able to remove, rather than as a peak instantaneous draw.
 
 For instance, when we read "64-bit RISC-V-based compute subsystem," that fixes our word length and ISA family under the RV64GCV standard. Yet, in our study, we must still choose the exact ISA extensions (such as RVV 1.0 vector lengths or custom NPU matrix instructions), ABI[^fn-abi-c01], compiler runtime stack (Triton, LLVM, MLIR, or domain libraries), and software contract. Similarly, the phrase "XRBench-class real-time mobile XR workload" sets our target environment, which we evaluate alongside SPEC2026 CPU benchmarks and MLPerf inference kernels. We also notice the "accelerator block" provision, which intentionally leaves several compute organizations open for comparison, ranging from scalar RISC-V CPUs to decoupled vector pipelines and specialized systolic NPU engines. Meanwhile, the 3\ W TDP target and physical constraints in TSMC N7 or 3\ nm-class LP mobile process nodes impose hard thermal and area limits, helping us swiftly rule out unfeasible proposals. To hit a 3\ W TDP in a mobile XR form factor, we have to explicitly state our cooling and skin-temperature assumptions, our packaging and signaling strategies, NoC bisection bandwidth, and exactly how much of that power budget we can allocate to the proposed compute subsystem versus off-chip LPDDR5X DRAM access energy (~100\ pJ per access vs ~0.1\ pJ per 32-bit ALU operation) under realistic DRAM timing constraints.
 
@@ -299,37 +296,20 @@ A request doesn't become an architecture result in a single step. Instead, our w
 
 These distinctions help us determine how to allocate our scarce evaluation feedback. As architects, we might begin with a memory-trace slice collected from a fixed XRBench workload and configuration, alongside its software pipeline. We might propose alternatives, such as varying vector widths, swapping CPUs, or adding accelerators, and screen them with a cheap proxy. We reserve our expensive compiler, simulator, RTL, and physical-design effort for candidates whose results could actually alter our next action or technical recommendation. To do this rigorously, we must state our selection rules and the specific claim each check supports before we ever run the tools.
 
-The distance between an artifact and a result is especially large in hardware. A generator might produce a mathematically elegant instruction extension that perfectly passes behavioral simulation, only to fail logic equivalence checking, design-rule checks, timing, power, or thermal limits during implementation. We can use a surrogate model[^fn-surrogate-model-c01] to cheaply screen candidates, but a design selected by the surrogate may still fail once a more faithful tool exposes properties the surrogate missed. This gap is our version of the simulation-to-real problem extensively studied in machine learning [@TobinEtAl2017DomainRandomization].
+The distance between an artifact and a result is especially large in hardware. A generator might produce a mathematically elegant instruction extension that perfectly passes behavioral simulation, only to fail logic equivalence checking, design-rule checks, timing, power, or thermal limits during implementation. We can use a surrogate model (a cheaper proxy approximation of an expensive evaluation that lets us screen many candidates quickly [@ForresterSobesterKeane2008Surrogate]) to screen candidates, but a design selected by the surrogate may still fail once a more faithful tool exposes properties the surrogate missed. This gap is our version of the simulation-to-real problem extensively studied in machine learning [@TobinEtAl2017DomainRandomization].
 
-[^fn-surrogate-model-c01]: **Surrogate model**: A cheaper approximation of an expensive evaluation that lets a method screen many candidates quickly [@ForresterSobesterKeane2008Surrogate]. Its score is only a proxy, so a promising candidate still needs a higher-fidelity check before it can support a design decision.
 
 Once we have measured the affected workload fraction and stated our mapping assumptions, Amdahl's law supplies an inexpensive rejection bound. For example, an accelerator that covers 60 percent of the XR pipeline's cycles inherently caps our whole-system speedup at 2.5 times, no matter how infinitely fast we make the block itself [@Amdahl1967ValiditySingleProcessor]. When we profile memory traces and instruction counts on Spike, we can compute these bounds in seconds long before launching multi-hour microarchitectural simulations. Of course, this bound doesn't verify our profile, mapping, overlap, memory behavior, or implementation. We must also recompute the bound anytime a candidate changes the covered work or the underlying software path.
 
 The roofline model supplies our second screening bound by relating operational intensity to peak compute and memory bandwidth [@Williams2009Roofline]. Much like the Amdahl calculation, this screen remains inexpensive only after we have measured or declared the specific inputs and assumptions that define the bound.
 
-::: {.callout-lighthouse title="The roofline rejects a candidate before the simulator sees it"}
-**Context.** The roofline bounds attainable performance once the study has a
-candidate-specific operational intensity and the platform's peak compute and
-memory bandwidth, which set its machine balance.
+The roofline bounds attainable performance once our study has a candidate-specific operational intensity and the platform's peak compute and memory bandwidth, which set its machine balance. Generation can propose legal vector configurations, prediction can estimate their data-movement risks, and optimization can choose which configurations merit simulation. A candidate whose bound is already inadequate need not enter the simulator queue. Operational intensity must reflect the candidate's mapping, declared memory boundary, and cache or scratchpad behavior. We recompute the bound when those properties change, and we still verify the mapping and resulting design for surviving candidates. Ultimately, the roofline can reject an implausible candidate cheaply; it cannot establish that the final design works.
 
-**How assistance uses the screen.** Generation can propose legal vector
-configurations, prediction can estimate their data-movement risks, and
-optimization can choose which configurations merit simulation. A candidate
-whose bound is already inadequate need not enter the simulator queue.
-
-**Required conditions and checks.** Operational intensity must reflect the
-candidate's mapping, declared memory boundary, and cache or scratchpad
-behavior. The study must recompute the bound when those properties change and
-must still verify the mapping and resulting design for surviving candidates.
-
-**Takeaway.** The roofline can reject an implausible candidate cheaply; it
-cannot establish that the final design works.
-:::
 
 ```{python}
 #| label: fig-jevons-verification-paradox
 #| fig-cap: |
-#|   Jevons' paradox of hardware verification across AI candidate proposal scales. As AI foundation models reduce proposal cost per candidate by two to three orders of magnitude, total verification compute demand explodes exponentially if every candidate is pushed to full signoff. Early rejection-bound filters (Amdahl caps, Roofline limits, SRAM bounds) tame this Jevons explosion, constraining total verification cost within a fixed project budget envelope. Grounded analytical formulation.
+#|   Jevons' paradox of hardware verification across AI candidate proposal scales. As AI foundation models reduce proposal cost per candidate by two to three orders of magnitude, total verification compute demand scales linearly with candidate volume $N$ (exploding as proposal velocity grows exponentially). Early rejection-bound filters (Amdahl caps, Roofline limits, SRAM bounds) tame this Jevons explosion, constraining total verification cost within a fixed project budget envelope. Grounded analytical formulation.
 #| out-width: "100%"
 #| fig-alt: "Log-log line plot illustrating Jevons' paradox in hardware verification. Unfiltered candidate verification demand scales linearly with proposal volume, blowing past a fixed project budget envelope at 100 candidates per day. Rejection-bound early screening filters prune non-viable candidates, constraining total verification compute within the project budget up to 100,000 candidates per day."
 
@@ -341,11 +321,16 @@ apply_style()
 fig, ax = plt.subplots(figsize=(6.5, 3.8))
 
 N = np.logspace(0, 5, 200)  # 1 to 100,000 candidates
-unfiltered_cost = N * 5.0  # Linear scaling in candidates
-rejection_bounded_cost = 5.0 + 15.0 * np.log10(N) + 0.005 * N  # Early analytical screening
+c_full = 5.0        # GPU-hours per full signoff candidate
+c_screen = 15.0     # Logarithmic screening & surrogate overhead
+alpha = 0.001       # 0.1% pass-through rate clearing early bounds (0.005 / 5.0)
+
+unfiltered_cost = N * c_full  # Linear scaling in candidates
+rejection_bounded_cost = c_full + c_screen * np.log10(N) + (alpha * c_full) * N  # Early analytical screening
 
 ax.set_xscale("log")
 ax.set_yscale("log")
+
 
 ax.plot(
     N,
