@@ -35,11 +35,12 @@ If we ignore these distinctions, we risk deploying methods that retrieve stale g
 ::: {.callout-learning-objectives}
 After reading this chapter, we can do the following.
 
-- Identify essential conditions that separate architecture data from generic examples.
-- Map workloads, tool results, and acquisition costs to executable design states.
-- Build datasets that explicitly handle tool failures, hard boundaries, and missing outcomes.
+- Identify essential conditions that separate architecture data from generic machine learning examples.
+- Map dynamic workload phase behavior, tool results, and acquisition costs to executable design states.
+- Build datasets that explicitly handle tool failures, hard physical boundaries, and missing outcomes.
 - Separate durable knowledge from live project state to trace facts to authoritative sources.
-- Select representations that preserve identity, design legality, constraints, and check results.
+- Formulate code, graph, and trace embeddings alongside explicit design structures.
+- Construct unified World Model state representations that support multi-step agentic planning rollouts.
 :::
 
 ## Dataset Properties for Hardware Architecture
@@ -199,17 +200,24 @@ ChipNeMo, an LLM domain-adaptation framework for chip design, provides us with a
 
 Through all of this, one source remains central to almost every architecture result we produce. The workload ultimately determines which parts of our hardware and software become active.
 
-## Workload Phase Behavior {#sec-workload-phase-behavior}
+## Workload Behavior, Trace Costs, and Execution Coverage
 
-A static hardware description, no matter how detailed or verified, tells us nothing about how a system will perform until we execute software upon it. The dynamic behavior of real application workloads, ranging from initialization bursts and memory-bound phase shifts to compute-intensive loops, dictates which hardware paths become active and which resource bottlenecks emerge. To evaluate an architectural design meaningfully, our data records must capture far more than just cycle counts. We must explicitly bundle the exact software binary, input datasets, execution scale, phase definitions, sampling policies, and runtime parameters alongside every performance trace. These attributes are not passive background metadata; they define the exact physical conditions under which our hardware observations were obtained.
+Static hardware netlists and microarchitectural specifications describe what a system can execute, but they reveal nothing about real-world performance until software runs upon them. The dynamic behavior of application workloads, ranging from initialization bursts and memory-bound phase shifts to compute-intensive loops, dictates which hardware paths become active and which resource bottlenecks emerge. To evaluate an architectural hypothesis or train an AI surrogate model, our data representations must capture far more than isolated cycle counts. We must explicitly bundle dynamic workload phase encodings, execution scale, sampling policies, and tool observation costs into a unified representation of execution state.
 
-If we look at our prospective Lighthouse cache study, the workload state needs to include a versioned snapshot of our bursty, phase-dependent extended reality (XR) workload alongside the exact software image we used to run it. We treat these declared sources as defining inputs, rather than just retained artifacts or passive evidence from an executed study. While a trace can brilliantly expose frame boundaries, memory access patterns, and periods of intense activity, it might still omit the crucial timing feedback that would have altered the instruction stream, thread interleaving, or overall system behavior. Because of this, we cannot silently substitute a trace captured under one software image for another. Instead, our representation must explicitly connect the workload snapshot to its corresponding software image, stable frame identifiers, our collection policy, and the specific hardware conditions under which we captured it.
+### Workload Phase Encodings and Dynamic AI State
 
-We can often reduce detailed simulation costs through representative sampling without ever touching the simulator itself. For instance, SimPoint, a profile-driven phase analysis tool, clusters recurring execution phases so we can simulate representative intervals, whereas SMARTS, a statistical simulation framework, relies on statistical sampling to report confidence bounds for our estimates [@SherwoodEtAl2002SimPoint; @WunderlichEtAl2003SMARTS]. But for our durable representation, the crucial takeaway isn't which sampling scheme we ultimately choose. Rather, it is that our selected intervals, weights, and coverage bounds must become an intrinsic part of the workload state itself. If we produce a sampled result that lacks these parameters, we can neither interpret nor reproduce it.
+When an AI agent navigates an architectural search space or a surrogate model predicts performance, it cannot evaluate a hardware design vector $x \in \mathcal{X}$ in a vacuum. System performance, power dissipation, and thermal behavior are joint outcomes $y = f(x, w)$ of the hardware configuration $x$ and the dynamic workload feature vector $w \in \mathcal{W}$. If we alter the underlying application software or workload phase, the exact same hardware candidate can shift from being severely compute-bound to entirely memory-bound.
 
-Ultimately, representativeness is always specific to the claim we want to make. A workload that perfectly exercises a cache capacity decision might completely fail to stress an accelerator interface, an operating system transition, or the thermal dynamics of our deployed workload mix. Because of this, we must ensure every measurement remains tightly linked to the exact workload artifact and design state that originally produced it. Once we make these conditions explicit, we can finally ask what a single sample truly costs and exactly which part of our design space it covers.
+To expose dynamic workload behavior to machine learning models without incurring prohibitive full-trace simulation overhead, we transform raw execution traces into compact feature representations. Phase analysis tools such as SimPoint extract Basic Block Vectors (BBVs), representing execution interval frequency distributions $w_{\text{BBV}} \in \mathbb{R}^d$, and cluster recurring execution intervals into representative phases [@SherwoodEtAl2002SimPoint]. Similarly, statistical sampling frameworks like SMARTS compute statistical confidence bounds over sampled execution slices [@WunderlichEtAl2003SMARTS].
 
-## Workload Trace Costs and Execution Coverage
+In an AI-assisted architecture workflow, these basic block vectors, memory stride histograms, and phase embeddings serve two distinct representation roles:
+
+1. **Surrogate Model Conditioning Vectors:** They supply the dynamic workload context $w$ to learned performance predictors, allowing a single surrogate model to generalize across diverse software applications.
+2. **Dynamic Environment State Encodings:** In agentic design loops, encodings of dynamic workload phases form the environment state $s_{\text{env}}$ of the agent's decision space, enabling the agent to reason about phase-dependent bottlenecks and workload context transfer.
+
+For our prospective Lighthouse cache study, the workload state requires a versioned snapshot of our bursty extended reality (XR) application alongside its exact software image and frame boundaries. A static memory access trace captured under one software image cannot be silently substituted for another, because dynamic timing feedback between the microarchitecture and software interleaving alters the instruction stream. Our representation must explicitly bind the workload phase feature vector $w_{\text{BBV}}$ to its software image, collection policy, stable frame identifiers, and underlying hardware execution parameters. Once we make these workload conditions explicit, we can evaluate what a single observation costs and exactly which portion of our execution space it covers.
+
+### Observation Paths, Acquisition Costs, and Execution Limits
 
 When we evaluate an architectural hypothesis, we can inspect our system through a wide spectrum of observation tools. In @fig-observation-source-choice, we arrange six representative observation sources in parallel: analytical models, trace-driven simulators, cycle-level simulators, RTL and gate-level simulation, FPGA or emulation platforms, and fabricated silicon. Starting from the target property at the top, the diagram shows how each candidate source yields an observation with distinct coverage, acquisition costs, environmental conditions, and blind spots. Crucially, we cannot arrange these tools into a single linear hierarchy of fidelity. Post-layout static timing analysis captures sub-nanosecond gate delays that an FPGA prototype completely loses, yet an FPGA platform allows us to boot a full operating system and execute billions of workload cycles that gate-level simulation could never complete in a reasonable timeframe. Likewise, while physical silicon provides the absolute ground truth of a fabricated chip, it cannot evaluate a counterfactual design variation that we chose not to tape out.
 
@@ -468,7 +476,7 @@ We should not maintain every source forever. When the refresh cost exceeds the v
 
 Even with correctly separated data, knowledge, and live state, we cannot guide a method unless we expose the needed properties in a usable form. Our native artifact may remain authoritative while a derived encoding hides the very relationship that our task needs.
 
-## Feature Space Mapping and Representation
+## Hardware Representation Formats: From Explicit Structures to World Model State
 
 Even when we have separated our raw data from live project state, we cannot pass an architectural design directly into a machine learning algorithm or optimization search without choosing a structural feature representation. The encodings we select, whether flat text tokens, Abstract Syntax Trees (ASTs), Control-Data Flow Graphs (CDFGs), physical layout matrices, or learned embedding vectors, fundamentally dictate which design variations we can express, which structural dependencies survive, and which candidates our downstream methods consider similar. Raw text alone cannot safely capture complex hardware semantics, because small token edits in HDL source code can cause catastrophic structural or physical failures.
 
@@ -491,9 +499,34 @@ However, typed representations are not universally safe. They only reject violat
 
 : **Our chosen representations make some properties explicit while leaving others for later checks.** When we select a specific format, we also dictate which legal designs become easy, difficult, or impossible to express. {#tbl-representation-formats tbl-colwidths="[24,34,32]"}
 
-When we use an embedding, we create a learned vector representation whose similarities or directions aid our downstream learning tasks [@BengioEtAl2013RepresentationLearning]. We must remember that this is just one type of learned representation, not a compressed replacement for the original source artifact. We must always retain a strict link back to the exact source and to those critical properties that we cannot safely recover from learned similarity alone.
+### Code, Graph, and Workload Embeddings
 
-We also need task-specific fitness tests for our learned representations. In any project, we state the learning objective and training data, specify the changes that should leave the representation invariant, and identify the distinctions that must remain visible. We then probe neighbors and counterexamples on our held-out design groups. If we use a representation to drive artifact generation or mutation, we must ensure our proposed changes round-trip back to the native representation and pass all applicable legality and tool checks. We often find that an embedding perfectly suited for retrieval remains wholly unfit for prediction or design modification if its geometry inadvertently collapses a topological, timing, or physical distinction required by a subsequent task.
+When we deploy machine learning algorithms for retrieval, surrogate prediction, or design space search, we frequently project high-dimensional hardware artifacts into continuous latent feature spaces. We organize these learned vector representations across three core classes:
+
+1. **RTL and Code Embeddings ($\mathbf{z}_{\text{code}} \in \mathbb{R}^n$):** Token-level, AST-level, and retrieval embeddings (e.g. CodeBERT, ChipNeMo, RTL-Repo embeddings) that map SystemVerilog/VHDL source files into dense vector spaces for similarity search, code completion, and specification matching [@LiuEtAl2023ChipNeMo].
+2. **Circuit and Graph Embeddings ($\mathbf{z}_{\text{graph}} \in \mathbb{R}^m$):** Graph Neural Network (GNN) representations operating over And-Inverter Graphs (AIGs), technology-mapped cell connectivity graphs, MLIR spatial dialects, and physical floorplan adjacency matrices (e.g. DeepGate2 gate-level embeddings, Mirhoseini macro placement spatial graphs). These vectors encode structural topology, logic depth, and physical proximity [@ShiEtAl2023DeepGate2; @MirhoseiniEtAl2021GraphPlacement].
+3. **Workload and Dynamic Trace Embeddings ($\mathbf{z}_{\text{trace}} \in \mathbb{R}^k$):** Vector encodings of instruction streams, SimPoint basic block vectors ($w_{\text{BBV}}$), memory access stride distributions, and DRAM command logs.
+
+While embeddings accelerate similarity queries and enable continuous optimization techniques (such as Bayesian optimization or gradient-guided search), we must treat an embedding as a derived auxiliary view, never a substitute for authoritative source code or native intermediate representations [@BengioEtAl2013RepresentationLearning]. Continuous latent spaces inadvertently collapse exact syntactic rules, hard pin connectivity, and physical legal constraints. If an AI agent proposes a candidate design edit within a continuous embedding space, that update must round-trip back to explicit parameter schemas or native netlists and pass hard tool checks before entering our project record.
+
+### World Model State Representations
+
+Before an automated optimization method, search policy, or reinforcement learning agent can execute multi-step planning rollouts, our representation pipeline must define a formal state space. In @sec-methods-generation-prediction-optimization, we introduce Architecture World Models, which are learned surrogate transition predictors that simulate environmental responses and structural consequences under proposed architectural actions. To enable these world models to conduct step-by-step design space rollouts without physical hallucinations or state drift, this chapter establishes their foundational state space representation.
+
+We define the complete Architecture World Model State Vector $s$ as a coupled tuple:
+
+$$s = \left\langle s_{\text{design}}, s_{\text{env}} \right\rangle$$
+
+- **Design Microarchitecture State ($s_{\text{design}}$):** Represents the static structural hardware configuration. It combines explicit parameter tuples (such as `l2.capacity`, `noc.bus_width`), typed intermediate representation graphs (CIRCT/MLIR dialects), cell-level And-Inverter Graph topologies, and learned structural graph embeddings $\mathbf{z}_{\text{graph}}$. This vector explicitly carries the legal mutation boundaries and non-negotiable physical invariants of the design.
+- **Environment & Operating Condition State ($s_{\text{env}}$):** Encodes the dynamic operational context. It incorporates workload phase feature vectors ($w_{\text{BBV}}$ or trace embeddings $\mathbf{z}_{\text{trace}}$), process corner specifications (e.g. TSMC N3 SS/TT/FF corners), Unified Power Format (UPF) power domain states, Synopsys Design Constraints (SDC) clock maps, and thermal-power envelopes.
+
+When an architectural agent executes an action $a$, such as modifying an L2 cache capacity, adding a tensor tile to an NPU, or re-partitioning a clock domain, the world model evaluates the state transition $s' = T(s, a)$.
+
+To prevent multi-step planning rollouts from drifting into physically un-constructible regions, our state representation enforces three critical properties:
+
+- **State Lineage & Invariant Preservation:** Every intermediate state $s'$ retains an immutable link back to its parent design revision, original PDK corner rules, and verification constraints (@tbl-represented-problem).
+- **Multi-Fidelity State Abstraction:** The state vector represents multiple fidelity tiers simultaneously, mapping rapid analytical bounds, cycle-accurate simulation traces, and signoff EDA tool outputs into a coherent multi-fidelity latent space. This allows downstream world models in @sec-methods-generation-prediction-optimization to conduct thousands of low-cost exploratory rollouts before selecting high-confidence candidates for expensive signoff checks.
+- **Round-Trip Legalization Contracts:** Any continuous latent state update proposed by a world model must map back to explicit parameter schemas and native SystemVerilog netlists, passing hard syntax, typing, and EDA checks before updating the authoritative project state.
 
 Our native sources can therefore feed several derived forms without surrendering their original meaning. In @tbl-source-representation-capability, we map seven native architectural sources to their derived representations across four columns: native source, structured or learned representation, supported capability, and exact linked information. For example, converting a gate-level database into an And-Inverter Graph enables fast logic depth analysis and area estimation, but we must keep native gate-level Verilog, Liberty cell libraries, and SDC constraints linked outside the graph.
 
@@ -850,11 +883,12 @@ We must enforce strict provenance by linking every observation directly back to 
 
 In this chapter, we evaluated how to represent architectural knowledge, project state, and empirical evidence across heterogeneous hardware-software stacks. Architecture data cannot be treated as a collection of interchangeable, flat samples. Specifications, RTL descriptions, execution traces, EDA reports, and negative tool results carry distinct structural semantics. Preserving strict data provenance and machine-usable representations is essential to prevent stale context or representation leakage from corrupting automated design loops.
 
-Our analysis highlights that learned embeddings and surrogate models must remain anchored to authoritative project records rather than creating uninspectable shadow state. When we evaluate architectural representations and state tracking, four core takeaways govern our work:
+Our analysis highlights that learned embeddings and surrogate models must remain anchored to authoritative project records rather than creating uninspectable shadow state. When we evaluate architectural representations and state tracking, five core takeaways govern our work:
 
 - **Context-bound observation lineage:** Every stored measurement or observation must remain explicitly bound to its exact design revision, workload snapshot, compiler toolchain, physical PDK library, and acquisition cost.
+- **Dynamic workload feature vectors:** Workload phase encodings ($w_{\text{BBV}}$) serve as essential conditioning inputs for learned surrogates and dynamic environment state vectors for agentic loops, making software execution explicit within hardware evaluation.
 - **Negative result preservation:** Retaining failed tool executions, synthesis timeouts, and negative-slack timing logs is mandatory to eliminate survivorship bias and define true physical feasibility boundaries.
-- **Distance metric alignment:** Encoding design spaces requires aligning vector distances with real architectural relationships, preventing continuous transformations from creating un-constructible intermediate design points.
+- **World Model state representation foundations:** Architecture World Model state vectors ($s = \langle s_{\text{design}}, s_{\text{env}} \rangle$) unify static design structures and dynamic operational environments, enabling multi-step agentic planning without physical state drift.
 - **Authoritative project record primacy:** Learned foundation models and surrogate embeddings provide rapid retrieval and predictive screening, but authoritative live project state must always reside in version-controlled hardware and software repositories.
 
 With our dataset and state representations securely structured, we can systematically select the learned generation, prediction, and optimization methods that best match our represented design problem. In @sec-methods-generation-prediction-optimization, we evaluate these core AI-assisted architecture methods.
