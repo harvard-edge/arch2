@@ -161,6 +161,6 @@ def generate_apple_vs_nvidia_cadence(output_dir: Path) -> None:
 
 if __name__ == "__main__":
     out_dir = (
-        Path(__file__).resolve().parents[1] / "chapters" / "02-design-loop" / "images"
+        Path(__file__).resolve().parents[1] / "chapters" / "02-pressures" / "images"
     )
     generate_apple_vs_nvidia_cadence(out_dir)
