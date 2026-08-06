@@ -38,7 +38,7 @@ After reading this chapter, we can:
 - Separate execution failures from design-limit violations while preserving lineage.
 :::
 
-## Tool Environments
+## Hardware and Software Evaluation Environments
 
 How do we decompose execution environments to isolate tool invocation, environment containment, and result extraction? We rarely find a single, monolithic component capable of carrying our request from a represented design state all the way to an identifiable tool return. To keep our pipelines manageable, we separate the responsibilities along this path into five distinct roles.
 
@@ -64,7 +64,7 @@ Our represented question and state enter the interface as a typed request. Our w
 
 Building this kind of robust environment challenges us precisely because our architecture tools often inherit state that our request never explicitly names, and they routinely return more material than we originally asked for.
 
-## Stateful Tools and Partial Returns
+## Stateful Tools and Partial Execution Returns
 
 How do tool harnesses encapsulate stateful EDA databases, partial executions, and non-deterministic environment returns? We cannot treat architecture tools like interchangeable, stateless services. Instead, we have to navigate a world where tools operate on massive, versioned artifacts and stash hidden state across working directories and databases. We wrestle with incompatible formats and units, wait in queues for shared machines and licenses, and often walk away with only partial files when long-running jobs fail. To evaluate a single candidate, our flow might string together software construction, functional simulation, register-transfer-level (RTL) models, formal checks, synthesis, and physical implementation. No generic software sandbox is going to automatically supply these hardware-specific semantics for us.
 
@@ -82,7 +82,7 @@ Our 3\ MiB cache, $16 \times 16$ NPU array, and dual LPDDR5 memory channel candi
 
 When we enforce this narrow rule, we prevent a frustratingly common failure mode. Often, an automated repair will make a tool call legal by silently altering the very design we set out to evaluate. The tool then runs cleanly and reports success, but we end up with results that belong to an entirely different candidate. Our request validation steps should catch these mismatches before we burn any expensive cluster time. Naturally, to perform this exact validation, we first need an unambiguously identifiable starting state.
 
-## Setup and Lineage
+## Environment Setup, Dependencies, and Lineage
 
 How do pinned environment specifications and lineage tracking guarantee reproducible execution across shifting toolchains? Every requested run must begin from a known state. Before we start our first tool, we must pin, or intentionally mark as variable, all source and generated artifacts, workload inputs, tool and library versions, process design kit (PDK) views, constraints, environment variables, host resources, and baseline artifacts. Our run specification cements the relationship between this starting state, the represented request, the tool path, and the final returned artifacts. In short, it defines exactly how our requested work will execute without inadvertently altering the architectural comparison.
 
@@ -124,7 +124,7 @@ We must also recognize that our host environment itself can warp a result. As My
 
 While our pinned state firmly establishes the foundation from which a run begins, our task does not end there. Our wrapper must now expose the specific changes a method is allowed to request, doing so without accidentally erasing the critical meaning behind the tool-specific return.
 
-## Typed Interfaces
+## Typed Contracts for Hardware Tool Interfaces
 
 How do typed request and return schemas enforce interface contracts across heterogeneous EDA and simulation tools? We use wrappers to transform a known starting state into a single, focused tool interface. When we define a request schema, we explicitly name every parameter, type, unit, required input, default value, and legal combination. Similarly, our return schema specifies every structured attribute, unit, status code, warning class, and raw artifact. For example, if we have an NPU buffer capacity attribute measured in bytes, it must reject an unqualified `3`; likewise, our timing results cannot leave us guessing whether the unit represents CPU cycles, nanoseconds, or simulator ticks.
 
@@ -152,7 +152,7 @@ Cloud systems offer us a valuable precedent here. Frameworks like FATE and DESTI
 
 Once a request successfully crosses our tested interface, the runtime must keep the request's identity perfectly intact while the work waits, runs, fails, or returns.
 
-## Managing Asynchronous Runs
+## Managing Asynchronous Tool Execution
 
 How do scheduler adapters manage asynchronous tool execution, license queuing, and checkpointing across distributed clusters? Architecture work rarely fits neatly into a single blocking function call. Instead, our cycle simulations might run for hours. Our physical-design jobs often sit in queues waiting for scarce licenses, produce massive intermediate databases, or fail after grinding through substantial work. We see tool state persist across working directories, caches, checkpoints, license servers, random seeds, and generated artifacts, while the outputs themselves often return asynchronously or out of order. Furthermore, we frequently find that one tool path depends directly on an artifact produced by another.
 
@@ -210,7 +210,7 @@ The decisive distinction we draw is between one identified candidate-configurati
 
 Before we ever choose a retry, a reset, a checkpoint, or a cached artifact, our harness must first meticulously determine exactly what the attempt returned. Our runtime establishes what actually ran, what returned, and what our work cost. However, it never assumes that a returned value is inherently valid or that our candidate should automatically advance.
 
-## Failure Classification
+## Categorizing Tool and Environment Failures
 
 How does structured failure classification distinguish execution failures from architectural candidate rejections? When we run tools, they fail in a variety of ways, and we cannot adequately represent these outcomes with a single `FAILED` value. We must separate the terminal cause, artifact completeness, parser status, and retry eligibility into distinct attributes. The rows below highlight common combinations rather than forcing everything into one exclusive status value. Because these attributes dictate what our harness repairs and what it hands forward, they strictly describe execution rather than rendering an architecture judgment (@tbl-failure-taxonomy).
 
@@ -247,7 +247,7 @@ We apply this same rule to partial returns. A placement density map produced jus
 
 Once we classify these outcomes, our harness can intelligently choose an allowed repair, retry, reset, checkpoint resume, cache reuse, or outright refusal, all without mistakenly treating a complete return as failed work.
 
-## Recovery and Reuse
+## State Recovery, Caching, and Artifact Reuse
 
 What rules govern safe artifact reuse, identity preservation, and recovery retries in automated tool pipelines? When we trigger a recovery retry, we launch a new attempt linked to the failed or incomplete one, rather than continuing and erasing what already happened. This differs from a planned repeat, where we request multiple runs independently of any failure. Our records must state exactly which inputs we reused, which state we reset, which checkpoint we resumed, and why we authorized another attempt. If we merely pause the scheduler and continue the same submitted job, it retains its original identity. However, when we authorize a restart from a checkpoint or perform a clean reset, we create a linked but distinct attempt. If a retry loses this lineage, our automated methods might easily mistake it for a brand new candidate, double-counting our evaluation evidence and rendering the sequence irreproducible. If we observe repeated failures under controlled conditions, we might expose a reproducible tool problem, but we have not necessarily proven that the design is physically infeasible.
 
@@ -298,7 +298,7 @@ We can look to the Popper Convention for a strong systems precedent on placing e
 
 While hashes successfully establish the identity and integrity of exact bytes, they do not prove that two netlists are equivalent, that two configurations express the same architecture, or that two separate runs support a valid comparison. To establish those deeper relationships, we require the relevant transformation records and subsequent checks. We must maintain this crucial distinction even as a single candidate branches its way through several complex tools.
 
-## Multi-Tool Toolchains
+## Orchestrating Multi-Tool Toolchains
 
 How do multi-fidelity toolchains coordinate heterogeneous evaluation tools while preserving cross-tool semantic validity? We often rely on multiple tools in our architecture studies because no single instrument can capture every relevant property. We can draw inspiration from multifidelity methods, which combine models of varying cost and accuracy for the specific quantity we want to measure [@PeherstorferWillcoxGunzburger2018Multifidelity]. In this chapter, we apply that same principle to our architecture toolchains. We define *fidelity* not as a single scalar score, but as a measure of how faithfully a tool path represents a specific property under stated conditions. A path might offer high fidelity for one metric while remaining completely silent on another. For example, a FireSim FPGA-accelerated simulation lets us execute a target model much faster than an RTL simulation in Verilator, but it will not give us ASIC placement or OpenSTA timing signoff. Similarly, we can use a circuit model to estimate SRAM area and access time without ever executing the actual workload.
 
@@ -526,7 +526,7 @@ Whenever possible, we should run our inexpensive prerequisite checks before comm
 
 Our prospective XR SoC application beautifully brings all of these responsibilities together into a single run specification. It seamlessly spans our pinned state, exact translations, tool dependencies, failure handling mechanisms, realized costs, and containment strategies.
 
-## XR SoC Environment
+## Mobile XR Subsystem Evaluation Environment
 
 How do environmental containment principles operate when applied to a complex industrial XR SoC evaluation flow? To see how these environmental responsibilities work in practice, we can apply them to a multi-subsystem XR SoC study balancing NPU tile sizing, LPDDR5 memory controller traffic, L2 cache capacity, and gate-level physical synthesis constraints. This example does not represent our complete XR tool graph. Instead, we offer a hypothetical scenario. We selected the thresholds and returned values purely as illustrations, not as empirical tool outputs or historical project data. They do not support any execution fact, validated measurement, comparison, or architecture recommendation.
 
@@ -585,7 +585,7 @@ What execution environment pitfalls corrupt simulation lineages and invalidate p
 
 [^fn-watchdog-timeouts-c06]: **Watchdog timer isolation**: Adopting watchdog timer design patterns from fault-tolerant operating systems, verification wrappers must enforce wall-clock execution limits to prevent unhandled coroutine deadlocks from leaking HPC compute resources.
 
-## Open Questions
+## Open Research Questions
 
 What open engineering questions challenge tool containment, workflow orchestration, and cross-toolchain semantic alignment? Our environment abstractions separate execution containment from result qualification, but deploying them across shifting tools and security boundaries introduces open engineering questions. We organize these challenges into workflow orchestration, infrastructure failures, and cross-toolchain meaning.
 
