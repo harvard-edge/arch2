@@ -84,7 +84,7 @@ Beyond defining the system, we must design the workflows that drive these decisi
 
 Consider the initial Lighthouse prompt. The prompt states an ambition, but an ambition is not a well-posed architecture problem. A directive like "Design a low-power, 64-bit RISC-V-based compute subsystem for a real-time mobile XR workload" leaves variables open. It ignores the choice of representative workloads, the supported software stack, the product boundary, alternative design points, operating conditions, tradeoffs, and the specific decisions we need to make. We must frame the ambition across all 8 layers of the Lighthouse Prompt Stack. We transform it into a challengeable architecture question that anchors the following design layers.
 
-1. **Workload.** Real-time spatial tracking and neural rendering tasks from XRBench (an extended-reality benchmark suite), CPU application benchmarks from SPEC2026 (an industry-standard CPU benchmark suite), and mobile inference workloads from MLPerf (an ML benchmark suite).
+1. **Workload.** Real-time spatial tracking and neural rendering tasks from XRBench (an extended-reality benchmark suite), CPU application benchmarks from SPEC CPU2026 (an industry-standard CPU benchmark suite), and mobile inference workloads from MLPerf (an ML benchmark suite).
 2. **ISA & ABI contract.** An RV64GCV 64-bit application processor core equipped with 128-bit vector extensions adhering to standard ABI conventions.
 3. **Compute organization.** A heterogeneous SoC block uniting the RV64GCV vector-capable CPU core with a dedicated NPU tensor accelerator engine.
 4. **Memory & data movement.** A multi-level cache hierarchy (32\ KB L1, 512\ KB L2, 4\ MB L3) and TCM scratchpads linked via AMBA AXI5, UCIe chiplet interconnects, and CXL memory expansion links, optimizing interconnect energy per bit.
@@ -103,7 +103,7 @@ We rely on a set of core architecture judgments to transform isolated results in
 | **Abstraction** | Which details can we simplify for this decision? | A cycle-level NPU model can compare matrix mappings locally, but it cannot hide Triton/LLVM/MLIR compiler lowering, SRAM/LPDDR5 memory traffic, UCIe interconnect energy, physical timing, or our 3\ W subsystem boundary from a freeze decision. |
 | **System boundary** | Where do workload, software, hardware, package, physical design, and product effects meet? | We cannot separate NPU array dimensions and dataflow from host RV64GCV vector core task dispatch, UCIe chiplet interconnects, memory bandwidth, thermal dissipation, DRCs, and the physical implementation path they require. |
 | **Architecture synthesis** | Do our mechanisms, interfaces, software paths, and implementation choices form one feasible system? | Our NPU array, RV64GCV CPU contract, compiler passes, LPDDR5 memory path, 3\ W thermal constraint, UCIe die-to-die PHY, and firmware fallback behavior must form one implementable subsystem rather than separate local wins. |
-| **Missing constraints** | What has our formulation, representation, or tool path left out? | XRBench, SPEC2026, and MLPerf workloads, software interface cost, 3\ W TDP subsystem power, UCIe signal integrity, physical timing closure, IP indemnification, NRE tapeout ROI, and hardware containment remain open obligations. |
+| **Missing constraints** | What has our formulation, representation, or tool path left out? | XRBench, SPEC CPU2026, and MLPerf workloads, software interface cost, 3\ W TDP subsystem power, UCIe signal integrity, physical timing closure, IP indemnification, NRE tapeout ROI, and hardware containment remain open obligations. |
 | **Cross-layer tradeoff** | Which feasible point best serves our product when objectives conflict? | We must compose RV64GCV tail latency, NPU matrix throughput, LPDDR5 interconnect power, UCIe chiplet routing, and review burden rather than delegating them to separate optimizers. |
 | **Mechanism and consequence** | Does our proposed explanation fit the observations, and what happens if it is wrong? | Our directional shape-and-mapping explanation cannot support transfer. A wrong freeze could harden an inadequate RV64GCV CPU contract and impose costly RTL, UCIe package, and physical silicon rework. |
 | **Commitment under uncertainty** | Are our remaining risks understood, containable, and worth accepting? | Missing physical checks, red-teaming verification, LLM judge confirmation bias audits, IP indemnification checks, and unverified UCIe power-grid drop block the current tapeout freeze. |
@@ -233,12 +233,14 @@ Disable mechanisms are not universal insurance policies. We must verify the disa
 
 When we advance a candidate architecture from software simulation to physical silicon, we must commit non-recurring engineering (NRE) capital. Evaluating whether candidate PPA gains deliver sufficient return on investment before committing fixed capital serves as a vital gatekeeping responsibility. In @fig-nre-mask-cost-productivity, we plot economic trends across semiconductor process technology nodes from 90\ nm down to 2\ nm to illustrate this capital barrier.
 
-The horizontal axis tracks advancing technology nodes, the left vertical log scale measures front-end design labor costs in millions of dollars, and the right vertical log scale measures fixed reticle mask set NRE costs. As we trace the curves from left to right, conventional front-end labor costs (solid blue curve) escalate to \$210 million at 2\ nm, while automated design scaling (dashed green curve) compresses labor costs down to \$2.1 million. However, the fixed reticle mask set cost (solid red curve) climbs steeply from \$1.5 million to a \$180 million wall at 2\ nm. The plot highlights our key architectural takeaway. While automated design synthesis dramatically lowers front-end design labor costs, it leaves the escalating reticle mask cost wall completely untouched. This shifts our primary capital bottleneck entirely from front-end engineering to physical mask fabrication, requiring lead architects and commitment authorities to act as rigorous ROI gatekeepers before authorizing a tapeout freeze for an RV64GCV host core and NPU tensor accelerator.
+The horizontal axis tracks advancing technology nodes, the left vertical log scale measures front-end design labor cost, and the right vertical log scale measures the fixed reticle mask set charge. Both curves are constructed to make one structural contrast visible, so read their shapes rather than their values. Front-end effort is the cost a change in methodology can act on, whether that change is a better tool, a larger team, or an automated search loop. The mask set is not. It is a fixed charge that falls due when we commit a design to fabrication, and it is indifferent to how that design was produced.
+
+The consequence for us as architects is a gatekeeping obligation that automation cannot relieve. Suppose an assisted workflow did compress front-end effort substantially. The mask charge would still arrive unchanged at tapeout, so the saving would show up as a larger share of program capital riding on a single commitment decision rather than as a smaller bill. Whether such compression happens at all is exactly the question this book leaves open in @sec-evaluating-agentic-architect, and nothing in this figure settles it. What the figure does establish is that cheaper candidate production raises rather than lowers the evidentiary bar before a lead architect and commitment authority authorize a tapeout freeze for an RV64GCV host core and NPU tensor accelerator.
 
 ```{python}
 #| label: fig-nre-mask-cost-productivity
 #| fig-cap: |
-#|   **Fixed reticle mask costs escalate while design tools yield a front-end productivity scaling curve.** Process node economic trends comparing fixed reticle mask set NRE costs against front-end engineering design costs per SoC project [@HennessyPatterson2017QuantitativeApproach; @Kahng2018Machine]. As design automation compresses front-end labor, reticle mask costs escalate, shifting the primary capital bottleneck to physical mask fabrication.
+#|   **A front-end cost an architect can attack and a mask cost they cannot.** Both curves are author-constructed to contrast the shape of two cost classes across process nodes, and neither reports measured program costs. The sourced design-cost figures this book relies on appear in @sec-design-loop-no-longer-scales. Front-end effort is the cost that methodology can move; the reticle mask set is a fixed charge that falls due at tapeout regardless of how the design was produced.
 #| out-width: "100%"
 #| fig-alt: "Dual-axis line chart plotting reticle mask set NRE costs and front-end engineering design labor costs across process nodes from 90nm to 2nm on log scales. Fixed mask costs escalate from $1.5M to $180M while front-end design costs drop."
 
@@ -248,13 +250,16 @@ import numpy as np
 
 apply_style()
 
-# Empirical data source: Semiconductor process node economic trends (90nm to 2nm) for mask NRE ($1.5M-$180M), conventional front-end design cost ($8M-$210M), and AI-scaled design cost ($0.12M-$2.1M) compiled from industry semiconductor cost studies (Hennessy & Patterson, 2017; Kahng, 2018).
+# Constructed illustrative parameters: both curves are author-constructed to show
+# the DIVERGENCE IN SHAPE between a front-end cost an architect can attack and a
+# fixed mask cost they cannot. The values are not measurements of any program and
+# no source is claimed for them. The sourced design-cost anchors this book relies
+# on are the IBS and SIA figures in @sec-design-loop-no-longer-scales.
 nodes = ["90nm", "45nm", "28nm", "16nm", "7nm", "3nm", "2nm"]
 x = np.arange(len(nodes))
 
 mask_cost_m = np.array([1.5, 4.2, 12.5, 28.0, 65.0, 120.0, 180.0])
 conv_design_cost_m = np.array([8.0, 16.0, 32.0, 55.0, 95.0, 150.0, 210.0])
-ai_design_cost_m = np.array([0.12, 0.22, 0.40, 0.65, 1.05, 1.50, 2.10])
 
 fig, ax1 = plt.subplots(figsize=(6.4, 3.8))
 fig.subplots_adjust(left=0.12, right=0.86, top=0.86, bottom=0.20)
@@ -270,25 +275,13 @@ l1 = ax1.plot(
     label="Conventional Front-End Labor Cost",
     zorder=3,
 )
-l2 = ax1.plot(
-    x,
-    ai_design_cost_m,
-    color=COLORS["green"],
-    linewidth=2.2,
-    linestyle="--",
-    marker="s",
-    markersize=5,
-    label="Design Cost Scaling",
-    zorder=3,
-)
-
 ax1.set_xlabel("Semiconductor Process Technology Node", fontsize=6.8, labelpad=6)
 ax1.set_ylabel(
     "Front-End Design Labor Cost ($M, Log Scale)", fontsize=6.8, color=COLORS["ink"]
 )
 ax1.set_xticks(x)
 ax1.set_xticklabels(nodes, fontsize=6.2)
-ax1.set_ylim(0.08, 400)
+ax1.set_ylim(4, 400)
 ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
 ax1.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
 
@@ -345,7 +338,7 @@ ax2.annotate(
     color=COLORS["constraints_ink"],
 )
 
-lines = l1 + l2 + l3
+lines = l1 + l3
 labels = [l.get_label() for l in lines]
 ax1.legend(lines, labels, frameon=False, fontsize=5.8, loc="upper left")
 
@@ -358,7 +351,6 @@ plt.show()
 plt.close(fig)
 ```
 
-[^fn-fig-nre-mask-cost-productivity-c11]: **Data provenance and empirical sources**: Mask set NRE costs ($1.5\text{M}\text{--}180\text{M}$) and front-end engineering design labor costs ($8\text{M}\text{--}210\text{M}$ conventional vs. $0.12\text{M}\text{--}2.1\text{M}$ automated) across semiconductor technology nodes ($90\text{ nm}\to 2\text{ nm}$) compiled from empirical semiconductor design cost scaling models [@HennessyPatterson2017QuantitativeApproach; @Kahng2018Machine]. Reticle set costs reflect multi-patterning EUV mask count growth, while design automation curves model high-level synthesis (HLS) and AI-assisted P&R productivity multipliers.
 
 When integrating generated RTL, Triton kernel passes, or foundation models into a production SoC, our organization assumes unshielded legal liability if generative models emit microarchitectural structures or HDL snippets that reproduce patented designs without contractual vendor warranty. Commercial IP blocks purchased from established vendors come with contractual indemnification that protects the organization against litigation. In contrast, code emitted by generative models carries no legal warranty.
 
@@ -420,7 +412,7 @@ The Pentium FDIV bug illustrates this reality. @Edelman1997PentiumDivision docum
 
 Transitioning to automated design loops and generative synthesis dramatically shifts our operational workflow, but it also creates subtle governance failure modes. When we delegate routine synthesis and verification tasks to automated systems, we risk mistaking execution efficiency for architectural correctness. Automation cannot shoulder our accountability for cross-layer synthesis, physical feasibility, or post-silicon product outcomes. To maintain true architectural ownership, we must recognize and actively guard against five primary failure modes.
 
-- **Manual HDL lock-in:** Dismissing architectural tools as unproven and clinging to manual HDL workflows. Conservative organizations that refuse to integrate generative search, fast surrogate evaluation, and automated verification loops forfeit NRE cost efficiency and schedule advantages, rendering their teams obsolete.
+- **Refusing the comparison rather than the tool:** Declining an assisted workflow is a legitimate outcome, and a conventional method that meets the requirement at lower total cost is a success. The failure is declining without running the comparison, so the organization can say neither what the assisted path would have cost nor what it would have produced. The same trap operates in reverse when a team adopts a workflow it has never measured against a credible alternative. In both directions the defect is an unpriced decision, not the direction it went.
 - **Conflating EDA execution with tapeout authority:** Assuming that because an agent can execute a complex EDA flow or synthesize a novel microarchitecture, it possesses the authority to commit that design to silicon. Technical execution remains within a bounded evaluator, whereas commitment requires us as architects to synthesize cross-layer tradeoffs across CPU, NPU, memory, and packaging layers while shouldering residual risk. We must never allow a green EDA exit code to authorize signoff without expert review.
 - **Unverified black-box IP signoff:** Accepting third-party models, vendor IP blocks, or generated chiplet configurations without interrogating their interface invariants. If we cannot trace a multi-layer failure through an opaque component, or if we lack independent verification checkers, we have surrendered our technical contact and can no longer guarantee system coherence.
 - **Normalization of deviance in synthesis workarounds:** Repeatedly approving automated workarounds or constraint relaxations (such as disabling a hardware feature or stretching a thermal design envelope) to force timing or placement closure. Accepting these synthetic exceptions without enforcing containment paths, hard expiration conditions, and post-silicon validation normalizes deviance, converting temporary technical debt into permanent architectural vulnerability.

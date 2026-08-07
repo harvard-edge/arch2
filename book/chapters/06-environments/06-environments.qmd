@@ -198,7 +198,7 @@ For our scheduler-managed resources, our records distinguish between reserved, c
 
 The decisive distinction we draw is between one identified candidate-configuration pair and the many attempts we might use to execute it. When we retry the same pair, we increase our realized cost, but we do not create another candidate, a new tool-specific configuration, or a fully independent observation. The setup and cost we record must travel alongside any returned value that later becomes data. When we enforce this requirement, we ensure that a later study can accurately compare time, compute, storage, and license use without absurdly treating a cycle simulation, a physical-design run, and a simple model call as equivalent samples.
 
-::: {.callout-design-principle title="Elevate Execution Records to Seminal Artifacts"}
+::: {.callout-design-principle title="An Unrecorded Execution Cannot Justify an Architectural Claim"}
 Every tool attempt must produce an immutable execution record detailing what ran, what configuration was passed, how the environment behaved, and what compute was spent. An unrecorded execution cannot justify an architectural claim.
 :::
 
@@ -331,14 +331,16 @@ Chipyard, an open-source SoC design framework, does an excellent job of making t
 
 In @fig-chipyard-framework, we trace how a single root configuration moves through Chisel hardware generation and FIRRTL intermediate compiler passes before fanning out into three distinct tool execution branches. Following the top branch, our generated RTL enters software RTL simulators like Verilator or Synopsys VCS for cycle-exact functional verification. The middle branch routes the netlist into physical design flows like OpenROAD for place-and-route timing signoff. The bottom branch lowers the design into FireSim for FPGA-accelerated target simulation. While all three branches share an identical configuration parent, each tool path consumes different intermediate collateral and emits non-interchangeable evaluation artifacts. Our primary architectural takeaway is that shared configuration lineage guarantees parameter traceability across tool flows, but it does not make raw returns directly comparable across different fidelity tiers without explicit condition matching.
 
-The choice of hardware evaluation environment establishes a fundamental trade-off between simulation throughput and microarchitectural cycle accuracy, as mapped in @fig-ch06-simulation-spectrum. In this plot, the horizontal axis measures simulation throughput in Kilo-Instructions Per Second ($\mathrm{KIPS}$) on a logarithmic scale spanning seven orders of magnitude, while the vertical axis tracks microarchitectural cycle error rate (where 0 percent represents exact cycle fidelity). The physical size of each data bubble encodes the setup and build overhead required before execution can begin. Software RTL engines like Synopsys VCS and Verilator sit at the far left ($4.5\ \mathrm{KIPS}$ at 0 percent cycle error), delivering exact RTL accuracy but requiring days of compute for long traces. Moving rightward, detailed timing simulators like gem5 increase throughput to $280\ \mathrm{KIPS}$ at a modest 4.2 percent cycle error, while functional ISA emulators like Spike reach $48{,}000\ \mathrm{KIPS}$ at the cost of an 18.5 percent error rate. FireSim FPGA acceleration occupies a key Pareto sweet spot along the front. Running at $24{,}000\ \mathrm{KIPS}$ with 0 percent cycle error, it delivers over $5{,}300\times$ the speed of software RTL simulators while requiring a $4\ \mathrm{hour}$ host FPGA build overhead. Our architectural takeaway is that no single platform optimizes throughput, accuracy, and setup latency simultaneously; we must dynamically route evaluation requests to the tier that satisfies our specific accuracy requirement within our compute budget.
+The choice of hardware evaluation environment establishes a fundamental trade-off between simulation throughput and how much of the microarchitecture a platform actually models, as mapped in @fig-ch06-simulation-spectrum. The horizontal axis measures simulation throughput on a logarithmic scale; the vertical axis measures the share of timing behavior a platform leaves unresolved; and bubble size encodes the setup and build overhead incurred before execution can begin. The positions are constructed to show the shape of the tradeoff, and the sourced throughput figures this chapter relies on appear above with the conditions under which they were reported.
+
+Reading left to right, cycle-exact RTL simulation resolves timing completely and runs slowest. FPGA emulation holds that resolution and buys throughput by paying a large up-front build. A detailed microarchitectural simulator gives up a modest amount of timing detail for a large throughput gain. The two fastest tiers are different in kind rather than degree, and this is the distinction the figure exists to make. A functional instruction-set simulator and an analytical bound model resolve no timing at all, so they sit at the top of the axis. Asking what cycle error either one exhibits is a category mistake, because neither produces a cycle count to be wrong about. As @tbl-multi-fidelity-spectrum states, a functional model tells us what the software computes, not when. Our architectural takeaway is that no single platform optimizes throughput, resolution, and setup latency simultaneously, so we must route each evaluation request to the tier that can observe the property we are asking about, within our compute budget.
 
 ```{python}
 #| label: fig-ch06-simulation-spectrum
 #| fig-cap: |
-#|   **Simulation speedup versus microarchitectural fidelity spectrum across hardware verification environments.** Evaluation platforms exhibit a wide tradeoff between throughput and cycle accuracy, from slow software RTL simulators ($4.5\text{ KIPS}$) to fast functional ISA emulators ($48,000\text{ KIPS}$). FireSim FPGA acceleration provides a key Pareto sweet spot, executing cycle-exact RTL at $24,000\text{ KIPS}$ (0 percent cycle error), delivering over $5,300\times$ speedup compared to software RTL simulation.
+#|   **A functional model is not an inaccurate timing model; it resolves no timing at all.** Constructed illustrative values, not measurements. The sourced throughput figures this chapter relies on appear in the prose above, with the conditions under which they were reported. Platforms trade throughput against how much of the microarchitecture they resolve, and the two fastest tiers here differ from the others in kind rather than degree: a functional instruction-set simulator and an analytical bound model produce no cycle count, so they are placed by what they omit rather than by an error rate. Routing an evaluation to a tier that cannot observe the property under test returns a number that cannot answer the question, however fast it arrives.
 #| out-width: "100%"
-#| fig-alt: "Scatter plot with log-scale horizontal axis showing simulation throughput in KIPS versus microarchitectural cycle error rate on the vertical axis. Bubbles are sized by setup and build overhead time. FireSim FPGA achieves 24,000 KIPS with 0 percent error, VCS RTL simulation achieves 4.5 KIPS with 0 percent error, gem5 achieves 280 KIPS with 4.2 percent error, and Spike achieves 48,000 KIPS with 18.5 percent error."
+#| fig-alt: "Scatter plot with a log-scale horizontal axis showing simulation throughput against the share of timing behavior a platform leaves unresolved. Cycle-exact RTL simulation and FPGA emulation resolve timing but run slowly; a detailed microarchitectural simulator sits between; a functional instruction-set simulator and an analytical bound model run fastest and resolve no timing at all. Values are constructed to show the tradeoff shape rather than to report measured platform characteristics."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
@@ -380,7 +382,7 @@ environments = [
     (
         "Spike / QEMU\n(Functional ISA)",
         48000.0,
-        18.5,
+        100.0,
         0.01,
         COLORS["orange"],
         "left",
@@ -390,7 +392,7 @@ environments = [
     (
         "Analytical Roofline\n(Bound model)",
         8500000.0,
-        26.0,
+        100.0,
         0.001,
         COLORS["muted"],
         "right",
@@ -424,7 +426,7 @@ ax.plot(
 )
 
 tradeoff_x = [4.5, 280.0, 48000.0, 8500000.0]
-tradeoff_y = [0.0, 4.2, 18.5, 26.0]
+tradeoff_y = [0.0, 4.2, 100.0, 100.0]
 ax.plot(
     tradeoff_x,
     tradeoff_y,
@@ -461,7 +463,7 @@ for name, kips, error, setup_h, color, ha, va, offset in environments:
     )
 
 ax.annotate(
-    "FireSim FPGA Sweet Spot\n(5,300x faster than VCS @ 0% RTL error)",
+    "FPGA emulation:\nRTL resolution at emulation speed",
     xy=(24000.0, 0.0),
     xytext=(300, 20.0),
     arrowprops=dict(
@@ -477,13 +479,13 @@ ax.annotate(
 
 ax.set_xscale("log")
 ax.set_xlim(1.0, 20000000.0)
-ax.set_ylim(-1.5, 30.0)
+ax.set_ylim(-5.0, 112.0)
 
 ax.set_xlabel(
     "Simulation Throughput (Kilo-Instructions Per Second, log scale)", fontsize=6.8
 )
 ax.set_ylabel(
-    "Microarchitectural Cycle Error Rate (%) (lower is better)", fontsize=6.8
+    "Timing behavior left unresolved (%)", fontsize=6.8
 )
 
 ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
@@ -620,7 +622,7 @@ The long-running architecture tools we rely on, especially those in physical des
 Autonomous tools and agentic scripts must execute generation, simulation, and parsing actions strictly within sandboxed, resource-bounded environments. Execution wrappers and harnesses must enforce hermetic tool boundaries, explicit time and memory budgets, and complete lineage tracking, ensuring that infrastructure failures never pollute hardware evaluation records.
 :::
 
-In this chapter, we showed that tool-connected execution environments form the backbone of modern hardware evaluation. Without robust environment abstractions, automated architecture flows risk corrupting candidate state, misinterpreting tool crashes as design rejections, and losing track of evaluation lineage. When we wrap individual CAD, simulation, and synthesis tools and orchestrate them through isolated harnesses, we elevate raw tool outputs into authoritative, replayable architectural evidence.
+In this chapter, we showed that tool-connected execution environments form the backbone of modern hardware evaluation. Without robust environment abstractions, automated architecture flows risk corrupting candidate state, misinterpreting tool crashes as design rejections, and losing track of evaluation lineage. When we wrap individual CAD, simulation, and synthesis tools and orchestrate them through isolated harnesses, we make a tool return identifiable, repeatable, and attributable to the request that produced it. That is the necessary condition for evidence, not evidence itself. Qualifying a return against the property it actually observed belongs to @sec-feedback-verification-trust.
 
 Our environments must strictly separate prospective run specifications, which define what we authorize to execute, from immutable execution records, which record what actually ran and what compute was spent. While our infrastructure manages job scheduling, reset policies, and fault containment, it never unilaterally decides whether a return constitutes a valid measurement or a winning candidate. When we evaluate this phase of AI-Native Co-Design, four core takeaways govern our work:
 
@@ -629,4 +631,4 @@ Our environments must strictly separate prospective run specifications, which de
 - **Execution records as primary artifacts:** We must record complete, immutable lineage covering candidate state, exact tool versions, seeds, raw logs, parsed outputs, and realized compute costs for every attempt.
 - **Separation of execution from evaluation:** Our harness records what ran and what returned, but it leaves measurement qualification, comparative validity, and candidate selection to downstream verification rules.
 
-Our environment excels at establishing what we requested, executed, returned, and spent, preserving enough core identity for both replay and reproduction. However, it cannot qualify a measurement, validate a comparison, or recommend a candidate on its own. In @sec-feedback-verification-trust, we tackle this next crucial step, exploring exactly how these returned values and artifacts transform into genuinely useful feedback.
+Our environment excels at establishing what we requested, executed, returned, and spent, preserving enough core identity for exact replay, which is narrower than the reproduction a different team with a different setup would attempt. However, it cannot qualify a measurement, validate a comparison, or recommend a candidate on its own. In @sec-feedback-verification-trust, we tackle this next crucial step, exploring exactly how these returned values and artifacts transform into genuinely useful feedback.
