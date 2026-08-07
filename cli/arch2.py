@@ -348,6 +348,11 @@ CHUNK_LABEL_RE = re.compile(
     re.MULTILINE,
 )
 CHUNK_FIG_ALT_RE = re.compile(r"^\s*#\|\s*fig-alt:\s*(?P<alt>.+?)\s*$")
+# Quarto expands @refs in prose but NOT inside alt text, so one written there
+# survives into the rendered alt attribute verbatim. That fails the build's
+# html-unresolved-reference check a full CI cycle later, and a screen reader
+# reads the raw label aloud. Catch it in the source instead.
+ALT_TEXT_REF_RE = re.compile(r"@(?:sec|fig|tbl|eq|lst|chap)-[A-Za-z0-9_-]+")
 CHUNK_FIG_POS_RE = re.compile(r"^\s*#\|\s*fig-pos:\s*(?P<pos>.+?)\s*$")
 CITE_RE = re.compile(r"(?<![\w@])@(?P<key>[A-Za-z0-9:_-]+)")
 DEFINITION_RE = re.compile(
@@ -1226,6 +1231,18 @@ def figure_source_findings(path: Path) -> list[Finding]:
                     f"figure '{label}' is missing meaningful fig-alt text",
                 )
             )
+        elif ALT_TEXT_REF_RE.search(alt_match.group(1)):
+            findings.append(
+                Finding(
+                    "error",
+                    "figure-alt-reference",
+                    location,
+                    f"figure '{label}' has a cross-reference marker in its fig-alt text; "
+                    "Quarto does not expand @refs there, so it reaches the rendered HTML "
+                    "verbatim and a screen reader announces the raw label. Describe the "
+                    "target in words instead",
+                )
+            )
 
     in_chunk = False
     chunk_label: str | None = None
@@ -1261,6 +1278,18 @@ def figure_source_findings(path: Path) -> list[Finding]:
         alt_match = CHUNK_FIG_ALT_RE.match(line)
         if alt_match and alt_match.group("alt").strip().strip('"'):
             chunk_has_alt = True
+            if ALT_TEXT_REF_RE.search(alt_match.group("alt")):
+                findings.append(
+                    Finding(
+                        "error",
+                        "figure-alt-reference",
+                        f"{_relative(path)}:{index}",
+                        f"generated figure '{chunk_label or 'unlabeled'}' has a cross-reference "
+                        "marker in its fig-alt text; Quarto does not expand @refs there, so it "
+                        "reaches the rendered HTML verbatim and a screen reader announces the "
+                        "raw label. Describe the target in words instead",
+                    )
+                )
             continue
         pos_match = CHUNK_FIG_POS_RE.match(line)
         if pos_match and chunk_label:
