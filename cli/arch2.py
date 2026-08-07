@@ -4346,6 +4346,15 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                         "or colon (attribution lines are the only exemption)",
                     )
                 )
+            if re.search(r"\b(et\s+al\.)", prose, re.IGNORECASE):
+                findings.append(
+                    Finding(
+                        "error",
+                        "explicit-et-al",
+                        f"{_relative(path)}:{lineno}",
+                        'explicit "et al." in running prose is non-standard; use proper Quarto citations [@key] or @key instead of typing "et al."',
+                    )
+                )
             for match in by_gerund.finditer(line_opener.sub("", prose)):
                 if match.group(1).lower() in BY_GERUND_EXEMPT:
                     continue
