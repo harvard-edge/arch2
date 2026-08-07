@@ -159,7 +159,7 @@ that one workflow outperforms another or isolate a specific component's contribu
 
 Furthermore, we must give the task and the evaluation environment their own separate identities across all 8 layers of the Lighthouse Prompt Stack. At a minimum, when we report a hardware result for our mobile XR subsystem, we must explicitly declare.
 
-1. **Workload:** The exact benchmark suites (XRBench, an extended-reality benchmark suite, for spatial tracking; SPEC2026, a standard CPU workload suite; and MLPerf, an industry-standard machine learning inference benchmark suite).
+1. **Workload:** The exact benchmark suites (XRBench, an extended-reality benchmark suite, for spatial tracking; SPEC CPU2026, a standard CPU workload suite; and MLPerf, an industry-standard machine learning inference benchmark suite).
 2. **ISA & ABI contract:** The architectural instruction set and ABI contract (RV64GCV with 128-bit vector extensions).
 3. **Compute organization:** The heterogeneous compute substrate (an RV64GCV vector-capable CPU coupled with a dedicated NPU tensor accelerator engine).
 4. **Memory & data movement:** The memory hierarchy and interconnect energy profile (L1/L2/L3 caches, TCM scratchpads, and pJ/bit data movement over AMBA AXI5, an ARM on-chip bus protocol, and UCIe chiplet links).
@@ -325,7 +325,7 @@ We must always measure the architecture outcome before we ask whether our workfl
 Ultimately, the architectural decision we intend to make dictates exactly which metrics matter. As we structure our evaluations, we should keep our eligibility criteria, our core architectural objectives, our implementation depth, and the lifecycle consequences of our choices strictly separate:
 
 - **Correctness and blocking constraints** establish whether our candidate is eligible for comparison at all. These constraints enforce functional checks for the RV64GCV ISA contract, protocol and interface properties on AMBA AXI5 and UCIe chiplet buses, timing and physical DRC rules in TSMC N7 or 3\ nm-class LP nodes, and absolute thermal constraints under our 3\ W TDP target.
-- **Architectural objectives** measure the specific quantities our design decision aims to improve. When we evaluate our heterogeneous SoC block, these targets encompass workload throughput across XRBench, SPEC2026, and MLPerf, Triton kernel fusion efficiency, LLVM vectorization, MLIR lowering overhead, interconnect energy per bit across the memory hierarchy, and 3\ W TDP passive thermal performance.
+- **Architectural objectives** measure the specific quantities our design decision aims to improve. When we evaluate our heterogeneous SoC block, these targets encompass workload throughput across XRBench, SPEC CPU2026, and MLPerf, Triton kernel fusion efficiency, LLVM vectorization, MLIR lowering overhead, interconnect energy per bit across the memory hierarchy, and 3\ W TDP passive thermal performance.
 - **Implementation feasibility** records the deepest tool stage our candidate design has successfully reached. This ranges from high-level cycle-accurate architectural simulation in gem5 (a cycle-accurate architectural simulator) or Verilator, through Triton and MLIR compiler passes down to RV64GCV vector intrinsics, RTL logic synthesis in Yosys (an open-source RTL synthesis suite) or Synopsys Design Compiler (a commercial logic synthesis tool), to physical place-and-route in OpenROAD (an open-source physical design toolchain) or Cadence Innovus (an enterprise place-and-route system), static timing analysis (STA) in OpenSTA (an open-source static timing analyzer) or Synopsys PrimeTime (an industry-standard static timing analysis tool), and formal equivalence verification in Yosys SymbiYosys (a formal verification front-end) or Cadence LEC (a commercial formal equivalence checker). We must document analysis corners, floorplan viability in TSMC N7 or 3\ nm-class LP process nodes, placement congestion metrics, setup and hold timing closure, power delivery networks, 3\ W TDP thermal limits, and concrete evidence that we can realize the candidate in hardware. For any silicon-bound decision, we must also cover IP indemnification legal risk, manufacturability and yield assumptions, design-for-test capabilities, fault coverage, UCIe packaging constraints, and NRE tapeout ROI analysis.
 - **Maintainability and future change cost** records whether an engineering team can actually work with the artifact once generated. Generating code that passes a testbench is insufficient if it is an incomprehensible, monolithic blob of RTL that no human engineer can debug, audit, or extend. We must evaluate code readability, clear module interfaces, adherence to organizational design guidelines, documentation quality, and how easily the design can be modified to accommodate future spec changes.
 - **Integration and verification burden** measures the friction of bringing the generated component into our broader SoC infrastructure. This includes how cleanly the component interfaces with existing bus protocols (such as AXI, AHB, or TileLink), the clarity of generated testbenches and assertions, and the human effort required to debug failures introduced by the candidate design. A design that saves two weeks of initial RTL writing but costs four weeks of extra verification debugging represents a net negative ROI.
@@ -462,7 +462,10 @@ import numpy as np
 
 apply_style()
 
-# Empirical data source: Workflow Pareto frontier evaluation points synthesized from ML for EDA cost-quality trade-off models (Kahng, 2018) and Wilson Research IC verification resource benchmarks (Foster, 2022).
+# Constructed illustrative parameters: the frontier points below are chosen to make a
+# cost-quality tradeoff inspectable. No published frontier is reproduced and no source
+# is claimed for the values. Original comment text follows for reference only:
+# (former) Workflow Pareto frontier evaluation points synthesized from ML for EDA cost-quality trade-off models (Kahng, 2018) and Wilson Research IC verification resource benchmarks (Foster, 2022).
 frontier_cost = np.array([1.0, 1.8, 3.0, 4.6])
 frontier_quality = np.array([0.48, 0.67, 0.81, 0.89])
 dominated_cost = np.array([2.4, 3.8, 5.2])
@@ -532,7 +535,6 @@ plt.show()
 plt.close(fig)
 ```
 
-[^fn-fig-cost-quality-frontier-c10]: **Data provenance and empirical sources**: Total workflow resource costs (normalized compute index $1.0\text{--}5.2$) and architecture outcome quality metrics ($0.48\text{--}0.89$) synthesized from empirical machine-learning-for-EDA design space exploration frontiers [@Kahng2018Machine] and IC verification execution datasets [@Foster2022WilsonVerificationStudy]. Non-dominated Pareto frontier points satisfy $\max Q(c)$ subject to workflow expenditure bounds $c \le C_{\text{max}}$.
 
 Each blue point represents a distinct synthetic workflow. In our real studies, we must actively plot our measured budgets against our predeclared architecture outcome, explicitly show our uncertainty, and rigorously preserve our underlying resource vector.
 
@@ -776,14 +778,14 @@ where candidate generator $\theta_{\text{gen}}$ seeks to synthesize valid design
 
 $$\text{ECE} = \sum_{b=1}^B \frac{|B_b|}{N} \left| \text{acc}(B_b) - \text{conf}(B_b) \right|$${#eq-expected-calibration-error}
 
-over $B$ probability bins [@GuoEtAl2017Calibration]. As verification complexity increases, the error curves for all three model judges climb steeply, surging from initial rates between 14.0 percent and 28.5 percent on basic syntax up to 79.5 percent through 91.6 percent on relational hyperproperties. In stark contrast, the deterministic formal solver baseline remains flat at zero percent across all four levels. This visual comparison illustrates the phenomenon of LLM-as-a-Judge confirmation bias and echoing, where an automated model judge uncritically validates flawed generator reasoning, approves invalid SDC timing constraints, and grants false passes to defective hardware artifacts because both models share underlying training heuristics. In our red-teaming framework, we explicitly test for LLM-as-a-Judge confirmation bias across all 8 layers of the Lighthouse Prompt Stack by feeding LLM evaluators synthetically flawed hardware candidates, unindemnified IP snippets, and invalid Triton kernel transformations paired with plausible but false self-justifications. Our red-team checks verify whether the LLM judge uncritically approves the candidate or whether our evaluator-owned deterministic verification pipeline interrupts the false positive before candidate acceptance.
+over $B$ probability bins [@GuoEtAl2017Calibration]. In the constructed curves of @fig-llm-judge-confirmation-bias, every judge series climbs steeply as the property under test becomes more relational, while the executed check stays flat within its declared applicability boundary. Read the ordering and the divergence, not the values; no benchmark run stands behind them. This illustrates the phenomenon of LLM-as-a-Judge confirmation bias and echoing, where an automated model judge uncritically validates flawed generator reasoning, approves invalid SDC timing constraints, and grants false passes to defective hardware artifacts because both models share underlying training heuristics. In our red-teaming framework, we explicitly test for LLM-as-a-Judge confirmation bias across all 8 layers of the Lighthouse Prompt Stack by feeding LLM evaluators synthetically flawed hardware candidates, unindemnified IP snippets, and invalid Triton kernel transformations paired with plausible but false self-justifications. Our red-team checks verify whether the LLM judge uncritically approves the candidate or whether our evaluator-owned deterministic verification pipeline interrupts the false positive before candidate acceptance.
 
 ```{python}
 #| label: fig-llm-judge-confirmation-bias
 #| fig-cap: |
-#|   **LLM evaluator confirmation bias surges with justification complexity while formal SVA checkers maintain zero false passes.** Benchmark error rates across model judges evaluating defective hardware candidates with plausible self-justifications [@GoodfellowEtAl2014GANs; @GuoEtAl2017Calibration]. While language model evaluators exhibit up to 91.6 percent false pass rates on complex relational properties, deterministic SystemVerilog Assertion (SVA) formal solvers and OpenSTA static timing analyzers maintain a zero percent error rate.
+#|   **A reader-judge degrades as the property moves away from what reading can observe.** Constructed illustrative values, not a benchmark study, and the judges are de-identified because naming vendors would assert a measured ranking this book has not run. The shape is the claim. A judge that reads an artifact and its justification loses discriminating power as the property becomes more relational, because plausible prose is cheap to produce and the judge shares the producer's blind spots. A check that executes the property does not lose power the same way, and its flat line here is its rate WITHIN its declared applicability boundary rather than a claim that formal tools cannot fail.
 #| out-width: "100%"
-#| fig-alt: "Line chart comparing false pass rates of Llama-3-70B, GPT-4o, and Claude 3.5 Sonnet against SystemVerilog Assertion formal solvers across four verification complexity levels. LLM judge error rates rise from 14 percent to 91.6 percent while formal SVA solvers stay flat at 0 percent."
+#| fig-alt: "Line chart of constructed false-pass rates for three de-identified model judges against an executed formal check, across four verification complexity levels from syntax to hyperproperties. The judge curves rise steeply as complexity increases while the executed check stays flat within its declared applicability boundary. The values illustrate a shape and are not measurements of any named system."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
@@ -791,7 +793,13 @@ import numpy as np
 
 apply_style()
 
-# Empirical data source: Benchmark false pass rates across model judges (Llama-3-70B, GPT-4o, Claude 3.5 Sonnet) vs deterministic SVA formal ground truth derived from LLM red-teaming and calibration error evaluations (Goodfellow et al., 2014; Guo et al., 2017).
+# Constructed illustrative parameters: no benchmark study is reported here. The three
+# judge series are de-identified on purpose. Naming vendors would assert a measured
+# ranking this book has not run, and the point does not depend on which model is which.
+# The shape is the argument: a reviewer that READS an artifact degrades as the property
+# moves further from what reading can observe, while a checker that EXECUTES the property
+# does not degrade the same way. The zero line is the checker's rate WITHIN its declared
+# applicability boundary, not a claim that formal tools are infallible.
 levels = [
     "Level 1\nSyntax & RTL",
     "Level 2\nSDC Exceptions",
@@ -800,52 +808,52 @@ levels = [
 ]
 x = np.arange(len(levels))
 
-llama3_70b = [28.5, 56.4, 79.2, 91.6]
-gpt4o = [18.2, 42.5, 68.4, 84.1]
-claude35 = [14.0, 38.2, 62.1, 79.5]
-sva_ground_truth = [0.0, 0.0, 0.0, 0.0]
+judge_a = [28.5, 56.4, 79.2, 91.6]
+judge_b = [18.2, 42.5, 68.4, 84.1]
+judge_c = [14.0, 38.2, 62.1, 79.5]
+formal_checker = [0.0, 0.0, 0.0, 0.0]
 
 fig, ax = plt.subplots(figsize=(6.2, 3.6))
 fig.subplots_adjust(left=0.12, right=0.95, top=0.86, bottom=0.22)
 
 ax.fill_between(
-    x, claude35, llama3_70b, color=COLORS["red"], alpha=0.08, zorder=1
+    x, judge_c, judge_a, color=COLORS["red"], alpha=0.08, zorder=1
 )
 
 
 ax.plot(
     x,
-    llama3_70b,
+    judge_a,
     color=COLORS["purple"],
     linewidth=1.8,
     marker="o",
     markersize=5,
-    label="Llama-3-70B Judge",
+    label="Model judge A",
     zorder=3,
 )
 ax.plot(
     x,
-    gpt4o,
+    judge_b,
     color=COLORS["blue"],
     linewidth=1.8,
     marker="s",
     markersize=5,
-    label="GPT-4o Judge",
+    label="Model judge B",
     zorder=3,
 )
 ax.plot(
     x,
-    claude35,
+    judge_c,
     color=COLORS["orange"],
     linewidth=1.8,
     marker="^",
     markersize=5,
-    label="Claude 3.5 Sonnet Judge",
+    label="Model judge C",
     zorder=3,
 )
 ax.plot(
     x,
-    sva_ground_truth,
+    formal_checker,
     color=COLORS["green"],
     linewidth=2.5,
     linestyle="-",
@@ -854,7 +862,7 @@ ax.plot(
 )
 
 ax.annotate(
-    "Echoing & Sycophancy Zone\nUp to 91.6% False Passes",
+    "Echoing and sycophancy zone",
     xy=(2.8, 88.0),
     xytext=(1.3, 82.0),
     arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
@@ -895,7 +903,6 @@ plt.show()
 plt.close(fig)
 ```
 
-[^fn-fig-llm-judge-confirmation-bias-c10]: **Data provenance and empirical sources**: Judge false-pass error rates ($14.0\%\text{--}91.6\%$) measured across four hardware verification complexity tiers (Level 1: Syntax & RTL; Level 2: SDC Exceptions; Level 3: CDC & Deadlocks; Level 4: Hyperproperties) compiled from empirical LLM red-teaming benchmarks and model calibration evaluations [@GoodfellowEtAl2014GANs; @GuoEtAl2017Calibration]. SystemVerilog Assertion (SVA) formal solvers (Cadence JasperGold / SymbiYosys) and static timing analysis (OpenSTA) establish the 0.0% false-pass ground truth.
 
 ### Red-Team Execution
 
@@ -976,7 +983,9 @@ import numpy as np
 
 apply_style()
 
-# Empirical data source: Optimization trajectory decay and oscillation equations (directed: 50 * exp(-0.25 * t); repeated: 15 + 5 * (-1)^t) modeled from EDA physical synthesis repair loop convergence data (Kahng, 2018; Foster, 2022).
+# Constructed illustrative parameters: the two closed-form trajectories below are chosen
+# to contrast a converging repair loop with an oscillating one. They model no measured
+# tool run and no source is claimed. Equations: (directed: 50 * exp(-0.25 * t); repeated: 15 + 5 * (-1)^t) modeled from EDA physical synthesis repair loop convergence data (Kahng, 2018; Foster, 2022).
 iterations = np.arange(21)
 directed = [max(0, int(value)) for value in 50 * np.exp(-0.25 * iterations)]
 repeated = [
@@ -1029,7 +1038,6 @@ plt.show()
 plt.close(fig)
 ```
 
-[^fn-fig-whac-a-mole-c10]: **Data provenance and empirical sources**: Synthetic violation trajectories ($N_v(t) = \lfloor 50 \cdot e^{-\lambda t} \rfloor$ for directed repair vs. steady-state oscillation $15 + 5 \cdot (-1)^t$ for oscillatory repair loops) modeled after empirical physical synthesis and place-and-route convergence behaviors in Cadence Innovus / Synopsys IC Compiler II workflows [@Kahng2018Machine; @Foster2022WilsonVerificationStudy].
 
 When we observe a recurring count, we treat it as a critical warning to inspect the synthesis run, rather than absolute proof that the same design state has repeated. Different architectural candidates often exhibit the exact same number of blocking violations. Moreover, a static count can easily mask underlying shifts in violation types, timing endpoints, severities, or overall constraint coverage.
 
@@ -1075,9 +1083,8 @@ When we apply these rules to @sec-running-the-loop, we intentionally separate ou
 - **Reliability of the advantage.** A single run under a synthetic workload with a fixed simulator configuration cannot establish repeatability, robustness, or generalization across diverse hardware workloads, physical designs, EDA tools, and operating conditions. Therefore, we deem reliability unresolved.
 
 Ultimately, both our complete-workflow effect and our ambitious Lighthouse moonshot remain unresolved. Our retained model-versus-fixed-heuristic comparison, even under equal simulator-event budgets, supports only the remarkably narrow finding that the model offered no advantage over the fixed heuristic in our specific array study. Matched total-cost attribution and broader claims regarding individual component contributions remain unresolved. Identifying these unresolved judgments highlights the specific baseline comparisons, costs, operating conditions, and adversarial attacks we need to finally change those statuses.
-:::
 
-Ultimately, these three statuses describe the strength of our evaluation evidence. They do not, on their own, decide whether an architecture truly advances the state of the art.
+These three statuses describe the strength of our evaluation evidence. They do not, on their own, decide whether an architecture truly advances the state of the art.
 
 ## Common Pitfalls
 

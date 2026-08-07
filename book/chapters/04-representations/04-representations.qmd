@@ -181,7 +181,6 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 
 ```
 
-[^fn-fig-openrtlset-data-c04]: **OpenRTLSet dataset filtering statistics**: Pipeline stage counts ($103,000 \to 12,000 \to 1,000$ repositories) reflect empirical repository attrition measured during the assembly of the OpenRTLSet collection [@WangEtAl2025OpenRTLSet]. Filtering stages exclude non-synthesizable C/C++ constructs (e.g., dynamic memory allocation, file I/O) and Vitis HLS elaboration failures.
 
 About 11.7 percent of the starting repositories survived the authors' initial screen, and only about 1 percent successfully produced Verilog through this particular pipeline. We must remember that those derived ratios merely describe the authors' specific repository search, license policy, screen, and tool flow, rather than accurately estimating how much public C/C++ is synthesizable in general. The example makes a narrower but crucial point. Collecting public source code, deciding what is legally usable, screening it, executing a conversion tool, and carefully accounting for failures are all distinct, necessary steps in our dataset construction.
 
@@ -510,7 +509,7 @@ When we deploy machine learning algorithms for retrieval, surrogate prediction, 
 2. **Circuit and Graph Embeddings ($\mathbf{z}_{\text{graph}} \in \mathbb{R}^m$):** Graph Neural Network (GNN) representations operating over And-Inverter Graphs (AIGs), technology-mapped cell connectivity graphs, MLIR spatial dialects, and physical floorplan adjacency matrices (e.g. DeepGate2 gate-level embeddings, Mirhoseini macro placement spatial graphs). These vectors encode structural topology, logic depth, and physical proximity [@ShiEtAl2023DeepGate2; @MirhoseiniEtAl2021GraphPlacement].
 3. **Workload and Dynamic Trace Embeddings ($\mathbf{z}_{\text{trace}} \in \mathbb{R}^k$):** Vector encodings of instruction streams, SimPoint basic block vectors ($w_{\text{BBV}}$), memory access stride distributions, and DRAM command logs.
 
-While embeddings accelerate similarity queries and enable continuous optimization techniques (such as Bayesian optimization or gradient-guided search), we must treat an embedding as a derived auxiliary view, never a substitute for authoritative source code or native intermediate representations [@BengioEtAl2013RepresentationLearning]. Continuous latent spaces inadvertently collapse exact syntactic rules, hard pin connectivity, and physical legal constraints. If an AI agent proposes a candidate design edit within a continuous embedding space, that update must round-trip back to explicit parameter schemas or native netlists and pass hard tool checks before entering our project record.
+While embeddings accelerate similarity queries and enable continuous optimization techniques (such as Bayesian optimization or gradient-guided search), we must treat an embedding as a derived auxiliary view, never a substitute for authoritative source code or native intermediate representations. Continuous latent spaces inadvertently collapse exact syntactic rules, hard pin connectivity, and physical legal constraints. If an AI agent proposes a candidate design edit within a continuous embedding space, that update must round-trip back to explicit parameter schemas or native netlists and pass hard tool checks before entering our project record.
 
 ### World Model State Representations
 
@@ -548,17 +547,20 @@ When we work with a physical design, we must recognize that a graph, tensor, emb
 
 Each row in our table connects a native source to a structured or learned form, alongside the capability that form supports. Crucially, the final column is not just another learned-feature list. We use it to strictly protect source identity, hierarchy, topology, order, units, legality, exact constraints, uncertainty, and returned check results, preserving them in formats that our fellow architects and downstream tools can readily inspect.
 
-The scalability of our intermediate representation choices becomes critical as design sizes scale. In @fig-ch04-ast-hls-latency, we plot High-Level Synthesis (HLS) compilation latency in seconds against IR node count on a log-log scale from 100 to 1,000,000 nodes. We compare three representation curves: flat Verilog/C ASTs ($O(N^{2.45})$ unpartitioned scaling), scalar LLVM / Polyhedral IRs ($O(N^{1.75})$ scaling), and multi-level CIRCT/MLIR graphs ($O(N^{1.20})$ hierarchical scaling). Benchmark scatter points ground these scaling laws in real workloads, including PolyBench gemm, MachSuite AES, Rosetta Rendering, OpenRTLSet Conv2D, and a Flat SoC Top-Level design. A horizontal dotted line highlights the 1-hour HLS tool timeout threshold (3,600\ s). Flat AST representations hit this timeout wall at 200,000 nodes due to global scope explosion, whereas multi-level graph IRs preserve structural hierarchy and module boundaries, achieving scalable $O(N^{1.20})$ synthesis throughput and a $24.8\times$ latency reduction at 500,000 nodes.
+The scalability of our intermediate representation choices becomes critical as design sizes scale. In @fig-ch04-ast-hls-latency, we plot High-Level Synthesis (HLS) compilation latency in seconds against IR node count on a log-log scale from 100 to 1,000,000 nodes. We compare three constructed curves: a flat Verilog or C AST, a scalar LLVM or polyhedral IR, and a multi-level CIRCT or MLIR graph. The exponents are chosen to contrast the three structures rather than fitted to any tool sweep, so the values carry no measurement and only the shapes are the argument. A horizontal dotted line marks a one-hour tool time limit, which stands in for whatever fixed budget a project actually sets.
+
+The mechanism behind the divergence is what an architect should take away. A flat representation gives the compiler one global scope, so an analysis that must reason about every pair of nodes grows super-linearly with design size, and the curve therefore meets any fixed time limit at some node count. A hierarchical representation preserves module boundaries, so the compiler can work per unit and compose the results, which flattens the exponent. Neither claim depends on the numbers on the axes. If a team runs the sweep on its own designs and toolchain, the crossings will land elsewhere; the ordering of the exponents is the part that transfers.
 
 ```{python}
 #| label: fig-ch04-ast-hls-latency
 #| fig-cap: |
-#|   **High-Level Synthesis compilation latency scaling across intermediate representation node count.** Empirical HLS benchmark compilation measurements across IR node counts [@WangEtAl2025OpenRTLSet; @CIRCT]. Flat AST representations exhibit non-linear compilation latency blowup $O(N^{2.45})$ as node counts increase, exceeding tool timeouts at $200,000$ nodes. In contrast, multi-level graph IRs preserve structural hierarchy, maintaining scalable $O(N^{1.20})$ compilation throughput across complex benchmarks and yielding a $24.8\times$ reduction in synthesis latency at $500,000$ nodes.
+#|   **Representation structure sets the exponent, and the exponent is what scales.** Constructed illustrative curves, not measurements: the three exponents are chosen to contrast a flat, a scalar, and a hierarchical representation, and no tool sweep is claimed. What transfers is the shape, not the values. A representation that forces a compiler to reason over one global scope grows super-linearly, so it meets any fixed tool time limit at some design size. One that preserves module boundaries lets the compiler work per unit, so the limit arrives far later or not at all.
 #| out-width: "100%"
-#| fig-alt: "Log-log plot comparing HLS synthesis latency in seconds against IR node count from 100 to 1,000,000 nodes. Flat Verilog or C AST exhibits super-linear blowup hitting the 1-hour timeout at 200,000 nodes. Multi-level CIRCT or MLIR graph IR maintains near-linear scaling, achieving a 24.8x latency reduction at 500,000 nodes."
+#| fig-alt: "Log-log plot of illustrative High-Level Synthesis compilation latency against intermediate representation node count from 100 to 1,000,000 nodes. A flat abstract syntax tree curve rises super-linearly and crosses a one-hour tool time limit; a scalar intermediate representation curve rises more slowly; a multi-level hierarchical graph curve stays nearly linear. The curves are constructed to contrast scaling shape rather than to report measured tool runtimes."
 
-# Empirical power-law scaling fits (R^2 > 0.94) derived from Vitis HLS 2023.2 and CIRCT v1.65 compilation sweeps
-# Benchmark scatter points extracted from PolyBench, MachSuite, Rosetta, and OpenRTLSet hardware designs [WangEtAl2025OpenRTLSet, LatifiEtAl2024CIRCT]
+# Constructed illustrative parameters: the three exponents below are chosen to
+# contrast how a flat, a scalar, and a hierarchical representation scale. They are
+# not fitted to any tool sweep and no measurement is claimed for them.
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
 import numpy as np
@@ -599,25 +601,6 @@ ax.plot(
     zorder=4,
 )
 
-benchmarks = [
-    (450, 0.6, "PolyBench gemm", COLORS["blue"]),
-    (2800, 4.2, "MachSuite AES", COLORS["blue"]),
-    (18500, 14.5, "Rosetta Rendering", COLORS["blue"]),
-    (120000, 185.0, "OpenRTLSet Conv2D", COLORS["red"]),
-    (480000, 2900.0, "Flat SoC Top-Level", COLORS["red"]),
-]
-
-for nodes, lat, name, col in benchmarks:
-    ax.scatter(
-        nodes,
-        lat,
-        color=col,
-        edgecolor="white",
-        linewidth=0.8,
-        s=36,
-        zorder=5,
-    )
-
 ax.axhline(
     3600,
     color=COLORS["muted"],
@@ -635,7 +618,7 @@ ax.text(
 )
 
 ax.annotate(
-    "24.8x HLS Latency Gap\n(hierarchical vs flat IR)",
+    "Gap widens with design size\n(hierarchical vs flat IR)",
     xy=(500000, 2000),
     xytext=(30000, 1200),
     arrowprops=dict(
@@ -681,7 +664,6 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 
 ```
 
-[^fn-fig-ch04-hls-data-c04]: **Empirical compilation scaling data sources**: Power-law scaling curves ($R^2 > 0.94$) are derived from empirical Vitis HLS 2023.2 and CIRCT v1.65 compilation latency sweeps across OpenRTLSet, PolyBench, MachSuite, and Rosetta HLS benchmark suites [@WangEtAl2025OpenRTLSet; @CIRCT]. Scatter points represent median measured execution times across AMD EPYC 7763 compilation nodes under a 1-hour ($3,600\text{ s}$) tool timeout threshold.
 
 ::: {.callout-war-story title="The StrongARM Voltage Domain Signoff Failure"}
 **The claim.** In early low-power mobile processors (such as the DEC StrongARM SA-110 and Intel XScale architectures), text-based HDL netlists connecting 1.5\ V core logic to 3.3\ V I/O pads passed all structural syntax checks.
@@ -838,7 +820,7 @@ When we manage architectural data and construct feature representations, subtle 
 
 - **Scrubbing confidential PDK views and Liberty timing models:** Proprietary Process Design Kit (PDK) non-disclosure agreements and confidential Liberty timing views, standardized library timing files, force public datasets to omit actual library pin capacitances, non-linear delay models, and process corner specs. Training representations on uncalibrated proxy units or dummy library gates teaches surrogate models patterns that fail completely when mapped to commercial silicon process nodes.[^fn-pdk-proxy-drift-c04]
 
-[^fn-pdk-proxy-drift-c04]: **Domain shift from uncalibrated proxy libraries**: Omitting foundry PDK pin capacitances and Liberty timing models due to NDA restrictions forces surrogate models to train on uncalibrated proxy cell libraries (such as Nangate45, an open-source 45nm standard cell library). This induces severe domain shift when models transfer to commercial silicon nodes, where non-linear interconnect delays and pin loading dominate gate delays [@BengioEtAl2013RepresentationLearning].
+[^fn-pdk-proxy-drift-c04]: **Domain shift from uncalibrated proxy libraries**: Omitting foundry PDK pin capacitances and Liberty timing models due to NDA restrictions forces surrogate models to train on uncalibrated proxy cell libraries (such as Nangate45, an open-source 45nm standard cell library). This induces severe domain shift when models transfer to commercial silicon nodes, where non-linear interconnect delays and pin loading dominate gate delays.
 
 - **Discarding unroutable layouts and negative-slack timing failure logs:** When we purge synthesis failures, negative-slack timing violations from Liberty reports, or physical placement routing congestions from our dataset, we introduce severe survivorship bias. Machine learning models trained solely on timing-closed artifacts predict aggressive frequency targets while remaining completely blind to unroutable physical layout boundaries.[^fn-survivorship-bias-c04]
 
