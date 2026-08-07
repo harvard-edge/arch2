@@ -4465,6 +4465,91 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     return findings
 
 
+PERMISSIONS_LEDGER_PATH = ROOT / "compliance" / "permissions-ledger.yml"
+
+# Phrases that mark a ledger note as an unresolved obligation rather than a
+# record of what was done. Kept narrow on purpose: the note field is also used
+# to record completed reconciliations, and flagging those would train people to
+# ignore the check.
+_LEDGER_OPEN_MARKERS = (
+    "before delivery",
+    "before publication",
+    "before release",
+    "before sign-off",
+    "before signoff",
+    "todo",
+    "tbd",
+)
+
+# A note that records a completed reconciliation is not an open obligation, even
+# when it describes the defect it closed. Without this, a note saying a figure's
+# unresolved provenance WAS resolved would trip the check that exists to find
+# unresolved provenance.
+_LEDGER_CLOSED_MARKERS = ("cleared", "verified", "resolved on", "n/a")
+
+
+def permissions_findings() -> list[Finding]:
+    """Fail on figures whose permission or provenance obligation is still open.
+
+    Two failure classes, both of which have shipped in this book before:
+    a non-original figure with no recorded permission, and an author-original
+    figure whose ledger note still records an unreconciled provenance defect
+    (constructed values presented as measurement, prose attributing them to a
+    tool run, a citation that does not contain them). The second class is the
+    one that motivated this check: ten such notes sat in the ledger, each
+    naming its own defect and its own remedy, and the book shipped with all
+    ten uncleared because nothing read them.
+    """
+    findings: list[Finding] = []
+    if not PERMISSIONS_LEDGER_PATH.exists():
+        return [
+            Finding(
+                "error",
+                "permissions-ledger-missing",
+                str(PERMISSIONS_LEDGER_PATH),
+                "the permissions ledger is required for delivery",
+            )
+        ]
+
+    text = PERMISSIONS_LEDGER_PATH.read_text(encoding="utf-8")
+    entries = re.split(r"\n\s*- label: ", text)[1:]
+    for entry in entries:
+        label = entry.split("\n", 1)[0].strip().strip('"')
+        note_match = re.search(r"\n\s*notes: (.+)", entry)
+        note = note_match.group(1).strip().strip('"') if note_match else ""
+        origin_match = re.search(r"\n\s*origin: (.+)", entry)
+        origin = origin_match.group(1).strip().strip('"') if origin_match else ""
+        status_match = re.search(r"\n\s*permission_status: (.+)", entry)
+        status = status_match.group(1).strip().strip('"') if status_match else ""
+
+        lowered = note.lower()
+        closed = any(marker in lowered for marker in _LEDGER_CLOSED_MARKERS)
+        if not closed and any(marker in lowered for marker in _LEDGER_OPEN_MARKERS):
+            findings.append(
+                Finding(
+                    "error",
+                    "permissions-note-open",
+                    f"compliance/permissions-ledger.yml:{label}",
+                    f"unresolved ledger obligation: {note}",
+                )
+            )
+
+        if origin and origin != "author-original" and not status:
+            findings.append(
+                Finding(
+                    "error",
+                    "permissions-uncleared",
+                    f"compliance/permissions-ledger.yml:{label}",
+                    f"non-original figure ({origin}) has no recorded permission status",
+                )
+            )
+    return findings
+
+
+def run_permissions_check() -> None:
+    _exit_on_findings(permissions_findings(), title="permissions ledger")
+
+
 def run_footnote_check() -> None:
     findings = footnote_in_table_findings()
     findings.extend(footnote_source_findings())
@@ -5748,6 +5833,12 @@ def validate_manifest() -> None:
     run_manifest_check()
 
 
+@validate_app.command("permissions")
+def validate_permissions() -> None:
+    """Check that every figure's permission and provenance obligation is closed."""
+    run_permissions_check()
+
+
 @validate_app.command("footnotes")
 def validate_footnotes() -> None:
     """Check footnote placement, identifiers, and defined-term source form."""
@@ -5868,6 +5959,7 @@ def check_precommit() -> None:
     run_bibliography_check()
     run_footnote_check()
     run_prose_style_check()
+    run_permissions_check()
     run_concept_check()
     run_disclosure_check()
     run_citation_check(show_context=False)
