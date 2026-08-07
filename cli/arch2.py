@@ -1158,6 +1158,36 @@ def structural_reference_findings(path: Path) -> list[Finding]:
     return findings
 
 
+def svg_wellformed_findings() -> list[Finding]:
+    """Reject SVG assets that are not well-formed XML.
+
+    The PDF build shells out to rsvg-convert, which parses every SVG as XML and
+    aborts the whole render when one fails. The usual cause is a bare ``&`` in a
+    CSS comment inside a ``<style>`` block, which XML reads as the start of an
+    entity reference. Wrapping the block in ``<![CDATA[ ... ]]>`` fixes it and
+    keeps the next one from happening. Checked here so a malformed asset fails
+    at commit time rather than eight minutes into a render.
+    """
+    import xml.etree.ElementTree as ElementTree
+
+    findings: list[Finding] = []
+    for svg_path in sorted((ROOT / "book").rglob("*.svg")):
+        try:
+            ElementTree.parse(svg_path)
+        except ElementTree.ParseError as exc:
+            findings.append(
+                Finding(
+                    "error",
+                    "svg-malformed",
+                    f"{_relative(svg_path)}:{exc.position[0]}",
+                    f"SVG is not well-formed XML ({exc.msg}); rsvg-convert will abort the "
+                    "PDF build. A bare '&', '<', or '>' inside a <style> block is the usual "
+                    "cause, so wrap the block in <![CDATA[ ... ]]>",
+                )
+            )
+    return findings
+
+
 def figure_path_findings(path: Path) -> list[Finding]:
     text = path.read_text(encoding="utf-8")
     findings: list[Finding] = []
@@ -1310,6 +1340,7 @@ def manuscript_integrity_findings() -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(undefined_ref_findings(all_paths))
     findings.extend(unreferenced_label_findings(all_paths, all_paths))
+    findings.extend(svg_wellformed_findings())
     for path in all_paths:
         findings.extend(figure_path_findings(path))
         findings.extend(figure_source_findings(path))
