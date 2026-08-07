@@ -1,6 +1,6 @@
 # Architecture 2.0
 
-*Foundations of AI-Native Computing Systems*
+*Principles of AI-Native System and Chip Design*
 
 <p align="center">
   <a href="https://arch2.mlsysbook.ai/start.html"><b>Start with the card</b></a> ·
