@@ -1158,6 +1158,37 @@ def structural_reference_findings(path: Path) -> list[Finding]:
     return findings
 
 
+XHTML_VOID_RE = re.compile(
+    r"<(br|img|hr|input|meta|link|source|col|area|embed|wbr)((?:\s[^>]*?)?)(?<!/)>",
+    re.IGNORECASE,
+)
+
+
+def xhtml_void_tag_findings(path: Path) -> list[Finding]:
+    """Reject unclosed void tags, which are valid HTML but break the EPUB.
+
+    EPUB content is XHTML, so every element must close. A raw ``<br>`` renders
+    fine in HTML and then fails EPUB generation with a mismatched-tag parse
+    error naming a line in a built artifact, which is a long way from the
+    manuscript line that caused it. Checked here so the failure names the
+    source file instead.
+    """
+    findings: list[Finding] = []
+    text = path.read_text(encoding="utf-8")
+    for match in XHTML_VOID_RE.finditer(text):
+        tag = match.group(1).lower()
+        findings.append(
+            Finding(
+                "error",
+                "xhtml-unclosed-void-tag",
+                f"{_relative(path)}:{line_number(text, match.start())}",
+                f"<{tag}> is not closed; EPUB content is XHTML and will fail to "
+                f"parse. Write <{tag}/>",
+            )
+        )
+    return findings
+
+
 def svg_wellformed_findings() -> list[Finding]:
     """Reject SVG assets that are not well-formed XML.
 
@@ -1342,6 +1373,7 @@ def manuscript_integrity_findings() -> list[Finding]:
     findings.extend(unreferenced_label_findings(all_paths, all_paths))
     findings.extend(svg_wellformed_findings())
     for path in all_paths:
+        findings.extend(xhtml_void_tag_findings(path))
         findings.extend(figure_path_findings(path))
         findings.extend(figure_source_findings(path))
         findings.extend(table_findings(path))
