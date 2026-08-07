@@ -85,17 +85,24 @@ def generate_verification_scaling(output_dir: Path) -> None:
     ax.set_xticks(xticks)
     ax.set_xticklabels(xtick_labels, fontsize=5.8)
 
-    ax.legend(frameon=False, fontsize=6.0, loc="lower right")
+    ax.legend(
+        frameon=False, fontsize=6.0, loc="lower left", bbox_to_anchor=(0.02, 0.05)
+    )
     ax.grid(
         True, which="both", axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0
     )
 
-    # Annotate the scissors gap
+    # Annotate the verification gap
     ax.annotate(
         "5-order-of-magnitude\nverification gap",
-        xy=(1e4, 3.85),
-        xytext=(3e1, 3.2),
-        arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
+        xy=(1e5, 4.0),
+        xytext=(3e2, 3.1),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["constraints_ink"],
+            lw=0.9,
+            connectionstyle="arc3,rad=-0.15",
+        ),
         fontsize=6.0,
         fontweight="bold",
         color=COLORS["constraints_ink"],
@@ -114,9 +121,13 @@ def generate_verification_scaling(output_dir: Path) -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     svg_path = output_dir / "fig-verification-scaling.svg"
+    pdf_path = output_dir / "fig-verification-scaling.pdf"
+    png_path = output_dir / "fig-verification-scaling.png"
     plt.savefig(svg_path, format="svg", bbox_inches="tight")
+    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    plt.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"Generated {svg_path}")
+    print(f"Generated {svg_path}, {pdf_path}, and {png_path}")
 
 
 if __name__ == "__main__":
