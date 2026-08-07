@@ -230,9 +230,9 @@ Accelerator speedups mean very little if data movement and software invocation o
 
 $$
 S(g) = \frac{g}{o + g/A + \max(0, \, bg - T_{\text{comp\_overlap}})}.
-$$
+$${#eq-logca-speedup-bound}
 
-LogCA accounts for both fixed startup overhead ($o$) and per-element transfer penalties ($b$), unifying Amdahl's offload fraction [@Amdahl1967ValiditySingleProcessor] with explicit physical communication costs. Decomposing the offload overhead exposes how excessive accelerator or tensor-engine invocations ($N \cdot o$), driver context switches, or memory bandwidth limits ($b \cdot g$) rapidly erase hard-won local compute gains ($A$). For our Lighthouse target, our implementation-readiness study must meticulously measure whether the trace-backed spatial-tracking work reaches the array with a granularity and locality that respects our stringent 3\ W power budget.
+In @eq-logca-speedup-bound, LogCA accounts for both fixed startup overhead ($o$) and per-element transfer penalties ($b$), unifying Amdahl's offload fraction [@Amdahl1967ValiditySingleProcessor] with explicit physical communication costs. Decomposing the offload overhead exposes how excessive accelerator or tensor-engine invocations ($N \cdot o$), driver context switches, or memory bandwidth limits ($b \cdot g$) rapidly erase hard-won local compute gains ($A$). For our Lighthouse target, our implementation-readiness study must meticulously measure whether the trace-backed spatial-tracking work reaches the array with a granularity and locality that respects our stringent 3\ W power budget.
 
 In @fig-logca-breakeven, we illustrate how startup and transfer penalties shift offload break-even points, plotting end-to-end speedup on the logarithmic y-axis against operation granularity $g$ (work amortized per offload) on the logarithmic x-axis. We anchor three illustrative parameter scenarios to a fixed local compute acceleration ceiling of $A=100\times$, sweeping through overhead pairs $(o,b)$ of $(2,0)$ for low startup with zero transfer penalty, $(40,0.005)$ for medium startup and transfer penalties, and $(1500,0.05)$ for high startup and transfer penalties. Visually, the plot displays three distinct curves rising toward the horizontal dashed peak acceleration line, alongside a shaded region below $1\times$ speedup where offloading incurs a net loss, with marked points identifying the exact break-even granularity for each parameter set. This plot demonstrates our core takeaway that offload speedup emerges only when payload size $g$ is large enough to amortize fixed launch latency $o$ and bus transfer penalty $b$.
 
@@ -344,8 +344,19 @@ def add_kernel(x_ptr, y_ptr, z_ptr, N, BLOCK_SIZE: tl.constexpr):
 
 During compilation, Triton's MLIR pipeline passes the block representation from high-level ASTs through structured CDFGs down to LLVM IR, where the RISC-V backend lowers the block operations into RVV 1.0 vector primitives.
 
+::: {.callout-war-story title="The Un-Amortized DMA Offload Wall"}
+**The claim.** In a high-throughput mobile neural processing unit (NPU), microarchitectural designers added a 1024-MAC systolic tensor engine capable of $100\times$ local matrix-multiply acceleration ($A=100$) over scalar RISC-V execution.
+
+**The gap.** Because the runtime stack invoked the NPU via kernel-mode device driver calls for each small layer (payload size $g=500$ operations), driver launch latency ($o=1500$ cycles) and PCIe DMA descriptor setup overhead dominated execution time. Rather than achieving $100\times$ speedup, the system operated at $S(g) = 0.32\times$, running slower than baseline scalar execution due to un-amortized offload overhead.
+
+**The lesson.** Local compute acceleration ($A$) cannot overcome un-amortized startup ($o$) and transfer ($b$) penalties. Hardware offload mechanisms must be co-designed with compiler layer-fusion techniques to ensure work payload size $g$ stays well above the LogCA break-even threshold.
+:::
+
+Assembly and vector loops provide explicit control over hardware execution, but we must also ensure that higher-level compiler paths generate equivalent code semantics.
+
 ```assembly
-# Lowered RVV 1.0 vector assembly for block execution
+# RISC-V Vector (RVV 1.0) 32-bit floating-point vector addition kernel
+# a0 = x_ptr, a1 = y_ptr, a2 = z_ptr, a3 = element count N
 .Lloop:
     vsetvli t0, a3, e32, m8, ta, ma  # Set vector length for 32-bit elements, 8x register grouping
     vle32.v v8, (a0)                  # Load vector x (x_ptr + offset)
@@ -379,9 +390,9 @@ Let $a$ be the fraction of target comparison mass submitted to the cheap check (
 
 $$
 S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
-$$
+$${#eq-screening-efficiency-bound}
 
-Here, $\epsilon \ge 0$ captures normalized per-item routing, auditing, and rework overhead. This inequality holds because $f \le a$; we cannot settle a case without executing the check. We achieve maximum speedup when every cheap check executed settles the case ($a = f$).
+In @eq-screening-efficiency-bound, $\epsilon \ge 0$ captures normalized per-item routing, auditing, and rework overhead. This inequality holds because $f \le a$; we cannot settle a case without executing the check. We achieve maximum speedup when every cheap check executed settles the case ($a = f$).
 
 Crucially, as $c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ and $\epsilon \to 0$, the theoretical free-check ceiling approaches $1/(1-f)$. This bound demonstrates that validated coverage $f$, rather than screening speed alone, sets the maximum obtainable speedup. Borrowing from selective classification theory [@ElYanivWiener2010SelectiveClassification], abstaining from uncertain or out-of-support predictions avoids false acceptance but forces un-settled candidates to incur full $c_{\mathrm{hi}}$ reference evaluation costs. If we estimate coverage solely on accepted cases, we introduce sample-selection bias [@Heckman1979SampleSelectionBias]; thus, $f$ must be evaluated across representative samples of the entire target stream.
 
