@@ -3,10 +3,25 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+# rsvg-convert stamps a creation date into every PDF it writes, so converting the
+# same SVG twice produces different bytes. The render's generated-asset check then
+# reports the tracked derivative as dirty and fails the publish, which is why a
+# release could not get past the drift gate. Pinning SOURCE_DATE_EPOCH makes the
+# output byte-identical, so a derivative changes only when its SVG actually does.
+# The value is arbitrary and fixed on purpose: it is metadata no reader sees, and
+# anything derived from the clock or from HEAD would reintroduce the drift.
+SOURCE_DATE_EPOCH = "1700000000"
+
+
+def deterministic_env() -> dict[str, str]:
+    return {**os.environ, "SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH}
+
 
 BOOK_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BOOK_DIR.parent
@@ -173,6 +188,7 @@ def convert_refs(refs: list[str], image_dir: Path, source: Path) -> list[str]:
             subprocess.run(
                 ["rsvg-convert", "-f", "pdf", "-o", str(pdf), str(svg)],
                 check=True,
+                env=deterministic_env(),
             )
     return missing
 
