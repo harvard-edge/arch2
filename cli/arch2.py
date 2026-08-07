@@ -311,7 +311,14 @@ LATEX_REF_RE = re.compile(
     r"\\(?:auto|[cC]|eq)?ref\{(?P<label>(?:fig|tab|eq|sec|lst):[A-Za-z0-9:_-]+)\}"
 )
 RAW_STRUCTURE_REF_RE = re.compile(
-    r"\b(?:(?:[Cc]hapters?|Ch\.)\s*\d+(?:\s*(?:-|and|,)\s*\d+)*|(?:[Aa]ppendix|[Aa]ppendices)\s+[A-Z])\b"
+    r"\b(?:"
+    r"(?:[Cc]hapters?|[Cc]h\.)\s*\d+(?:\.\d+)?(?:\s*(?:-|and|,)\s*\d+(?:\.\d+)?)*"
+    r"|(?:[Aa]ppendix|[Aa]ppendices|[Aa]pp\.)\s+[A-Z](?:\s*(?:-|and|,)\s*[A-Z])*"
+    r"|(?:[Tt]ables?|[Tt]ab\.)\s*\d+(?:\.\d+)?"
+    r"|(?:[Ff]igures?|[Ff]ig\.)\s*\d+(?:\.\d+)?"
+    r"|(?:[Ss]ections?|[Ss]ec\.)\s*\d+(?:\.\d+)?"
+    r"|(?:[Ee]quations?|[Ee]qs?\.)\s*\d+(?:\.\d+)?"
+    r")\b"
 )
 CHAP_LABEL_OR_REF_RE = re.compile(
     r"(?<![\w#])@chap-[A-Za-z0-9_-]+\b|#chap-[A-Za-z0-9_-]+\b"
@@ -1119,7 +1126,7 @@ def manuscript_source_lines(path: Path) -> Iterable[tuple[int, str]]:
 
 def structural_reference_findings(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    message = "use top-level {#sec-*} labels and @sec-* cross-references instead of hard-coded chapter/appendix names"
+    message = "use top-level cross-references (@tbl-*, @fig-*, @sec-*, @eq-*, @chap-*) instead of hard-coded table, figure, section, chapter, or appendix numbers"
 
     for line_number_value, line in manuscript_source_lines(path):
         if CHAP_LABEL_OR_REF_RE.search(line) or LATEX_SECTION_REF_RE.search(line):
@@ -1132,7 +1139,8 @@ def structural_reference_findings(path: Path) -> list[Finding]:
                 )
             )
             continue
-        if RAW_STRUCTURE_REF_RE.search(line):
+        line_prose_only = re.sub(r"\[@[^\]]+\]", "", line)
+        if RAW_STRUCTURE_REF_RE.search(line_prose_only):
             findings.append(
                 Finding(
                     "error",
