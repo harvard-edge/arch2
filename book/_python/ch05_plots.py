@@ -130,8 +130,8 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     )
 
     ax.set_title(
-        "Candidate generation arrival rate versus downstream tool stage utilization",
-        fontsize=7.8,
+        "Candidate arrival rate versus downstream tool stage utilization",
+        fontsize=7.5,
         pad=10,
         fontweight="bold",
         color=COLORS["ink"],
