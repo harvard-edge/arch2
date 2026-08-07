@@ -1,6 +1,6 @@
 # Architecture 2.0
 
-*AI-Assisted Computer Architecture*
+*Foundations of AI-Native Computing Systems*
 
 <p align="center">
   <a href="https://arch2.mlsysbook.ai/start.html"><b>Start with the card</b></a> ·
