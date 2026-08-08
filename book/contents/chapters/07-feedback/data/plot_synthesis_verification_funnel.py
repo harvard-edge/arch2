@@ -70,7 +70,9 @@ def main():
         COLORS["red"],
     ]
 
-    bars = ax1.bar(x, all_counts, color=colors_bars, alpha=0.85, width=0.52, zorder=3)
+    bars = ax1.bar(
+        x, all_counts, bottom=1, color=colors_bars, alpha=0.85, width=0.52, zorder=3
+    )
     ax1.set_yscale("log")
     ax1.set_ylim(1, 400000)
     ax1.set_xticks(x)

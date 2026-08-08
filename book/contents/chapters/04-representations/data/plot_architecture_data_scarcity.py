@@ -64,7 +64,13 @@ def main():
     ]
 
     bars = ax.barh(
-        y_pos[::-1], tokens, color=colors_bars, alpha=0.85, height=0.52, zorder=3
+        y_pos[::-1],
+        tokens,
+        left=1e6,
+        color=colors_bars,
+        alpha=0.85,
+        height=0.52,
+        zorder=3,
     )
     ax.set_xscale("log")
     ax.set_xlim(1e6, 5e14)
