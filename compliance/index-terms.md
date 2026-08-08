@@ -8,7 +8,7 @@ definition or the section that establishes the book's primary treatment when
 no formal definition is given. Later columns identify only material
 applications, not every occurrence.
 
-- `preface`: `book/index.qmd` (other front matter under `book/frontmatter/`)
+- `preface`: `book/contents/frontmatter/preface.qmd` (included from `book/index.qmd` for the home URL)
 - `ch01`–`ch11`: numbered chapters in book order
 - `appA`: *The Architecture 2.0 Reviewer's Checklist*
 - `appB`: *Design Principles*

@@ -134,7 +134,7 @@ def test_start_path_keeps_fixtures_labs_and_lighthouse_distinct() -> None:
     assert "Practice with executed evidence" in start
     assert "https://github.com/harvard-edge/arch2/tree/main/labs" in start
     assert "does not replace empirical lab work" in start
-    assert "/book/chapters/08-loop/" in start
+    assert "/book/contents/chapters/08-loop/" in start
     assert "None substitutes for another." in start
 
     examples_readme = (VALID_CARD_DIR / "README.md").read_text(encoding="utf-8")

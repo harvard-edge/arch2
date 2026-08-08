@@ -15,31 +15,38 @@ def _write_part_manifest_fixture(tmp_path) -> Path:
     book = tmp_path / "book"
     files = (
         "index.qmd",
-        "frontmatter/acknowledgments.qmd",
-        "frontmatter/about-the-author.qmd",
-        "frontmatter/disclosure.qmd",
-        "parts/part-i.qmd",
-        "chapters/01-one.qmd",
-        "backmatter/appendix-a.qmd",
+        "contents/frontmatter/preface.qmd",
+        "contents/frontmatter/acknowledgments.qmd",
+        "contents/frontmatter/about-the-author.qmd",
+        "contents/frontmatter/disclosure.qmd",
+        "contents/parts/part-i.qmd",
+        "contents/chapters/01-one.qmd",
+        "contents/backmatter/appendix-a.qmd",
     )
     for relative in files:
         path = book / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"# {path.stem}\n", encoding="utf-8")
+        if relative == "index.qmd":
+            path.write_text(
+                "{{< include contents/frontmatter/preface.qmd >}}\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(f"# {path.stem}\n", encoding="utf-8")
 
     (book / "_quarto.yml").write_text(
         "book:\n"
         "  chapters:\n"
         "    - index.qmd\n"
-        "    - frontmatter/acknowledgments.qmd\n"
-        "    - frontmatter/about-the-author.qmd\n"
-        "    - frontmatter/disclosure.qmd\n"
+        "    - contents/frontmatter/acknowledgments.qmd\n"
+        "    - contents/frontmatter/about-the-author.qmd\n"
+        "    - contents/frontmatter/disclosure.qmd\n"
         "    - ---\n"
-        "    - part: parts/part-i.qmd\n"
+        "    - part: contents/parts/part-i.qmd\n"
         "      chapters:\n"
-        "        - chapters/01-one.qmd\n"
+        "        - contents/chapters/01-one.qmd\n"
         "  appendices:\n"
-        "    - backmatter/appendix-a.qmd\n",
+        "    - contents/backmatter/appendix-a.qmd\n",
         encoding="utf-8",
     )
     return book
@@ -51,17 +58,31 @@ def _point_cli_at_book(monkeypatch: pytest.MonkeyPatch, root: Path, book: Path) 
     monkeypatch.setattr(
         arch2_cli,
         "CONTENT_ROOTS",
-        (book / "chapters", book / "parts", book / "backmatter"),
+        (
+            book / "contents" / "chapters",
+            book / "contents" / "parts",
+            book / "contents" / "backmatter",
+        ),
+    )
+    monkeypatch.setattr(
+        arch2_cli,
+        "BOOK_PREFACE_SOURCE",
+        book / "contents" / "frontmatter" / "preface.qmd",
+    )
+    monkeypatch.setattr(
+        arch2_cli,
+        "BOOK_INCLUDE_ONLY_SOURCES",
+        (book / "contents" / "frontmatter" / "preface.qmd",),
     )
     monkeypatch.setattr(
         arch2_cli,
         "BOOK_FRONTMATTER",
         (
             book / "index.qmd",
-            book / "frontmatter" / "foreword.qmd",
-            book / "frontmatter" / "acknowledgments.qmd",
-            book / "frontmatter" / "about-the-author.qmd",
-            book / "frontmatter" / "disclosure.qmd",
+            book / "contents" / "frontmatter" / "foreword.qmd",
+            book / "contents" / "frontmatter" / "acknowledgments.qmd",
+            book / "contents" / "frontmatter" / "about-the-author.qmd",
+            book / "contents" / "frontmatter" / "disclosure.qmd",
         ),
     )
 
@@ -75,9 +96,9 @@ def test_manifest_includes_qmd_backed_part_opener(
     findings = arch2_cli.manifest_findings()
 
     assert not [finding for finding in findings if finding.code == "orphan-qmd"]
-    assert (book / "parts" / "part-i.qmd").resolve() in arch2_cli._manifest_qmd_entries(
-        arch2_cli._load_quarto_config()[0]
-    )
+    assert (
+        book / "contents" / "parts" / "part-i.qmd"
+    ).resolve() in arch2_cli._manifest_qmd_entries(arch2_cli._load_quarto_config()[0])
 
 
 def test_book_order_places_part_opener_before_its_chapter(
@@ -92,12 +113,13 @@ def test_book_order_places_part_opener_before_its_chapter(
 
     assert ordered == [
         "index.qmd",
-        "frontmatter/acknowledgments.qmd",
-        "frontmatter/about-the-author.qmd",
-        "frontmatter/disclosure.qmd",
-        "parts/part-i.qmd",
-        "chapters/01-one.qmd",
-        "backmatter/appendix-a.qmd",
+        "contents/frontmatter/acknowledgments.qmd",
+        "contents/frontmatter/about-the-author.qmd",
+        "contents/frontmatter/disclosure.qmd",
+        "contents/parts/part-i.qmd",
+        "contents/chapters/01-one.qmd",
+        "contents/backmatter/appendix-a.qmd",
+        "contents/frontmatter/preface.qmd",
     ]
 
 

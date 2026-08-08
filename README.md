@@ -90,7 +90,7 @@ The public site connects the following maintained surfaces.
 
 | Path | What it contains |
 | --- | --- |
-| [`book/`](book/) | Quarto source for the synthesis lecture: front matter (`index.qmd` + `frontmatter/`), numbered chapters, back matter (`backmatter/`), figures, and references. |
+| [`book/`](book/) | Quarto book project: config and render machinery at the root, manuscript under [`book/contents/`](book/contents/) (see [docs/REPO-LAYOUT.md](docs/REPO-LAYOUT.md)). |
 | [`labs/`](labs/) | Tool-backed exercises, the executed study, replay support, and tests. |
 | [`design-loop-card/`](design-loop-card/) and [`schemas/`](schemas/) | Human-readable templates and machine-checkable contracts for recording a study. |
 | [`examples/`](examples/) | Completed cards and supporting evidence that show how the contracts are used. |

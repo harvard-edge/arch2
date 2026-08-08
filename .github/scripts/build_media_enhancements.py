@@ -17,14 +17,13 @@ TOOL_DIR = ROOT / "tools" / "registry"
 URL_RE = re.compile(r'https?://[^\s)>\]}`"]+')
 
 MANUSCRIPT_UNITS = {
-    # Preface (book home). Other front-matter pages under book/frontmatter/ are
-    # short back-matter of the opening unit, not separate media units.
+    # Thin home includes contents/frontmatter/preface.qmd (sole preface body).
     "front": ROOT / "book" / "index.qmd",
     **{
         f"ch{number:02d}": next(
-            (ROOT / "book" / "chapters").glob(f"{number:02d}-*/*.qmd")
+            (ROOT / "book" / "contents" / "chapters").glob(f"{number:02d}-*/*.qmd")
         )
-        for number in range(1, 12)
+        for number in range(1, 13)
     },
     # Appendices are discovered rather than hardcoded. The previous map named
     # appendix-a-bootstrapping and appendix-b-design-loop-card, both removed in
@@ -32,7 +31,9 @@ MANUSCRIPT_UNITS = {
     # manifest test permanently red. Globbing keeps it correct across renames.
     **{
         f"app{path.parent.name.split('-')[1].upper()}": path
-        for path in sorted((ROOT / "book" / "backmatter").glob("apdx-*/*.qmd"))
+        for path in sorted(
+            (ROOT / "book" / "contents" / "backmatter").glob("apdx-*/*.qmd")
+        )
     },
 }
 

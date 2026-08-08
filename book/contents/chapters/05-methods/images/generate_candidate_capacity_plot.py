@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 # book/ is on sys.path so `from _python.plots import ...` works when run as a script.
-_BOOK_DIR = Path(__file__).resolve().parents[3]
+_BOOK_DIR = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(_BOOK_DIR))
 
 import matplotlib.pyplot as plt

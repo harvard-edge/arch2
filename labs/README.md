@@ -24,7 +24,7 @@ The complete activity map, expected duration, and output of each lab are in
 These activities are formative rather than a complete summative assessment.
 Lab 08 integrates a supplied task, candidate set, environment, evidence path,
 and decision record. The transfer capstone defined in
-[Chapter 10](../book/chapters/11-ownership/11-ownership.qmd) instead gives the
+[Chapter 10](../book/contents/chapters/11-ownership/11-ownership.qmd) instead gives the
 learner a new, tractable architecture problem and assesses all six capabilities
 as one bounded study. The activity map shows which parts of that larger outcome
 the current labs practice.
