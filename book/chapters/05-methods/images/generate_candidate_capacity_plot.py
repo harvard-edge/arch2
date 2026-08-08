@@ -1,10 +1,13 @@
-"""Generate Matplotlib figures for Chapter 5 (Methods & Capacity Models)."""
+"""Generate the static candidate-check capacity figure for Chapter 5."""
+
+from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Add book directory to sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# book/ is on sys.path so `from _python.plots import ...` works when run as a script.
+_BOOK_DIR = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_BOOK_DIR))
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -179,5 +182,4 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-    out_dir = Path(__file__).resolve().parents[1] / "chapters" / "05-methods" / "images"
-    generate_candidate_capacity_plot(out_dir)
+    generate_candidate_capacity_plot(Path(__file__).resolve().parent)

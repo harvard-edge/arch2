@@ -17,6 +17,8 @@ TOOL_DIR = ROOT / "tools" / "registry"
 URL_RE = re.compile(r'https?://[^\s)>\]}`"]+')
 
 MANUSCRIPT_UNITS = {
+    # Preface (book home). Other front-matter pages under book/frontmatter/ are
+    # short back-matter of the opening unit, not separate media units.
     "front": ROOT / "book" / "index.qmd",
     **{
         f"ch{number:02d}": next(
@@ -30,7 +32,7 @@ MANUSCRIPT_UNITS = {
     # manifest test permanently red. Globbing keeps it correct across renames.
     **{
         f"app{path.parent.name.split('-')[1].upper()}": path
-        for path in sorted((ROOT / "book" / "appendices").glob("apdx-*/*.qmd"))
+        for path in sorted((ROOT / "book" / "backmatter").glob("apdx-*/*.qmd"))
     },
 }
 

@@ -11,6 +11,8 @@ Static figures used by the chapter:
 - `F5e-method-selection-guide`: the chapter's canonical conditional recipe for
   choosing direct evaluation, a conventional method, prediction, generation,
   optimization, or a justified composition from the limiting work.
+- `fig-candidate-check-capacity`: staged tool-path utilization plot (regenerate
+  with `generate_candidate_capacity_plot.py`).
 
 Executable Quarto figures in the chapter:
 
@@ -19,16 +21,6 @@ Executable Quarto figures in the chapter:
 - `fig-ch05-conformal-coverage`: synthetic support-change illustration.
 - `fig-bayesian-optimization`: illustrative Gaussian-process posterior and
   upper-confidence-bound acquisition.
+- Search-efficiency chart from `generate_ch05_plots.py`.
 
-Deferred figure sources:
-
-- `book/scratch_figures/deferred-chapter-05/F6-verification-lifecycle.svg`
-  awaits the Chapter 6/7 visual audit.
-- `book/scratch_figures/deferred-chapter-05/F7-method-role-map.svg` awaits the
-  Chapter 7/11 visual audit.
-- `book/scratch_figures/deferred-chapter-05/ch6_ai_roles.svg` awaits the Chapter
-  6 visual audit.
-
-The deferred files preserve the original hand-authored sources without forcing
-later-chapter concepts into Chapter 5. Their old PDF companions are generated
-derivatives and can be recreated after a destination is selected.
+The `.pdf` files beside active SVG sources are generated print companions.

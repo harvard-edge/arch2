@@ -283,14 +283,14 @@ DEFAULT_SPARSE_MIN_BODY_WORDS = 80
 CONTENT_ROOTS = (
     BOOK_DIR / "chapters",
     BOOK_DIR / "parts",
-    BOOK_DIR / "appendices",
+    BOOK_DIR / "backmatter",
 )
 BOOK_FRONTMATTER = (
     BOOK_DIR / "index.qmd",
-    BOOK_DIR / "foreword.qmd",
-    BOOK_DIR / "acknowledgments.qmd",
-    BOOK_DIR / "about-the-author.qmd",
-    BOOK_DIR / "disclosure.qmd",
+    BOOK_DIR / "frontmatter" / "foreword.qmd",
+    BOOK_DIR / "frontmatter" / "acknowledgments.qmd",
+    BOOK_DIR / "frontmatter" / "about-the-author.qmd",
+    BOOK_DIR / "frontmatter" / "disclosure.qmd",
 )
 CANONICAL_CROSSREF_PREFIXES = ("fig", "tbl", "eq", "sec", "lst", "pri")
 REQUIRED_REFERENCED_LABEL_PREFIXES = ("fig-", "tbl-", "eq-", "lst-")
@@ -1396,7 +1396,7 @@ def citation_chapter_name(path: Path) -> str:
     except ValueError:
         rel = path.relative_to(ROOT)
     parts = rel.parts
-    if len(parts) >= 2 and parts[0] in {"chapters", "appendices"}:
+    if len(parts) >= 2 and parts[0] in {"chapters", "backmatter", "frontmatter"}:
         return parts[1]
     return str(rel)
 
@@ -1806,7 +1806,10 @@ def manifest_findings() -> list[Finding]:
 
     # A finalized foreword may be added before the acknowledgments, and the AI
     # disclosure page trails the author bio; neither is required front matter.
-    optional_frontmatter = {"foreword.qmd", "disclosure.qmd"}
+    optional_frontmatter = {
+        "frontmatter/foreword.qmd",
+        "frontmatter/disclosure.qmd",
+    }
     optional_paths = {BOOK_DIR / name for name in optional_frontmatter}
     for path in sorted(actual_qmds - entry_set - optional_paths):
         findings.append(
@@ -1826,10 +1829,10 @@ def manifest_findings() -> list[Finding]:
     ]
     expected_frontmatter = [
         "index.qmd",
-        "foreword.qmd",
-        "acknowledgments.qmd",
-        "about-the-author.qmd",
-        "disclosure.qmd",
+        "frontmatter/foreword.qmd",
+        "frontmatter/acknowledgments.qmd",
+        "frontmatter/about-the-author.qmd",
+        "frontmatter/disclosure.qmd",
     ]
     present_frontmatter = [
         name
@@ -1842,7 +1845,8 @@ def manifest_findings() -> list[Finding]:
                 "error",
                 "frontmatter-order",
                 _relative(quarto_path),
-                "front matter should begin with index, foreword (when included), acknowledgments, and about-the-author",
+                "front matter should begin with index (preface), then "
+                "frontmatter/foreword (when included), acknowledgments, and about-the-author",
             )
         )
     if len(chapter_items) > len(present_frontmatter):
@@ -2132,7 +2136,7 @@ def generated_asset_findings() -> list[Finding]:
             "--untracked-files=no",
             "--",
             "book/chapters",
-            "book/appendices",
+            "book/backmatter",
         ],
         capture=True,
     )

@@ -159,7 +159,7 @@ def chapter_sources() -> dict[Path, list[Path]]:
     for qmd in sorted(
         [
             *BOOK_DIR.glob("chapters/*/*.qmd"),
-            *BOOK_DIR.glob("appendices/*/*.qmd"),
+            *BOOK_DIR.glob("backmatter/*/*.qmd"),
         ]
     ):
         groups.setdefault(qmd.parent, []).append(qmd)
@@ -198,7 +198,7 @@ def prepare_local_images() -> None:
     if not groups:
         print(
             "No chapter or appendix QMD files found under "
-            f"{BOOK_DIR}/chapters and {BOOK_DIR}/appendices. Figure preparation "
+            f"{BOOK_DIR}/chapters and {BOOK_DIR}/backmatter. Figure preparation "
             "would silently do nothing and the PDF would build against stale "
             "art, so this is treated as a build failure.",
             file=sys.stderr,
@@ -224,10 +224,24 @@ def prepare_local_images() -> None:
 
     # Front matter draws on book/images/, which also holds site art such as the
     # cover and favicons that no QMD references. Convert it, never prune it.
-    front_matter = BOOK_DIR / "index.qmd"
-    if front_matter.exists():
-        refs = image_ref_stems(front_matter.read_text(encoding="utf-8"))
-        missing += convert_refs(refs, BOOK_DIR / "images", front_matter)
+    # index.qmd is the Preface home page; remaining pages live under frontmatter/.
+    front_matter_sources = [
+        path
+        for path in (
+            BOOK_DIR / "index.qmd",
+            *sorted((BOOK_DIR / "frontmatter").glob("*.qmd")),
+        )
+        if path.exists()
+    ]
+    front_refs: set[str] = set()
+    for source in front_matter_sources:
+        front_refs.update(image_ref_stems(source.read_text(encoding="utf-8")))
+    if front_refs:
+        missing += convert_refs(
+            sorted(front_refs),
+            BOOK_DIR / "images",
+            front_matter_sources[0],
+        )
 
     if missing:
         print("Missing local figure SVGs:", file=sys.stderr)

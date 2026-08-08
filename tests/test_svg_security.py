@@ -46,15 +46,15 @@ def test_svg_paths_default_to_recursive_content_roots(
     tmp_path: Path, monkeypatch
 ) -> None:
     chapters = tmp_path / "chapters"
-    appendices = tmp_path / "appendices"
+    backmatter = tmp_path / "backmatter"
     chapter_svg = chapters / "chapter-1" / "images" / "chapter.svg"
-    appendix_svg = appendices / "appendix-a" / "images" / "appendix.svg"
+    appendix_svg = backmatter / "appendix-a" / "images" / "appendix.svg"
     chapter_svg.parent.mkdir(parents=True)
     appendix_svg.parent.mkdir(parents=True)
     chapter_svg.write_text("<svg/>", encoding="utf-8")
     appendix_svg.write_text("<svg/>", encoding="utf-8")
 
-    monkeypatch.setattr(arch2_cli, "CONTENT_ROOTS", (chapters, appendices))
+    monkeypatch.setattr(arch2_cli, "CONTENT_ROOTS", (chapters, backmatter))
 
     assert arch2_cli.svg_paths() == sorted(
         [chapter_svg.resolve(), appendix_svg.resolve()]
