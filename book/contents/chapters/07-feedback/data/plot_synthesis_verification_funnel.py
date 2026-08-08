@@ -1,5 +1,5 @@
 """
-Physical Signoff Verification Funnel Plot Script (Chapter 1)
+Physical Signoff Verification Funnel Plot Script (Chapter 7)
 
 Literature Calibration & Citation Provenance:
 ---------------------------------------------
@@ -9,8 +9,8 @@ Literature Calibration & Citation Provenance:
 4. Stage 4 (Static Timing Closure WNS >= 0ns - 3.8% pass): AgentDSE (Wang et al., 2026) [@WangEtAl2026AgentDSE].
 5. Stage 5 (Physical Place & Route DRC Closure - 59.5% pass / 0.09% yield): AutoDSE (Zhang et al., 2022) [@ZhangEtAl2022AutoDSE] on OpenROAD 7nm ASAP7.
 
-Dataset Receipt: book/contents/chapters/01-moonshot/data/fig-synthesis-verification-funnel.csv
-Output Figure:   book/contents/chapters/01-moonshot/images/fig-synthesis-verification-funnel.svg
+Dataset Receipt: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
+Output Figure:   book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.svg
 """
 
 import csv
@@ -21,7 +21,6 @@ import numpy as np
 
 # Connect parent repo path to import book._python.plots
 REPO_ROOT = Path(__file__).resolve().parents[5]
-
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

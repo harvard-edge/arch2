@@ -1,5 +1,5 @@
 """
-Domain Corpus Volume & Data Scarcity Spectrum Plot Script (Chapter 1)
+Domain Corpus Volume & Data Scarcity Spectrum Plot Script (Chapter 4)
 
 Literature Calibration & Citation Provenance:
 ---------------------------------------------
@@ -9,8 +9,8 @@ Literature Calibration & Citation Provenance:
 4. Curated Architecture Data (~10^9 Tokens): Arch2 Curated Computer Architecture Corpus [@PrakashEtAl2025QuArch].
 5. Physical EDA Signoff Traces (~10^7 Records): CircuitNet (Chai et al., 2022) [@ChaiEtAl2022CircuitNet].
 
-Dataset Receipt: book/contents/chapters/01-moonshot/data/fig-architecture-data-scarcity.csv
-Output Figure:   book/contents/chapters/01-moonshot/images/fig-architecture-data-scarcity.svg
+Dataset Receipt: book/contents/chapters/04-representations/data/fig-architecture-data-scarcity.csv
+Output Figure:   book/contents/chapters/04-representations/images/fig-architecture-data-scarcity.svg
 """
 
 import csv
@@ -19,13 +19,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Connect parent repo path to import book._python.plots
 REPO_ROOT = Path(__file__).resolve().parents[5]
-
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from book._python.plots import COLORS, apply_style
-
 
 apply_style()
 
