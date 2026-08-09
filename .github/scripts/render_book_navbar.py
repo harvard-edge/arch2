@@ -126,7 +126,7 @@ def render_navbar(navbar: dict) -> str:
                 '    <button type="button" class="btn quarto-color-scheme-toggle arch2-hub-search" '
                 'aria-label="Toggle dark mode" onclick="window.quartoToggleColorScheme();">'
             ),
-            '      <i class="bi" aria-hidden="true"></i>',
+            '      <i class="bi bi-moon-stars" aria-hidden="true"></i>',
             "    </button>",
             (
                 '    <button type="button" class="btn quarto-search-button arch2-hub-search" '
