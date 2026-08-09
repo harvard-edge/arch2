@@ -25,8 +25,20 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from book._python.plots import COLORS, apply_style
+import matplotlib as mpl
 
 apply_style()
+
+
+def _declare_font_stack(svg_path: Path) -> None:
+    # The SVG text-fit check requires the shared font stack declared in the file.
+    text = svg_path.read_text()
+    text = text.replace(
+        "<defs>",
+        '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
+        1,
+    )
+    svg_path.write_text(text)
 
 
 def main():
@@ -113,6 +125,7 @@ def main():
 
     plt.tight_layout()
     plt.savefig(out_plot_ch, dpi=300, bbox_inches="tight")
+    _declare_font_stack(out_plot_ch)
     print(f"Data Scarcity Spectrum plot saved to '{out_plot_ch}'")
 
 
