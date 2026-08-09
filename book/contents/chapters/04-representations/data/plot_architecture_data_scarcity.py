@@ -33,9 +33,6 @@ def main():
     chapter_dir = Path(__file__).resolve().parent.parent
     csv_file = chapter_dir / "data" / "fig-architecture-data-scarcity.csv"
     out_plot_ch = chapter_dir / "images" / "fig-architecture-data-scarcity.svg"
-    out_plot_global = (
-        REPO_ROOT / "book" / "images" / "fig-architecture-data-scarcity.svg"
-    )
 
     categories = []
     corpora = []
@@ -85,29 +82,38 @@ def main():
 
     labels_fmt = [
         r"$\sim 10^{13}$ Tokens (Llama-3 / RedPajama 3T)",
-        r"$\sim 10^{11}$ Tokens (The Stack v2 / StarCoder2)",
+        r"$\sim 9{\times}10^{11}$ Tokens (The Stack v2 / StarCoder2)",
         r"$\sim 10^9$ Tokens (OpenRTLSet / Verilog)",
         r"$\sim 10^9$ Tokens (Arch2 Curated 1B Corpus)",
         r"$\sim 10^7$ Records (CircuitNet / OpenROAD)",
     ]
 
-    for bar, val, lbl in zip(bars[::-1], tokens, labels_fmt):
-        ax.text(
-            val * 1.35,
-            bar.get_y() + bar.get_height() / 2,
-            lbl,
-            va="center",
-            fontsize=5.8,
-            fontweight="bold",
-            color=COLORS["ink"],
-        )
+    for bar, val, lbl in zip(bars, tokens, labels_fmt):
+        if val >= 1e10:
+            ax.text(
+                val / 1.4,
+                bar.get_y() + bar.get_height() / 2,
+                lbl,
+                va="center",
+                ha="right",
+                fontsize=5.8,
+                fontweight="bold",
+                color="#ffffff",
+            )
+        else:
+            ax.text(
+                val * 1.35,
+                bar.get_y() + bar.get_height() / 2,
+                lbl,
+                va="center",
+                fontsize=5.8,
+                fontweight="bold",
+                color=COLORS["ink"],
+            )
 
     plt.tight_layout()
     plt.savefig(out_plot_ch, dpi=300, bbox_inches="tight")
-    plt.savefig(out_plot_global, dpi=300, bbox_inches="tight")
-    print(
-        f"Data Scarcity Spectrum plot saved to '{out_plot_ch}' and '{out_plot_global}'"
-    )
+    print(f"Data Scarcity Spectrum plot saved to '{out_plot_ch}'")
 
 
 if __name__ == "__main__":
