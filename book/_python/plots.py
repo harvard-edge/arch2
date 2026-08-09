@@ -16,11 +16,12 @@ FONT_DIR = Path(__file__).resolve().parents[1] / "_fonts"
 # ("Arial, Helvetica, sans-serif"). Arimo and Liberation Sans are open,
 # metric-compatible substitutes for machines without Arial (e.g. CI/Linux).
 BRAND_SANS = [
-    "Arimo",
     "Arial",
+    "Helvetica",
+    "sans-serif",
+    "Arimo",
     "Liberation Sans",
     "Helvetica Neue",
-    "Helvetica",
     "DejaVu Sans",
 ]
 
