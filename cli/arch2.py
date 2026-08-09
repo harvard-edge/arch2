@@ -1734,6 +1734,10 @@ def _flatten_manifest_items(items: list) -> list[str]:
         if not isinstance(item, dict):
             continue
 
+        file_path = item.get("file") or item.get("href")
+        if isinstance(file_path, str):
+            flat.append(file_path)
+
         part = item.get("part")
         if isinstance(part, str) and part.endswith(".qmd"):
             flat.append(part)
