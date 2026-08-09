@@ -6,7 +6,7 @@ Literature Calibration & Citation Provenance:
 1. Natural Language Web Text (~10^13 Tokens): Meta Llama-3 (2024); RedPajama-V2 (Together AI, 2023) [@TogetherAI2023RedPajama].
 2. General Software Code (~10^11 Tokens): StarCoder 2 & The Stack v2 (Lozhkov et al., 2024) [@LozhkovEtAl2024TheStackV2].
 3. Hardware RTL Code (~10^9 Tokens): OpenRTLSet (Wang et al., 2025) [@WangEtAl2025OpenRTLSet].
-4. Curated Architecture Data (~10^9 Tokens): Arch2 Curated Computer Architecture Corpus [@PrakashEtAl2025QuArch].
+4. Curated Architecture Data (~10^9 Tokens): QuArch curated architecture corpus [@PrakashEtAl2025QuArch].
 5. Physical EDA Signoff Traces (~10^7 Records): CircuitNet (Chai et al., 2022) [@ChaiEtAl2022CircuitNet].
 
 Dataset Receipt: book/contents/chapters/04-representations/data/fig-architecture-data-scarcity.csv
@@ -96,7 +96,7 @@ def main():
         r"$\sim 10^{13}$ Tokens (Llama-3 / RedPajama 3T)",
         r"$\sim 9{\times}10^{11}$ Tokens (The Stack v2 / StarCoder2)",
         r"$\sim 10^9$ Tokens (OpenRTLSet / Verilog)",
-        r"$\sim 10^9$ Tokens (Arch2 Curated 1B Corpus)",
+        r"$\sim 10^9$ Tokens (QuArch curated corpus)",
         r"$\sim 10^7$ Records (CircuitNet / OpenROAD)",
     ]
 
