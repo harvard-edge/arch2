@@ -1,13 +1,12 @@
 """
 Domain Corpus Volume & Data Scarcity Spectrum Plot Script (Chapter 4)
 
-Literature Calibration & Citation Provenance:
----------------------------------------------
-1. Natural Language Web Text (~10^13 Tokens): Meta Llama-3 (2024); RedPajama-V2 (Together AI, 2023) [@TogetherAI2023RedPajama].
-2. General Software Code (~10^11 Tokens): StarCoder 2 & The Stack v2 (Lozhkov et al., 2024) [@LozhkovEtAl2024TheStackV2].
-3. Hardware RTL Code (~10^9 Tokens): OpenRTLSet (Wang et al., 2025) [@WangEtAl2025OpenRTLSet].
-4. Curated Architecture Data (~10^9 Tokens): QuArch curated architecture corpus [@PrakashEtAl2025QuArch].
-5. Physical EDA Signoff Traces (~10^7 Records): CircuitNet (Chai et al., 2022) [@ChaiEtAl2022CircuitNet].
+Literature Calibration & Citation Provenance (per-tier units differ):
+1. Natural Language Web Text (~1.5e13 tokens): Llama 3 training scale (Meta, 2024); RedPajama (Together AI, 2023) [@MetaAI2024Llama31; @TogetherAI2023RedPajama].
+2. General Software Code (~9e11 tokens): The Stack v2 / StarCoder2 [@LozhkovEtAl2024TheStackV2].
+3. Synthesizable Hardware RTL (~1.31e5 modules): OpenRTLSet [@WangEtAl2025OpenRTLSet].
+4. Physical Layout Samples (~1.02e4 layouts): CircuitNet [@ChaiEtAl2022CircuitNet].
+5. Curated Architecture QA (~1.5e3 validated pairs): QuArch v0.1 [@PrakashEtAl2025QuArch].
 
 Dataset Receipt: book/contents/chapters/04-representations/data/fig-architecture-data-scarcity.csv
 Output Figure:   book/contents/chapters/04-representations/images/fig-architecture-data-scarcity.svg
@@ -75,29 +74,29 @@ def main():
     bars = ax.barh(
         y_pos[::-1],
         tokens,
-        left=1e6,
+        left=1e2,
         color=colors_bars,
         alpha=0.85,
         height=0.52,
         zorder=3,
     )
     ax.set_xscale("log")
-    ax.set_xlim(1e6, 5e14)
+    ax.set_xlim(1e2, 5e14)
     ax.set_yticks(y_pos[::-1])
     ax.set_yticklabels(categories, fontsize=6.2, fontweight="bold", color=COLORS["ink"])
     ax.set_xlabel(
-        "Corpus Volume Scale (Tokens / Records - Log Scale)",
+        "Corpus Scale (log; units differ per tier)",
         fontsize=7.0,
         color=COLORS["ink"],
     )
     ax.grid(True, which="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     labels_fmt = [
-        r"$\sim 10^{13}$ Tokens (Llama-3 / RedPajama 3T)",
+        r"$\sim 1.5{\times}10^{13}$ Tokens (Llama-3 / RedPajama)",
         r"$\sim 9{\times}10^{11}$ Tokens (The Stack v2 / StarCoder2)",
-        r"$\sim 10^9$ Tokens (OpenRTLSet / Verilog)",
-        r"$\sim 10^9$ Tokens (QuArch curated corpus)",
-        r"$\sim 10^7$ Records (CircuitNet / OpenROAD)",
+        r"$\sim 1.3{\times}10^5$ Modules (OpenRTLSet)",
+        r"$\sim 10^4$ Layouts (CircuitNet)",
+        r"$\sim 1.5{\times}10^3$ QA Pairs (QuArch v0.1)",
     ]
 
     for bar, val, lbl in zip(bars, tokens, labels_fmt):
