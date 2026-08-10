@@ -346,17 +346,17 @@ def add_kernel(x_ptr, y_ptr, z_ptr, N, BLOCK_SIZE: tl.constexpr):
     tl.store(z_ptr + offsets, z, mask=mask)
 ```
 
-During compilation, Triton's MLIR pipeline passes the block representation from high-level ASTs through structured CDFGs down to LLVM IR, where the RISC-V backend lowers the block operations into RVV 1.0 vector primitives.
+During compilation, Triton's MLIR pipeline passes the block representation from high-level ASTs through structured CDFGs down to LLVM IR; a RISC-V backend would then lower the block operations into RVV 1.0 vector primitives, a CPU-targeting path that as of this writing exists only as experimental community work rather than a mainline shipped flow.
 
 ::: {.callout-failure-mode title="The un-amortized offload wall"}
 **The trap.** In an illustrative scenario consistent with the model above, a mobile NPU adds a 1024-MAC systolic tensor engine capable of $100\times$ local matrix-multiply acceleration ($A=100$) over scalar RISC-V execution, and the team treats that local factor as the expected system speedup.
 
-**The mechanism.** Because the runtime invokes the NPU through kernel-mode driver calls for each small layer (payload $g=500$ operations), launch latency ($o=1500$ cycles) and DMA descriptor setup dominate execution. Instead of $100\times$, the modeled system runs at $S(g) = 0.32\times$, slower than baseline scalar execution.
+**The mechanism.** Because the runtime invokes the NPU through kernel-mode driver calls for each small layer (payload $g=500$ operations), launch latency ($o=1500$ cycles) dominates execution before any DMA descriptor setup is even counted. Instead of $100\times$, the modeled system runs at $S(g) = 0.33\times$, slower than baseline scalar execution.
 
 **The lesson.** Local compute acceleration ($A$) cannot overcome un-amortized startup ($o$) and transfer ($b$) penalties. Offload mechanisms must be co-designed with compiler layer fusion so that payload size $g$ stays well above the break-even threshold.
 :::
 
-Assembly and vector loops provide explicit control over hardware execution, but we must also ensure that higher-level compiler paths generate equivalent code semantics.
+Assembly and vector loops provide explicit control over hardware execution, but we must also ensure that higher-level compiler paths generate equivalent code semantics. The kernel below is an author-constructed illustration of the RVV 1.0 stripmining pattern, not captured compiler output.
 
 ```assembly
 # RISC-V Vector (RVV 1.0) 32-bit floating-point vector addition kernel
@@ -368,13 +368,14 @@ Assembly and vector loops provide explicit control over hardware execution, but 
     vfadd.vv v24, v8, v16             # Vector floating-point addition (z = x + y)
     vse32.v v24, (a2)                 # Store vector z (z_ptr + offset)
     sub     a3, a3, t0                # Decrement remaining element count N
-    add     a0, a0, t0                # Advance x_ptr by vector length
-    add     a1, a1, t0                # Advance y_ptr by vector length
-    add     a2, a2, t0                # Advance z_ptr by vector length
+    slli    t1, t0, 2                 # Byte offset = elements processed x 4 (e32)
+    add     a0, a0, t1                # Advance x_ptr by processed bytes
+    add     a1, a1, t1                # Advance y_ptr by processed bytes
+    add     a2, a2, t1                # Advance z_ptr by processed bytes
     bnez    a3, .Lloop                # Loop while N > 0
 ```
 
-We consider any architecture claim fundamentally incomplete until our workload semantics pass through compiler (Triton, LLVM) and runtime transformations and we measure the resulting executable natively on our declared target. For the Lighthouse architecture, we introduce a new interface check using a fully compiler-generated, end-to-end execution run that verifies correctness while precisely measuring array-cycle ordering, latency, traffic, and bandwidth against our pinned target configuration. If we expect portability and continued relevance in our designs, we must ensure successful rebuilding and execution even as our compilers, runtimes, libraries, interfaces, and underlying hardware inevitably evolve.
+We consider any architecture claim fundamentally incomplete until our workload semantics pass through compiler (Triton, LLVM) and runtime transformations and we measure the resulting executable natively on our declared target. For the Lighthouse architecture, the target study would add an interface check built on a fully compiler-generated, end-to-end execution run, one that verifies correctness while measuring array-cycle ordering, latency, traffic, and bandwidth against a target configuration that still must be pinned. If we expect portability and continued relevance in our designs, we must ensure successful rebuilding and execution even as our compilers, runtimes, libraries, interfaces, and underlying hardware inevitably evolve.
 
 We should clarify that this executable path does not represent an exhaustive system-software inventory. Our target architectures will routinely depend on a complex web of operating-system services, device drivers, firmware, memory management units, synchronization primitives, and deployment configurations. We cannot allow a localized kernel benchmark to conveniently bypass the very infrastructure required to validate its performance claims. Our target studies must rigorously retain both the hardware context and the lowering path. We must meticulously record the kernel structure, the execution schedule, the compiler (Triton, LLVM) and runtime versions, applicable driver and firmware states, the exact interface, and the specific hardware revision that produced every single result.
 
