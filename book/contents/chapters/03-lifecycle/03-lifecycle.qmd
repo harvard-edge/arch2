@@ -20,7 +20,7 @@ format:
 AI can generate more candidates and invoke more tools than any architect can manually inspect. How must the work be organized so that promising outputs become defensible design decisions rather than an uncurated volume of unverified artifacts?
 :::
 
-As systems architects, we constantly blend explicit artifacts with tacit knowledge (unwritten experience and architectural intuition) [@Polanyi1966TacitDimension]. In traditional computer architecture (Architecture 1.0), we relied on manual human intuition, manually constructed simulation sweeps, and ad hoc engineering reviews to explore microarchitectural design spaces. While our requirements, models, and review notes capture much of the design, we supply the rest directly from memory. With the rise of AI-native co-design (Architecture 2.0), generative models and autonomous agent loops accelerate our exploration across every layer of the hardware-software stack.
+As systems architects, we constantly blend explicit artifacts with tacit knowledge (unwritten experience and architectural intuition) [@Polanyi1966TacitDimension]. Established architecture practice already combines expert judgment with structured requirements, automated sweeps, simulation infrastructure, verification plans, and formal review. Even so, requirements, models, and review notes capture only part of the reasoning, and experienced engineers still supply crucial context from memory. Today's learned tools can assist with proposing candidates, screening local choices, and coordinating selected tool actions. The broader Architecture 2.0 program asks how to organize those capabilities across a complete workflow without claiming that autonomous full-stack design is already routine.
 
 Generative models can propose heterogeneous subsystem candidates far faster than manual review can absorb them. However, without a disciplined life cycle, automated tools can subtly shift the research question, submit invalid microarchitectural configurations, or accept a clean tool execution that recorded no valid measurements. They might optimize a misleading proxy metric [@AmodeiEtAl2016Concrete; @Goodhart1975MonetaryManagement] or extrapolate a result beyond its generating conditions. If we rely solely on a raw sequence of ad hoc prompts and unmonitored tool invocations, we lose visibility into where these failures occur.
 
@@ -96,19 +96,19 @@ The six responsibilities defined above now become six working stages, examined o
 
 Every architecture study begins with high-level intent, yet converting a vague goal like optimizing real-time spatial tracking into an actionable design space determines whether an engineering study succeeds or fails. Without explicit scope, declared comparators, and hard constraints, automated search algorithms optimize misleading proxy metrics or propose illegal microarchitectural configurations. Formulation transforms raw intent into a precise architectural question bound by machine-readable component metadata contracts (such as IP-XACT / IEEE 1685) and strict hardware-software contracts. When we define component metadata, bus interfaces, register maps, and memory-mapped address spaces up front, we establish what software can safely assume and what hardware must reliably deliver. A scoped plan establishes these requirements before any search space exploration begins, fixing the concrete parameters our mobile XR SoC study assigns (@tbl-bounded-study-contract). The contract establishes our core Question comparing 3 MiB and 4 MiB L2 cache candidates against our 2 MiB baseline under strict Hard constraints (a 3\ W TDP envelope, a $1.5\text{ mm}^2$ SRAM macro area limit, and a 2.5\ ns access latency bound).
 
-The same contract specifies our Objectives (minimizing 99th-percentile frame latency), workload Conditions (XRBench, SPEC CPU2017, and MLPerf benchmarks running on an RV64GCV software image), Planned checks in Verilator, gem5, and SCALE-Sim, and a strict Budget of four execution sweeps. When we fix these declarations before choosing a search algorithm, we rule out invalid configurations and identify the true Pareto set of non-dominated alternatives where improving latency does not violate our power envelope [@Deb2001MultiObjective].
+The same contract specifies our objective, workload conditions, planned checks, and a strict budget of four cycle-level execution attempts. We use one versioned XRBench trace and one pinned RV64GCV software image. gem5 measures frame-time, cache, and memory-system behavior; a declared SRAM model estimates area and access time; and Verilator checks functional behavior for any candidate that advances. Fixing those declarations lets us enumerate this small legal space directly and report the observed comparison without claiming a complete Pareto frontier.
 
 | Declaration | Prospective mobile XR SoC subsystem study |
 | --- | --- |
 | **Question** | Which 3 MiB and 4 MiB L2 candidates should advance to RTL evaluation for the declared XR workload? |
 | **Comparator** | The current 2 MiB baseline. |
 | **Scope** | One subsystem capacity decision inside the XR compute block. |
-| **Permitted changes** | L2 capacity and associated NPU tile buffer partitioning may take values 2 MiB, 3 MiB, or 4 MiB over AMBA AXI5 bus handshakes. |
+| **Permitted changes** | L2 capacity may take values 2 MiB, 3 MiB, or 4 MiB. Banking, NPU tile buffers, core count, compiler flags, interfaces, and clocking remain fixed. |
 | **Hard constraints** | Modeled subsystem power must not exceed 3\ W. The SRAM macro must not exceed $1.5\text{ mm}^2$ and its access time must not exceed 2.5\ ns. |
 | **Objectives** | Reduce 99th-percentile frame time while limiting added power and area. |
-| **Conditions** | A versioned XRBench snapshot alongside SPEC CPU2017 and MLPerf traces, an RV64GCV RISC-V software image compiled via Apache TVM, IREE, LLVM, or MLIR, and recorded tool versions. |
-| **Planned checks** | Run the functional regression suite in Verilator and measure 99th-percentile frame time in gem5 and SCALE-Sim (an analytical and cycle-level hybrid systolic array memory simulator). |
-| **Budget** | Four cycle-level execution sweeps in total. |
+| **Conditions** | One versioned XRBench trace, one RV64GCV RISC-V software image compiled with a pinned LLVM toolchain, and recorded model and tool versions. |
+| **Planned checks** | Estimate SRAM area and access time with the declared SRAM model; measure 99th-percentile frame time, cache behavior, and memory traffic in gem5; run the functional regression suite in Verilator for any candidate that advances. |
+| **Budget** | Four cycle-level gem5 execution attempts in total. One attempt is reserved to replace an infrastructure-invalid run; if no replacement is needed, the study ends after the three declared configurations. Analytical and RTL checks are costed separately. |
 | **Stopping conditions** | Stop when the intended decision is resolved or the run budget is spent. |
 | **Intended decision** | Recommend at most one subsystem capacity configuration for a later gate-level RTL study. |
 | **Exclusions** | Subsystem clock domain changes, prefetching algorithms, thermal signoff, and product-level cost. |
@@ -122,9 +122,9 @@ Our claim forces us to make the connection between mechanism and system-level ou
 
 ### Stage 2. Exploring Alternatives
 
-Once we bound our architecture question, we face an exponentially large search space spanning cache configurations, compute tile counts, buffer partitions, and compiler flags. Exhaustive simulation across this combinatorial space is computationally impossible, yet naive sampling risks missing non-dominated Pareto trade-offs [@Deb2001MultiObjective]. A candidate configuration is non-dominated on a Pareto frontier when we cannot improve one objective (such as reducing 99th-percentile frame latency) without worsening another (such as increasing dynamic power or die area).
+Once we bound our architecture question, exploration must remain inside the declared legal space. This example contains only three L2 capacities, so enumeration is more defensible than introducing a search method. Larger studies may span compute tile counts, buffer partitions, compiler choices, and other coupled variables, but adding any of those here would change the question and require a new formulation. When a larger study does compare several objectives, a candidate is non-dominated on the observed Pareto set when no evaluated alternative improves one objective without worsening another [@Deb2001MultiObjective].
 
-Exploration systematically searches the declared legal design space using explicit parameter representations and multi-agent sampling while pruning invalid configurations early. When we structure parameter spaces through discrete grids, Abstract Syntax Tree (AST) compiler flag mutations, Control-Data Flow Graph (CDFG) schedule transformations, or continuous surrogate bounds, we prevent search algorithms from wasting compute budget on unfeasible subsystem combinations. Our exploration record captures which boundary cases we evaluated, which regions we pruned, and what remains unexplored.
+Exploration systematically covers the declared legal design space using explicit parameter representations while pruning invalid configurations early. In this study, that means evaluating the three legal L2 capacities and changing nothing else. In a broader study, discrete grids, Abstract Syntax Tree (AST) compiler mutations, Control-Data Flow Graph (CDFG) schedule transformations, or continuous surrogate bounds may represent additional choices. The exploration record must still show which cases we evaluated, which regions we pruned, and what remains unexplored.
 
 Legal does not mean independent. When we increase capacity in one subsystem, we alter access time, banking, interconnect distance, leakage, floorplan pressure, and the software-visible benefit of another optimization. We explore coupled alternatives rather than selecting uncoordinated parameters across CPU cores, NPUs, memory, and software compilers. We record why we sampled or pruned each region and which dependency drove that choice. If a coupling changes a declared workload, interface, constraint, or legal action, the study returns to formulation.
 
@@ -132,7 +132,7 @@ Legal does not mean independent. When we increase capacity in one subsystem, we 
 
 A promising candidate on paper or in a parameter dictionary cannot yield empirical evidence until it is translated into an executable representation. Implementation bridges abstract parameter selections and concrete tool execution by instantiating transaction-level models, generating synthesizable RTL, and compiling target software binaries. Transaction-level interconnect handoffs between IP blocks rely on SystemC TLM-2.0, an IEEE standard transaction-level modeling framework, using socket and generic payload schemas to model memory-mapped bus transactions across heterogeneous subsystems. Synthesizable RTL blocks and interconnect wrappers are formatted into synthesizable SystemVerilog, while software images are packaged alongside explicit ISA extension flags.
 
-To guarantee reproducibility, every tool invocation produces an execution record, an immutable structured audit log joining authorized requests, scheduler jobs, input parameters, execution status, returned artifacts, computational costs, and terminal failure causes into a single inspectable object.
+To support replay and later reproducibility attempts, every tool invocation produces an execution record, an immutable structured audit log joining authorized requests, scheduler jobs, input parameters, execution status, returned artifacts, computational costs, and terminal failure causes into a single inspectable object.
 
 We must confirm that each tool actually used our requested parameters. A syntactically valid configuration can deceive us by selecting the wrong top-level module or skipping the precise workload region that defines our comparison. This distinguishes an infrastructure failure from a candidate failure. If a simulator crashes or a script is malformed, we only know that our requested test failed to run correctly. These infrastructure execution failures provide no evidence regarding the quality of our architectural candidate. Only a valid execution produces a result we can trust to evaluate or reject a design. The stakes here are old and documented. Data General's Eagle team invested months in a microcode simulator that had to behave like the real machine precisely so that debugging against it would mean anything, with scarce prototype hardware driving the investment [@Kidder1981SoulOfANewMachine].
 
@@ -146,96 +146,49 @@ We must confirm that each tool actually used our requested parameters. A syntact
 
 ### Stage 4. Evaluating Candidate Evidence
 
-Once implementation confirms that our tool execution completed cleanly, we turn to evaluating candidate evidence against declared design constraints. Yet architectural evaluation presents a trade-off between simulation throughput and physical accuracy. No single tool can simultaneously model cycle-accurate DRAM queueing, RTL functional assertions, and gate-level static timing across millions of workload cycles within a practical runtime envelope. Evaluation resolves this tension by orchestrating a multi-fidelity tool spectrum, measuring raw execution outputs against the precise power, performance, area, and timing boundaries established during formulation.
+Once implementation confirms that our tool execution completed cleanly, we turn to evaluating candidate evidence against declared design constraints. Architectural evaluation trades turnaround against the properties each tool can observe. No single tool can simultaneously model cycle-accurate DRAM queueing, RTL functional assertions, and gate-level static timing across millions of workload cycles within a practical runtime envelope. Evaluation therefore combines specialized tools and interprets each return against the power, performance, area, timing, or correctness question it was configured to examine.
 
 
-The multi-fidelity evaluation spectrum trades turnaround latency per candidate against normalized physical and architectural fidelity (@fig-eval-fidelity-latency). Our workflow navigates this trade-off in stages. Early analytical models occupy the fastest tier at moderate fidelity, rapidly filtering out candidates that violate physical Static Random-Access Memory (SRAM) area or memory bandwidth bounds. Architectural simulators sit a tier higher, trading seconds per candidate for cycle counts, cache miss ratios, and Network-on-Chip (NoC) queueing latencies under strict Dynamic Random-Access Memory (DRAM) timing parameters. High-speed Register-Transfer Level (RTL) simulation buys a further fidelity step at minutes per candidate, verifying bit-exact functional correctness alongside SystemVerilog Assertions (SVA) and formal property checkers.
+The tools in @fig-eval-fidelity-latency do not form a single ranking toward architectural truth. They expose different properties at different costs. Analytical models can reject candidates against encoded bounds. SCALE-Sim and Timeloop focus on accelerator cycles, utilization, and traffic under their models. gem5 exposes configured microarchitectural timing, while Verilator executes RTL behavior under a supplied harness. FireSim accelerates a mapped target model, and implementation or signoff flows examine selected physical properties under declared libraries, constraints, modes, and corners.
 
-Finally, Field-Programmable Gate Array (FPGA) accelerated simulation adds another fidelity step at tens of minutes per candidate, while physical signoff Electronic Design Automation (EDA) toolchains sit at the top of the curve, spending hours or days per candidate to approach physical accuracy. Handoffs to these signoff tools exchange cell timing, dynamic power, leakage, and pin capacitance tables via Liberty (`.lib`) schemas for TSMC N7 and 3\ nm-class nodes, extracting true dynamic power within our 3\ W TDP target. When we structure evaluation along this curve, we reject unviable designs at millisecond latencies before committing compute budget to multi-hour signoff runs.
+Those paths can still be staged economically. Cheap bounds reject candidates before expensive runs, while later checks target properties the earlier models did not observe. Handoffs to implementation tools exchange cell timing, dynamic power, leakage, and pin-capacitance data through Liberty (`.lib`) libraries. The resulting power estimate remains conditioned on activity, parasitics, libraries, operating modes, and corners. Staging controls cost; it does not make one tool's return a more complete version of another's.
 
 ```{python}
 #| label: fig-eval-fidelity-latency
 #| fig-cap: |
-#|   **Evaluation tool fidelity versus turnaround latency across life-cycle stages.** Constructed illustrative values, not measurements. The latencies are order-of-magnitude placeholders and the vertical axis is a stand-in for how much of the physical design a tier actually resolves, which no single instrument reports. Read the ordering of the tiers, which is the durable part; a project's own numbers will differ. Early analytical models yield rapid feedback (~1\ ms to 100\ ms) with moderate physical fidelity, while full physical signoff requires hours to days per candidate to reach physical accuracy.
+#|   **Architecture tools answer different questions rather than occupying one total ranking.** The matrix identifies the representative property focus of each tool class. A marked cell means that the class can contribute evidence about that property when configured appropriately; it does not imply complete coverage or direct comparability with another row.
 #| out-width: "100%"
-#| fig-alt: "Scatter plot showing physical and architectural fidelity (0.25 to 1.0) versus turn-around latency per candidate (1 ms to 1 day log scale) across analytical models, gem5, Verilator, FireSim, and Cadence/Synopsys EDA flows."
+#| fig-alt: "Matrix with tool classes as rows and property classes as columns. Marks associate analytical models with bounds, accelerator simulators with cycles and traffic, gem5 with microarchitectural timing, Verilator with RTL behavior, FireSim with mapped execution, and implementation and signoff flows with physical properties."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
-import numpy as np
-
 apply_style()
 
-tools = [
-    {"name": "Analytical / roofline", "latency": 0.001, "fidelity": 0.35, "color": COLORS["methods"]},
-    {"name": "SCALE-Sim / Timeloop", "latency": 0.1, "fidelity": 0.62, "color": COLORS["methods"]},
-    {"name": "gem5 / Spike", "latency": 15.0, "fidelity": 0.78, "color": COLORS["workload"]},
-    {"name": "Verilator C++ Sim", "latency": 180.0, "fidelity": 0.88, "color": COLORS["workload"]},
-    {"name": "FireSim (FPGA)", "latency": 1200.0, "fidelity": 0.94, "color": COLORS["evidence"]},
-    {"name": "Yosys / OpenROAD", "latency": 7200.0, "fidelity": 0.96, "color": COLORS["evidence"]},
-    {"name": "Synopsys / Cadence Signoff", "latency": 86400.0, "fidelity": 0.99, "color": COLORS["constraints"]},
-]
+tools = ["Analytical / Roofline", "SCALE-Sim / Timeloop", "gem5", "Verilator", "FireSim", "Implementation / signoff"]
+properties = ["Encoded\nbounds", "Accelerator\ncycles & traffic", "Microarchitectural\ntiming", "RTL\nbehavior", "Mapped\nexecution", "Physical\nproperties"]
+coverage = {
+    "Analytical / Roofline": [0],
+    "SCALE-Sim / Timeloop": [1],
+    "gem5": [2],
+    "Verilator": [3],
+    "FireSim": [3, 4],
+    "Implementation / signoff": [5],
+}
 
 fig, ax = plt.subplots(figsize=(6.4, 3.3))
-fig.subplots_adjust(left=0.14, right=0.95, top=0.88, bottom=0.18)
+fig.subplots_adjust(left=0.24, right=0.98, top=0.94, bottom=0.22)
 
-latencies = [t["latency"] for t in tools]
-fidelities = [t["fidelity"] for t in tools]
-colors = [t["color"] for t in tools]
+for y, tool in enumerate(tools):
+    for x in coverage[tool]:
+        ax.scatter(x, y, s=95, color=COLORS["evidence"], edgecolor="white", linewidth=0.9, zorder=3)
 
-ax.scatter(
-    latencies,
-    fidelities,
-    c=colors,
-    s=70,
-    zorder=3,
-    edgecolor="white",
-    linewidth=0.9,
-)
-
-sorted_idx = np.argsort(latencies)
-ax.plot(
-    np.array(latencies)[sorted_idx],
-    np.array(fidelities)[sorted_idx],
-    color=COLORS["ink"],
-    linestyle="--",
-    linewidth=1.0,
-    alpha=0.7,
-    zorder=2,
-)
-
-offsets = [
-    (0.0012, 0.33),
-    (0.12, 0.60),
-    (18.0, 0.76),
-    (220.0, 0.86),
-    (1400.0, 0.92),
-    (1200.0, 0.985),
-    (95000.0, 0.94),
-]
-for i, t in enumerate(tools):
-    ax.text(
-        offsets[i][0],
-        offsets[i][1],
-        t["name"],
-        fontsize=5.8,
-        fontweight="bold",
-        color=COLORS["ink"],
-        va="center",
-    )
-
-ax.set_xscale("log")
-ax.set_xlim(5e-4, 1.2e6)
-ax.set_ylim(0.25, 1.05)
-
-xticks = [1e-3, 1e-1, 10, 3600, 86400]
-xtick_labels = ["1 ms", "100 ms", "10 s", "1 hour", "1 day"]
-ax.set_xticks(xticks)
-ax.set_xticklabels(xtick_labels, fontsize=5.8)
-
-ax.set_xlabel("Evaluation latency per candidate (seconds, log scale)", fontsize=6.5, color=COLORS["ink"])
-ax.set_ylabel("Physical & architectural fidelity (normalized)", fontsize=6.5, color=COLORS["ink"])
-
+ax.set_xlim(-0.5, len(properties) - 0.5)
+ax.set_ylim(len(tools) - 0.5, -0.5)
+ax.set_xticks(range(len(properties)))
+ax.set_xticklabels(properties, fontsize=5.8)
+ax.set_yticks(range(len(tools)))
+ax.set_yticklabels(tools, fontsize=6.1)
+ax.set_xlabel("Representative property focus", fontsize=6.5, color=COLORS["ink"])
 ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
 for spine in ["top", "right"]:
@@ -245,7 +198,7 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 plt.show()
 ```
 
-While higher fidelity strengthens our answer to the declared question, it never widens our decision scope. A cycle-level result in gem5 does not authorize full silicon fabrication if our study only promised a recommendation for gate-level RTL evaluation. Our evaluation can end in several legitimate states. We must keep invalid executions, unresolved comparisons, and rejected candidates visible for subsequent review.
+Stronger evidence for one property never widens our decision scope by itself. A cycle-level result in gem5 does not authorize full silicon fabrication if our study only promised a recommendation for gate-level RTL evaluation. Our evaluation can end in several legitimate states. We must keep invalid executions, unresolved comparisons, and rejected candidates visible for subsequent review.
 
 We must declare tool comparability study by study. Software engineering benchmarks like SWE-bench, an evaluation framework for software engineering tasks [@JimenezEtAl2024SWEBench], evaluate functional state using a single test harness, but architecture evaluation lacks any single test that simultaneously resolves performance, power, area, timing, physical feasibility, and system-level trade-offs. Instead, we aggregate feedback across a spectrum of specialized tools.
 
@@ -263,7 +216,7 @@ An improved top-line metric differs from a proven physical mechanism. We should 
 
 ### Stage 6. Reviewing and Deciding Handoffs
 
-The final stage of our life cycle bridges empirical evidence to organizational commitment. An extensive collection of simulation logs and Pareto curves does not automatically constitute a design decision; an architect must judge whether accumulated proof justifies advancing a candidate toward RTL synthesis or silicon tapeout. Review synthesizes exploration trajectory, verified evaluation evidence, physical explanations, and residual risk into an audit-ready study record that supports an explicit design decision.
+The final stage of our life cycle bridges empirical evidence to an architectural recommendation and, when warranted, an organizational commitment. An extensive collection of simulation logs and Pareto curves does not automatically constitute either. The architect judges what technical recommendation the evidence supports. A named commitment authority then decides whether the organization should advance the candidate toward RTL synthesis or silicon tapeout. Review synthesizes the exploration trajectory, qualified evaluation evidence, physical explanations, and residual risk into a study record that supports both judgments without conflating them.
 
 Through review, we might advance one candidate, reject another, or request an entirely new comparison. We may revise the original question, narrow our conclusion, or simply stop because we exhausted our budget. An honest, unresolved result remains a useful outcome provided our study record clearly explains why the question remains open.
 
@@ -281,7 +234,7 @@ As work moves forward, backward return paths route repairs to the owning stage w
 
 When we conduct parallel work, we preserve the same study state across branches. We merge results only after verifying that their assumptions, interfaces, and permitted changes remain compatible. When a change invalidates a result, we do not erase the data, but we prevent that outdated result from silently carrying forward as current evidence.
 
-Every loop we run also needs a defensible way to end. Our scoped plan declares the stopping conditions up front, and the design loop honors them. We stop when the intended decision is resolved, when the run budget is spent, when every legal candidate has been rejected, or when feedback shows that the question itself needs reformulation. In the L2 capacity study, four cycle-level sweeps bound the effort. If two sweeps settle the comparison, we stop early and bank the remaining budget. If all four run and the 3 MiB and 4 MiB candidates remain indistinguishable on 99th-percentile frame time under the declared conditions, we do not quietly run a fifth. We either close the study with an unresolved verdict or return to formulation to sharpen the question.
+Every loop we run also needs a defensible way to end. Our scoped plan declares the stopping conditions up front, and the design loop honors them. We stop when the intended decision is resolved, when the run budget is spent, when every legal candidate has been rejected, or when feedback shows that the question itself needs reformulation. In the L2 capacity study, three valid cycle-level executions cover the baseline and two alternatives. A fourth attempt may replace one infrastructure-invalid run, but it may not expand the legal space or rescue an unfavorable comparison. If the three valid executions leave the 3 MiB and 4 MiB candidates indistinguishable on 99th-percentile frame time under the declared conditions, we close the study with an unresolved verdict or return to formulation to sharpen the question.
 
 Convergence and churn can look alike from inside the loop. When successive iterations change the candidate ranking without changing the decision, the loop has converged and further work buys nothing. When successive iterations keep reopening formulation, the problem is not the loop's speed but its question. We watch for both signals, and we treat a loop that cannot stop as a formulation defect rather than an evaluation shortfall.
 
@@ -289,7 +242,7 @@ Stopping is a result, not a failure. A study that ends with a resolved decision,
 
 ## Design-Loop Cards and Documentation {#sec-design-loop-card}
 
-While targeted return paths route design revisions to the correct stage, we still need an operational mechanism to track how these tool executions evolve. As AI agents autonomously generate and test hundreds of subsystem variants, maintaining transparent design provenance becomes a central governance challenge. Without a structured record, automated exploration degenerates into uninspectable shadow state. To establish clear architectural accountability, we introduce the Design-Loop Card, a standardized index that binds automated tool execution directly to human design intent, verified evidence, and explicit signoff authority.
+While targeted return paths route design revisions to the correct stage, we still need an operational mechanism to track how these tool executions evolve. As automated methods generate and test many subsystem variants, maintaining transparent design provenance becomes a central governance challenge. Without a structured record, automated exploration degenerates into uninspectable shadow state. To establish clear architectural accountability, we introduce the Design-Loop Card, a standardized index that binds automated tool execution directly to human design intent, qualified evidence, and explicit approval rights.
 
 We adapt the reporting methodology of model cards and datasheets for datasets, tools that make intended use and known limits readily reviewable [@MitchellEtAl2019ModelCards; @GebruEtAl2021Datasheets]. Because our designs evolve rapidly, our architecture studies must preserve the changing design state, tool conditions, failed checks, and the explicit authority for the next action. To manage these dynamic requirements, our study record makes our architectural state and its revisions fully inspectable.
 
@@ -342,7 +295,7 @@ Even when we enforce stage boundaries and avoid these common pitfalls, fundament
 
 - **How can lightweight early-stage screening avoid premature life-cycle overhead while guaranteeing that no candidate reaches commitment without full stage signoff?** Demanding complete IP-XACT specs, SystemVerilog assertion checks, and gate-level static timing signoff during early exploration degrades candidate throughput significantly. The open problem is a life-cycle policy that scales verification rigor proportionally from initial surrogate screening up to full physical signoff under human commitment authority.
 
-- **What architectural safeguards prevent circular self-verification when the same AI agent proposes, implements, and interprets a candidate design?** When a generative model drafts RTL, configures simulation scripts, and synthesizes the explanation, it risks propagating shared training biases or missing its own implementation flaws. The open problem is operational boundaries that enforce independent verifier agents or mandatory human architect review at consequential decision handoffs.
+- **What architectural safeguards prevent circular self-verification when the same AI agent proposes, implements, and interprets a candidate design?** When a generative model drafts RTL, configures simulation scripts, and synthesizes the explanation, it risks propagating shared training biases or missing its own implementation flaws. The open problem is operational boundaries that establish distinct evidence, instruments, assumptions, and failure modes at consequential handoffs. A separate reviewer or model does not create independence when it relies on the same underlying evidence.
 
 ## Summary
 

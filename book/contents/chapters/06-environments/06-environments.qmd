@@ -26,13 +26,13 @@ Suppose we want to evaluate a heterogeneous mobile XR SoC targeting a TSMC N7 or
 
 Even if our initial request explicitly identifies which tools to use, it is rarely ready to execute as-is. We have to translate each conceptual candidate into the exact configuration format our tool expects. The workload, software stack, shared libraries, process assumptions, and specific tool versions all need to travel alongside that configuration. We also know that long-running jobs will sit in queues and wait for licenses. Tools will crash, time out, drop reports, or even falsely report success after running the wrong top-level design. When the dust settles, our returned files might trickle back hours later and out of order.
 
-This is exactly why we build an enclosing environment to handle these messy mechanics. As the third technical building block of Architecture 2.0, tool-connected execution environments provide the containerized execution harnesses that insulate automated loops from raw CAD toolchain complexity. A robust environment proves that our requested work hit the specified tool in a known, named state, and it records what that attempt produced. However, the environment does not guarantee that the resulting metric is scientifically valid, nor does it tell us if the candidate is good. We must maintain this distinction. Executing a well-formed run is not the same as supporting an architectural claim. To interpret the data and judge the claim itself, we need targeted verification feedback in @sec-feedback-verification-trust that sits well outside the environment's responsibilities.
+This is exactly why we build an enclosing environment to handle these messy mechanics. As the third technical building block of Architecture 2.0, tool-connected execution environments provide the containerized execution harnesses that insulate automated loops from raw CAD toolchain complexity. A robust environment records that our requested work reached the specified tool in a known, named state and preserves what that attempt produced. It does not establish that the resulting metric is scientifically valid, nor does it tell us whether the candidate is good. We must maintain this distinction. Executing a well-formed run is not the same as supporting an architectural claim. To interpret the data and judge the claim itself, we need targeted verification feedback in @sec-feedback-verification-trust that sits well outside the environment's responsibilities.
 
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
 
 - Distinguish tools and simulators from their wrappers, harnesses, and enclosing environments.
-- Pin environment state across hardware, software, and tools to guarantee reproducible execution.
+- Pin environment state across hardware, software, and tools to support replay, expose drift, and make reproducibility claims testable.
 - Design typed tool interfaces that precisely translate intent and return structured artifacts.
 - Coordinate multi-tool asynchronous workflows within strict resource and permission boundaries.
 - Separate execution failures from design-limit violations while preserving lineage.
@@ -116,7 +116,7 @@ When we introduce larger hardware and software changes, we must explicitly track
 
 ![**Evaluated software and hardware artifacts retain explicit parent transformation lineage.** Software and hardware artifacts derived from our proposals must retain their transformation history, and when we change an input, we create a new evaluation identity.](images/fig-artifact-lineage){#fig-artifact-lineage fig-alt="Our single Lighthouse intent branches into a software variant and a hardware variant. The software compiles into an identified binary, and the hardware elaborates into an identified RTL artifact. Our evaluation instance binds both artifacts to the tool and version, workload, and operating conditions. Hashes and evaluation keys distinguish exact artifacts and paths but do not prove functional equivalence or reproducibility."}
 
-A single root Lighthouse intent branches into two parallel transformation paths (@fig-artifact-lineage): a software variant that compiles through an identified toolchain into a specific executable binary, and a hardware variant that elaborates into a uniquely identified RTL artifact. Our evaluation instance binds this compiled binary and elaborated RTL artifact together under a single evaluation key that incorporates tool versions, workload snapshots, and operating conditions. If we alter either child artifact or modify an operating condition, we generate a brand-new evaluation identity even if our high-level intent remains unchanged. Cryptographic hashes uniquely identify individual files, but only a complete evaluation key preserves the parent-child lineage necessary to guarantee reproducible hardware-software co-design.
+A single root Lighthouse intent branches into two parallel transformation paths (@fig-artifact-lineage). A software variant compiles through an identified toolchain into a specific executable binary, while a hardware variant elaborates into a uniquely identified RTL artifact. Our evaluation instance binds this compiled binary and elaborated RTL artifact together under a single evaluation key that incorporates tool versions, workload snapshots, and operating conditions. If we alter either child artifact or modify an operating condition, we generate a new evaluation identity even if our high-level intent remains unchanged. Cryptographic hashes uniquely identify individual files, while the complete evaluation key preserves the parent-child lineage needed to reconstruct the comparison and attempt a replay. It cannot guarantee that a later execution realizes identical conditions or returns identical results.
 
 Hidden or mismatched conditions can invalidate an identity match just as quickly as a stale artifact. When we receive an SRAM-model return, it carries circuit and technology assumptions bound to its declared process, voltage, and temperature settings. Likewise, an OpenROAD or Vivado implementation return is permanently tethered to its specific corner, mode, libraries, constraints, and flags. The returns we pull from cycle-level simulation, cache models, and power models carry equally heavy baggage, including workload, software, warm-up length, measured region, seed, checkpoint, and model configuration. Our environment must retain all conditions that apply to each tool, safely marking any nonapplicable parameters without independently judging if those conditions are sufficient. A timing-slack return of $-12\,\mathrm{ps}$ at a slow process corner is not interchangeable with the same numeric return taken at a typical corner. The number itself must travel directly alongside the conditions that give it meaning.
 
@@ -166,7 +166,7 @@ An authorized request instantiates a single attempt record, the same per-invocat
 
 When we make a request, we specify an allowed action for a candidate under declared conditions. We define each authorized try as an attempt. Every job and segment we spawn retains that attempt identifier. If our study requires an intentional repeat, we treat it as a planned new attempt; in contrast, a recovery retry is a new attempt we authorize because our prior execution failed or returned incompletely. We develop the detailed retry policy in the Recovery section later in this chapter.
 
-Our harness attaches every job or segment to its attempt right at submission, well before a late result could arrive. We keep our dependencies explicit. For instance, our compiler builds might wait for a source artifact, our RTL simulations in Verilator or VCS might wait for elaboration, and our physical implementations in OpenROAD or Vivado might wait for a mapped netlist from Yosys. We can run independent jobs concurrently, but we never let that concurrency relax their strict identity or resource limits. Because the scheduler might accept work before our harness records the job identifier, we explicitly tag our submitted work with the attempt identifier and reconcile our records with the scheduler before ever resubmitting. We rely on an idempotency key, a unique request identifier whose durable backend handling prevents a repeated submission from accidentally launching the same work twice. In our system, `submission_token` serves exactly this role. The backend records this key alongside the first admission result, ensuring that any later submission bearing the same key identifies the existing attempt or job. We design our harness to retain this key throughout the retry window, reconcile it cleanly after a crash, and outright reject its reuse for any different request [@Featonby2021IdempotentAPIs].
+Our reference runtime attaches every job or segment to its attempt at submission, before a late result can arrive. It keeps dependencies explicit. A compiler build may wait for a source artifact, an RTL simulation in Verilator or VCS may wait for elaboration, and a physical implementation in OpenROAD or Vivado may wait for a mapped netlist from Yosys. Independent jobs can run concurrently without relaxing identity or resource limits. Because the scheduler might accept work before the runtime records the job identifier, the design tags submitted work with the attempt identifier and reconciles its records with the scheduler before resubmitting. The interface uses `submission_token` as an idempotency key, a unique request identifier whose durable backend handling prevents a repeated submission from launching duplicate work. A conforming backend records the key with the first admission result, returns the existing attempt or job for later submissions carrying that key, and rejects reuse for a different request [@Featonby2021IdempotentAPIs].
 
 A backend status of `running` does not establish useful progress. Whenever the tool or backend exposes them, our harness retains advisory metrics, such as the last heartbeat or output time, the current tool stage or checkpoint, and any resources or licenses still held. We can use these indicators to support escalation or cancellation decisions, but we never let them prove architecture progress or validate a returned result.
 
@@ -188,7 +188,7 @@ Cancellation is not complete the moment we issue a stop request. Instead, our ha
 
 We enforce a finite deadline for every attempt to confirm its terminal state. Our timeouts clearly state whether they bound a queue wait, a run time, a single tool stage, or serve as an absolute wall-clock deadline. If we find that scheduler and process states disagree, or remain unknown past that deadline, our harness retains the attempt as unconfirmed, quarantines the uncertain outputs, and prevents any late writers from mutating our live state. We preserve enough of the partial state to explain exactly what happened. This explicit confirmation step is how we transform a cancellation request or timeout into a controlled runtime outcome.
 
-We built our execution interface to keep every request identifiable as it moves through validation, admission, scheduling, termination, artifact inspection, and parsing. In our common case, a single attempt produces one scheduler job, but our records deliberately keep those stages and their outcomes distinct.
+The reference execution interface keeps every request identifiable as it moves through validation, admission, scheduling, termination, artifact inspection, and parsing. In the common case, a single attempt produces one scheduler job, but the record keeps those stages and their outcomes distinct.
 
 Our records must answer precisely what we requested, what actually ran, how it ended, and what it cost us. We use the request and the run specification to define our authorized work. We then rely on our attempt, job, and segment identifiers to show us exactly what reached a backend. Our attempt record joins all these objects to the returned material and our realized cost. Keeping these concepts separate prevents a simple retry from spawning a new candidate, or an intermediate scheduler job from masquerading as a final architecture result.
 
@@ -268,7 +268,7 @@ Reusing cached timing or layout views across a design revision carries operation
 **The lesson.** Reusing stale library views or failing to flush cached tool workspace state produces deceptively clean signoff reports for failing designs. Architecture harnesses must validate PDK, LEF, and Liberty view checksums against candidate specifications before executing timing signoff.
 :::
 
-This lesson extends far beyond a single accident. For our own systems, reuse remains safe only when we guarantee that the specific conditions making the prior execution meaningful still hold true today.
+This lesson extends far beyond a single accident. Reuse remains defensible only when we can establish that the conditions making the prior execution meaningful still hold.
 
 ## Execution Records {#sec-operational-attempt-record}
 
@@ -279,7 +279,7 @@ Once we establish rules for safe state recovery, caching, and artifact reuse, we
 
 **The lineage:** The electrostatic storage tubes were notoriously unreliable, losing data as stored charge leaked and drifted. Core memory brought a marked increase in operating speed and a dramatic improvement in mean time between failures (MTBF), enabling dependable real-time operation.
 
-**The lesson.** Hardware MTBF sets an upper bound on uncheckpointed execution time. In modern AI-driven EDA workflows running large multi-node synthesis or long-vector emulation, long-running processes inevitably encounter host failures or compute preemption. Just as magnetic core memory stabilized physical execution for Whirlwind, our architecture harnesses must provide deterministic state recovery, incremental checkpointing, and immutable attempt records to prevent infrastructure failure from invalidating expensive simulation runs.
+**The lesson.** Mean time between failures is an expectation, not a hard upper bound. As uncheckpointed execution time grows relative to MTBF, the expected recovery loss from host failure or compute preemption grows with it. Long-running synthesis and emulation therefore need checkpoint intervals that balance recovery exposure against checkpoint overhead, plus retained attempt records that distinguish infrastructure loss from an architectural result.
 :::
 
 We treat this as a logical record rather than a mandate to build a new database. We can map these attributes and links directly onto our existing run directories, scheduler records, artifact stores, and review logs, provided we keep the attempt identities and their relationships recoverable. The enclosing record carries our study and request context, preserves the ordered attempt identifiers, and aggregates costs without hiding any repeated or retried work.
@@ -337,18 +337,18 @@ Chipyard, an open-source SoC design framework, makes this shared lineage visible
 
 ![**Unified design configurations anchor multi-tool evaluation flows.** This simplified view of the cited Chipyard framework retains configuration lineage while branch-specific transformations and tools produce artifacts for RTL simulation, VLSI implementation, and FPGA-accelerated simulation [@chipyard].](images/fig-chipyard-framework){#fig-chipyard-framework fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
 
-A single root configuration moves through Chisel hardware generation and FIRRTL intermediate compiler passes before fanning out into three distinct tool execution branches (@fig-chipyard-framework). The generated RTL enters software RTL simulators like Verilator or Synopsys VCS for cycle-exact functional verification; the netlist routes into physical design flows like OpenROAD for place-and-route timing signoff; and the design lowers into FireSim for FPGA-accelerated target simulation. All three branches share an identical configuration parent, yet each tool path consumes different intermediate collateral and emits non-interchangeable evaluation artifacts. Shared configuration lineage guarantees parameter traceability across tool flows, but it does not make raw returns directly comparable across different fidelity tiers without explicit condition matching.
+A single root configuration moves through Chisel hardware generation and FIRRTL intermediate compiler passes before fanning out into three distinct tool execution branches (@fig-chipyard-framework). The generated RTL enters software RTL simulators like Verilator or Synopsys VCS for cycle-exact functional verification; the netlist routes into physical design flows like OpenROAD for place-and-route timing signoff; and the design lowers into FireSim for FPGA-accelerated target simulation. All three branches share an identical configuration parent, yet each tool path consumes different intermediate collateral and emits non-interchangeable evaluation artifacts. Shared configuration lineage preserves parameter traceability across tool flows, but it does not make raw returns directly comparable across different fidelity tiers without explicit condition matching.
 
-The choice of hardware evaluation environment establishes a trade-off between simulation throughput and how much of the microarchitecture a platform actually models (@fig-ch06-simulation-spectrum). The positions are constructed to show the shape of the trade-off, and the sourced throughput figures this chapter relies on appear above with the conditions under which they were reported.
+The choice of hardware evaluation environment establishes a trade-off among throughput, setup cost, and the kind of timing behavior a platform represents (@fig-ch06-simulation-spectrum). The horizontal positions and bubble sizes are constructed to make that operational trade-off visible. The vertical positions are categories, not a percentage error or a ranking of physical fidelity.
 
-Cycle-exact RTL simulation resolves timing completely and runs slowest. FPGA emulation holds that resolution and buys throughput by paying a large up-front build. A detailed microarchitectural simulator gives up a modest amount of timing detail for a large throughput gain. Fabricated silicon closes out the same resolved-timing tier at native execution speed, and its bubble is the largest on the plot because that throughput arrives only after fabrication, the heaviest setup cost of all. The functional instruction-set simulator and the analytical bound model are different in kind rather than degree, and this is the distinction the figure exists to make. Both resolve no timing at all, so they sit at the top of the axis, and the analytical model outruns even silicon because it executes nothing. Asking what cycle error either one exhibits is a category mistake, because neither produces a cycle count to be wrong about. As @tbl-multi-fidelity-spectrum states, a functional model tells us what the software computes, not when. No single platform optimizes throughput, resolution, and setup latency simultaneously, so we must route each evaluation request to the tier that can observe the property we are asking about, within our compute budget.
+RTL simulation resolves cycle behavior under the supplied RTL, testbench, and delay model; it does not establish post-layout delay unless that timing is supplied. FPGA acceleration executes a mapped target model more quickly after a substantial build, but the FPGA mapping is not ASIC timing signoff. Detailed microarchitectural simulators expose modeled cycle behavior at another abstraction, while functional instruction-set simulators answer software-behavior questions without producing a microarchitectural cycle result. Analytical bounds execute no target model. Fabricated silicon supplies measured behavior for the realized chip and test conditions, not a universal timing result for every operating point. No single platform optimizes throughput, setup latency, and property coverage, so we route each request to an environment that can observe the property at issue within our budget.
 
 ```{python}
 #| label: fig-ch06-simulation-spectrum
 #| fig-cap: |
-#|   **A functional model is not an inaccurate timing model; it resolves no timing at all.** Constructed illustrative values, not measurements. The sourced throughput figures this chapter relies on appear in the prose above, with the conditions under which they were reported. Platforms trade throughput against how much of the microarchitecture they resolve, and the two no-timing tiers here differ from the others in kind rather than degree. A functional instruction-set simulator and an analytical bound model produce no cycle count, so they are placed by what they omit rather than by an error rate. Fabricated silicon resolves timing at native speed, but only after the largest setup cost on the plot. Routing an evaluation to a tier that cannot observe the property under test returns a number that cannot answer the question, however fast it arrives.
+#|   **Timing abstractions are categorical, while throughput and setup cost remain operational trade-offs.** Constructed horizontal positions and bubble sizes illustrate relative throughput and setup regimes rather than measured platform performance. The vertical axis distinguishes no timing result, modeled microarchitectural cycles, RTL cycle behavior, mapped-target execution, and fabricated behavior under test conditions. It does not assign a percentage of unresolved timing or place the environments on one physical-fidelity scale.
 #| out-width: "100%"
-#| fig-alt: "Scatter plot with a log-scale horizontal axis showing simulation throughput against the share of timing behavior a platform leaves unresolved. Cycle-exact RTL simulation and FPGA emulation resolve timing but run slowly; a detailed microarchitectural simulator sits between; fabricated silicon resolves timing fully at the highest throughput of the timing-resolving platforms but carries the largest setup bubble; a functional instruction-set simulator and an analytical bound model resolve no timing at all, with the analytical bound model the fastest point on the plot. Values are constructed to show the tradeoff shape rather than to report measured platform characteristics."
+#| fig-alt: "Scatter plot with a constructed log-scale throughput axis and five categorical timing abstractions. Analytical and functional execution occupy the no-timing category, gem5 occupies modeled microarchitectural cycles, RTL simulation occupies RTL cycle behavior, FireSim occupies mapped-target execution, and fabricated silicon occupies measured fabricated behavior. Bubble size represents illustrative setup overhead."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
@@ -358,9 +358,9 @@ apply_style()
 
 environments = [
     (
-        "VCS / Verilator\n(Cycle-exact RTL)",
+        "VCS / Verilator\n(RTL cycle behavior)",
         4.5,
-        0.0,
+        2.0,
         1.5,
         COLORS["red"],
         "left",
@@ -368,9 +368,9 @@ environments = [
         (16, 12),
     ),
     (
-        "FireSim FPGA\n(Cycle-exact @ 25 MHz)",
+        "FireSim FPGA\n(Mapped target model)",
         24000.0,
-        0.0,
+        3.0,
         4.0,
         COLORS["green"],
         "center",
@@ -380,7 +380,7 @@ environments = [
     (
         "gem5 / SST\n(Detailed microarch)",
         280.0,
-        4.2,
+        1.0,
         0.1,
         COLORS["blue"],
         "left",
@@ -390,27 +390,27 @@ environments = [
     (
         "Spike / QEMU\n(Functional ISA)",
         48000.0,
-        100.0,
+        0.0,
         0.01,
         COLORS["orange"],
         "left",
-        "center",
-        (12, 0),
+        "bottom",
+        (12, 9),
     ),
     (
         "Analytical Roofline\n(Bound model)",
         8500000.0,
-        100.0,
+        0.0,
         0.001,
         COLORS["muted"],
         "right",
-        "top",
-        (-12, -10),
+        "bottom",
+        (-12, 34),
     ),
     (
-        "Fabricated Silicon\n(Physical chip)",
+        "Fabricated Silicon\n(Measured behavior)",
         2200000.0,
-        0.0,
+        4.0,
         720.0,
         COLORS["magenta"],
         "center",
@@ -422,33 +422,11 @@ environments = [
 fig, ax = plt.subplots(figsize=(5.6, 3.4))
 fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
 
-pareto_x = [4.5, 24000.0, 2200000.0]
-pareto_y = [0.0, 0.0, 0.0]
-ax.plot(
-    pareto_x,
-    pareto_y,
-    color=COLORS["grid"],
-    linewidth=1.2,
-    linestyle="--",
-    zorder=1,
-)
-
-tradeoff_x = [4.5, 280.0, 48000.0, 8500000.0]
-tradeoff_y = [0.0, 4.2, 100.0, 100.0]
-ax.plot(
-    tradeoff_x,
-    tradeoff_y,
-    color=COLORS["grid"],
-    linewidth=1.2,
-    linestyle=":",
-    zorder=1,
-)
-
-for name, kips, error, setup_h, color, ha, va, offset in environments:
+for name, kips, timing_class, setup_h, color, ha, va, offset in environments:
     bubble_size = 45 + 25 * np.log10(max(0.01, setup_h * 60) + 1.0)
     ax.scatter(
         kips,
-        error,
+        timing_class,
         s=bubble_size * 2.2,
         color=color,
         alpha=0.85,
@@ -459,7 +437,7 @@ for name, kips, error, setup_h, color, ha, va, offset in environments:
 
     ax.annotate(
         name,
-        xy=(kips, error),
+        xy=(kips, timing_class),
         xytext=(offset[0], offset[1]),
         textcoords="offset points",
         fontsize=5.8,
@@ -471,9 +449,9 @@ for name, kips, error, setup_h, color, ha, va, offset in environments:
     )
 
 ax.annotate(
-    "FPGA emulation:\nRTL resolution at emulation speed",
-    xy=(24000.0, 0.0),
-    xytext=(60000, 34.0),
+    "FPGA acceleration:\nmapped execution after a build",
+    xy=(24000.0, 3.0),
+    xytext=(60000, 2.2),
     arrowprops=dict(
         arrowstyle="->",
         color=COLORS["ink"],
@@ -487,14 +465,17 @@ ax.annotate(
 
 ax.set_xscale("log")
 ax.set_xlim(1.0, 20000000.0)
-ax.set_ylim(-5.0, 112.0)
+ax.set_ylim(-0.5, 4.5)
 
 ax.set_xlabel(
-    "Simulation Throughput (Kilo-Instructions Per Second, log scale)", fontsize=6.8
+    "Illustrative throughput placement (KIPS, log scale)", fontsize=6.8
 )
-ax.set_ylabel(
-    "Timing behavior left unresolved (%)", fontsize=6.8
+ax.set_yticks(range(5))
+ax.set_yticklabels(
+    ["No timing result", "Modeled microarchitectural cycles", "RTL cycle behavior", "Mapped target execution", "Fabricated behavior"],
+    fontsize=5.6,
 )
+ax.set_ylabel("Timing abstraction represented", fontsize=6.8)
 
 ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
 ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
@@ -572,7 +553,7 @@ Even when we design clear interfaces and enforce strict schemas, real-world EDA 
 
 - **Silent drifts in gem5 architectural simulation configurations:** When we execute cycle-accurate architectural studies in gem5, a full-system architectural simulator, subtle default parameter changes across minor version revisions or unverified Ruby memory hierarchy flags can corrupt execution lineage.[^fn-nix-hermeticity-c06] Automated flows that fail to lock exact gem5 build hashes and seed states produce non-reproducible cache latency and memory contention measurements.
 
-[^fn-nix-hermeticity-c06]: **Hermetic package management**: In software engineering, pure functional package management and hermetic build graphs ensure deterministic build outputs by binding all inputs, tool binaries, and environment dependencies to cryptographic hashes [@Dolstra2006Purely]. In hardware evaluation, harness environments must similarly lock tool binaries, host OS libraries, seed states, and simulation configuration flags to guarantee reproducible cycle counts across compute clusters.
+[^fn-nix-hermeticity-c06]: **Hermetic package management**: In software engineering, pure functional package management and hermetic build graphs bind declared inputs, tool binaries, and environment dependencies to content identities [@Dolstra2006Purely]. In hardware evaluation, harness environments should likewise lock tool binaries, host OS libraries, seed states, and simulation flags. This supports replay and exposes remaining platform or tool variation; it does not guarantee identical cycle counts across compute clusters.
 
 - **Unmanaged license preemption in VCS RTL simulation flows:** When we execute Synopsys VCS, an event-driven RTL simulator, under Slurm, a high-performance computing workload manager, we can encounter silent job preemptions and license check-out failures.[^fn-least-privilege-c06] Harnesses that treat license denials as hard design rejections corrupt dataset provenance by masking operational cluster limits as physical hardware incompatibilities.
 
@@ -580,7 +561,7 @@ Even when we design clear interfaces and enforce strict schemas, real-world EDA 
 
 - **Failing to reset persistent state in FireSim FPGA-accelerated runs:** FireSim, an FPGA-accelerated full-system simulation environment, relies on persistent host DRAM state and FPGA bitstream images across simulation runs.[^fn-state-sanitization-c06] If an execution environment fails to force a hard reset of host memory and PCIe register state between candidate evaluations, residual kernel buffers can corrupt subsequent workload timing measurements.
 
-[^fn-state-sanitization-c06]: **State sanitization boundaries**: Analogous to state sanitization and idempotency boundaries in cloud architectures, hardware simulation accelerators require complete memory and bus register resets between candidate evaluations to guarantee independent, uncontaminated measurement runs.
+[^fn-state-sanitization-c06]: **State sanitization boundaries**: Analogous to state sanitization and idempotency boundaries in cloud architectures, hardware simulation accelerators require declared memory and bus-register reset procedures between candidate evaluations. The reset supports independence only to the extent that it covers the persistent state capable of influencing the next run.
 
 - **Silent DRC violations and macro collisions in OpenROAD physical design:** OpenROAD, an open-source physical design toolchain, can complete floorplanning and placement without automatically stopping on intermediate Design Rule Checking (DRC) errors.[^fn-drc-verification-c06] Automated environments that parse final area metrics without validating detailed routing reports can accept layouts with un-routable signal pin collisions or power grid shorts.
 
@@ -625,10 +606,10 @@ In this chapter, we showed that tool-connected execution environments form the b
 Our environments must strictly separate prospective run specifications, which define what we authorize to execute, from immutable execution records, which record what actually ran and what compute was spent. While our infrastructure manages job scheduling, reset policies, and fault containment, it never unilaterally decides whether a return constitutes a valid measurement or a winning candidate. When we evaluate this phase of AI-native co-design, four core takeaways govern our work:
 
 ::: {.callout-takeaways title="Key Takeaways"}
-- **Hermetic tool wrappers and contracts.** Encapsulate each simulation or EDA tool within a typed wrapper that validates inputs, translates parameters without altering architectural intent, and parses outputs deterministically.
-- **Strict runtime containment and budgets.** Contain automated tool executions within isolated boundaries with explicit time, memory, and license limits, ensuring that infrastructure failures never masquerade as physical design defects.
-- **Execution records as primary artifacts.** Capture complete, immutable lineage covering candidate state, exact tool versions, seeds, raw logs, parsed outputs, and realized compute costs for every attempt.
+- **Hermetic tool wrappers and contracts.** Encapsulate each simulation or EDA tool within a typed wrapper that validates inputs, applies a declared parameter mapping, and parses outputs deterministically.
+- **Strict runtime containment and budgets.** Contain automated tool executions within isolated boundaries with explicit time, memory, and license limits, and record infrastructure failures separately from design results.
+- **Execution records as primary artifacts.** Capture a versioned execution record covering candidate state, exact tool versions, seeds, raw logs, parsed outputs, and realized compute costs for every attempt.
 - **Separation of execution from evaluation.** Execution harnesses record what ran and what returned, leaving measurement qualification, comparative validity, and candidate selection to downstream verification rules.
 :::
 
-Our environment establishes what we requested, executed, returned, and spent, preserving enough core identity for exact replay, which is narrower than the reproduction a different team with a different setup would attempt. However, it cannot qualify a measurement, validate a comparison, or recommend a candidate on its own. In @sec-feedback-verification-trust, we tackle this next crucial step, exploring exactly how these returned values and artifacts transform into genuinely useful feedback.
+Our environment establishes what we requested, executed, returned, and spent, preserving the core identities needed to attempt local replay when the declared dependencies remain available. This is narrower than the reproduction a different team with a different setup would attempt. The environment cannot qualify a measurement, validate a comparison, or recommend a candidate on its own. @sec-feedback-verification-trust examines how these returned values and artifacts become useful feedback.
