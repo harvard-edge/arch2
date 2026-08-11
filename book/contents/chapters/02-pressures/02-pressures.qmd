@@ -50,7 +50,7 @@ Our architectural work has always progressed through cycles of analysis and revi
 > **The Architectural Design Loop.** The architectural design loop is the continuous, iterative cycle through which we formulate intent, generate candidate designs, evaluate candidates using multi-fidelity simulators and EDA tools, interpret empirical feedback, and refine hardware-software choices toward a supported decision. The cycle closes into a loop only when returned evidence changes the represented design state and triggers another allowed action. A sequence that runs these activities once, or that returns evidence which changes nothing, is a design path rather than a design loop.
 
 
-Consider a traditional central processing unit (CPU) evaluation using SPEC CPU 2017 to measure processor, memory-system, and compiler performance [@SPEC2017CPU]. We then run our architectural simulators (such as gem5, a modular cycle-accurate architectural simulator [@BinkertEtAl2011Gem5], `Sniper`, a fast parallel multi-core timing simulator, or compiled Verilator models, an open-source SystemVerilog compiler engine) to inspect instructions per cycle (IPC), miss rates, branch-misprediction rates, and initial area and power estimates. When we find candidates that help one workload but harm others, we must either revise or discard them. Our human judgment shapes this comparison every step of the way, guiding everything from workload selection and proxy choice to the ultimate decision that a candidate deserves deeper analysis.
+Consider a traditional central processing unit (CPU) evaluation using SPEC CPU 2017 to measure processor, memory-system, and compiler performance [@SPEC2017CPU]. We then run our architectural simulators (such as gem5, a modular cycle-accurate architectural simulator [@BinkertEtAl2011Gem5], Sniper, a fast parallel multi-core timing simulator, or compiled Verilator models, an open-source SystemVerilog compiler engine) to inspect instructions per cycle (IPC), miss rates, branch-misprediction rates, and initial area and power estimates. When we find candidates that help one workload but harm others, we must either revise or discard them. Our human judgment shapes this comparison every step of the way, guiding everything from workload selection and proxy choice to the ultimate decision that a candidate deserves deeper analysis.
 
 What matters in such a study is how we bound the comparison. When we define the workloads, run rules, and reporting conventions, we can compare different candidates fairly under clearly stated conditions.
 
@@ -673,7 +673,7 @@ plt.close(fig)
 
 Apple's gaps shrink rapidly from 19 to 16 to 7 months, while NVIDIA's data-center GPU gaps remain near two years, at 22 and 24 months (@fig-silicon-cadence). We cannot use these announcement dates to bound a silicon program or to identify exactly when an architecture choice became too hard to change. They do not measure the pace of software change, rank release strategies, isolate any specific architecture contribution, or prove that AI tools caused a release to arrive sooner. Neither plot establishes a definitive design-cycle mismatch. Together, they illustrate why our comparisons must record the actual hardware, workload, and software exposure, rather than attempting to infer these details from public release dates.
 
-We often use benchmarks to keep our changing workloads comparable. For example, MLPerf, an industry-standard machine learning benchmarking suite [@MattsonEtAl2020MLPerf], defines shared tasks and reporting rules for machine-learning systems. Within the same benchmark version, division, scenario, and accuracy target, its strict inference rules allow us to compare results from different systems [@ReddiEtAl2020MLPerfInference], all while giving submitters the freedom to optimize their software toolchains [@ReddiEtAl2021VisionBehindMLPerf]. However, this comparability is actively maintained rather than inherent to the workloads themselves. The comparison only holds true as long as our community actively maintains the tasks and run rules.[^fn-metrology-calibration-c02] Whenever those underlying rules change, we may find that an earlier comparison no longer answers the same question.
+Benchmarks are how our discipline holds changing workloads still long enough to compare them, and they also show what that costs. Within one MLPerf version, division, scenario, and accuracy target, the run rules let us compare results from different systems while leaving submitters free to optimize their own software [@ReddiEtAl2020MLPerfInference]. That comparability is maintained rather than inherent to the workloads, and it lasts only as long as the community keeps maintaining the tasks and the rules.[^fn-metrology-calibration-c02] When those rules change, an earlier comparison may no longer answer the same question.
 
 [^fn-metrology-calibration-c02]: **Metrological traceability**: A measurement result is traceable when we can relate it to a reference through a documented, unbroken chain of calibrations, each contributing uncertainty [@NIST2021MetrologicalTraceability]. While our architecture benchmarks do not create this kind of formal calibration chain, we still need explicit versions for their tasks, run rules, and measurement procedures so that reviewers can verify when two results remain genuinely comparable.
 
@@ -887,14 +887,14 @@ To manage this complexity, we increasingly turn to multifidelity methods that pa
 
 While an inexpensive energy proxy can support our early screening efforts, our finalists require an accurate, current power model before we can make binding power or efficiency decisions. We encounter this same limitation when measuring whatever metric we happen to be optimizing. A design can easily lead on the figures advertised in a standard data sheet, yet still fall behind on the actual work a real program executes.
 
-The evolution of AMD's Bulldozer architecture, its later FX-9590 product, and the subsequent Zen transition illustrates this gap between easy-to-count specifications and real-world workload behavior [@BurgessEtAl2011Bulldozer; @AMDFXQuickReference; @AMDZen].
+One generation of AMD processors shows how wide that gap between an advertised specification and delivered work can open.
 
 ::: {.callout-war-story title="A design that won on the spec sheet"}
-**The claim.** In their Bulldozer generation (Zambezi, 2011), AMD chose to group two integer cores behind a shared front-end and floating-point unit while aggressively pursuing high clock frequencies. Since core counts and frequencies were easy to advertise, they made compelling marketing points. When sharing structures, AMD's design team explicitly traded some per-thread capacity to maximize overall throughput.
+**The claim.** In the Bulldozer generation (Zambezi, 2011), AMD grouped two integer cores behind a shared front end and floating-point unit while pushing clock frequency hard [@BurgessEtAl2011Bulldozer]. Core counts and frequencies are easy to advertise, so they made compelling marketing points. In sharing those structures, the design team traded per-thread capacity for aggregate throughput.
 
-**The gap.** Unfortunately, those figures did not reflect how real workloads actually used the machine. The shared structures became performance bottlenecks when threads competed for resources, and raising clock frequencies increased power draw. AMD's later FX-9590 specification listed a high 220\ W thermal design power.
+**The gap.** Those figures did not reflect how real workloads used the machine. The shared structures became bottlenecks when threads competed for them, and the higher frequencies raised power draw. The later FX-9590 part carried a 220\ W thermal design power [@AMDFXQuickReference].
 
-**The lesson.** Candidates must always be ranked on the metrics their true workloads reward, rather than the numbers that are easiest to count. In silicon, discovering that gap is expensive, because it only becomes undeniable after the design is shipped. AMD eventually addressed this by introducing the Zen microarchitecture, returning to a renewed, disciplined emphasis on core performance and efficiency.
+**The lesson.** Candidates have to be ranked on the metrics their workloads reward rather than the numbers that are easiest to count. In silicon that gap is expensive to discover, because it becomes undeniable only after the design ships. AMD's answer was the Zen microarchitecture, which returned the emphasis to per-core performance and efficiency [@AMDZen].
 :::
 
 Because physical constraints and reliability concerns define a vast search space, no early model will ever eliminate our need for the robust physical tools required to validate our final claims. As architects, we must understand which lower-cost estimates are safe for broad screening, and which rigorous checks retain the power to overturn our rankings.
@@ -903,13 +903,81 @@ Because physical constraints and reliability concerns define a vast search space
 
 As we design larger systems, we expose vastly more candidate configurations, software states, physical corners, and failure modes. Expanding our choice space inherently drives up our demand for simulator runs, synthesis runs, physical-design tools, verification passes, and expert review. We simply cannot run every candidate through every available tool. Since these evaluations consume varying mixtures of compute clusters, software licenses, project schedule, and human attention, our feedback loop starves whenever an architectural study demands more checking capacity than our available people and tools can provide.
 
-Our evaluation tools form a broad spectrum where adjacent tiers often sit orders of magnitude apart in throughput, cost, and setup time. Suppose, as an illustrative working rate, that a detailed simulator like gem5 sustains ten to one hundred thousand instructions per second. At those rates, simulating just one real-time second of a workload retiring one billion instructions per second takes $10^{9}/10^{5}$ to $10^{9}/10^{4}$ host seconds, roughly three to twenty-eight hours. Fast parallel simulators like `Sniper` or compiled C++ RTL models generated via Verilator run significantly faster, while hardware emulation platforms (such as `Cadence Palladium`, an enterprise hardware emulation system, or `Synopsys ZeBu`, a high-throughput emulation engine) and FPGA prototypes (like `FireSim`, an FPGA-accelerated full-system simulation platform [@KarandikarEtAl2018FireSim]) accelerate execution even further. Yet, each step up the fidelity spectrum demands different hardware, complex logic synthesis (via open-source engines like Yosys or industrial suites), and substantial bring-up costs. Since actual rates always depend on the model, workload, host, tool, and platform, our budgeting question is not just whether a candidate can be measured, but rather which candidates have actually earned the right to consume an expensive evaluation tier.
+Our evaluation tools form a broad spectrum where adjacent tiers often sit orders of magnitude apart in throughput, cost, and setup time. Suppose, as an illustrative working rate, that a detailed simulator like gem5 sustains ten to one hundred thousand instructions per second. At those rates, simulating just one real-time second of a workload retiring one billion instructions per second takes $10^{9}/10^{5}$ to $10^{9}/10^{4}$ host seconds, roughly three to twenty-eight hours. Fast parallel simulators like Sniper or compiled C++ RTL models generated via Verilator run significantly faster, while hardware emulation platforms (such as Cadence Palladium, an enterprise hardware emulation system, or Synopsys ZeBu, a high-throughput emulation engine) and FPGA prototypes (like FireSim, an FPGA-accelerated full-system simulation platform [@KarandikarEtAl2018FireSim]) accelerate execution even further. Yet, each step up the fidelity spectrum demands different hardware, complex logic synthesis (via open-source engines like Yosys or industrial suites), and substantial bring-up costs. Since actual rates always depend on the model, workload, host, tool, and platform, our budgeting question is not just whether a candidate can be measured, but rather which candidates have actually earned the right to consume an expensive evaluation tier.
 
 To cope, we have long rationed our expensive evaluations through abstraction and statistical sampling. For example, SimPoint, a profile-driven simulation sampling framework [@SherwoodEtAl2002SimPoint], helps us isolate representative program regions, while SMARTS, a statistically rigorous sampling methodology [@WunderlichEtAl2003SMARTS], gives us rigorous error bounds for sampled simulation. We employ analytical models, reduced workloads, and multifidelity evaluation to serve this exact same purpose across different design levels. Because every one of these techniques trades some fidelity for capacity, we must clearly state what our cheaper evaluations preserve and explicitly flag which candidates still mandate a stronger check.
 
 Making this allocation decision is difficult. While generating or scoring one more candidate might feel cheap, an inaccurate screening tool can discard a breakthrough design or advance a weak one into our most expensive stages. We have to decide which inexpensive checks can safely reject a candidate, which nagging uncertainties demand stronger tools, and which measurements are most likely to completely flip our final decision. If we fail to make these distinctions, generating candidates faster merely dumps more unproductive work into our design program's most expensive, back-end stages.
 
-The substantial costs of leading-edge chip development illustrate the magnitude of this constraint. Public estimates vary, but they agree on the order of magnitude. @SemiconductorIndustryAssociation2026ChipDesign reports that designing a latest-node chip increased from approximately \$30M for a 65\ nm node in 2006 to over \$540M for a 5\ nm node in 2020, an $18\times$ increase, and comparable industry estimates cover architecture, design, validation, verification, and IP qualification rather than masks and wafers alone [@BauerEtAl2020SemiconductorDesignManufacturing]. An expensive evaluation tier draws on that same budget, so deciding which candidates earn one is a program-level judgment rather than a local convenience.
+The substantial costs of leading-edge chip development illustrate the magnitude of this constraint. Public estimates vary, but they agree on the order of magnitude. @SemiconductorIndustryAssociation2026ChipDesign reports that designing a latest-node chip increased from approximately \$30M for a 65\ nm node in 2006 to over \$540M for a 5\ nm node in 2020, an $18\times$ increase, and comparable industry estimates cover architecture, design, validation, verification, and IP qualification rather than masks and wafers alone [@BauerEtAl2020SemiconductorDesignManufacturing].
+
+```{python}
+#| label: fig-design-cost-by-node
+#| fig-cap: |
+#|   **Reported design cost for a new chip rises roughly eighteenfold from the 65\ nm node to the 5\ nm node.** Each bar is a published estimate rather than a measured program cost, and the two sources use different accounting boundaries. The 65\ nm and 5\ nm anchors come from an industry association summary [@SemiconductorIndustryAssociation2026ChipDesign], while the 10\ nm, 7\ nm, and 5\ nm figures come from a consulting analysis that counts architecture, design, validation, verification, and IP qualification [@BauerEtAl2020SemiconductorDesignManufacturing]. The two independent 5\ nm estimates agree, which is what makes the trend usable as an order of magnitude rather than as a price list.
+#| out-width: "100%"
+#| fig-alt: "Horizontal bar chart of reported chip design cost by process node. The 65 nanometer node is about 30 million dollars, the 10 nanometer node about 175 million, the 7 nanometer node about 300 million, and the 5 nanometer node about 540 million dollars. The 5 nanometer bar is marked as agreed by two independent sources."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+# Sourced constants: data/source-receipts/chapter2-leading-node-design-cost.csv
+nodes = ["65 nm\n(2006)", "10 nm", "7 nm", "5 nm\n(2020)"]
+costs = [30, 175, 300, 540]
+sources = ["SIA", "McKinsey", "McKinsey", "SIA and McKinsey"]
+
+fig, ax = plt.subplots(figsize=(6.4, 2.5))
+positions = range(len(nodes))
+
+ax.barh(
+    positions,
+    costs,
+    height=0.58,
+    color=COLORS["note_fill"],
+    edgecolor=COLORS["constraints"],
+    linewidth=1.4,
+    zorder=3,
+)
+
+for pos, cost, source in zip(positions, costs, sources):
+    ax.text(
+        cost + 12,
+        pos,
+        f"${cost}M",
+        va="center",
+        ha="left",
+        fontsize=7,
+        fontweight="bold",
+        color=COLORS["constraints_ink"],
+        zorder=4,
+    )
+    ax.text(
+        cost + 78,
+        pos,
+        source,
+        va="center",
+        ha="left",
+        fontsize=6,
+        color=COLORS["muted"],
+        zorder=4,
+    )
+
+ax.set_yticks(list(positions))
+ax.set_yticklabels(nodes, fontsize=7, color=COLORS["ink"])
+ax.invert_yaxis()
+ax.set_xlim(0, 780)
+ax.set_xlabel("Reported cost to design one new chip (US$M)", fontsize=7, color=COLORS["ink"])
+ax.tick_params(axis="x", labelsize=6.5)
+ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
+for spine in ["top", "right", "left"]:
+    ax.spines[spine].set_visible(False)
+plt.show()
+plt.close(fig)
+```
+
+Two things in @fig-design-cost-by-node matter more than the totals. The curve steepens as the node shrinks, so each additional node costs more to design than the one before it rather than the same amount. And the estimates count architecture, design, validation, verification, and IP qualification, not masks and wafers, which means most of what the chart shows is the price of the engineering and checking work this chapter has been describing. An expensive evaluation tier draws on that same budget, so deciding which candidates earn one is a program-level judgment rather than a local convenience.
 
 If we force a respin, we add fabrication, validation, and schedule penalties before we even learn whether our correction worked. Our investments in simulation, emulation, and signoff exist precisely to minimize the probability of paying for that iteration again.
 
@@ -917,7 +985,7 @@ If we force a respin, we add fabrication, validation, and schedule penalties bef
 
 Verification faces an exponential state-space upper bound, even though careful structuring, abstraction, and advanced verification methods ultimately govern how much work we actually perform. Adding just a single state-holding bit doubles our number of encoded states, meaning a design with $n$ such bits can technically encode up to $2^n$ states. In practice, the reachable subset is usually far smaller because it depends tightly on our reset and next-state logic; this is precisely why our verification jobs do not just blindly enumerate every encoded state.
 
-However, that theoretical upper bound rules out verifying every relevant property through brute-force enumeration. Instead, we must combine coverage goals, SystemVerilog Assertions (SVA), formal proofs, constrained-random testing with production simulators like `Synopsys VCS` (an industrial SystemVerilog logic simulator), fast compiled C++ simulation using Verilator, deep regressions, unresolved-defect reviews, and engineering judgment. We view a flattening bug-discovery curve as just one key input to our tapeout decision, rather than a standalone, infallible rule. A sudden flood of novel architectural candidates forces our team to repeat substantial portions of this work.
+However, that theoretical upper bound rules out verifying every relevant property through brute-force enumeration. Instead, we must combine coverage goals, SystemVerilog Assertions (SVA), formal proofs, constrained-random testing with production simulators like Synopsys VCS (an industrial SystemVerilog logic simulator), fast compiled C++ simulation using Verilator, deep regressions, unresolved-defect reviews, and engineering judgment. We view a flattening bug-discovery curve as just one key input to our tapeout decision, rather than a standalone, infallible rule. A sudden flood of novel architectural candidates forces our team to repeat substantial portions of this work.
 
 For these reasons, our architectural evaluations must explicitly weigh verification effort alongside the classic pillars of Power, Performance, and Area (PPA). For instance, a highly speculative cache-coherence protocol might demonstrate a strong measured performance gain, yet it remains a poor choice if we cannot check its complex new states and interactions within our given design-program budget.
 
@@ -1083,7 +1151,7 @@ Importantly, our evaluation test must also allow us to reject AI assistance enti
 **Shared assumptions remain mandatory.** The Lighthouse example also clearly shows the limits of this decomposition. Every component in our pipeline must refer to the same underlying workload, interfaces, and technology assumptions. Even with the complete system in place, our selected design still needs executable software, stronger physical analysis, and independent verification. Such a system can connect and accelerate our work, but it cannot turn an inconsistent set of local results into a sound, reliable system design.
 :::
 
-The public AlphaChip debate illustrates this same boundary. Producing a macro placement quickly is a different claim from establishing its routed physical quality. We have seen that comparisons of learned placement inherently depend on specific cases, compute budgets, implementation details, and downstream checks [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement; @GoldieEtAl2024ThatChipHasSailed]. While we will not resolve that technical disagreement here, its crucial lesson for our discussion is clear. Candidate-production speed can never stand in for matched, rigorous downstream evaluation.
+That boundary between a fast candidate and a checked result is what the public disagreement over AlphaChip, the reinforcement-learning macro placer introduced in @tbl-design-loop-scale-anchors, has been about. Producing a macro placement quickly is a different claim from establishing its routed physical quality. The original report, an independent reproduction, and the authors' reply disagree over cases, compute budgets, implementation details, and downstream checks [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement; @GoldieEtAl2024ThatChipHasSailed]. We do not resolve that disagreement here. What we take from it is that candidate-production speed cannot stand in for matched downstream evaluation.
 
 No single method diagnoses its own need, performs the required work, and supplies an independent check all at the same time. As architects, we still own the question, the scope, the comparison, and the supported technical recommendation. A named commitment authority separately decides whether the organization should act on that recommendation.
 
