@@ -238,89 +238,9 @@ The roofline model supplies our second screening bound by relating operational i
 The roofline bounds attainable performance once our study has a candidate-specific operational intensity and the platform's peak compute and memory bandwidth, which set its machine balance. In the method vocabulary that @sec-methods-generation-prediction-optimization develops fully, generation can propose legal vector configurations, prediction can estimate their data-movement risks, and optimization can choose which configurations merit simulation. A candidate whose bound is already inadequate need not enter the simulator queue. Operational intensity must reflect the candidate's mapping, declared memory boundary, and cache or scratchpad behavior. We recompute the bound when those properties change, and we still verify the mapping and resulting design for surviving candidates. Ultimately, the roofline can reject an implausible candidate cheaply; it cannot establish that the final design works.
 
 
-```{python}
-#| label: fig-verification-demand-scaling
-#| fig-cap: |
-#|   **Verification demand scaling across AI candidate proposal velocities.** As AI foundation models reduce
-#|   proposal cost per candidate by two to three orders of magnitude, total verification compute demand scales
-#|   linearly with candidate volume $N$, which climbs exponentially as proposal velocity rises. Early
-#|   rejection-bound filters (Amdahl caps, Roofline limits, SRAM bounds) tame this demand explosion,
-#|   constraining total verification compute within a fixed project budget envelope. The cost
-#|   coefficients and pass-through rate are constructed to make the relationship inspectable; they
-#|   are not measurements of any tool flow, and the crossover point moves with a project's own numbers.
-#| out-width: "100%"
-#| fig-alt: "Log-log line plot illustrating verification demand scaling. Unfiltered candidate verification demand scales linearly with proposal volume, exceeding a fixed project budget envelope at 100 candidates per day. Rejection-bound early screening filters prune non-viable candidates, constraining total verification compute within the project budget up to 100,000 candidates per day."
-
-import matplotlib.pyplot as plt
-import numpy as np
-from _python.plots import apply_style, COLORS
-
-apply_style()
-fig, ax = plt.subplots(figsize=(6.5, 3.8))
-
-N = np.logspace(0, 5, 200)  # 1 to 100,000 candidates
-c_full = 5.0        # compute-hours per full signoff candidate (constructed)
-c_screen = 15.0     # Logarithmic screening & surrogate overhead
-alpha = 0.0008      # 0.08% pass-through rate clearing early bounds (0.004 / 5.0)
-
-unfiltered_cost = N * c_full  # Linear scaling in candidates
-rejection_bounded_cost = c_full + c_screen * np.log10(N) + (alpha * c_full) * N  # Early analytical screening
-
-ax.set_xscale("log")
-ax.set_yscale("log")
 
 
-ax.plot(
-    N,
-    unfiltered_cost,
-    color=COLORS["constraints"],
-    linewidth=2.2,
-    label="Unfiltered Verification Demand (Proposal Velocity Explosion)",
-)
-ax.plot(
-    N,
-    rejection_bounded_cost,
-    color=COLORS["evidence"],
-    linewidth=2.2,
-    linestyle="--",
-    label="Rejection-Bound Tamed Demand (Early Screening Filters)",
-)
-
-ax.axhline(
-    500,
-    color=COLORS["muted"],
-    linestyle=":",
-    linewidth=1.0,
-    label="Fixed Project Verification Budget Envelope",
-)
-
-ax.set_xlabel(
-    "AI Candidate Proposal Velocity (candidates / day, log scale)",
-    fontsize=8,
-    labelpad=4,
-)
-ax.set_ylabel(
-    "Total verification and simulation demand (compute-hours, log scale)",
-    fontsize=8,
-    labelpad=4,
-)
-
-ax.legend(
-    loc="upper left",
-    fontsize=7,
-    frameon=True,
-    facecolor=COLORS["note_fill"],
-    edgecolor=COLORS["note_edge"],
-)
-ax.grid(True, which="both", color=COLORS["grid"], linestyle="-", linewidth=0.5, alpha=0.7)
-
-plt.tight_layout()
-plt.show()
-plt.close(fig)
-```
-
-
-Analytical bounds, proxy scores, simulator results, and EDA reports provide very different kinds of evidence, at sharply different costs. Without early rejection bounds, accelerating candidate generation moves the verification burden downstream rather than removing it (@fig-verification-demand-scaling). Early rejection-bound filters, such as Amdahl caps, Roofline limits, and SRAM area bounds, prune non-viable candidates before they reach full signoff tools. The scaling model behind that figure is constructed, and its coefficients set where the crossover falls rather than whether it exists.
+Analytical bounds, proxy scores, simulator results, and EDA reports provide very different kinds of evidence, at sharply different costs. Without early rejection bounds, accelerating candidate generation moves the verification burden downstream rather than removing it. Early rejection-bound filters, such as Amdahl caps, Roofline limits, and SRAM area bounds, prune non-viable candidates before they reach full signoff tools.
 
 We often see a proxy rank candidates one way, only for a simulator to reverse that ranking, while an EDA run might give us complex timing paths and congestion heatmaps rather than a convenient single score. For instance, BOOM-Explorer, an automated design-space exploration framework for RISC-V cores [@BaiEtAl2021BOOMExplorer], highlights that some implementation evaluations can take hours to run. Cadence Joules and Synopsys PrimePower estimate time-based and gate-level power, identify power-critical activity windows, and produce power data that downstream power-integrity and thermal analyses can use [@Cadence2026Joules; @Synopsys2026PrimePower]. They do not themselves establish dynamic voltage-drop or thermal-hot-spot signoff. Iterative searches demand many trials before we can distinguish the best actions. When our evaluation capacity cannot cover those trials, brute-force approaches exceed our computational budget. Statistical overfitting[^fn-overfitting-c01] provides a useful analogy here, though our specific failure mode is more acute. If we run a repeated search against a fast proxy, the search can exploit the proxy's omissions or errors. This produces apparent design gains that disappear when surviving candidates undergo stronger evaluation for the property at issue.
 
