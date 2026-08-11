@@ -4416,7 +4416,9 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     )
     # Sentence-initial, allowing for the list bullets, blockquote marks, and bold
     # callout labels that can sit in front of the first word of a sentence.
-    by_gerund = re.compile(r"(?:^|[.!?]\s+|\*\*\s+)By\s+(\w+ing)\b")
+    # An adverb may sit between "By" and the gerund ("By systematically stepping
+    # through..."), which evaded the original pattern and hid a live instance.
+    by_gerund = re.compile(r"(?:^|[.!?]\s+|\*\*\s+)By\s+(?:\w+ly\s+)?(\w+ing)\b")
     line_opener = re.compile(r"^(?:[-*+>]\s+|\d+\.\s+|\*\*)+")
     bare_si_unit = re.compile(
         r"(?<![\\\w])(\d+(?:\.\d+)?) "
@@ -4458,7 +4460,17 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                         f'vocabulary; use "{replacement}" or plainer wording',
                     )
                 )
-            if "\u2014" in prose and not prose.lstrip("> ").startswith("\u2014"):
+            # Pandoc renders "---" as an em-dash, so the literal form is a prose
+            # em-dash too and was previously unchecked. Table separator rows and
+            # YAML/thematic-break lines are excluded before the test, since those
+            # legitimately consist of dashes.
+            dash_prose = prose
+            if dash_prose.lstrip().startswith("|") or dash_prose.strip(" -:|") == "":
+                dash_prose = ""
+            has_em_dash = "\u2014" in dash_prose or re.search(
+                r"(?<!-)---(?!-)", dash_prose
+            )
+            if has_em_dash and not prose.lstrip("> ").startswith("\u2014"):
                 findings.append(
                     Finding(
                         "error",
