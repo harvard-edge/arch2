@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 from urllib.parse import unquote, urlsplit
@@ -104,6 +105,42 @@ review_app = typer.Typer(
 loop_app = typer.Typer(
     help="Run self-improving manuscript review loops.", no_args_is_help=True
 )
+
+
+class FindingFormat(str, Enum):
+    """How findings are rendered.
+
+    ``table`` is for a human at a terminal. ``json`` and ``ndjson`` are for a
+    program or an agent applying the repairs; both keep every path intact,
+    which the Rich table cannot promise once a column has to wrap.
+    """
+
+    table = "table"
+    json = "json"
+    ndjson = "ndjson"
+
+
+# Set once by the root callback and read by the emitter. Findings are produced
+# deep inside the check functions, and threading a format argument through
+# every run_*_check signature would touch far more code than the choice is
+# worth.
+_finding_format = FindingFormat.table
+
+
+@app.callback()
+def main(
+    output_format: FindingFormat = typer.Option(
+        FindingFormat.table,
+        "--format",
+        "-f",
+        help="Finding output format. Use json or ndjson for machine repair.",
+    ),
+) -> None:
+    """Compiler-style build and audit driver for the Architecture 2.0 lecture."""
+    global _finding_format
+    _finding_format = output_format
+
+
 app.add_typer(check_app, name="check")
 app.add_typer(validate_app, name="validate")
 app.add_typer(migrate_app, name="migrate")
@@ -115,10 +152,56 @@ app.add_typer(loop_app, name="loop")
 
 @dataclass(frozen=True)
 class Finding:
+    """One rule violation.
+
+    The first four attributes are what a human reads. The last three are what a
+    machine needs to repair the violation without re-deriving it: ``span`` is
+    the exact source substring at fault, ``replacement`` is what it should
+    become, and ``context`` is the unwrapped source line the span sits in.
+
+    A rule that can fill ``span`` and ``replacement`` describes a deterministic
+    edit, which is the same property that makes it safe to gate on. A rule that
+    can offer neither is asking for a judgment call and generally belongs at
+    warning severity.
+    """
+
     severity: str
     code: str
     location: str
     message: str
+    span: str | None = None
+    replacement: str | None = None
+    context: str | None = None
+
+    @property
+    def fixable(self) -> bool:
+        """True when the finding carries a deterministic edit."""
+        return self.span is not None and self.replacement is not None
+
+    def as_record(self) -> dict[str, Any]:
+        """Render as a flat record with the file path and line split out.
+
+        ``location`` is a display string and not always a file position; a
+        citation-reuse finding locates a BibTeX key, not a line. Splitting is
+        therefore best-effort, and ``path``/``line`` stay absent when the
+        location is not ``file:line``.
+        """
+        record: dict[str, Any] = {
+            "severity": self.severity,
+            "code": self.code,
+            "location": self.location,
+            "message": self.message,
+            "fixable": self.fixable,
+        }
+        match = re.match(r"^(?P<path>.+?):(?P<line>\d+)$", self.location)
+        if match:
+            record["path"] = match.group("path")
+            record["line"] = int(match.group("line"))
+        for key in ("span", "replacement", "context"):
+            value = getattr(self, key)
+            if value is not None:
+                record[key] = value
+        return record
 
 
 @dataclass(frozen=True)
@@ -322,12 +405,41 @@ RAW_STRUCTURE_REF_RE = re.compile(
     r"|(?:[Ff]igures?|[Ff]ig\.)\s*\d+(?:\.\d+)?"
     r"|(?:[Ss]ections?|[Ss]ec\.)\s*\d+(?:\.\d+)?"
     r"|(?:[Ee]quations?|[Ee]qs?\.)\s*\d+(?:\.\d+)?"
+    r"|(?:[Ll]istings?|[Ll]st\.)\s*\d+(?:\.\d+)?"
     r")\b"
 )
 CHAP_LABEL_OR_REF_RE = re.compile(
     r"(?<![\w#])@chap-[A-Za-z0-9_-]+\b|#chap-[A-Za-z0-9_-]+\b"
 )
-LATEX_SECTION_REF_RE = re.compile(r"\\ref\{sec-[A-Za-z0-9_-]+\}")
+# A raw LaTeX \ref against a Quarto-style hyphen label. Quarto owns these
+# labels, so \ref does not resolve them and the PDF prints a bare "??" while
+# the HTML silently drops the link. The colon form (\ref{fig:x}) is a genuine
+# LaTeX label and is handled by LATEX_REF_RE, not banned here.
+LATEX_SECTION_REF_RE = re.compile(
+    rf"\\(?:auto|[cC]|eq)?ref\{{(?:{CROSSREF_PREFIX_PATTERN}|chap)-[A-Za-z0-9_-]+\}}"
+)
+# Deictic structure references: prose that points at a neighbouring chapter,
+# section, or float by position rather than by label. These survive an edit
+# that reorders the book and then quietly lie to the reader, which is the same
+# failure the hard-coded-number ban exists to prevent. Only flagged when the
+# line carries no cross-reference of its own; "the next chapter
+# (@sec-loop-patterns-across-stack)" names its target and is fine.
+DEICTIC_STRUCTURE_RE = re.compile(
+    r"\b(?:"
+    r"(?:the|this|that|a)\s+(?:next|previous|last|preceding|following|prior|earlier|later)\s+"
+    # "part" is deliberately absent. Quarto emits no @part-* reference, so a
+    # part opener saying "the preceding part" has no cross-reference to migrate
+    # to. Same reason Part I / Part 2 stays out of RAW_STRUCTURE_REF_RE.
+    r"(?:chapter|section|subsection|appendix)"
+    r"|(?:chapter|section|appendix)\s+that\s+follows"
+    r"|(?:the\s+)?(?:table|figure|listing|equation|diagram|plot)\s+(?:above|below)"
+    r"|(?:above|below)\s+(?:table|figure|listing|equation)"
+    r")\b",
+    re.IGNORECASE,
+)
+ANY_CROSSREF_RE = re.compile(
+    rf"(?<![#\w])@(?:{CROSSREF_PREFIX_PATTERN}|chap)-[A-Za-z0-9_-]+\b"
+)
 TABLE_ENV_RE = re.compile(
     r"\\begin\{(?P<env>table\*?)\}(?P<option>\[[^\]]+\])?"
     r"(?P<body>.*?)\\end\{(?P=env)\}",
@@ -414,7 +526,10 @@ def _record_log(name: str, text: str) -> Path:
 
 
 def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
-    rows = list(findings)
+    rows = _filter_suppressed(findings)
+    if _finding_format is not FindingFormat.table:
+        _emit_findings_machine(rows, title=title)
+        return
     if not rows:
         console.print(f"[green]passed[/green] {title}")
         return
@@ -435,6 +550,118 @@ def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
     console.print(table)
 
 
+SUPPRESSION_RE = re.compile(
+    r"<!--\s*arch2-allow:\s*(?P<code>[a-z][a-z0-9-]*)\s*(?P<reason>[^>]*?)\s*-->"
+)
+
+
+def suppression_map(path: Path) -> dict[int, set[str]]:
+    """Map line numbers to the rule codes deliberately allowed on them.
+
+    A directive covers the line it sits on. When it sits alone on its own line
+    it covers the next non-blank line instead, which is the only way to exempt
+    something inside a construct that cannot hold a trailing comment.
+
+    The reason is required and is not parsed. Its job is to survive in the
+    source so the next reader learns why the exception exists rather than
+    finding a bare override and deleting it.
+    """
+    allowed: dict[int, set[str]] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return allowed
+    for index, line in enumerate(lines, start=1):
+        match = SUPPRESSION_RE.search(line)
+        if not match or not match.group("reason"):
+            continue
+        target = index
+        if SUPPRESSION_RE.sub("", line).strip() == "":
+            for offset in range(index, len(lines)):
+                if lines[offset].strip():
+                    target = offset + 1
+                    break
+        allowed.setdefault(target, set()).add(match.group("code"))
+    return allowed
+
+
+_suppression_cache: dict[str, dict[int, set[str]]] = {}
+
+
+def _is_suppressed(finding: Finding) -> bool:
+    match = re.match(r"^(?P<path>.+?):(?P<line>\d+)$", finding.location)
+    if not match:
+        return False
+    relative = match.group("path")
+    if relative not in _suppression_cache:
+        _suppression_cache[relative] = suppression_map(ROOT / relative)
+    return finding.code in _suppression_cache[relative].get(
+        int(match.group("line")), set()
+    )
+
+
+def _filter_suppressed(findings: Iterable[Finding]) -> list[Finding]:
+    return [finding for finding in findings if not _is_suppressed(finding)]
+
+
+def suppression_hygiene_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Reject an arch2-allow directive that states no reason.
+
+    A bare override is how a ruleset quietly stops meaning anything. Requiring
+    a reason keeps the cost of an exception slightly above the cost of the fix.
+    """
+    findings: list[Finding] = []
+    for path in paths if paths is not None else content_qmd_files():
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"<!--\s*arch2-allow:[^>]*-->", text):
+            parsed = SUPPRESSION_RE.fullmatch(match.group(0))
+            if parsed and parsed.group("reason"):
+                continue
+            findings.append(
+                Finding(
+                    "error",
+                    "arch2-allow-missing-reason",
+                    f"{_relative(path)}:{line_number(text, match.start())}",
+                    "arch2-allow needs a reason: <!-- arch2-allow: code why this "
+                    "case is deliberate -->",
+                    span=match.group(0),
+                    context=match.group(0),
+                )
+            )
+    return findings
+
+
+def _emit_findings_machine(findings: list[Finding], *, title: str) -> None:
+    """Write findings as JSON or NDJSON on stdout.
+
+    Printed with the plain builtin rather than the Rich console. Rich wraps to
+    the terminal width, and a wrapped path is a broken path once something
+    downstream tries to open it.
+    """
+    records = [finding.as_record() for finding in findings]
+    if _finding_format is FindingFormat.ndjson:
+        for record in records:
+            print(json.dumps({"gate": title, **record}))
+        return
+    fixable = sum(1 for record in records if record["fixable"])
+    print(
+        json.dumps(
+            {
+                "gate": title,
+                "summary": {
+                    "total": len(records),
+                    "errors": sum(1 for r in records if r["severity"] == "error"),
+                    "warnings": sum(1 for r in records if r["severity"] == "warning"),
+                    "fixable": fixable,
+                    "codes": sorted({r["code"] for r in records}),
+                },
+                "findings": records,
+            },
+            indent=2,
+        )
+    )
+
+
 def _exit_if_failed(proc: subprocess.CompletedProcess[str], label: str) -> None:
     if proc.returncode == 0:
         console.print(f"[green]passed[/green] {label}")
@@ -450,11 +677,12 @@ def _exit_if_failed(proc: subprocess.CompletedProcess[str], label: str) -> None:
 def _exit_on_findings(
     findings: list[Finding], *, title: str, fail_on_warning: bool = False
 ) -> None:
-    _emit_findings(findings, title=title)
+    remaining = _filter_suppressed(findings)
+    _emit_findings(remaining, title=title)
     if any(
         finding.severity == "error"
         or (fail_on_warning and finding.severity == "warning")
-        for finding in findings
+        for finding in remaining
     ):
         raise typer.Exit(1)
 
@@ -1138,7 +1366,11 @@ def manuscript_source_lines(path: Path) -> Iterable[tuple[int, str]]:
 
 def structural_reference_findings(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    message = "use top-level cross-references (@tbl-*, @fig-*, @sec-*, @eq-*, @chap-*) instead of hard-coded table, figure, section, chapter, or appendix numbers"
+    # @chap-* is deliberately absent from the guidance. CHAP_LABEL_OR_REF_RE
+    # rejects it, because Quarto resolves a chapter through its section label
+    # and renders @sec-* against a chapter H1 as the chapter reference. Naming
+    # @chap-* here would advise the one form this rule refuses.
+    message = "use top-level cross-references (@sec-*, @fig-*, @tbl-*, @lst-*, @eq-*) instead of hard-coded chapter, section, appendix, figure, table, listing, or equation numbers"
 
     for line_number_value, line in manuscript_source_lines(path):
         if CHAP_LABEL_OR_REF_RE.search(line) or LATEX_SECTION_REF_RE.search(line):
@@ -1162,6 +1394,76 @@ def structural_reference_findings(path: Path) -> list[Finding]:
                 )
             )
 
+    return findings
+
+
+FOOTNOTE_BEFORE_PUNCT_RE = re.compile(
+    r"(?P<marker>\[\^[A-Za-z0-9_-]+\])(?P<punct>[.,;:!?])(?!\S)"
+)
+
+
+def footnote_punctuation_findings(path: Path) -> list[Finding]:
+    """Flag footnote markers that sit inside trailing punctuation.
+
+    House style puts the marker after the punctuation ("text.[^fn]"), not
+    before it ("text[^fn]."). The fix is a pure transposition of two adjacent
+    tokens, so each finding carries the exact span and its replacement and can
+    be applied without reading the sentence.
+
+    A definition line ("[^fn]: body") is not a marker and is excluded by
+    requiring the punctuation to be followed by whitespace or end of line.
+    """
+    findings: list[Finding] = []
+    for line_number_value, line in manuscript_source_lines(path):
+        if line.lstrip().startswith("[^"):
+            continue
+        for match in FOOTNOTE_BEFORE_PUNCT_RE.finditer(line):
+            marker, punct = match.group("marker"), match.group("punct")
+            findings.append(
+                Finding(
+                    "error",
+                    "footnote-inside-punctuation",
+                    f"{_relative(path)}:{line_number_value}",
+                    f'footnote marker precedes "{punct}"; house style puts the '
+                    f"marker after trailing punctuation",
+                    span=match.group(0),
+                    replacement=f"{punct}{marker}",
+                    context=line.rstrip(),
+                )
+            )
+    return findings
+
+
+def deictic_reference_findings(path: Path) -> list[Finding]:
+    """Flag prose that points at a chapter, section, or float by position.
+
+    "In the next chapter" and "the table above" are hard-coded structure
+    references wearing a different coat. They read as harmless because they
+    carry no number, but they break under exactly the same edit: reorder two
+    chapters, or let a float land on the previous page, and the sentence now
+    misdirects the reader with nothing in the build to catch it.
+
+    A line that already carries a cross-reference is exempt. "In the next
+    chapter (@sec-loop-patterns-across-stack), we ask..." names its target, so
+    the deictic phrase is prose colour rather than the only pointer, and it
+    survives a reorder.
+    """
+    findings: list[Finding] = []
+    for line_number_value, line in manuscript_source_lines(path):
+        if ANY_CROSSREF_RE.search(line):
+            continue
+        match = DEICTIC_STRUCTURE_RE.search(re.sub(r"\[@[^\]]+\]", "", line))
+        if match:
+            findings.append(
+                Finding(
+                    "error",
+                    "deictic-structure-reference",
+                    f"{_relative(path)}:{line_number_value}",
+                    f'"{match.group(0)}" points at structure by position; name the '
+                    "target with a cross-reference (@sec-*, @fig-*, @tbl-*, @lst-*) "
+                    "so it survives a reorder",
+                )
+            )
     return findings
 
 
@@ -1377,6 +1679,7 @@ def manuscript_integrity_findings() -> list[Finding]:
     all_paths = content_qmd_files()
     findings: list[Finding] = []
     findings.extend(undefined_ref_findings(all_paths))
+    findings.extend(suppression_hygiene_findings(all_paths))
     findings.extend(unreferenced_label_findings(all_paths, all_paths))
     findings.extend(svg_wellformed_findings())
     for path in all_paths:
@@ -1385,6 +1688,7 @@ def manuscript_integrity_findings() -> list[Finding]:
         findings.extend(figure_source_findings(path))
         findings.extend(table_findings(path))
         findings.extend(structural_reference_findings(path))
+        findings.extend(deictic_reference_findings(path))
     return sorted(
         findings, key=lambda finding: (finding.location, finding.code, finding.message)
     )
@@ -4511,6 +4815,9 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                             f'"{match.group(0)}" splits a number from its unit; '
                             f"write {match.group(1)}\\ {match.group(2)} so the "
                             "PDF cannot break the line between them",
+                            span=match.group(0),
+                            replacement=f"{match.group(1)}\\ {match.group(2)}",
+                            context=line.rstrip(),
                         )
                     )
             body = prose.strip()
@@ -4619,6 +4926,8 @@ def run_permissions_check() -> None:
 def run_footnote_check() -> None:
     findings = footnote_in_table_findings()
     findings.extend(footnote_source_findings())
+    for path in content_qmd_files():
+        findings.extend(footnote_punctuation_findings(path))
     _exit_on_findings(findings, title="footnotes")
 
 
@@ -6012,6 +6321,116 @@ def validate_book_navbar() -> None:
 def validate_registries() -> None:
     """Check registry schemas, generated indexes, status, and AWESOME mirror."""
     run_registry_check()
+
+
+def apply_line_edits(line: str, edits: list[tuple[str, str]]) -> str:
+    """Apply several span replacements to one line without re-matching output.
+
+    Two SI-unit violations can share a line, and a naive repeated ``replace``
+    would rewrite the first span twice when the spans are identical. Walking a
+    cursor left to right consumes each span exactly once and never inspects
+    text a previous replacement produced.
+
+    Edits are sorted by position first. Findings reach here grouped by the rule
+    that raised them rather than in document order, so a footnote repair late
+    in the line can otherwise arrive before an SI-unit repair early in it and
+    strand the cursor past its target.
+    """
+    cursor = 0
+    pieces: list[str] = []
+    for span, replacement in sorted(edits, key=lambda edit: line.find(edit[0])):
+        index = line.find(span, cursor)
+        if index < 0:
+            raise ValueError(f"span {span!r} not found at or after column {cursor}")
+        pieces.append(line[cursor:index])
+        pieces.append(replacement)
+        cursor = index + len(span)
+    pieces.append(line[cursor:])
+    return "".join(pieces)
+
+
+def apply_fixable_findings(findings: Iterable[Finding]) -> tuple[int, list[str]]:
+    """Rewrite every finding that names a deterministic edit.
+
+    Files are read and written once each, and each line's edits are applied
+    together, so line offsets never shift under a pending repair.
+    """
+    by_file: dict[str, dict[int, list[tuple[str, str]]]] = {}
+    log: list[str] = []
+    for finding in findings:
+        if not finding.fixable:
+            continue
+        record = finding.as_record()
+        if "path" not in record:
+            continue
+        by_file.setdefault(record["path"], {}).setdefault(record["line"], []).append(
+            (finding.span, finding.replacement)
+        )
+        log.append(
+            f"{record['path']}:{record['line']}  {finding.code}  "
+            f"{finding.span!r} -> {finding.replacement!r}"
+        )
+
+    applied = 0
+    for relative, per_line in by_file.items():
+        path = ROOT / relative
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        for line_no, edits in sorted(per_line.items()):
+            index = line_no - 1
+            ending = ""
+            body = lines[index]
+            while body.endswith(("\n", "\r")):
+                ending = body[-1] + ending
+                body = body[:-1]
+            lines[index] = apply_line_edits(body, edits) + ending
+            applied += len(edits)
+        path.write_text("".join(lines), encoding="utf-8")
+    return applied, log
+
+
+@app.command("fix")
+def fix_command(
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the repairs. Without it, only report them."
+    ),
+    code: list[str]
+    | None = typer.Option(None, "--code", help="Limit to these rule codes."),
+) -> None:
+    """Apply the source repairs that the checks can name exactly.
+
+    Only findings carrying both a span and a replacement are touched. Anything
+    needing an authorial decision is reported and left alone.
+    """
+    findings = _filter_suppressed(source_repairable_findings())
+    if code:
+        findings = [finding for finding in findings if finding.code in set(code)]
+    fixable = [finding for finding in findings if finding.fixable]
+    skipped = len(findings) - len(fixable)
+
+    if not fixable:
+        console.print(f"[green]nothing to fix[/green] ({skipped} need a decision)")
+        return
+    if not apply:
+        _emit_findings(fixable, title="repairable findings (dry run)")
+        console.print(
+            f"[yellow]dry run[/yellow] {len(fixable)} repairable, {skipped} need a "
+            "decision; rerun with --apply"
+        )
+        return
+
+    applied, log = apply_fixable_findings(fixable)
+    for entry in log:
+        console.print(f"[green]fixed[/green] {entry}")
+    console.print(f"[green]applied[/green] {applied} repair(s); {skipped} left alone")
+
+
+def source_repairable_findings() -> list[Finding]:
+    """Collect source-level findings from every no-render gate."""
+    findings: list[Finding] = []
+    for path in content_qmd_files():
+        findings.extend(footnote_punctuation_findings(path))
+    findings.extend(prose_style_findings())
+    return findings
 
 
 @check_app.command("precommit")
