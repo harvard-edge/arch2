@@ -212,5 +212,45 @@ class Suppression(unittest.TestCase):
         )
 
 
+class OnlyChildSections(unittest.TestCase):
+    """A subdivision needs at least two members to be a subdivision."""
+
+    def _codes(self, text: str) -> set:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "s.qmd"
+            path.write_text(text, encoding="utf-8")
+            return {f.code for f in arch2.only_child_section_findings(path)}
+
+    def test_a_lone_subsection_is_rejected(self) -> None:
+        self.assertEqual(
+            {"only-child-section"},
+            self._codes("## Parent\n\nProse.\n\n### Only Child\n\nMore.\n"),
+        )
+
+    def test_two_subsections_are_fine(self) -> None:
+        self.assertEqual(
+            set(),
+            self._codes("## Parent\n\n### First\n\na\n\n### Second\n\nb\n"),
+        )
+
+    def test_a_section_with_no_subsections_is_fine(self) -> None:
+        self.assertEqual(
+            set(), self._codes("## Parent\n\nProse only.\n\n## Next\n\nb\n")
+        )
+
+    def test_a_grandchild_does_not_count_as_a_sibling(self) -> None:
+        self.assertEqual(
+            {"only-child-section"},
+            self._codes("## Parent\n\n### Child\n\n#### Grandchild\n\na\n"),
+        )
+
+    def test_the_next_parent_ends_the_search(self) -> None:
+        """A subsection of the following section is not a sibling of this one."""
+        self.assertEqual(
+            set(),
+            self._codes("## One\n\nProse.\n\n## Two\n\n### A\n\na\n\n### B\n\nb\n"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

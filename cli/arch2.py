@@ -1397,6 +1397,47 @@ def structural_reference_findings(path: Path) -> list[Finding]:
     return findings
 
 
+def only_child_section_findings(path: Path) -> list[Finding]:
+    """Flag a section whose subdivision produced exactly one subsection.
+
+    A lone subsection is not a division. It promises the reader a set and then
+    delivers one member, and in the table of contents it shows up as a single
+    indented entry under its parent with no sibling to justify the indent.
+    Either the subsection is the parent's remaining content, in which case the
+    heading should be removed or promoted, or a sibling is missing.
+
+    Reported without a replacement because the resolution is an authorial
+    choice between promoting, deleting, and splitting.
+    """
+    headings = [
+        (number, len(match.group(1)), match.group(2).strip())
+        for number, line in manuscript_source_lines(path)
+        for match in [re.match(r"^(#{2,4})\s+(.*)$", line)]
+        if match
+    ]
+    findings: list[Finding] = []
+    for index, (number, level, title) in enumerate(headings):
+        children = []
+        for _, other_level, other_title in headings[index + 1 :]:
+            if other_level <= level:
+                break
+            if other_level == level + 1:
+                children.append(other_title)
+        if len(children) == 1:
+            findings.append(
+                Finding(
+                    "error",
+                    "only-child-section",
+                    f"{_relative(path)}:{number}",
+                    f'"{re.sub(r"\\s*\\{#.*", "", title)}" has exactly one '
+                    f'subsection ("{re.sub(r"\\s*\\{#.*", "", children[0])}"); '
+                    "promote it, fold it into the parent, or give it a sibling",
+                    context=("#" * level) + " " + title,
+                )
+            )
+    return findings
+
+
 FOOTNOTE_BEFORE_PUNCT_RE = re.compile(
     r"(?P<marker>\[\^[A-Za-z0-9_-]+\])(?P<punct>[.,;:!?])(?!\S)"
 )
@@ -1689,6 +1730,7 @@ def manuscript_integrity_findings() -> list[Finding]:
         findings.extend(table_findings(path))
         findings.extend(structural_reference_findings(path))
         findings.extend(deictic_reference_findings(path))
+        findings.extend(only_child_section_findings(path))
     return sorted(
         findings, key=lambda finding: (finding.location, finding.code, finding.message)
     )
