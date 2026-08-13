@@ -1397,6 +1397,9 @@ def structural_reference_findings(path: Path) -> list[Finding]:
     return findings
 
 
+ANCHOR_SUFFIX_RE = re.compile(r"\s*\{#.*")
+
+
 def only_child_section_findings(path: Path) -> list[Finding]:
     """Flag a section whose subdivision produced exactly one subsection.
 
@@ -1424,14 +1427,19 @@ def only_child_section_findings(path: Path) -> list[Finding]:
             if other_level == level + 1:
                 children.append(other_title)
         if len(children) == 1:
+            # Computed outside the f-strings below: a backslash inside an
+            # f-string expression is a SyntaxError before Python 3.12, and CI
+            # runs 3.10 and 3.11.
+            parent_title = ANCHOR_SUFFIX_RE.sub("", title)
+            child_title = ANCHOR_SUFFIX_RE.sub("", children[0])
             findings.append(
                 Finding(
                     "error",
                     "only-child-section",
                     f"{_relative(path)}:{number}",
-                    f'"{re.sub(r"\\s*\\{#.*", "", title)}" has exactly one '
-                    f'subsection ("{re.sub(r"\\s*\\{#.*", "", children[0])}"); '
-                    "promote it, fold it into the parent, or give it a sibling",
+                    f'"{parent_title}" has exactly one subsection '
+                    f'("{child_title}"); promote it, fold it into the parent, '
+                    "or give it a sibling",
                     context=("#" * level) + " " + title,
                 )
             )

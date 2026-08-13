@@ -254,3 +254,40 @@ class OnlyChildSections(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InterpreterCompatibility(unittest.TestCase):
+    """The CLI must parse on the oldest Python CI runs, not just the local one.
+
+    A backslash inside an f-string expression is a SyntaxError before 3.12 and
+    legal from 3.12 on. Developing on a newer interpreter therefore hides the
+    fault until CI rejects it, which is how it reached main once already.
+    ``ast.parse(feature_version=...)`` does not help: the change is in the
+    tokenizer and is not gated by that flag. Only a real old interpreter is.
+    """
+
+    CI_VERSIONS = ("3.10", "3.11")
+
+    def test_cli_parses_on_the_oldest_available_ci_interpreter(self) -> None:
+        import shutil
+        import subprocess
+
+        target = str(ROOT / "cli" / "arch2.py")
+        checked = []
+        for version in self.CI_VERSIONS:
+            binary = shutil.which(f"python{version}")
+            if not binary:
+                continue
+            checked.append(version)
+            result = subprocess.run(
+                [binary, "-c", f"import ast;ast.parse(open({target!r}).read())"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                0,
+                result.returncode,
+                f"python{version} rejects the CLI:\n{result.stderr}",
+            )
+        if not checked:
+            self.skipTest(f"none of {self.CI_VERSIONS} installed locally")
