@@ -322,12 +322,41 @@ RAW_STRUCTURE_REF_RE = re.compile(
     r"|(?:[Ff]igures?|[Ff]ig\.)\s*\d+(?:\.\d+)?"
     r"|(?:[Ss]ections?|[Ss]ec\.)\s*\d+(?:\.\d+)?"
     r"|(?:[Ee]quations?|[Ee]qs?\.)\s*\d+(?:\.\d+)?"
+    r"|(?:[Ll]istings?|[Ll]st\.)\s*\d+(?:\.\d+)?"
     r")\b"
 )
 CHAP_LABEL_OR_REF_RE = re.compile(
     r"(?<![\w#])@chap-[A-Za-z0-9_-]+\b|#chap-[A-Za-z0-9_-]+\b"
 )
-LATEX_SECTION_REF_RE = re.compile(r"\\ref\{sec-[A-Za-z0-9_-]+\}")
+# A raw LaTeX \ref against a Quarto-style hyphen label. Quarto owns these
+# labels, so \ref does not resolve them and the PDF prints a bare "??" while
+# the HTML silently drops the link. The colon form (\ref{fig:x}) is a genuine
+# LaTeX label and is handled by LATEX_REF_RE, not banned here.
+LATEX_SECTION_REF_RE = re.compile(
+    rf"\\(?:auto|[cC]|eq)?ref\{{(?:{CROSSREF_PREFIX_PATTERN}|chap)-[A-Za-z0-9_-]+\}}"
+)
+# Deictic structure references: prose that points at a neighbouring chapter,
+# section, or float by position rather than by label. These survive an edit
+# that reorders the book and then quietly lie to the reader, which is the same
+# failure the hard-coded-number ban exists to prevent. Only flagged when the
+# line carries no cross-reference of its own; "the next chapter
+# (@sec-loop-patterns-across-stack)" names its target and is fine.
+DEICTIC_STRUCTURE_RE = re.compile(
+    r"\b(?:"
+    r"(?:the|this|that|a)\s+(?:next|previous|last|preceding|following|prior|earlier|later)\s+"
+    # "part" is deliberately absent. Quarto emits no @part-* reference, so a
+    # part opener saying "the preceding part" has no cross-reference to migrate
+    # to. Same reason Part I / Part 2 stays out of RAW_STRUCTURE_REF_RE.
+    r"(?:chapter|section|subsection|appendix)"
+    r"|(?:chapter|section|appendix)\s+that\s+follows"
+    r"|(?:the\s+)?(?:table|figure|listing|equation|diagram|plot)\s+(?:above|below)"
+    r"|(?:above|below)\s+(?:table|figure|listing|equation)"
+    r")\b",
+    re.IGNORECASE,
+)
+ANY_CROSSREF_RE = re.compile(
+    rf"(?<![#\w])@(?:{CROSSREF_PREFIX_PATTERN}|chap)-[A-Za-z0-9_-]+\b"
+)
 TABLE_ENV_RE = re.compile(
     r"\\begin\{(?P<env>table\*?)\}(?P<option>\[[^\]]+\])?"
     r"(?P<body>.*?)\\end\{(?P=env)\}",
@@ -1138,7 +1167,7 @@ def manuscript_source_lines(path: Path) -> Iterable[tuple[int, str]]:
 
 def structural_reference_findings(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    message = "use top-level cross-references (@tbl-*, @fig-*, @sec-*, @eq-*, @chap-*) instead of hard-coded table, figure, section, chapter, or appendix numbers"
+    message = "use top-level cross-references (@tbl-*, @fig-*, @sec-*, @eq-*, @lst-*, @chap-*) instead of hard-coded table, figure, listing, section, chapter, or appendix numbers"
 
     for line_number_value, line in manuscript_source_lines(path):
         if CHAP_LABEL_OR_REF_RE.search(line) or LATEX_SECTION_REF_RE.search(line):
@@ -1162,6 +1191,39 @@ def structural_reference_findings(path: Path) -> list[Finding]:
                 )
             )
 
+    return findings
+
+
+def deictic_reference_findings(path: Path) -> list[Finding]:
+    """Flag prose that points at a chapter, section, or float by position.
+
+    "In the next chapter" and "the table above" are hard-coded structure
+    references wearing a different coat. They read as harmless because they
+    carry no number, but they break under exactly the same edit: reorder two
+    chapters, or let a float land on the previous page, and the sentence now
+    misdirects the reader with nothing in the build to catch it.
+
+    A line that already carries a cross-reference is exempt. "In the next
+    chapter (@sec-loop-patterns-across-stack), we ask..." names its target, so
+    the deictic phrase is prose colour rather than the only pointer, and it
+    survives a reorder.
+    """
+    findings: list[Finding] = []
+    for line_number_value, line in manuscript_source_lines(path):
+        if ANY_CROSSREF_RE.search(line):
+            continue
+        match = DEICTIC_STRUCTURE_RE.search(re.sub(r"\[@[^\]]+\]", "", line))
+        if match:
+            findings.append(
+                Finding(
+                    "error",
+                    "deictic-structure-reference",
+                    f"{_relative(path)}:{line_number_value}",
+                    f'"{match.group(0)}" points at structure by position; name the '
+                    "target with a cross-reference (@sec-*, @fig-*, @tbl-*, @lst-*) "
+                    "so it survives a reorder",
+                )
+            )
     return findings
 
 
@@ -1385,6 +1447,7 @@ def manuscript_integrity_findings() -> list[Finding]:
         findings.extend(figure_source_findings(path))
         findings.extend(table_findings(path))
         findings.extend(structural_reference_findings(path))
+        findings.extend(deictic_reference_findings(path))
     return sorted(
         findings, key=lambda finding: (finding.location, finding.code, finding.message)
     )
