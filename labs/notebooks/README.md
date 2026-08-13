@@ -14,12 +14,12 @@ live-AI comparison or assess the whole Architecture 2.0 discipline.
 | [02](lab_02_scissors_gap.py) | Ch2, Scissors Gap | data | 20 min | Queue and disposition diagnosis with an intervention choice |
 | [03](lab_03_score_a_claim.py) | Ch3, Score a Claim | audit | 20 min | Claim-review record naming missing evidence and rejection conditions |
 | [04](lab_04_represent_and_replay.py) | Ch4, Represent and Replay | simulator audit | 25 min | Replayability audit of a generated draft run archive |
-| [05](lab_05_environment_contract.py) | Ch5, Environment Contract | simulator | 25 min | Legal or refused action plus a provenance-bearing environment record |
-| [06](../examples/scale_proxy_mirage/lab.py) | Ch6, Proxy Versus Evidence | simulator anchor | 45 min | Completed and validated run archive with a recorded decision |
+| [05](lab_05_environment_contract.py) | Ch6, Environment Contract | simulator | 25 min | Legal or refused action plus a provenance-bearing environment record |
+| [06](../examples/scale_proxy_mirage/lab.py) | Ch5, Proxy Versus Evidence | simulator anchor | 45 min | Completed and validated run archive with a recorded decision |
 | [07](lab_07_earned_trust.py) | Ch7, Earned Trust | simulator red team | 30 min | Orthogonal feasibility check for an environment blind spot |
 | [08](lab_08_run_the_loop.py) | Ch8, Run the Loop | simulator integration study | 45 min | Completed run archive and limited decision |
 | [09](lab_09_same_loop_different_costs.py) | Ch9, Same Loop at Different Costs | feedback-budget exercise | 25 min | Budget-allocation audit and cheap-first rejection decision |
-| [10](lab_10_own_the_commitment.py) | Ch10, Own the Commitment | public-record audit | 30 min | Shareable Architecture 2.0 claim audit with a bounded conclusion |
+| [10](lab_10_own_the_commitment.py) | Ch11, Own the Commitment | public-record audit | 30 min | Shareable Architecture 2.0 claim audit with a bounded conclusion |
 
 The full sequence takes about four and three-quarters hours. Labs 01, 06, and 08
 form a coherent two-hour introduction when time is limited.
@@ -39,7 +39,7 @@ It does not claim independent mastery.
 | **Explain** | Labs 06 and 07 | Mechanism prediction, reconciliation with measured utilization, and a separate analytic feasibility check with shared inputs disclosed. | The mechanism tests are guided; the learner does not design a new sensitivity, intervention, or ablation. |
 | **Defend** | Labs 01, 03, and 05 through 10 | Bounded disposition or decision with rationale, ownership, residual risk, and reversal conditions. | The record is self-authored but is not defended under independent challenge. |
 
-The summative transfer capstone is the new-problem study defined in Chapter 10,
+The summative transfer capstone is the new-problem study defined in Chapter 11,
 not Lab 08. It requires a study brief, meaningful alternatives, a method
 rationale, a checkable artifact and tool path, an evaluation packet, a tested
 mechanism explanation, and a bounded decision defended under independent

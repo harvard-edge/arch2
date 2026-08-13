@@ -53,7 +53,7 @@ def _(dedent, mo):
     mo.md(
         dedent(
             """
-    # Lab 06 · Proxy vs Evidence  ·  Chapter 6 (Method Roles)
+    # Lab 06 · Proxy vs Evidence  ·  Chapter 5 (Method Roles)
 
     **You can, after this lab:** predict what a cheap proxy will say, run a real
     simulator, measure how far the proxy *overstated* the winner, inspect the
