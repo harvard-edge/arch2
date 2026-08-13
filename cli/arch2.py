@@ -1167,7 +1167,11 @@ def manuscript_source_lines(path: Path) -> Iterable[tuple[int, str]]:
 
 def structural_reference_findings(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    message = "use top-level cross-references (@tbl-*, @fig-*, @sec-*, @eq-*, @lst-*, @chap-*) instead of hard-coded table, figure, listing, section, chapter, or appendix numbers"
+    # @chap-* is deliberately absent from the guidance. CHAP_LABEL_OR_REF_RE
+    # rejects it, because Quarto resolves a chapter through its section label
+    # and renders @sec-* against a chapter H1 as the chapter reference. Naming
+    # @chap-* here would advise the one form this rule refuses.
+    message = "use top-level cross-references (@sec-*, @fig-*, @tbl-*, @lst-*, @eq-*) instead of hard-coded chapter, section, appendix, figure, table, listing, or equation numbers"
 
     for line_number_value, line in manuscript_source_lines(path):
         if CHAP_LABEL_OR_REF_RE.search(line) or LATEX_SECTION_REF_RE.search(line):
