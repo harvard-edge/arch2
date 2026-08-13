@@ -112,5 +112,42 @@ class DeicticStructureReferences(unittest.TestCase):
                 self.assertEqual(set(), codes_for(prose))
 
 
+class MachineReadableFindings(unittest.TestCase):
+    """The JSON contract that makes a finding repairable without re-derivation."""
+
+    def test_a_fixable_finding_carries_an_exact_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.qmd"
+            path.write_text("Cost is bounded[^fn-cost-c01].\n", encoding="utf-8")
+            findings = arch2.footnote_punctuation_findings(path)
+        self.assertEqual(1, len(findings))
+        record = findings[0].as_record()
+        self.assertTrue(record["fixable"])
+        self.assertEqual("[^fn-cost-c01].", record["span"])
+        self.assertEqual(".[^fn-cost-c01]", record["replacement"])
+        self.assertEqual(path.name, Path(record["path"]).name)
+        self.assertEqual(1, record["line"])
+        # The span must be applicable to the context verbatim.
+        self.assertIn(record["span"], record["context"])
+
+    def test_footnote_definitions_are_not_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.qmd"
+            path.write_text(
+                "[^fn-cost-c01]: **Cost**: the bounded figure.\n", encoding="utf-8"
+            )
+            self.assertEqual([], arch2.footnote_punctuation_findings(path))
+
+    def test_a_judgment_finding_is_not_marked_fixable(self) -> None:
+        finding = arch2.Finding("error", "x", "a.qmd:1", "msg")
+        self.assertFalse(finding.fixable)
+        self.assertNotIn("span", finding.as_record())
+
+    def test_a_non_positional_location_yields_no_path(self) -> None:
+        record = arch2.Finding("warning", "citation-reuse", "SomeKey", "m").as_record()
+        self.assertNotIn("path", record)
+        self.assertNotIn("line", record)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 from urllib.parse import unquote, urlsplit
@@ -104,6 +105,42 @@ review_app = typer.Typer(
 loop_app = typer.Typer(
     help="Run self-improving manuscript review loops.", no_args_is_help=True
 )
+
+
+class FindingFormat(str, Enum):
+    """How findings are rendered.
+
+    ``table`` is for a human at a terminal. ``json`` and ``ndjson`` are for a
+    program or an agent applying the repairs; both keep every path intact,
+    which the Rich table cannot promise once a column has to wrap.
+    """
+
+    table = "table"
+    json = "json"
+    ndjson = "ndjson"
+
+
+# Set once by the root callback and read by the emitter. Findings are produced
+# deep inside the check functions, and threading a format argument through
+# every run_*_check signature would touch far more code than the choice is
+# worth.
+_finding_format = FindingFormat.table
+
+
+@app.callback()
+def main(
+    output_format: FindingFormat = typer.Option(
+        FindingFormat.table,
+        "--format",
+        "-f",
+        help="Finding output format. Use json or ndjson for machine repair.",
+    ),
+) -> None:
+    """Compiler-style build and audit driver for the Architecture 2.0 lecture."""
+    global _finding_format
+    _finding_format = output_format
+
+
 app.add_typer(check_app, name="check")
 app.add_typer(validate_app, name="validate")
 app.add_typer(migrate_app, name="migrate")
@@ -115,10 +152,56 @@ app.add_typer(loop_app, name="loop")
 
 @dataclass(frozen=True)
 class Finding:
+    """One rule violation.
+
+    The first four attributes are what a human reads. The last three are what a
+    machine needs to repair the violation without re-deriving it: ``span`` is
+    the exact source substring at fault, ``replacement`` is what it should
+    become, and ``context`` is the unwrapped source line the span sits in.
+
+    A rule that can fill ``span`` and ``replacement`` describes a deterministic
+    edit, which is the same property that makes it safe to gate on. A rule that
+    can offer neither is asking for a judgment call and generally belongs at
+    warning severity.
+    """
+
     severity: str
     code: str
     location: str
     message: str
+    span: str | None = None
+    replacement: str | None = None
+    context: str | None = None
+
+    @property
+    def fixable(self) -> bool:
+        """True when the finding carries a deterministic edit."""
+        return self.span is not None and self.replacement is not None
+
+    def as_record(self) -> dict[str, Any]:
+        """Render as a flat record with the file path and line split out.
+
+        ``location`` is a display string and not always a file position; a
+        citation-reuse finding locates a BibTeX key, not a line. Splitting is
+        therefore best-effort, and ``path``/``line`` stay absent when the
+        location is not ``file:line``.
+        """
+        record: dict[str, Any] = {
+            "severity": self.severity,
+            "code": self.code,
+            "location": self.location,
+            "message": self.message,
+            "fixable": self.fixable,
+        }
+        match = re.match(r"^(?P<path>.+?):(?P<line>\d+)$", self.location)
+        if match:
+            record["path"] = match.group("path")
+            record["line"] = int(match.group("line"))
+        for key in ("span", "replacement", "context"):
+            value = getattr(self, key)
+            if value is not None:
+                record[key] = value
+        return record
 
 
 @dataclass(frozen=True)
@@ -444,6 +527,9 @@ def _record_log(name: str, text: str) -> Path:
 
 def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
     rows = list(findings)
+    if _finding_format is not FindingFormat.table:
+        _emit_findings_machine(rows, title=title)
+        return
     if not rows:
         console.print(f"[green]passed[/green] {title}")
         return
@@ -462,6 +548,37 @@ def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
             finding.message,
         )
     console.print(table)
+
+
+def _emit_findings_machine(findings: list[Finding], *, title: str) -> None:
+    """Write findings as JSON or NDJSON on stdout.
+
+    Printed with the plain builtin rather than the Rich console. Rich wraps to
+    the terminal width, and a wrapped path is a broken path once something
+    downstream tries to open it.
+    """
+    records = [finding.as_record() for finding in findings]
+    if _finding_format is FindingFormat.ndjson:
+        for record in records:
+            print(json.dumps({"gate": title, **record}))
+        return
+    fixable = sum(1 for record in records if record["fixable"])
+    print(
+        json.dumps(
+            {
+                "gate": title,
+                "summary": {
+                    "total": len(records),
+                    "errors": sum(1 for r in records if r["severity"] == "error"),
+                    "warnings": sum(1 for r in records if r["severity"] == "warning"),
+                    "fixable": fixable,
+                    "codes": sorted({r["code"] for r in records}),
+                },
+                "findings": records,
+            },
+            indent=2,
+        )
+    )
 
 
 def _exit_if_failed(proc: subprocess.CompletedProcess[str], label: str) -> None:
@@ -1195,6 +1312,43 @@ def structural_reference_findings(path: Path) -> list[Finding]:
                 )
             )
 
+    return findings
+
+
+FOOTNOTE_BEFORE_PUNCT_RE = re.compile(
+    r"(?P<marker>\[\^[A-Za-z0-9_-]+\])(?P<punct>[.,;:!?])(?!\S)"
+)
+
+
+def footnote_punctuation_findings(path: Path) -> list[Finding]:
+    """Flag footnote markers that sit inside trailing punctuation.
+
+    House style puts the marker after the punctuation ("text.[^fn]"), not
+    before it ("text[^fn]."). The fix is a pure transposition of two adjacent
+    tokens, so each finding carries the exact span and its replacement and can
+    be applied without reading the sentence.
+
+    A definition line ("[^fn]: body") is not a marker and is excluded by
+    requiring the punctuation to be followed by whitespace or end of line.
+    """
+    findings: list[Finding] = []
+    for line_number_value, line in manuscript_source_lines(path):
+        if line.lstrip().startswith("[^"):
+            continue
+        for match in FOOTNOTE_BEFORE_PUNCT_RE.finditer(line):
+            marker, punct = match.group("marker"), match.group("punct")
+            findings.append(
+                Finding(
+                    "error",
+                    "footnote-inside-punctuation",
+                    f"{_relative(path)}:{line_number_value}",
+                    f'footnote marker precedes "{punct}"; house style puts the '
+                    f"marker after trailing punctuation",
+                    span=match.group(0),
+                    replacement=f"{punct}{marker}",
+                    context=line.rstrip(),
+                )
+            )
     return findings
 
 
@@ -4578,6 +4732,9 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                             f'"{match.group(0)}" splits a number from its unit; '
                             f"write {match.group(1)}\\ {match.group(2)} so the "
                             "PDF cannot break the line between them",
+                            span=match.group(0),
+                            replacement=f"{match.group(1)}\\ {match.group(2)}",
+                            context=line.rstrip(),
                         )
                     )
             body = prose.strip()
@@ -4686,6 +4843,8 @@ def run_permissions_check() -> None:
 def run_footnote_check() -> None:
     findings = footnote_in_table_findings()
     findings.extend(footnote_source_findings())
+    for path in content_qmd_files():
+        findings.extend(footnote_punctuation_findings(path))
     _exit_on_findings(findings, title="footnotes")
 
 
