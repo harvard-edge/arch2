@@ -24,7 +24,7 @@ The complete activity map, expected duration, and output of each lab are in
 These activities are formative rather than a complete summative assessment.
 Lab 08 integrates a supplied task, candidate set, environment, evidence path,
 and decision record. The transfer capstone defined in
-[Chapter 10](../book/contents/chapters/11-ownership/11-ownership.qmd) instead gives the
+[Chapter 11](../book/contents/chapters/11-ownership/11-ownership.qmd) instead gives the
 learner a new, tractable architecture problem and assesses all six capabilities
 as one bounded study. The activity map shows which parts of that larger outcome
 the current labs practice.
@@ -140,7 +140,7 @@ rubric. Use the rows together rather than adding field-presence points.
 The downloadable records capture the prediction, inspected evidence, and
 bounded disposition appropriate to each activity. The final transfer reflection
 is currently session-local and is not included in the downloaded artifact, so
-instructors who grade it must collect it separately. The open-ended Chapter 10
+instructors who grade it must collect it separately. The open-ended Chapter 11
 capstone remains the assessment of independent transfer across all six
 capabilities.
 

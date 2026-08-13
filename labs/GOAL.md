@@ -24,12 +24,12 @@ chapter still gets exactly one.
 | **02** | Ch2 Scissors gap | data (no sim) | Compute a real generation-vs-rejection ratio from sourced numbers; feel "rejection-bound." |
 | **03** | Ch3 Framework | audit (no sim) | Score loop records for reviewability; fill the card fields. |
 | **04** | Ch4 Representations | light sim | What state must a receipt carry to be replayable? Provenance, negative traces. |
-| **05** | Ch5 Environments | sim | Turn SCALE-Sim into an environment: legal actions, observations, invalid actions, provenance. |
-| **06** | Ch6 Methods | sim | **Proxy vs Evidence (anchor)** — the proxy overstates 16x; the tool measures 7.5x. *(built)* |
+| **05** | Ch6 Environments | sim | Turn SCALE-Sim into an environment: legal actions, observations, invalid actions, provenance. |
+| **06** | Ch5 Methods | sim | **Proxy vs Evidence (anchor)** — the proxy overstates 16x; the tool measures 7.5x. *(built)* |
 | **07** | Ch7 Trust | sim + adversarial | Fidelity ladder via injected noise, rejection authority, multi-objective, **red-team the sim's idealized memory**. |
 | **08** | Ch8 Running the loop | sim capstone | Two-turn full loop, complete receipt, graded by the judgment rubric. |
 | **09** | Ch9 Patterns | light sim | The same loop at different feedback costs; method posture changes. |
-| **10** | Ch10 Ownership | audit (no sim) | Redact a negative trace to share; **audit AlphaChip with the card** (also the book's demonstration). |
+| **10** | Ch11 Ownership | audit (no sim) | Redact a negative trace to share; **audit AlphaChip with the card** (also the book's demonstration). |
 
 Build cost is concentrated in the four full-sim labs (05–08), which share the
 existing `arch2_labs` engine. The reasoning labs (01, 02, 03, 10) need no

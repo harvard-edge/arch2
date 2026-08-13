@@ -55,7 +55,7 @@ def _(dedent, mo):
     mo.md(
         dedent(
             r"""
-        # Lab 05 | The Environment Contract | Chapter 5
+        # Lab 05 | The Environment Contract | Chapter 6
 
         **You can, after this lab:** submit a frozen action to the checked-in SCALE-Sim
         environment contract, distinguish an environment refusal from a tool failure and a

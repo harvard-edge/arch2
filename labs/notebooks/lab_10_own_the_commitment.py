@@ -21,7 +21,7 @@ def _(dedent, mo):
     mo.md(
         dedent(
             """
-        # Lab 10 · Own the Commitment: Audit a Public Record · Chapter 10
+        # Lab 10 · Own the Commitment: Audit a Public Record · Chapter 11
 
         **You can, after this lab:** inspect all twelve canonical design-loop card
         fields for a fixed public-record snapshot, locate the fields that limit public
