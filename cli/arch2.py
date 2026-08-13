@@ -526,7 +526,7 @@ def _record_log(name: str, text: str) -> Path:
 
 
 def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
-    rows = list(findings)
+    rows = _filter_suppressed(findings)
     if _finding_format is not FindingFormat.table:
         _emit_findings_machine(rows, title=title)
         return
@@ -548,6 +548,87 @@ def _emit_findings(findings: Iterable[Finding], *, title: str) -> None:
             finding.message,
         )
     console.print(table)
+
+
+SUPPRESSION_RE = re.compile(
+    r"<!--\s*arch2-allow:\s*(?P<code>[a-z][a-z0-9-]*)\s*(?P<reason>[^>]*?)\s*-->"
+)
+
+
+def suppression_map(path: Path) -> dict[int, set[str]]:
+    """Map line numbers to the rule codes deliberately allowed on them.
+
+    A directive covers the line it sits on. When it sits alone on its own line
+    it covers the next non-blank line instead, which is the only way to exempt
+    something inside a construct that cannot hold a trailing comment.
+
+    The reason is required and is not parsed. Its job is to survive in the
+    source so the next reader learns why the exception exists rather than
+    finding a bare override and deleting it.
+    """
+    allowed: dict[int, set[str]] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return allowed
+    for index, line in enumerate(lines, start=1):
+        match = SUPPRESSION_RE.search(line)
+        if not match or not match.group("reason"):
+            continue
+        target = index
+        if SUPPRESSION_RE.sub("", line).strip() == "":
+            for offset in range(index, len(lines)):
+                if lines[offset].strip():
+                    target = offset + 1
+                    break
+        allowed.setdefault(target, set()).add(match.group("code"))
+    return allowed
+
+
+_suppression_cache: dict[str, dict[int, set[str]]] = {}
+
+
+def _is_suppressed(finding: Finding) -> bool:
+    match = re.match(r"^(?P<path>.+?):(?P<line>\d+)$", finding.location)
+    if not match:
+        return False
+    relative = match.group("path")
+    if relative not in _suppression_cache:
+        _suppression_cache[relative] = suppression_map(ROOT / relative)
+    return finding.code in _suppression_cache[relative].get(
+        int(match.group("line")), set()
+    )
+
+
+def _filter_suppressed(findings: Iterable[Finding]) -> list[Finding]:
+    return [finding for finding in findings if not _is_suppressed(finding)]
+
+
+def suppression_hygiene_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Reject an arch2-allow directive that states no reason.
+
+    A bare override is how a ruleset quietly stops meaning anything. Requiring
+    a reason keeps the cost of an exception slightly above the cost of the fix.
+    """
+    findings: list[Finding] = []
+    for path in paths if paths is not None else content_qmd_files():
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"<!--\s*arch2-allow:[^>]*-->", text):
+            parsed = SUPPRESSION_RE.fullmatch(match.group(0))
+            if parsed and parsed.group("reason"):
+                continue
+            findings.append(
+                Finding(
+                    "error",
+                    "arch2-allow-missing-reason",
+                    f"{_relative(path)}:{line_number(text, match.start())}",
+                    "arch2-allow needs a reason: <!-- arch2-allow: code why this "
+                    "case is deliberate -->",
+                    span=match.group(0),
+                    context=match.group(0),
+                )
+            )
+    return findings
 
 
 def _emit_findings_machine(findings: list[Finding], *, title: str) -> None:
@@ -596,11 +677,12 @@ def _exit_if_failed(proc: subprocess.CompletedProcess[str], label: str) -> None:
 def _exit_on_findings(
     findings: list[Finding], *, title: str, fail_on_warning: bool = False
 ) -> None:
-    _emit_findings(findings, title=title)
+    remaining = _filter_suppressed(findings)
+    _emit_findings(remaining, title=title)
     if any(
         finding.severity == "error"
         or (fail_on_warning and finding.severity == "warning")
-        for finding in findings
+        for finding in remaining
     ):
         raise typer.Exit(1)
 
@@ -1597,6 +1679,7 @@ def manuscript_integrity_findings() -> list[Finding]:
     all_paths = content_qmd_files()
     findings: list[Finding] = []
     findings.extend(undefined_ref_findings(all_paths))
+    findings.extend(suppression_hygiene_findings(all_paths))
     findings.extend(unreferenced_label_findings(all_paths, all_paths))
     findings.extend(svg_wellformed_findings())
     for path in all_paths:
@@ -6238,6 +6321,116 @@ def validate_book_navbar() -> None:
 def validate_registries() -> None:
     """Check registry schemas, generated indexes, status, and AWESOME mirror."""
     run_registry_check()
+
+
+def apply_line_edits(line: str, edits: list[tuple[str, str]]) -> str:
+    """Apply several span replacements to one line without re-matching output.
+
+    Two SI-unit violations can share a line, and a naive repeated ``replace``
+    would rewrite the first span twice when the spans are identical. Walking a
+    cursor left to right consumes each span exactly once and never inspects
+    text a previous replacement produced.
+
+    Edits are sorted by position first. Findings reach here grouped by the rule
+    that raised them rather than in document order, so a footnote repair late
+    in the line can otherwise arrive before an SI-unit repair early in it and
+    strand the cursor past its target.
+    """
+    cursor = 0
+    pieces: list[str] = []
+    for span, replacement in sorted(edits, key=lambda edit: line.find(edit[0])):
+        index = line.find(span, cursor)
+        if index < 0:
+            raise ValueError(f"span {span!r} not found at or after column {cursor}")
+        pieces.append(line[cursor:index])
+        pieces.append(replacement)
+        cursor = index + len(span)
+    pieces.append(line[cursor:])
+    return "".join(pieces)
+
+
+def apply_fixable_findings(findings: Iterable[Finding]) -> tuple[int, list[str]]:
+    """Rewrite every finding that names a deterministic edit.
+
+    Files are read and written once each, and each line's edits are applied
+    together, so line offsets never shift under a pending repair.
+    """
+    by_file: dict[str, dict[int, list[tuple[str, str]]]] = {}
+    log: list[str] = []
+    for finding in findings:
+        if not finding.fixable:
+            continue
+        record = finding.as_record()
+        if "path" not in record:
+            continue
+        by_file.setdefault(record["path"], {}).setdefault(record["line"], []).append(
+            (finding.span, finding.replacement)
+        )
+        log.append(
+            f"{record['path']}:{record['line']}  {finding.code}  "
+            f"{finding.span!r} -> {finding.replacement!r}"
+        )
+
+    applied = 0
+    for relative, per_line in by_file.items():
+        path = ROOT / relative
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        for line_no, edits in sorted(per_line.items()):
+            index = line_no - 1
+            ending = ""
+            body = lines[index]
+            while body.endswith(("\n", "\r")):
+                ending = body[-1] + ending
+                body = body[:-1]
+            lines[index] = apply_line_edits(body, edits) + ending
+            applied += len(edits)
+        path.write_text("".join(lines), encoding="utf-8")
+    return applied, log
+
+
+@app.command("fix")
+def fix_command(
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the repairs. Without it, only report them."
+    ),
+    code: list[str]
+    | None = typer.Option(None, "--code", help="Limit to these rule codes."),
+) -> None:
+    """Apply the source repairs that the checks can name exactly.
+
+    Only findings carrying both a span and a replacement are touched. Anything
+    needing an authorial decision is reported and left alone.
+    """
+    findings = _filter_suppressed(source_repairable_findings())
+    if code:
+        findings = [finding for finding in findings if finding.code in set(code)]
+    fixable = [finding for finding in findings if finding.fixable]
+    skipped = len(findings) - len(fixable)
+
+    if not fixable:
+        console.print(f"[green]nothing to fix[/green] ({skipped} need a decision)")
+        return
+    if not apply:
+        _emit_findings(fixable, title="repairable findings (dry run)")
+        console.print(
+            f"[yellow]dry run[/yellow] {len(fixable)} repairable, {skipped} need a "
+            "decision; rerun with --apply"
+        )
+        return
+
+    applied, log = apply_fixable_findings(fixable)
+    for entry in log:
+        console.print(f"[green]fixed[/green] {entry}")
+    console.print(f"[green]applied[/green] {applied} repair(s); {skipped} left alone")
+
+
+def source_repairable_findings() -> list[Finding]:
+    """Collect source-level findings from every no-render gate."""
+    findings: list[Finding] = []
+    for path in content_qmd_files():
+        findings.extend(footnote_punctuation_findings(path))
+    findings.extend(prose_style_findings())
+    return findings
 
 
 @check_app.command("precommit")

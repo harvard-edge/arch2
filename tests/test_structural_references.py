@@ -149,5 +149,68 @@ class MachineReadableFindings(unittest.TestCase):
         self.assertNotIn("line", record)
 
 
+class LineEditApplication(unittest.TestCase):
+    """Repairs must compose on one line regardless of the order they arrive in."""
+
+    def test_two_identical_spans_on_one_line_are_each_repaired(self) -> None:
+        out = arch2.apply_line_edits(
+            "Budget is 3 W and the ceiling is 3 W overall.",
+            [("3 W", r"3\ W"), ("3 W", r"3\ W")],
+        )
+        self.assertEqual(r"Budget is 3\ W and the ceiling is 3\ W overall.", out)
+
+    def test_edits_out_of_document_order_still_apply(self) -> None:
+        """Findings arrive grouped by rule, so a later span can be listed first."""
+        line = "The budget is 3 W in practice[^fn-x]."
+        out = arch2.apply_line_edits(line, [("[^fn-x].", ".[^fn-x]"), ("3 W", r"3\ W")])
+        self.assertEqual(r"The budget is 3\ W in practice.[^fn-x]", out)
+
+    def test_a_span_that_is_absent_is_an_error_not_a_silent_skip(self) -> None:
+        with self.assertRaises(ValueError):
+            arch2.apply_line_edits("nothing here", [("3 W", r"3\ W")])
+
+
+class Suppression(unittest.TestCase):
+    """A deliberate exception must be cheap to express and impossible to hide."""
+
+    def _map(self, text: str) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "s.qmd"
+            path.write_text(text, encoding="utf-8")
+            return arch2.suppression_map(path)
+
+    def _hygiene(self, text: str) -> set:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "s.qmd"
+            path.write_text(text, encoding="utf-8")
+            return {f.code for f in arch2.suppression_hygiene_findings([path])}
+
+    def test_trailing_directive_covers_its_own_line(self) -> None:
+        self.assertEqual(
+            {1: {"informal-idiom"}},
+            self._map("Text. <!-- arch2-allow: informal-idiom defended in fn -->\n"),
+        )
+
+    def test_standalone_directive_covers_the_next_content_line(self) -> None:
+        self.assertEqual(
+            {3: {"em-dash"}},
+            self._map("<!-- arch2-allow: em-dash quoted source -->\n\nThe line.\n"),
+        )
+
+    def test_a_directive_without_a_reason_grants_nothing(self) -> None:
+        self.assertEqual({}, self._map("Text. <!-- arch2-allow: em-dash -->\n"))
+
+    def test_a_directive_without_a_reason_is_itself_reported(self) -> None:
+        self.assertEqual(
+            {"arch2-allow-missing-reason"},
+            self._hygiene("Text. <!-- arch2-allow: em-dash -->\n"),
+        )
+
+    def test_a_reasoned_directive_is_accepted(self) -> None:
+        self.assertEqual(
+            set(), self._hygiene("Text. <!-- arch2-allow: em-dash quoted -->\n")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
