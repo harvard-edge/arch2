@@ -7,7 +7,6 @@ import html
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH = 960
 HEIGHT = 285
@@ -336,63 +335,55 @@ def flow_arrow(svg: SVG, x1: float, x2: float, y: float) -> None:
 def chapter_1(svg: SVG) -> None:
     y, h = 112, 103
     cards = (
-        (14, 142, "Compact intent", ("Lighthouse request",), "workload"),
+        (14, 136, "Compact intent", ("Lighthouse request",), "workload"),
         (
-            184,
-            210,
+            176,
+            190,
             "Cross-stack specification",
             ("requirements + constraints", "checks + evidence needs"),
             "artifact",
         ),
         (
-            424,
-            224,
+            392,
+            204,
             "AI-native design system",
             ("state + methods + real tools", "independent checks included"),
             "neutral",
         ),
         (
-            678,
-            170,
+            622,
+            154,
             "Supported result",
-            ("better result / lower cost", "reference / unresolved"),
+            ("better result", "or lower cost", "reference / unresolved"),
             "evidence",
         ),
     )
     for x, w, title, lines, role in cards:
-        svg.card(x, y, w, h, title, lines, role=role, title_size=15.5, body_size=12.5)
-    flow_arrow(svg, 156, 184, 163)
-    flow_arrow(svg, 394, 424, 163)
-    flow_arrow(svg, 648, 678, 163)
-    svg.line("M 848 163 H 870", width=2.5)
-    svg.diamond(909, 163, 37, 49, role="decision")
-    svg.text(
-        909,
-        153,
-        "NAMED",
-        size=11.5,
-        weight=700,
-        fill=ROLES["decision"][2],
-        anchor="middle",
+        svg.card(x, y, w, h, title, lines, role=role, title_size=14, body_size=11)
+    flow_arrow(svg, 150, 176, 163)
+    flow_arrow(svg, 366, 392, 163)
+    flow_arrow(svg, 596, 622, 163)
+    flow_arrow(svg, 776, 804, 163)
+    svg.card(
+        804,
+        y,
+        142,
+        h,
+        "Named authority",
+        ("advance / hold", "reject"),
+        role="decision",
+        title_size=14,
+        body_size=11,
+        center=True,
     )
     svg.text(
-        909,
-        171,
-        "AUTHORITY",
-        size=11.5,
-        weight=700,
-        fill=ROLES["decision"][2],
-        anchor="middle",
-    )
-    svg.text(909, 189, "advance", size=9.5, fill=MUTED, anchor="middle")
-    svg.text(909, 202, "hold / reject", size=9.5, fill=MUTED, anchor="middle")
-    svg.text(
-        701,
+        784,
         244,
-        "Supported recommendation + stated limits",
-        size=13,
+        "RECOMMENDATION INFORMS; AUTHORITY COMMITS",
+        size=11.5,
         weight=700,
         fill=ROLES["decision"][2],
+        anchor="middle",
     )
 
 
@@ -1022,42 +1013,31 @@ def chapter_11(svg: SVG) -> None:
         title_size=15,
         body_size=11.5,
     )
-    svg.line("M 649 182 H 720", width=3.0)
-    svg.diamond(818, 182, 91, 55, role="decision")
+    svg.line("M 649 182 H 735", width=3.0)
+    svg.rect(735, 139, 190, 86, role="decision")
     svg.text(
-        818,
+        830,
         164,
         "NAMED COMMITMENT",
-        size=12.5,
+        size=13.5,
         weight=700,
         fill=ROLES["decision"][2],
         anchor="middle",
     )
     svg.text(
-        818,
-        181,
+        830,
+        184,
         "AUTHORITY",
-        size=12.5,
+        size=13.5,
         weight=700,
         fill=ROLES["decision"][2],
         anchor="middle",
     )
+    svg.text(830, 207, "ADVANCE / HOLD / REJECT", size=10, fill=MUTED, anchor="middle")
     svg.text(
-        818, 201, "ADVANCE / HOLD / REJECT", size=10.5, fill=MUTED, anchor="middle"
-    )
-    svg.text(
-        684,
-        160,
-        "SUPPORTED",
-        size=8.8,
-        weight=700,
-        fill=ROLES["decision"][2],
-        anchor="middle",
-    )
-    svg.text(
-        684,
-        172,
-        "RECOMMENDATION",
+        692,
+        168,
+        "RECOMMENDS",
         size=8.8,
         weight=700,
         fill=ROLES["decision"][2],
