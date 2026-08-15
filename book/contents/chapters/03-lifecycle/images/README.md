@@ -2,12 +2,15 @@
 
 Active hand-authored figures:
 
-- `F4d-structured-layer-above-rtl`: missing structured layer between tacit
-  architecture reasoning and executable implementation flows.
-- `ch3-ontology-loop`: six lifecycle responsibilities and their repair paths.
-- `F3-design-loop`: an iterative architecture study connected to its question
-  and decision.
-- `F4b-design-loop-card-example`: design-loop card example.
+- `fig-ontology-loop`: six lifecycle responsibilities and their repair paths.
+- `fig-design-loop`: an iterative architecture study connected to its question and decision.
+- `fig-lifecycle-interaction-protocol`: sequence protocol diagram showing time-ordered message flows across Human Architect, AI Orchestrator, Execution Harness, Verification Engines, and Commitment Authority.
+- `fig-structured-layer-above-rtl`: missing structured layer between tacit architecture reasoning and executable implementation flows.
+- `fig-filled-design-loop-card`: design-loop card example.
+
+Executable Quarto figures in the chapter:
+
+- `fig-eval-fidelity-latency`: matrix associating evaluation tool classes with their representative property focus and fidelity trade-offs.
 
 Deferred and unused in the current chapter:
 

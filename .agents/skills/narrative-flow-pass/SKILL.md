@@ -23,7 +23,22 @@ Use this skill when auditing or refining the narrative flow, pedagogical structu
 - **Place Footnotes Outside Trailing Punctuation:** Footnote callout markers MUST always be placed OUTSIDE (after) trailing punctuation marks (periods, commas, closing quotation marks), e.g., `sentence finish.[^fn-key]` or `clause,[^fn-key]`. Never place markers inside punctuation (`sentence finish[^fn-key].`).
 - **High Technical Signal & Named Keys:** All footnotes must use reference-style named keys (`[^fn-...-cXX]`), isolate ephemeral/historical context, follow `**Term**: Definition` format, and avoid discursive bloat.
 
-## 4. Visual Figure Line & Arrow Routing Audit Loop
+## 4. Chicago Manual of Style (CMOS) Figure and Table Prose Integration
+
+Follow CMOS (17th/18th ed., Sections 3.9, 3.50–3.53) conventions for referencing illustrations, figures, and tables in narrative prose:
+
+- **Pre-Briefing Requirement:** Every figure and table MUST be introduced or cited in the prose *before* or directly adjacent to its appearance in the text. Never allow a figure or table to float without prior narrative preparation.
+- **Syntactic Integration vs. Parenthetical Citation:**
+  - *Syntactically Integrated (Primary Object):* When the visual is the focal point of explanation, weave it directly into the sentence structure:
+    - *Good:* "We trace this progression in @fig-design-method-progression, which maps each historical era..."
+    - *Good:* "As @fig-moonshot-prompt illustrates, compact intent encapsulates eight coupled requirement layers..."
+  - *Parenthetical (Supplementary Evidence):* When the visual confirms or illustrates an architectural fact or measurement, cite it parenthetically:
+    - *Good:* "...reversing the net system efficiency through elevated interconnect traffic (@fig-waterbed-effect)."
+    - *Good:* "...under strict thermal design power ceilings (@tbl-cache-run-declaration)."
+  - *Avoid Awkward Meta-Narration:* Avoid clumsy formulas like "The following figure is a diagram that shows..." or "See Figure X below". State the engineering insight directly, using the cross-reference as the visual anchor.
+- **Quarto Cross-Reference Syntax:** Always use `@fig-<name>` and `@tbl-<name>` so Pandoc generates hyperlinked, properly numbered cross-references. For parenthetical references, use `(@fig-<name>)` or `(@tbl-<name>)`.
+
+## 5. Visual Figure Line & Arrow Routing Audit Loop
 
 For every conceptual SVG figure:
 1. **Render PNG:** Convert the SVG to a 1200px PNG using `rsvg-convert -w 1200 <input.svg> -o /tmp/<figure-name>.png`.

@@ -19,16 +19,16 @@ applications, not every occurrence.
 | Term | Canonical owner or definition | Material applications |
 | --- | --- | --- |
 | ablation | ch10 § Evaluating Workflow-Level Design Effects | ch07 § Outcomes Versus Causal Mechanisms; ch10 § Accounting for Total Workflow Compute Cost |
-| accountable organization | ch11 § Architectural Ownership and Commitment | appA § Technical Ownership and Decision Boundaries; appC § Core Principles, principle 8 |
+| accountable organization | ch11 § What the Architect Owns | appA § Technical Ownership and Decision Boundaries; appC § Core Principles, principle 8 |
 | active learning | ch04 § Multi-Fidelity Sampling | ch07 § Quarantining Heuristics |
 | agent | ch01 § From Architecture 1.0 to Architecture 2.0 | ch05 § Heterogeneous and Hybrid Optimization Methods; ch10 § System Under Test |
 | AI (artificial intelligence) | preface § Preface | ch01 § Defining Architecture 2.0; ch02 § Targeting AI Assistance |
 | AI-native design life cycle | ch03 § The AI-Native Design Life Cycle | appC § Core Principles, principle 5 |
-| AI-native design system | ch01 § AI Models vs. AI-Native Design Systems | preface § Book Structure; ch10 § Explicit Claims and Nonclaims Boundaries; ch11 § Architectural Ownership and Commitment |
+| AI-native design system | ch01 § AI Models vs. AI-Native Design Systems | preface § Book Structure; ch10 § Explicit Claims and Nonclaims Boundaries; ch11 § What the Architect Owns |
 | AlphaChip | ch05 § Algorithmic Search Tactics and Heuristics | ch02 § Search Space Explosion; ch07 § Proxy Metric Gaming; appB § Survey of Existing AI-Assisted Systems |
 | Amdahl's law | ch01 § Qualifying Artifacts into Verifiable Results | ch02 § Specialization Traps and Amdahl's Law; ch09 § Offloading Bounds |
 | ArchGym | ch02 § Search Space Explosion | ch05 § Pre-Flight Evaluation Criteria; ch06 § Orchestrating Multi-Tool Toolchains |
-| architect | ch01 § The Mobile XR Subsystem Case Study | ch11 § Architectural Ownership and Commitment; appA § Technical Ownership and Decision Boundaries |
+| architect | ch01 § The Mobile XR Subsystem Case Study | ch11 § What the Architect Owns; appA § Technical Ownership and Decision Boundaries |
 | architectural claim | ch03 § Stage 1. Formulating Core Architecture Questions | ch07 § Verifiers, Claims, and Evidence Boundaries; appA § Claim Scope |
 | architecture | ch01 § The Mobile XR Subsystem Case Study | ch11 § Framing Cross-Layer Problems |
 | Architecture 1.0 | ch01 § From Architecture 1.0 to Architecture 2.0 | — |
@@ -54,7 +54,7 @@ applications, not every occurrence.
 | challenge capacity | ch11 § Sustaining Ownership and Responsibility | appA § Technical Ownership and Decision Boundaries |
 | Circuit IR Compilers and Tools (CIRCT) | ch04 § Hardware Representation Formats and World-Model State | ch06 § Typed Contracts for Hardware Tool Interfaces |
 | cloud silicon shuttle | ch12 § Open PDKs and Cloud Silicon Shuttles | ch12 § Ecosystem Staging and Execution Sequence |
-| commitment authority | ch11 § Architectural Ownership and Commitment | ch01 § From Architecture 1.0 to Architecture 2.0; appA § Technical Ownership and Decision Boundaries; appC § Core Principles, principle 8 |
+| commitment authority | ch11 § What the Architect Owns | ch01 § From Architecture 1.0 to Architecture 2.0; appA § Technical Ownership and Decision Boundaries; appC § Core Principles, principle 8 |
 | complete human-plus-technical workflow | ch10 § System Under Test | ch01 § The Mobile XR Subsystem Case Study; ch11 § Closing the Moonshot |
 | complete-workflow evaluation protocol | ch10 § Complete-Workflow Protocol | appA § Matched Baselines and Declared Budgets |
 | configured technical system | ch10 § Architecture 2.0 Evaluation Objects | ch09 § Evaluating Pattern Transferability and Scope; ch10 § System Under Test |
@@ -65,12 +65,12 @@ applications, not every occurrence.
 | dataset construction | ch04 § Dataset Integrity and Construction Pipelines | ch09 § Mapping Dependencies; appA § Environment, State, and Provenance |
 | decision margin | ch07 § Empirical Admission Criteria | ch10 § System Variance |
 | design automation | ch01 § Defining the Architecture Moonshot | preface § What This Book Teaches |
-| design loop | ch03 § Managing Architectural Revisions | ch08 § Closed-Loop Design Execution; appC § Core Principles, principles 5 and 6 |
+| design loop | ch03 § Managing Architectural Revisions | ch08 § Running the Loop; appC § Core Principles, principles 5 and 6 |
 | design-loop card | ch03 § Design-Loop Cards and Documentation | appA § The Architecture 2.0 Reviewer's Checklist |
 | design problem | ch09 § Target System Shifts and Decision Reopening | ch03 § Stage 1. Formulating Core Architecture Questions; ch11 § Framing Cross-Layer Problems |
 | design space | ch02 § Search Space Explosion | ch03 § Stage 2. Exploring Alternatives; ch05 § Algorithmic Search Tactics and Heuristics |
 | distribution shift and drift signal | ch07 § Distribution Shift | ch09 § Target System Shifts and Decision Reopening; ch10 § Reliability Across Environmental Operating Conditions |
-| domain specialist | ch11 § Architectural Ownership and Commitment | ch07 § Routing Evidence Across System Layers; appA § Technical Ownership and Decision Boundaries |
+| domain specialist | ch11 § What the Architect Owns | ch07 § Routing Evidence Across System Layers; appA § Technical Ownership and Decision Boundaries |
 | ecosystem staging sequence | ch12 § Ecosystem Staging and Execution Sequence | ch12 § University Curricula and Workforce Certification |
 | electronic design automation (EDA) | preface § What This Book Teaches | ch06 § Hardware and Software Evaluation Environments; ch12 § EDA Industry Structures and Business Models |
 | engineering role | ch05 § Optimization Roles and Method Families | appA § Engineering Roles and Method Families |
