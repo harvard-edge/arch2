@@ -175,6 +175,13 @@ Workload evaluation requires decoupling inherent workload properties from single
 
 Transitioning to RTL and physical implementation shifts observable properties and reversal costs. Compiler-generated tests and simulation yield behavioral evidence; formal property verification establishes properties within declared model bounds; equivalence checking verifies representation mappings without proving architectural intent; and synthesis and place-and-route establish timing closure, area, congestion, and electrothermal behavior. At scaled semiconductor nodes, increasing global-wire delay relative to logic gates makes extracted post-layout verification essential [@HoMaiHorowitz2001FutureOfWires].
 
+Transferring architectural patterns across evolving technology generations must navigate four major structural shifts:
+
+1. **Cross-ISA and Memory Consistency Shifts (x86 TSO $\rightarrow$ RISC-V RVWMO):** Microarchitectural synchronization patterns, lock-free queues, and speculative store buffers designed under x86 Total Store Order (TSO) assume hardware-enforced store-load ordering. Transferring these designs to RISC-V, which defaults to the weaker RVWMO memory consistency model [@RISCV2026UnprivilegedISA], introduces subtle multi-core data races unless explicit acquire-release `fence` instructions and Atomic Memory Operations (AMOs) are re-verified via formal memory consistency checkers.
+2. **Vector Architecture Shifts (Fixed-Width SIMD $\rightarrow$ Dynamic RVV 1.0):** Software kernel patterns optimized for fixed-width SIMD (such as 512-bit AVX-512) cannot directly transfer to vector-length-agnostic architectures like RISC-V Vector (RVV 1.0). RVV requires strip-mining loops that query the hardware vector length at runtime via `vsetvli`, dynamically adapting to hardware implementations ranging from 128-bit mobile pipelines to 2048-bit server arrays.
+3. **Physical Transistor Node Shifts (FinFET $\rightarrow$ Gate-All-Around GAAFET & BSPDN):** Floorplan heuristics and standard cell placement patterns calibrated on FinFET nodes (7\ nm/5\ nm) fail when applied to 2\ nm/A16 nanosheet GAAFETs with Backside Power Delivery Networks (BSPDN). Backside power delivery shifts standard cell pin access entirely to the frontside while power grids route beneath active silicon, fundamentally altering dynamic IR-drop profiles, cell routing congestion, and thermal resistance paths.
+4. **Workload Paradigm Shifts (Dense GEMMs $\rightarrow$ Mixture-of-Experts & KV-Cache):** Systolic arrays and line-buffer architectures optimized for dense matrix multiplication (GEMMs) suffer catastrophic efficiency collapse when transferred to modern Mixture-of-Experts (MoE) LLM architectures. MoE workloads replace static, contiguous data movement with dynamic, data-dependent token routing across sparse expert weights and irregular, memory-bound Key-Value (KV) cache lookups, rendering dense systolic dataflows ineffective without dynamic crossbar routing and scatter-gather memory interfaces.
+
 ::: {.callout-lighthouse title="Timing closure does not settle the thermal question"}
 Achieving static timing closure in OpenSTA or Cadence Tempus confirms that path propagation delays satisfy target clock frequencies under specified PVT corners. However, it provides zero evidence regarding dynamic IR-drop, spatial thermal hotspots, or total power dissipation under real-time workloads.
 :::
@@ -218,6 +225,12 @@ The resulting speedup bound (@eq-logca-speedup-bound) formalizes net system acce
 $$
 S(g) = \frac{C_h g}{o + C_h g/A + \max\left(0,\, d g/B - T_{\mathrm{overlap}}(g)\right)}.
 $${#eq-logca-speedup-bound}
+
+The physical parameters in @eq-logca-speedup-bound depend heavily on the target interconnect technology regime:
+
+- **Die-to-Die Interconnect (UCIe 2.0 / 2.5D Packaging):** Delivers ultra-low invocation latency ($o \sim 5\text{--}10\text{ ns}$), high shore bandwidth density ($B > 1\text{ TB/s/mm}$), and minimal energy per bit ($\sim 0.5\text{ pJ/bit}$), allowing fine-grained sub-microsecond offloading between heterogeneous compute chiplets.
+- **Coherent Socket Interconnect (CXL 3.1 over PCIe PHY):** Operates at moderate latency ($o \sim 80\text{--}150\text{ ns}$) and energy ($\sim 5\text{--}10\text{ pJ/bit}$), suitable for memory pooling and coarse-grained accelerator kernel offloads.
+- **Board-Level Peripheral Interconnect (PCIe Gen 5/6):** Imposes significant round-trip invocation latency ($o > 500\text{--}1000\text{ ns}$) and transport energy ($\sim 20\text{ pJ/bit}$), requiring large workload batch sizes ($g \gg 10^5$ operations) to amortize host-device driver serialization and DMA transfer overheads.
 
 Fixed startup cost and transfer time share units with compute time, combining Amdahl's serial-fraction principle [@Amdahl1967ValiditySingleProcessor] with explicit communication costs. Excessive invocations ($N \cdot o$) or transfer overhead ($d g / B$) can erase local compute gains.
 
@@ -575,4 +588,4 @@ When we evaluate pattern transferability across Architecture 2.0, four core take
 - **Conclusion isolation.** Historical source records carry forward as valuable provenance, while prior architectural conclusions remain isolated and withheld until newly established target evidence confirms them in the new design context.
 :::
 
-As we transition into the next chapter (@sec-evaluating-agentic-architect), we hand off this source-to-target map and our versioned hardware-software state to address a broader question. Across repeated and varied architectural studies, does our configured AI-native system actually improve the final hardware result, reduce the total engineering cost of achieving it, or deliver on both fronts?
+Carrying forward this source-to-target map and versioned hardware-software state sets up the broader program question explored in @sec-evaluating-agentic-architect: across repeated and varied architectural studies, does a configured AI-native design system actually improve the final hardware result, reduce the total engineering cost of achieving it, or deliver on both fronts?

@@ -7,24 +7,24 @@ conflicts across non-sequential access strides during dynamic data selection.
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
 # Ensure repository root is in sys.path
-repo_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
-)
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+repo_root = Path(__file__).resolve().parents[4]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
 import numpy as np
 import matplotlib.pyplot as plt
-from book.tools.figures import style as book_style
+from _python.plots import COLORS, apply_style
 
 
-def generate_plot(output_dir: str | None = None) -> str:
+def generate_plot(output_dir: Path | None = None) -> str:
     """Generate and save the DRAM bank conflict latency overhead plot."""
-    fig, ax1, COLORS, plt_mod = book_style.setup_plot(figsize=(9, 4.8))
+    apply_style()
+    fig, ax1 = plt.subplots(figsize=(6.4, 3.4))
+    fig.subplots_adjust(left=0.12, right=0.86, top=0.88, bottom=0.18)
 
     strides = np.array([1, 2, 4, 8, 16, 32, 64, 128])
     stride_labels = [str(s) for s in strides]
@@ -43,25 +43,27 @@ def generate_plot(output_dir: str | None = None) -> str:
     line1 = ax1.plot(
         x_indices,
         scalesim_latency,
-        color=COLORS["BlueLine"],
-        linewidth=2.2,
+        color=COLORS["blue"],
+        linewidth=2.0,
         marker="o",
-        label="SCALE-Sim (Ideal Memory Interface)",
+        label="SCALE-Sim (Flat Memory Interface)",
     )
     line2 = ax1.plot(
         x_indices,
         ramulator_latency,
-        color=COLORS["RedLine"],
-        linewidth=2.2,
+        color=COLORS["red"],
+        linewidth=2.0,
         marker="s",
-        label="Ramulator (Cycle-Accurate HBM3)",
+        label="Ramulator (Cycle-Accurate DRAM)",
     )
 
-    ax1.set_xlabel("Dataset Access Stride (Index / Batch Stride)")
-    ax1.set_ylabel("Average Memory Latency (ns per 64B line read)")
+    ax1.set_xlabel("Dataset Access Stride (Index / Batch Stride)", fontsize=6.8)
+    ax1.set_ylabel("Average Memory Latency (ns per 64B line read)", fontsize=6.8)
     ax1.set_xticks(x_indices)
-    ax1.set_xticklabels(stride_labels)
+    ax1.set_xticklabels(stride_labels, fontsize=6.0)
     ax1.set_ylim(50, 500)
+    ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
+    ax1.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
     # Secondary axis: Overhead Percentage Bar Chart
     ax2 = ax1.twinx()
@@ -69,12 +71,12 @@ def generate_plot(output_dir: str | None = None) -> str:
         x_indices,
         overhead_pct,
         width=0.35,
-        color=COLORS["OrangeLine"],
+        color=COLORS["orange"],
         alpha=0.25,
         label="DRAM Bank Conflict Overhead (%)",
     )
-    ax2.set_ylabel("Latency Overhead Penalty (%)", color=COLORS["OrangeLine"])
-    ax2.tick_params(axis="y", labelcolor=COLORS["OrangeLine"])
+    ax2.set_ylabel("Latency Overhead Penalty (%)", fontsize=6.5, color=COLORS["orange"])
+    ax2.tick_params(axis="y", labelcolor=COLORS["orange"], labelsize=5.8)
     ax2.set_ylim(0, 400)
     ax2.grid(False)
 
@@ -82,58 +84,62 @@ def generate_plot(output_dir: str | None = None) -> str:
     ax1.annotate(
         "Sequential Stream\n(+8% Row Buffer Hit)",
         xy=(0, 108),
-        xytext=(0.2, 180),
+        xytext=(0.2, 190),
         arrowprops=dict(
-            facecolor=COLORS["GreenLine"],
-            edgecolor=COLORS["GreenLine"],
             arrowstyle="->",
-            lw=1.2,
+            color=COLORS["green"],
+            lw=0.9,
         ),
-        fontsize=8.5,
-        color=COLORS["GreenLine"],
+        fontsize=5.8,
+        color=COLORS["green"],
         fontweight="bold",
     )
 
     ax1.annotate(
         "Bank Conflict Peak at Stride 16\n(+340% Latency Overhead)",
         xy=(4, 440),
-        xytext=(2.2, 390),
+        xytext=(2.2, 380),
         arrowprops=dict(
-            facecolor=COLORS["RedLine"],
-            edgecolor=COLORS["RedLine"],
             arrowstyle="->",
-            lw=1.2,
+            color=COLORS["red"],
+            lw=0.9,
         ),
-        fontsize=8.5,
-        color=COLORS["RedLine"],
+        fontsize=5.8,
+        color=COLORS["red"],
         fontweight="bold",
     )
 
     ax1.set_title(
         "SCALE-Sim vs. Ramulator DRAM Bank Conflict Overhead across Access Strides",
-        pad=12,
+        fontsize=7.8,
+        pad=9,
+        fontweight="bold",
     )
+
+    for spine in ["top"]:
+        ax1.spines[spine].set_visible(False)
+        ax2.spines[spine].set_visible(False)
+    ax1.spines["left"].set_color(COLORS["ink"])
+    ax1.spines["bottom"].set_color(COLORS["ink"])
 
     # Combine legends
     lines = line1 + line2 + [bars]
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc="upper left", framealpha=0.9, fontsize=8.5)
-
-    fig = book_style.finalize_web_figure(fig)
+    ax1.legend(lines, labels, loc="upper left", framealpha=0.9, fontsize=5.5)
 
     if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        png_path = os.path.join(output_dir, "dram_bank_conflict_overhead.png")
-        svg_path = os.path.join(output_dir, "dram_bank_conflict_overhead.svg")
-        fig.savefig(png_path, dpi=300, bbox_inches="tight")
-        fig.savefig(svg_path, bbox_inches="tight")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        svg_path = output_dir / "fig-dram-bank-conflict.svg"
+        pdf_path = output_dir / "fig-dram-bank-conflict.pdf"
+        fig.savefig(svg_path, format="svg", bbox_inches="tight")
+        fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
         plt.close(fig)
-        return png_path
+        return str(svg_path)
 
     return ""
 
 
 if __name__ == "__main__":
-    out_dir = os.path.dirname(os.path.abspath(__file__))
+    out_dir = Path(__file__).resolve().parent
     saved_file = generate_plot(out_dir)
     print(f"Plot successfully saved to {saved_file}")

@@ -2,18 +2,21 @@
 
 Active hand-authored figures:
 
-- `F8-evidence-flow`: the sequence from tool return through typed result
+- `ch07-cover-map.svg`: chapter overview mapping raw signals to qualified evidence, formal bounds, proxy diagnostics, and trust calibration.
+- `fig-evidence-flow`: the sequence from tool return through typed result
   qualification, a comparison or property check, scoped interpretation, and a
   recorded next step, with early repair paths for incomplete returns and
   invalid checks.
-- `F7-claim-frame`: candidate, comparator, measured difference, conditions,
+- `fig-claim-frame`: candidate, comparator, measured difference, conditions,
   uncertainty, and check limits.
-- `F9-trust-calibration`: a conceptual normalized schematic with discrete
+- `fig-trust-calibration`: a conceptual normalized schematic with discrete
   observed qualification strata, a visible unsampled gap, and possible proxy
   divergence beyond the sampled strata, while keeping qualification coverage
   separate from held-out agreement.
-- `ch7_independent_checks`: shared failure assumptions versus a
+- `fig-independent-checks`: shared failure assumptions versus a
   claim-specific checking path.
+- `fig-sva-bmc-coverage-depth`: SystemVerilog Assertion (SVA) formal coverage versus BMC unroll depth across accelerator control units.
+- `fig-synthesis-verification-funnel`: Physical signoff verification funnel across automated hardware generation.
 
 A retired mitigation-overhead chart used
 `data/source-receipts/chapter7-mitigation-overhead.csv`. Do not return that

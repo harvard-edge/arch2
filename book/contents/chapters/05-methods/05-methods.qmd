@@ -482,6 +482,11 @@ Evaluating generative methods requires matching construction paths and budgets a
 
 Chip-Chat demonstrates interactive RTL generation where language models drafted Verilog for an 8-bit processor, reaching tapeout only through iterative human revision and strict tool feedback [@BlockloveEtAl2023ChipChat]. Generation cost remains inseparable from checking cost.
 
+Modern generative hardware design deploys two advanced search structures beyond single-pass autoregressive prompting:
+
+1. **Monte Carlo Tree Search (MCTS) for Hardware Code Generation:** Single-pass LLM generation ($T=0.7$) frequently generates hallucinated ports or syntax errors that discard the entire prompt context upon compilation failure. MCTS structures hardware generation as a tree search over AST modifications and modular code snippets. Intermediate nodes are evaluated by fast syntax linters (Verilator lint) and unit assertion checkers (`assert property`), providing non-terminal reward estimates that guide rollout expansion toward syntactically valid and assertion-compliant hardware blocks.
+2. **Multi-Agent Reflection and Adversarial Debate:** Structuring multiple specialized agent roles (a *RTL Generator*, a *Lint/CDC Critic*, a *Testbench Author*, and a *Formal Proof Specialist*) creates an adversarial verification ring. When the Generator proposes an RVV vector unit, the Critic flags unhandled reset state, the Testbench Author generates corner-case randomized stimulus in Cocotb, and the Formal Specialist formulates bounded model checking properties before any candidate consumes expensive FPGA or physical synthesis cycles.
+
 While construction methods resolve candidate shortages, they create downstream evaluation bottlenecks when candidate production outpaces tool throughput. Search tactics must then ration evaluation budgets.
 
 ## Search Tactics and Budget Allocation {#sec-search-tactics-budget-allocation}
@@ -490,7 +495,11 @@ When architectural spaces exceed exhaustive simulation limits, optimization algo
 
 Feedback metrics require explicit semantic interpretation. Known constraints (such as enumerated cache capacities or non-overlap rules) should be encoded directly into candidate constructors or enforced via deterministic projection before invoking expensive tools. Downstream constraints (such as routing feasibility or timing closure) emerge only after tool execution. If a run terminates at a declared limit, its completion time is right-censored [@KleinMoeschberger2003Survival], providing no objective value unless explicitly modeled. Infrastructure crashes and non-convergent runs must be recorded as failures rather than zero-valued objectives.
 
-Surrogate-driven selection introduces positive selection bias. Selecting the maximum among noisy estimates systematically selects for optimistic prediction error, known as the optimizer's curse [@SmithWinkler2006OptimizersCurse]. Guarding against optimistic bias requires preserving original surrogate predictions, reserving independent confirmation runs, and reporting shrinkage.
+Surrogate-driven selection introduces positive selection bias. When choosing the candidate that maximizes a noisy surrogate estimate $\hat{f}(x) = f(x) + \epsilon$, the expected value of the selected candidate systematically exceeds the true maximum:
+$$\mathbb{E}\left[\max_{i=1,\dots,K} \hat{f}(x_i)\right] > \max_{i=1,\dots,K} f(x_i)$$
+This statistical phenomenon, known as the *Optimizer's Curse* [@SmithWinkler2006OptimizersCurse], causes optimization loops targeting fast proxy models to select candidates with large positive estimation errors rather than superior physical performance. Guarding against optimistic bias requires preserving original surrogate predictions, reserving independent confirmation runs, and reporting shrinkage.
+
+In high-performance computing (HPC) clusters managed by Slurm or Kubernetes, evaluating candidates sequentially (one at a time) leaves simulation nodes idle. Modern search tactics deploy *Batch Active Learning* via $q$-Expected Improvement ($q$-EI) or asynchronous Bayesian optimization. These algorithms select a batch of $q$ distinct candidate designs simultaneously, penalizing candidates that lie too close to currently running simulations, thus maximizing information gain across parallel cluster workers without redundant duplicate evaluations.
 
 Within a fixed space, exploitation samples promising regions, while exploration samples high-uncertainty areas. Neither strategy widens declared boundaries; evaluating novel topologies or ISA extensions requires redefining the representation.
 

@@ -105,7 +105,28 @@ In Counterexample-Guided Abstraction Refinement (CEGAR), spurious counterexample
 
 Bounded Model Checking (BMC) unrolls transition relations to depth $k$ to catch shallow defects [@BiereEtAl1999BMC]. Unbounded safety requires $k$-induction or property-directed reachability (IC3/PDR) [@Bradley2011IC3; @EenEtAl2011PDR].
 
+Formal state-space coverage scales with unroll depth $k$ before hitting exponential solver runtime walls (@fig-sva-bmc-coverage-depth). While shallow control structures (such as DMA ring buffer controllers) achieve complete formal proof at moderate depths ($k=32$), complex state machines (such as multi-tile systolic array controllers) suffer state-space explosion, triggering SAT solver timeouts ($k > 45$).
+
+![**SystemVerilog Assertion (SVA) formal coverage versus BMC unroll depth.** Shallow control units (DMA controllers and barrier synchronizers) achieve 100% formal proof at moderate unroll depths ($k \le 32$). Complex multi-tile systolic controllers and arbiters encounter state-space explosion, hitting solver timeout barriers ($k > 45$) where formal proof remains bounded rather than complete.](images/fig-sva-bmc-coverage-depth){#fig-sva-bmc-coverage-depth width="100%" fig-alt="Two-panel plot showing SVA formal state-space coverage rising with BMC depth k across four accelerator units on the left axis, alongside exponential SAT solver runtime on the right log-scale axis, highlighting solver timeout walls beyond depth 45."}
+
 Safety properties exclude forbidden states (such as mutual exclusion violations), while liveness properties guarantee eventual progress under explicit fairness assumptions [@AlpernSchneider1985Liveness]. Vacuity checks ensure assertions trigger non-trivially [@BeerEtAl2001Vacuity]. Automated assertion generators (e.g., AssertLLM) require syntactic and semantic qualification against seeded mutants [@FangEtAl2025AssertLLM; @PulavarthiEtAl2025AssertionGeneration].
+
+### Semantic RTL Defect Classes and Mutation Testing
+
+Automated generative pipelines frequently introduce four distinct semantic RTL defect classes that survive basic syntax compilation:
+
+1. **Inferred Latches & Combinational Loops:** Incomplete `case` statements or omitted default assignments in `always_comb` blocks cause synthesis tools to infer unwanted transparent latches, corrupting clock gating and inflating static leakage.
+2. **Clock-Domain Crossing (CDC) Metastability:** Missing dual-flip-flop synchronizers, gray-coded FIFO pointers, or handshake protocols across asynchronous clock boundaries lead to transient metastability and nondeterministic silicon lockups.
+3. **Bitwidth Truncation and Overflow Hazards:** Vector arithmetic pipelines (such as RVV matrix multipliers) silently truncate intermediate accumulator precision when fixed-point quantization schemes or saturating arithmetic bounds are omitted.
+4. **Unhandled Reset States in Complex FSMs:** State machines that fail to define recovery transitions for unassigned binary states can enter deadlock traps upon transient single-event upsets (SEUs).
+
+To prevent the self-verification paradox (where the same learned model generates both the RTL implementation and its testbench, producing tautological testbenches that pass because they mirror the model's own false assumptions), verification harnesses enforce mutation testing and fault injection. Harnesses systematically inject artificial synthetic faults (mutating logic operators, inverting conditional branches, and forcing stuck-at-0/1 faults) into candidate RTL. A testbench is qualified only if it successfully detects and rejects every seeded mutant.
+
+Verification environments balance turnaround time by deploying lightweight Python-based testbenches (Cocotb) for rapid unit regression during inner-loop exploration, while reserving full IEEE 1800.2 UVM constrained-random environments with functional covergroups for final architectural signoff.
+
+Physical candidate survival follows a steep multi-stage verification funnel (@fig-synthesis-verification-funnel).
+
+![**Physical signoff verification funnel across automated hardware generation.** Candidate proposals experience heavy attrition across syntactic parsing, interface validation, functional simulation, static timing closure (WNS $\ge 0\text{ ns}$), and physical DRC layout, yielding a sub-1% final survival rate.](images/fig-synthesis-verification-funnel){#fig-synthesis-verification-funnel width="100%" fig-alt="Two-panel chart illustrating candidate attrition on a log scale across five physical verification gates from 100,000 initial proposals down to surviving signoff layouts, alongside conditional pass rates per stage."}
 
 ### Equivalence and Refinement
 

@@ -7,24 +7,24 @@ in machine learning accelerators.
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
-# Ensure repository root is in sys.path
-repo_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
-)
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+# Add repository root to sys.path
+repo_root = Path(__file__).resolve().parents[4]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
 import numpy as np
 import matplotlib.pyplot as plt
-from book.tools.figures import style as book_style
+from _python.plots import COLORS, apply_style
 
 
-def generate_plot(output_dir: str | None = None) -> str:
+def generate_plot(output_dir: Path | None = None) -> str:
     """Generate and save the SVA formal coverage vs BMC depth plot."""
-    fig, ax1, COLORS, plt_mod = book_style.setup_plot(figsize=(9, 4.8))
+    apply_style()
+    fig, ax1 = plt.subplots(figsize=(6.4, 3.4))
+    fig.subplots_adjust(left=0.12, right=0.86, top=0.88, bottom=0.18)
 
     # BMC unroll depth array
     depths = np.arange(1, 61, 1)
@@ -52,117 +52,124 @@ def generate_plot(output_dir: str | None = None) -> str:
     line1 = ax1.plot(
         depths,
         cov_dma,
-        color=COLORS["GreenLine"],
-        linewidth=2.2,
+        color=COLORS["green"],
+        linewidth=2.0,
         label="DMA Ring Buffer Controller",
     )
     line2 = ax1.plot(
         depths,
         cov_barrier,
-        color=COLORS["BlueLine"],
-        linewidth=2.2,
+        color=COLORS["blue"],
+        linewidth=2.0,
         label="All-Reduce Barrier Synchronizer",
     )
     line3 = ax1.plot(
         depths,
         cov_arbiter,
-        color=COLORS["OrangeLine"],
-        linewidth=2.2,
+        color=COLORS["orange"],
+        linewidth=2.0,
         label="Weight Buffer Arbiter",
     )
     line4 = ax1.plot(
         depths,
         cov_systolic,
-        color=COLORS["RedLine"],
-        linewidth=2.2,
+        color=COLORS["red"],
+        linewidth=2.0,
         label="Systolic Array Controller",
     )
 
     # Highlight Formal Verification Wall (SAT Solver Timeout Region)
     ax1.axvspan(
-        45, 60, color=COLORS["RedFill"], alpha=0.35, label="SAT Solver Timeout Region"
+        45, 60, color=COLORS["red"], alpha=0.12, label="SAT Solver Timeout Region"
     )
-    ax1.axhline(100, color="#888888", linestyle=":", linewidth=1.0, alpha=0.7)
+    ax1.axhline(100, color=COLORS["muted"], linestyle=":", linewidth=1.0, alpha=0.7)
 
-    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth (k)")
-    ax1.set_ylabel("Formal State-Space Coverage (%)")
+    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth (k)", fontsize=6.8)
+    ax1.set_ylabel("Formal State-Space Coverage (%)", fontsize=6.8)
     ax1.set_xlim(1, 60)
     ax1.set_ylim(0, 105)
+    ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
+    ax1.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
     # Secondary Axis for Solver Runtime
     ax2 = ax1.twinx()
     line_rt = ax2.plot(
         depths,
         runtime_sec,
-        color=COLORS["VioletLine"],
-        linewidth=1.8,
+        color=COLORS["purple"],
+        linewidth=1.6,
         linestyle="--",
         label="SAT Solver Runtime (s)",
     )
     ax2.set_yscale("log")
     ax2.set_ylabel(
-        "Solver Runtime per Property (seconds, log scale)", color=COLORS["VioletLine"]
+        "Solver Runtime per Property (seconds, log scale)",
+        fontsize=6.5,
+        color=COLORS["purple"],
     )
-    ax2.tick_params(axis="y", labelcolor=COLORS["VioletLine"])
+    ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=5.8)
     ax2.grid(False)
 
     # Annotations
     ax1.annotate(
         "100% Formal Proof\n(Full Coverage at k=32)",
         xy=(32, 100),
-        xytext=(18, 92),
+        xytext=(16, 88),
         arrowprops=dict(
-            facecolor=COLORS["GreenLine"],
-            edgecolor=COLORS["GreenLine"],
             arrowstyle="->",
-            lw=1.2,
+            color=COLORS["green"],
+            lw=0.9,
         ),
-        fontsize=8.5,
-        color=COLORS["GreenLine"],
+        fontsize=5.8,
+        color=COLORS["green"],
         fontweight="bold",
     )
 
     ax1.annotate(
         "State Space Explosion\n(Timeout at k > 45)",
         xy=(48, 76),
-        xytext=(34, 55),
+        xytext=(32, 52),
         arrowprops=dict(
-            facecolor=COLORS["RedLine"],
-            edgecolor=COLORS["RedLine"],
             arrowstyle="->",
-            lw=1.2,
+            color=COLORS["red"],
+            lw=0.9,
         ),
-        fontsize=8.5,
-        color=COLORS["RedLine"],
+        fontsize=5.8,
+        color=COLORS["red"],
         fontweight="bold",
     )
 
-    # Title & Legend
     ax1.set_title(
-        "SystemVerilog Assertion (SVA) Coverage vs. BMC Unroll Depth in Accelerator Logic",
-        pad=12,
+        "SystemVerilog Assertion Coverage vs. BMC Unroll Depth in Accelerator Units",
+        fontsize=7.8,
+        pad=9,
+        fontweight="bold",
     )
+
+    for spine in ["top"]:
+        ax1.spines[spine].set_visible(False)
+        ax2.spines[spine].set_visible(False)
+    ax1.spines["left"].set_color(COLORS["ink"])
+    ax1.spines["bottom"].set_color(COLORS["ink"])
 
     # Combine legends from both axes
     lines = line1 + line2 + line3 + line4 + line_rt
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc="upper left", framealpha=0.9, fontsize=8.5)
-
-    fig = book_style.finalize_web_figure(fig)
+    ax1.legend(lines, labels, loc="lower right", framealpha=0.9, fontsize=5.5)
 
     if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        png_path = os.path.join(output_dir, "sva_bmc_coverage_depth.png")
-        svg_path = os.path.join(output_dir, "sva_bmc_coverage_depth.svg")
-        fig.savefig(png_path, dpi=300, bbox_inches="tight")
-        fig.savefig(svg_path, bbox_inches="tight")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        svg_path = output_dir / "fig-sva-bmc-coverage-depth.svg"
+        pdf_path = output_dir / "fig-sva-bmc-coverage-depth.pdf"
+        fig.savefig(svg_path, format="svg", bbox_inches="tight")
+        fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
         plt.close(fig)
-        return png_path
+        return str(svg_path)
 
     return ""
 
 
 if __name__ == "__main__":
-    out_dir = os.path.dirname(os.path.abspath(__file__))
+    out_dir = Path(__file__).resolve().parent
     saved_file = generate_plot(out_dir)
     print(f"Plot successfully saved to {saved_file}")
