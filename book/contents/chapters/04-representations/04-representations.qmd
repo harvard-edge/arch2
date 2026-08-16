@@ -43,7 +43,7 @@ This chapter establishes the following learning objectives:
 - **Map** dynamic workload phase behavior, tool results, and acquisition costs to executable design states.
 - **Build** datasets that explicitly handle tool failures, hard physical boundaries, and missing outcomes.
 - **Separate** durable knowledge from live project state to trace facts to authoritative sources.
-- **Choose** representations knowing that each format preserves different properties and governs what a method can act on.
+- **Choose** representations across the three operational layers (flat tokens, local graphs, multi-level IRs) knowing that each format preserves different properties and governs what a method can act on.
 - **Construct** world-model state representations that support multi-step planning without drifting from physical reality.
 :::
 
@@ -413,6 +413,12 @@ Maintaining current state incurs compute, storage, license, and review costs. Ev
 
 Passing an architectural design into machine learning algorithms or optimization loops requires selecting a structural feature representation. The encodings chosen (flat tokens, ASTs, CDFGs, layout matrices, learned embeddings) dictate which design variations are expressible, which structural dependencies survive, and which candidates downstream methods consider similar.
 
+The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-integration) impose fundamentally different representation requirements:
+
+- **Layer 1 (AI-Assisted Engineering):** Consumes and emits unstructured natural language and flat syntax tokens (such as raw SystemVerilog snippets, code comments, and tool error logs). Because flat syntax tokens omit circuit hierarchy, wire delay, and clock domains, Layer 1 tools accelerate human typing without possessing machine-checkable awareness of physical hardware invariants.
+- **Layer 2 (AI-Driven Subsystem Optimization):** Operates on domain-specific structured state vectors, cost matrices, and localized circuit graphs (such as And-Inverter Graphs, macro-placement grid canvases, and DRAM access histograms). These representations enable deep local search (e.g., reinforcement-learning floorplanning) within a fixed container, but remain specialized to one subsystem and cannot represent cross-boundary trade-offs.
+- **Layer 3 (AI-Native System Design):** Requires unified multi-level intermediate representations (such as CIRCT and MLIR dialect lowering) and coupled world-model state vectors $s = \langle s_{\text{design}}, s_{\text{env}} \rangle$ that preserve syntax, typing, control-flow semantics, and physical constraints across the entire hardware-software vertical stack.
+
 Parameter schemas enumerate legal values; ASTs and CDFGs preserve structural and dataflow relationships obscured by token sequences. Clang/LLVM ASTs expose software control flow; MLIR dialects and Spatial IR capture tensor dependencies, loop tilings, and scratchpad allocations; Triton and CUDA PTX ASTs represent thread-block tiling and Tensor Core scheduling. Typed intermediate representations reject malformed constructions before execution.
 
 Intermediate representation scaling directly governs High-Level Synthesis (HLS) and compiler turnaround time (@fig-ch04-ast-hls-latency). While unpartitioned, flat syntax trees suffer super-linear compilation blowup ($O(N^{2.45})$), progressive multi-level IRs in CIRCT/MLIR scale hierarchically ($O(N^{1.20})$), maintaining sub-minute compilation turnaround even across hundreds of thousands of operations.
@@ -422,7 +428,7 @@ Intermediate representation scaling directly governs High-Level Synthesis (HLS) 
 Modern representation stacks deploy four specialized representations to bridge the hardware semantic gap:
 
 1. **Progressive Dialect Lowering (CIRCT / MLIR):** Compilers lower high-level tensor operators (`linalg`, `affine`) through intermediate control and memory dialects (`scf`, `memref`) down to hardware-specific dialects (`hw`, `comb`, `seq`, `sv`, `firrtl`) [@CIRCT]. Progressive lowering preserves high-level loop nest structures and clock domain boundaries that flat Verilog ASTs lose.
-2. **Equality Graphs (E-Graphs & `egg`):** Hardware optimization frequently encounters phase-ordering deadlocks, where applying one microarchitectural transform (e.g., pipelining before retiming) permanently closes off a superior solution. E-graphs represent entire equivalence classes of structural rewrites simultaneously, enabling saturation-based rewriting and optimal technology mapping without greedy heuristic traps.
+2. **Equality Graphs (E-Graphs & `egg`):** Hardware optimization frequently encounters phase-ordering deadlocks, where applying one microarchitectural transform (e.g., pipelining before retiming) permanently closes off a superior solution. E-graphs represent entire equivalence classes of structural rewrites simultaneously, enabling saturation-based rewriting and optimal technology mapping without greedy heuristic traps, bounded by extraction cost when rewrite rules expand combinatorial state.
 3. **Hypergraph Netlists:** Gate-level circuits are more accurately represented as hypergraphs (where a single net connects one driver to many load pins) rather than standard directed graphs. Hypergraph representations allow Graph Neural Networks (GNNs) to predict routing congestion, pin density, and wire parasitic capacitance directly before running placement and routing.
 4. **Waveform and Event Stream Tokenization:** Dynamic execution behavior is captured via Value Change Dump (VCD) and Fast Signal Database (FSDB) dumps. Tokenizing transition densities, clock toggle rates, and signal switching probabilities allows learned models to predict transient IR-drop hotspots, dynamic power peaks, and glitch power without executing gate-level timing simulations.
 
@@ -465,7 +471,7 @@ The world-model state vector $s$ is defined as a coupled tuple:
 $$s = \left\langle s_{\text{design}}, s_{\text{env}} \right\rangle$$
 
 - **Design microarchitecture state ($s_{\text{design}}$):** Static structural hardware configurations combining parameter tuples (such as `l2.capacity`, `noc.bus_width`), typed IR graphs (CIRCT/MLIR), cell-level AIG topologies, and structural graph embeddings $\mathbf{z}_{\text{graph}}$. This vector carries legal mutation boundaries and physical invariants.
-- **Environment and operating-condition state ($s_{\text{env}}$):** Dynamic operational context incorporating workload phase vectors ($w_{\text{BBV}}$ or trace embeddings $\mathbf{z}_{\text{trace}}$), process corners (TSMC N3 SS/TT/FF), UPF power domain states, SDC clock maps, and thermal-power envelopes.
+- **Environment and operating-condition state ($s_{\text{env}}$):** Dynamic operational context incorporating workload phase vectors ($w_{\text{BBV}}$ or trace embeddings $\mathbf{z}_{\text{trace}}$), process corners (TSMC N3 multi-corner multi-mode conditions, e.g., SSG 0.675\ V -40\ °C vs. FFG 0.825\ V 125\ °C), UPF power domain states, SDC clock maps, and thermal-power envelopes.
 
 When an agent executes an action $a$ (modifying cache capacity, adding an NPU tile, re-partitioning clock domains), the world model evaluates the state transition $s' = T(s, a)$.
 
@@ -538,7 +544,7 @@ Representation pipelines must enforce boundaries between mutable parameters and 
 
 Parametric changes select new values within an existing framework (cache capacity or queue depth); structural changes alter components or relationships (adding pipeline stages or swapping interconnects), requiring distinct schemas and separate studies.
 
-System and software contracts (ISA specifications, memory consistency models) must be codified directly as dependencies and invariants. Physical collateral demands equal coupling: timing constraints rely on hierarchical paths in SDC files [@Synopsys2023ConstraintMapping], and power intent requires UPF alignment with matching RTL hierarchies [@IEEE2024UPF].
+System and software contracts (ISA specifications, memory consistency models) must be codified directly as dependencies and invariants. Physical collateral demands equal coupling: timing constraints rely on hierarchical paths and clock definitions in SDC files [@Synopsys2023ConstraintMapping], where unverified timing exceptions (such as spurious false paths or multicycle paths) can falsely report timing closure on physically broken silicon. Power intent requires UPF alignment with matching RTL hierarchies [@IEEE2024UPF].
 
 Multi-corner, multi-mode analysis assesses physical designs across operating modes and timing views [@Cadence2021Tempus]. Design candidates must maintain consistent identities across this matrix, with every result naming its condition rather than substituting typical-corner values for hold checks.
 

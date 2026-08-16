@@ -31,7 +31,7 @@ Combining state representations (@sec-data-representations-world-models), search
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
 
-- **Qualify** tool returns by type and status to preserve data lineage.
+- **Qualify** tool returns across the three operational layers (syntax checks, local subsystem rewards, multi-property verification harnesses) to preserve data lineage.
 - **Interpret** formal bounds and empirical uncertainty without overextending claims.
 - **Isolate** real design differences from confounding conditions, run-to-run variance, selection effects, and proxy error.
 - **Route** formal proof returns and empirical checks into defensible repair actions.
@@ -50,6 +50,12 @@ Qualifying an execution return requires separating five distinct questions:
 3. Is the measurement or proof valid under declared operating conditions?
 4. Which specific design requirement does the result satisfy or contradict?
 5. What concrete architectural revision or claim does the evidence support?
+
+The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-integration) establish fundamentally different verification boundaries:
+
+- **Layer 1 (AI-Assisted Engineering):** Relies on manual human inspection or lightweight syntax linting. If the same language model drafts both the hardware and its testbench, the workflow collapses into the Self-Verification Paradox, passing syntactically plausible candidates that suffer severe physical signoff attrition (<1% tapeout-ready).
+- **Layer 2 (AI-Driven Subsystem Optimization):** Uses domain-specific surrogate cost models or localized signoff tools (such as proxy wirelength or timing slack in macro floorplanning) within a fixed container. Search loops exploit modeling shortcuts (proxy gaming) unless constrained by independent reference checks.
+- **Layer 3 (AI-Native System Design):** Deploys a full multi-property verification harness combining formal SystemVerilog Assertions (SVA/BMC), IEEE 1801 UPF power-domain isolation, clock-domain crossing linting, and mutation testing with non-correlated oracles to deliver rejectable evidence to In-Order Human Commitment Authority.
 
 Incomplete runs require quarantining artifacts unless extraction lineage is independently verified. An unconstrained process corner in Cadence Tempus or missing UPF power-domain isolation in JasperGold invalidates physical claims even if the tool exits cleanly.
 
@@ -113,7 +119,7 @@ Formal state-space coverage scales with unroll depth $k$ before hitting exponent
 
 Safety properties exclude forbidden states (such as mutual exclusion violations), while liveness properties guarantee eventual progress under explicit fairness assumptions [@AlpernSchneider1985Liveness]. Vacuity checks ensure assertions trigger non-trivially [@BeerEtAl2001Vacuity]. Automated assertion generators (e.g., AssertLLM) require syntactic and semantic qualification against seeded mutants [@FangEtAl2025AssertLLM; @PulavarthiEtAl2025AssertionGeneration].
 
-### Semantic RTL Defect Classes and Mutation Testing
+### Semantic RTL Defect Classes and Mutation Testing {#sec-semantic-rtl-defects}
 
 Automated generative pipelines frequently introduce four distinct semantic RTL defect classes that survive basic syntax compilation:
 
@@ -132,13 +138,13 @@ Combinational equivalence checking (CEC) compares logic between aligned state el
 
 ### Formal Bounds Versus Dynamic Coverage
 
-To extend finite BMC depth $k$ into an unbounded safety proof, $k$-induction checks the base query $B_k$ and the inductive step $S_k$:
+To extend finite BMC depth $k$ into an unbounded safety proof, $k$-induction checks the base query $B_k$ (verifying no property violation is reachable from the initial state within $k$ steps) and the inductive step $S_k$ (verifying that any valid $k$-step trajectory cannot transition into an invalid state):
 
 $$B_k = Init(s_0) \land \bigwedge_{i=0}^{k-1} T(s_i,s_{i+1}) \land \bigvee_{i=0}^{k} \neg P(s_i),$$
 
-$$S_k = \bigwedge_{i=0}^{k} P(s_i) \land \bigwedge_{i=0}^{k} T(s_i,s_{i+1}) \land \neg P(s_{k+1}).$$
+$$S_k = \bigwedge_{i=0}^{k} P(s_i) \land \bigwedge_{i=0}^{k} T(s_i,s_{i+1}) \land \neg P(s_{k+1}),$$
 
-Unbounded safety holds when both queries are unsatisfiable under transition relation $T$.
+where $Init(s_0)$ constrains the initial state, $T(s_i, s_{i+1})$ represents the hardware transition relation, and $P(s)$ is the target safety invariant. Unbounded safety holds when both queries are proven unsatisfiable by the solver.
 
 Dynamic verification pairs constrained-random simulation (VCS, Verilator) and UVM coverage metrics [@IEEE2020UVM; @IEEE2023SystemVerilog] with hardware emulation platforms (Palladium, ZeBu, Veloce). Low-power verification combines static IEEE 1801 UPF Power State Tables (PST) with low-power aware simulation to prevent unisolated domain crossings [@IEEE2024UPF].
 
@@ -170,11 +176,13 @@ Every comparison binds candidate and comparator revisions to a measured differen
 
 ![**Comparative claim frames bind candidate and baseline designs to measured deltas.** The three-column structure maps compared designs (candidate and comparator) to measured results (quantities, units, differences, and uncertainty), which remain strictly conditional on experimental scope (workloads, architectural state, tool versions, PVT corners, and check nonclaims). A change in evaluation scope creates a distinct comparison rather than an interchangeable measurement.](images/fig-claim-frame){#fig-claim-frame width="100%" fig-alt="Three-column comparison frame. Candidate and comparator feed a measured quantity, difference, and uncertainty, which are bounded by workload and design state, tool conditions, and check scope."}
 
-For matched architectural cases $c_j$, the paired difference is:
+For a matched set of architectural evaluation cases $c_j \in \mathcal{C}$ (representing identical benchmark inputs, initial cache states, and PVT operating corners), the paired difference is:
 
 $$
-d_j = y(\text{candidate}, c_j) - y(\text{comparator}, c_j).
+d_j = y(\text{candidate}, c_j) - y(\text{comparator}, c_j),
 $$
+
+where $y(\cdot)$ denotes the evaluated architectural metric.
 
 Normalized performance ratios across benchmark suites require geometric means to preserve rank consistency [@FlemingWallace1986HowNotToLie].
 
@@ -291,7 +299,7 @@ Superficially distinct verifiers often share underlying specifications, training
 
 ![**Second checks add information only when changing the failure source.** The left column illustrates how a candidate producer paired with a critic sharing the same underlying model or specification produces false correlated agreement. The right column shows how introducing a claim-specific check with an independent measurement path provides a bounded challenge, reducing correlated blind spots while requiring remaining shared baseline assumptions to be explicitly recorded [@KnightLeveson1986Multiversion; @PanicksseryEtAl2024SelfPreference].](images/fig-independent-checks){#fig-independent-checks width="100%" fig-alt="Two-column diagram. A producer and critic sharing the same assumptions lead to correlated agreement. A producer and a claim-specific check with a different measurement path lead to a bounded challenge, with remaining shared assumptions explicitly retained."}
 
-Mutation testing evaluates verification suite adequacy by measuring the detection rate of synthetically injected RTL defects [@DeMilloLiptonSayward1978Hints]. Security vulnerabilities (Spectre, Meltdown) exploit microarchitectural side channels invisible to standard functional suites, requiring dedicated leakage checks [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre].
+As established in @sec-semantic-rtl-defects, mutation testing evaluates verification suite adequacy by measuring the detection rate of synthetically injected RTL defects [@DeMilloLiptonSayward1978Hints]. Similarly, hardware security vulnerabilities (such as Spectre and Meltdown) exploit microarchitectural side channels invisible to standard functional suites, requiring dedicated information-leakage checkers [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre].
 
 ## Routing Evidence Across System Layers
 

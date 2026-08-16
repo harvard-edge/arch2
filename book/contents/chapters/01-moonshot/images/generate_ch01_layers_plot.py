@@ -1,0 +1,222 @@
+"""Generate fig-ch01-three-layers-ai-integration SVG, PDF, and PNG with pristine layout."""
+
+from pathlib import Path
+import subprocess
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="100%" height="100%" role="img">
+  <title>The Three Operational Layers of AI in System and Chip Design</title>
+  <desc>Hierarchical representation of AI integration across hardware design: Layer 1 for point-task acceleration, Layer 2 for deep local subsystem optimization, and Layer 3 for cross-boundary AI-native system orchestration under in-order human commitment authority.</desc>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 1 L 9 5 L 0 9 Z" fill="#1683A6"/>
+    </marker>
+    <style>
+      .font { font-family: Arial, Helvetica, sans-serif; }
+      .main-title { font-size: 16px; font-weight: 700; fill: #20252B; }
+      .main-subtitle { font-size: 12px; font-weight: 400; fill: #59636D; }
+
+      .layer-title { font-size: 13px; font-weight: 700; }
+      .badge-text { font-size: 10px; font-weight: 700; fill: #FFFFFF; letter-spacing: 0.5px; }
+
+      .col-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+      .body-text { font-size: 9.8px; font-weight: 400; fill: #20252B; }
+      .limit-text { font-size: 9.8px; font-weight: 400; fill: #3E474B; }
+
+      .side-label { font-size: 10.5px; font-weight: 700; fill: #1683A6; text-anchor: middle; letter-spacing: 0.3px; }
+      .banner-text { font-size: 11px; font-weight: 400; fill: #3E474B; }
+    </style>
+  </defs>
+
+  <rect width="960" height="600" fill="#FFFFFF"/>
+
+  <!-- Main Title & Subtitle -->
+  <text class="font main-title" x="65" y="34">The Three Operational Layers of AI in System and Chip Design</text>
+  <text class="font main-subtitle" x="65" y="52">Distinguishing point-task assistance and local subsystem optimization from cross-boundary system orchestration</text>
+
+  <!-- Side Axis Indicator -->
+  <line x1="38" y1="500" x2="38" y2="82" stroke="#1683A6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+  <text class="font side-label" transform="translate(20, 290) rotate(-90)">Increasing Cross-Layer Scope &amp; Multi-Tool Verification</text>
+
+  <!-- ===================================================================== -->
+  <!-- LAYER 3: AI-Native System Design                                      -->
+  <!-- ===================================================================== -->
+  <g transform="translate(65, 72)">
+    <!-- Container -->
+    <rect width="865" height="128" rx="6" fill="#F4FAFD" stroke="#1683A6" stroke-width="1.8"/>
+    <!-- Top Header Bar -->
+    <path d="M 0 6 Q 0 0 6 0 L 859 0 Q 865 0 865 6 L 865 28 L 0 28 Z" fill="#E4F1F6"/>
+    <line x1="0" y1="28" x2="865" y2="28" stroke="#1683A6" stroke-width="1.2"/>
+
+    <!-- Badge -->
+    <rect x="12" y="5" width="64" height="18" rx="3" fill="#1683A6"/>
+    <text class="font badge-text" x="44" y="18" text-anchor="middle">LAYER 3</text>
+
+    <!-- Glyph: Connected Orchestration Nodes -->
+    <g transform="translate(84, 6)" stroke="#136680" stroke-width="1.2" fill="none">
+      <circle cx="8" cy="3.5" r="2.2" fill="#136680"/>
+      <circle cx="3" cy="12.5" r="2.2" fill="#136680"/>
+      <circle cx="13" cy="12.5" r="2.2" fill="#136680"/>
+      <line x1="8" y1="3.5" x2="3" y2="12.5"/>
+      <line x1="8" y1="3.5" x2="13" y2="12.5"/>
+      <line x1="3" y1="12.5" x2="13" y2="12.5"/>
+    </g>
+
+    <!-- Title & Subtitle in single flowing tspan -->
+    <text class="font layer-title" x="105" y="19" fill="#136680">AI-Native System Design <tspan fill="#59636D" font-weight="400" font-size="11px">— Cross-Boundary Closed-Loop Orchestration (Architecture 2.0 Moonshot)</tspan></text>
+
+    <!-- Column 1: Scope & Operational Focus -->
+    <rect x="12" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="24" y="50" fill="#136680">Operational Scope</text>
+    <text class="font body-text" x="24" y="68">• Cross-boundary closed-loop multi-tool search</text>
+    <text class="font body-text" x="24" y="86">• Workload ↔ Compiler ↔ RTL ↔ Physical ↔ Formal</text>
+    <text class="font body-text" x="24" y="104">• Co-explores microarchitecture &amp; PDK signoff</text>
+
+    <!-- Column 2: Key Mechanisms & Artifacts -->
+    <rect x="294" y="35" width="277" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="306" y="50" fill="#136680">Key Technical Mechanisms</text>
+    <text class="font body-text" x="306" y="68">• Multi-level IRs (CIRCT / MLIR dialect lowering)</text>
+    <text class="font body-text" x="306" y="86">• Rejectable multi-fidelity check harnesses</text>
+    <text class="font body-text" x="306" y="104">• Cryptographic lineage &amp; design-loop cards</text>
+
+    <!-- Column 3: Governance & Admission Boundary -->
+    <rect x="583" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="595" y="50" fill="#136680">Governance &amp; Signoff Boundary</text>
+    <text class="font limit-text" x="595" y="68">• In-Order Human Commitment Authority</text>
+    <text class="font limit-text" x="595" y="86">• Multi-property formal &amp; physical signoff gates</text>
+    <text class="font limit-text" x="595" y="104">• Governs daily code churn &amp; tool dispersion</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- LAYER 2: AI-Driven Subsystem Optimization                            -->
+  <!-- ===================================================================== -->
+  <g transform="translate(65, 218)">
+    <!-- Container -->
+    <rect width="865" height="128" rx="6" fill="#FDF8F0" stroke="#E68A17" stroke-width="1.8"/>
+    <!-- Top Header Bar -->
+    <path d="M 0 6 Q 0 0 6 0 L 859 0 Q 865 0 865 6 L 865 28 L 0 28 Z" fill="#FBF0DE"/>
+    <line x1="0" y1="28" x2="865" y2="28" stroke="#E68A17" stroke-width="1.2"/>
+
+    <!-- Badge -->
+    <rect x="12" y="5" width="64" height="18" rx="3" fill="#E68A17"/>
+    <text class="font badge-text" x="44" y="18" text-anchor="middle">LAYER 2</text>
+
+    <!-- Glyph: Optimization Reticle / Crosshair -->
+    <g transform="translate(84, 6)" stroke="#8A5310" stroke-width="1.2" fill="none">
+      <circle cx="8" cy="8" r="5.5"/>
+      <circle cx="8" cy="8" r="2.2" fill="#8A5310"/>
+      <line x1="8" y1="1" x2="8" y2="3.5"/>
+      <line x1="8" y1="12.5" x2="8" y2="15"/>
+      <line x1="1" y1="8" x2="3.5" y2="8"/>
+      <line x1="12.5" y1="8" x2="15" y2="8"/>
+    </g>
+
+    <!-- Title & Subtitle in single flowing tspan -->
+    <text class="font layer-title" x="105" y="19" fill="#8A5310">AI-Driven Subsystem Optimization <tspan fill="#59636D" font-weight="400" font-size="11px">— Autonomous Deep Local Search Inside a Fixed Container</tspan></text>
+
+    <!-- Column 1: Scope & Operational Focus -->
+    <rect x="12" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="24" y="50" fill="#8A5310">Operational Scope</text>
+    <text class="font body-text" x="24" y="68">• Autonomous search in a single subsystem</text>
+    <text class="font body-text" x="24" y="86">• Macro floorplanning &amp; kernel autotuning</text>
+    <text class="font body-text" x="24" y="104">• DRAM controller timing &amp; DSE sweeps</text>
+
+    <!-- Column 2: Key Mechanisms & Artifacts -->
+    <rect x="294" y="35" width="277" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="306" y="50" fill="#8A5310">Key Technical Mechanisms</text>
+    <text class="font body-text" x="306" y="68">• Reinforcement learning (e.g. AlphaChip)</text>
+    <text class="font body-text" x="306" y="86">• Bayesian optimization &amp; conformal models</text>
+    <text class="font body-text" x="306" y="104">• Domain-specific surrogate cost models</text>
+
+    <!-- Column 3: Governance & Admission Boundary -->
+    <rect x="583" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="595" y="50" fill="#8A5310">Governance &amp; Signoff Boundary</text>
+    <text class="font limit-text" x="595" y="68">• Bounding container frozen by architect</text>
+    <text class="font limit-text" x="595" y="86">• Cannot alter cross-stack interfaces</text>
+    <text class="font limit-text" x="595" y="104">• Bounded by Waterbed Effect &amp; Amdahl limits</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- LAYER 1: AI-Assisted Engineering                                     -->
+  <!-- ===================================================================== -->
+  <g transform="translate(65, 364)">
+    <!-- Container -->
+    <rect width="865" height="128" rx="6" fill="#F8F6FD" stroke="#6A4FC7" stroke-width="1.8"/>
+    <!-- Top Header Bar -->
+    <path d="M 0 6 Q 0 0 6 0 L 859 0 Q 865 0 865 6 L 865 28 L 0 28 Z" fill="#F0ECFA"/>
+    <line x1="0" y1="28" x2="865" y2="28" stroke="#6A4FC7" stroke-width="1.2"/>
+
+    <!-- Badge -->
+    <rect x="12" y="5" width="64" height="18" rx="3" fill="#6A4FC7"/>
+    <text class="font badge-text" x="44" y="18" text-anchor="middle">LAYER 1</text>
+
+    <!-- Glyph: Prompt / Code Terminal Arrow -->
+    <g transform="translate(84, 6)" stroke="#59429E" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 3 4 L 7 8 L 3 12"/>
+      <line x1="9" y1="12" x2="14" y2="12"/>
+    </g>
+
+    <!-- Title & Subtitle in single flowing tspan -->
+    <text class="font layer-title" x="105" y="19" fill="#59429E">AI-Assisted Engineering <tspan fill="#59636D" font-weight="400" font-size="11px">— Human-in-the-Loop Point Task Speedup Within Existing Workflows</tspan></text>
+
+    <!-- Column 1: Scope & Operational Focus -->
+    <rect x="12" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="24" y="50" fill="#59429E">Operational Scope</text>
+    <text class="font body-text" x="24" y="68">• Accelerates isolated drafting &amp; typing</text>
+    <text class="font body-text" x="24" y="86">• RTL module generation &amp; testbench templates</text>
+    <text class="font body-text" x="24" y="104">• Timing log parsing &amp; script generation</text>
+
+    <!-- Column 2: Key Mechanisms & Artifacts -->
+    <rect x="294" y="35" width="277" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="306" y="50" fill="#59429E">Key Technical Mechanisms</text>
+    <text class="font body-text" x="306" y="68">• Open-loop foundation models &amp; copilots</text>
+    <text class="font body-text" x="306" y="86">• Unstructured natural language &amp; tokens</text>
+    <text class="font body-text" x="306" y="104">• Syntax-level completion &amp; code search</text>
+
+    <!-- Column 3: Governance & Admission Boundary -->
+    <rect x="583" y="35" width="270" height="82" rx="4" fill="#FFFFFF" stroke="#D5DEE3" stroke-width="1.0"/>
+    <text class="font col-header" x="595" y="50" fill="#59429E">Governance &amp; Signoff Boundary</text>
+    <text class="font limit-text" x="595" y="68">• Human acts as manual integration bus</text>
+    <text class="font limit-text" x="595" y="86">• Generates syntax without signoff proof</text>
+    <text class="font limit-text" x="595" y="104">• Severe physical attrition (&lt;1% tapeout-ready)</text>
+  </g>
+
+  <!-- Bottom Annotation Bar -->
+  <g transform="translate(65, 510)">
+    <rect width="865" height="46" rx="5" fill="#F8FAFC" stroke="#9AA8B5" stroke-width="1.0"/>
+    <text class="font banner-text" x="432" y="20" text-anchor="middle">
+      <tspan font-weight="700" fill="#136680">The Architecture 2.0 Premise:</tspan> Point assistance (Layer 1) and subsystem tuning (Layer 2) accelerate components,
+    </text>
+    <text class="font banner-text" x="432" y="36" text-anchor="middle" fill="#3E474B">
+      but only AI-native system orchestration (Layer 3) carries compact intent through real tools to physically realizable silicon.
+    </text>
+  </g>
+</svg>
+"""
+
+
+def main() -> None:
+    svg_path = SCRIPT_DIR / "fig-ch01-three-layers-ai-integration.svg"
+    pdf_path = SCRIPT_DIR / "fig-ch01-three-layers-ai-integration.pdf"
+    png_path = SCRIPT_DIR / "fig-ch01-three-layers-ai-integration.png"
+
+    print(f"Writing SVG to {svg_path}...")
+    svg_path.write_text(SVG_CONTENT.strip() + "\n", encoding="utf-8")
+
+    print(f"Converting SVG to PDF via rsvg-convert -> {pdf_path}...")
+    subprocess.run(
+        ["rsvg-convert", "-f", "pdf", str(svg_path), "-o", str(pdf_path)],
+        check=True,
+    )
+
+    print(f"Converting SVG to PNG (1800px width) via rsvg-convert -> {png_path}...")
+    subprocess.run(
+        ["rsvg-convert", "-w", "1800", str(svg_path), "-o", str(png_path)],
+        check=True,
+    )
+    print("Done! All three format twins created successfully.")
+
+
+if __name__ == "__main__":
+    main()
