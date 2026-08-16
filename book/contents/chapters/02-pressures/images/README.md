@@ -16,6 +16,8 @@ Executable Quarto figures in the chapter:
 
 - `fig-microprocessor-trends`: frontier microprocessor trends and the end of
   frequency scaling.
+- `fig-ch02-accelerator-scaling-frontier`: 14-year AI accelerator scaling vectors,
+  memory bandwidth, TDP, and arithmetic ratio collapse (2012-2026).
 - `fig-accelerator-landscape`: the public AI-accelerator power/performance
   landscape.
 - `fig-search-vs-eval-gap`: design-space scale anchors.

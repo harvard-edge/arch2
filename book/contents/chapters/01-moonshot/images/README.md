@@ -3,6 +3,7 @@
 Active hand-authored figures:
 
 - `ch01-cover-map.svg`: chapter overview mapping compact intent to specification, system, evidence, and commitment.
+- `fig-ch01-github-hardware-divide`: public code volume and synthesizability funnel comparing software and hardware ecosystems on GitHub.
 - `fig-design-method-progression`: historical design-method shifts and the
   prospective AI-native architecture target.
 - `fig-moonshot-prompt`: the architecture and engineering work hidden by the

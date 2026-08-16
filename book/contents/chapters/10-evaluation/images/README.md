@@ -2,7 +2,7 @@
 
 Image-backed figures currently used by the chapter:
 
-- `F10-matched-complete-systems`: matched comparison of an AI-assisted
+- `F10-matched-complete-systems`: matched comparison of an AI-native
   architecture workflow and the strongest practical alternative, from shared
   study definition through bounded program status.
 

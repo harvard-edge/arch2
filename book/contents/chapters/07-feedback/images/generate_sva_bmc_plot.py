@@ -110,33 +110,49 @@ def generate_plot(output_dir: Path | None = None) -> str:
     ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=5.8)
     ax2.grid(False)
 
-    # Annotations
+    # Annotations with clean background boxes in open whitespace
     ax1.annotate(
         "100% Formal Proof\n(Full Coverage at k=32)",
-        xy=(32, 100),
-        xytext=(16, 88),
+        xy=(32, 99.5),
+        xytext=(22, 88),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["green"],
             lw=0.9,
         ),
-        fontsize=5.8,
+        fontsize=5.2,
         color=COLORS["green"],
         fontweight="bold",
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["green"],
+            alpha=0.92,
+            lw=0.6,
+        ),
+        zorder=5,
     )
 
     ax1.annotate(
         "State Space Explosion\n(Timeout at k > 45)",
-        xy=(48, 76),
-        xytext=(32, 52),
+        xy=(45, 62),
+        xytext=(48, 15),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["red"],
             lw=0.9,
         ),
-        fontsize=5.8,
+        fontsize=5.2,
         color=COLORS["red"],
         fontweight="bold",
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["red"],
+            alpha=0.92,
+            lw=0.6,
+        ),
+        zorder=5,
     )
 
     ax1.set_title(
@@ -152,17 +168,21 @@ def generate_plot(output_dir: Path | None = None) -> str:
     ax1.spines["left"].set_color(COLORS["ink"])
     ax1.spines["bottom"].set_color(COLORS["ink"])
 
-    # Combine legends from both axes
+    # Combine legends from both axes and place in upper left
     lines = line1 + line2 + line3 + line4 + line_rt
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc="lower right", framealpha=0.9, fontsize=5.5)
+    ax1.legend(
+        lines, labels, loc="upper left", framealpha=0.92, fontsize=5.0, borderpad=0.25
+    )
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
         svg_path = output_dir / "fig-sva-bmc-coverage-depth.svg"
         pdf_path = output_dir / "fig-sva-bmc-coverage-depth.pdf"
+        png_path = output_dir / "fig-sva-bmc-coverage-depth.png"
         fig.savefig(svg_path, format="svg", bbox_inches="tight")
         fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
+        fig.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
         plt.close(fig)
         return str(svg_path)
 

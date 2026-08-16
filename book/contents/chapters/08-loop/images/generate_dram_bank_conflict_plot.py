@@ -61,7 +61,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
     ax1.set_ylabel("Average Memory Latency (ns per 64B line read)", fontsize=6.8)
     ax1.set_xticks(x_indices)
     ax1.set_xticklabels(stride_labels, fontsize=6.0)
-    ax1.set_ylim(50, 500)
+    ax1.set_ylim(50, 530)
     ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
     ax1.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
@@ -77,10 +77,10 @@ def generate_plot(output_dir: Path | None = None) -> str:
     )
     ax2.set_ylabel("Latency Overhead Penalty (%)", fontsize=6.5, color=COLORS["orange"])
     ax2.tick_params(axis="y", labelcolor=COLORS["orange"], labelsize=5.8)
-    ax2.set_ylim(0, 400)
+    ax2.set_ylim(0, 420)
     ax2.grid(False)
 
-    # Annotations for key data points
+    # Annotations for key data points with clean background boxes
     ax1.annotate(
         "Sequential Stream\n(+8% Row Buffer Hit)",
         xy=(0, 108),
@@ -90,23 +90,39 @@ def generate_plot(output_dir: Path | None = None) -> str:
             color=COLORS["green"],
             lw=0.9,
         ),
-        fontsize=5.8,
+        fontsize=5.2,
         color=COLORS["green"],
         fontweight="bold",
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["green"],
+            alpha=0.9,
+            lw=0.6,
+        ),
+        zorder=5,
     )
 
     ax1.annotate(
         "Bank Conflict Peak at Stride 16\n(+340% Latency Overhead)",
         xy=(4, 440),
-        xytext=(2.2, 380),
+        xytext=(2.2, 470),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["red"],
             lw=0.9,
         ),
-        fontsize=5.8,
+        fontsize=5.2,
         color=COLORS["red"],
         fontweight="bold",
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["red"],
+            alpha=0.9,
+            lw=0.6,
+        ),
+        zorder=5,
     )
 
     ax1.set_title(
@@ -125,14 +141,16 @@ def generate_plot(output_dir: Path | None = None) -> str:
     # Combine legends
     lines = line1 + line2 + [bars]
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc="upper left", framealpha=0.9, fontsize=5.5)
+    ax1.legend(lines, labels, loc="upper left", framealpha=0.9, fontsize=5.2)
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
         svg_path = output_dir / "fig-dram-bank-conflict.svg"
         pdf_path = output_dir / "fig-dram-bank-conflict.pdf"
+        png_path = output_dir / "fig-dram-bank-conflict.png"
         fig.savefig(svg_path, format="svg", bbox_inches="tight")
         fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
+        fig.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
         plt.close(fig)
         return str(svg_path)
 

@@ -31,7 +31,7 @@ def generate_ast_hls_latency(output_dir: Path) -> None:
     # Scaled so 1,000 nodes -> ~0.8s, 100,000 nodes -> ~28s, 500,000 nodes -> ~117s
     mlir_latency = 0.00022 * (node_counts**1.20)
 
-    fig, ax = plt.subplots(figsize=(5.6, 3.4))
+    fig, ax = plt.subplots(figsize=(5.6, 3.6))
     fig.subplots_adjust(left=0.13, right=0.95, top=0.88, bottom=0.18)
 
     # Plot curves
@@ -40,7 +40,7 @@ def generate_ast_hls_latency(output_dir: Path) -> None:
         flat_ast_latency,
         color=COLORS["red"],
         linewidth=2.0,
-        label="Flat Verilog/C AST (O(N^2.45) unpartitioned)",
+        label="Flat Verilog/C AST (O(N^2.45))",
         zorder=3,
     )
     ax.plot(
@@ -57,7 +57,7 @@ def generate_ast_hls_latency(output_dir: Path) -> None:
         mlir_latency,
         color=COLORS["blue"],
         linewidth=2.2,
-        label="Multi-Level CIRCT/MLIR Graph (O(N^1.20) hierarchical)",
+        label="Multi-Level CIRCT/MLIR Graph (O(N^1.20))",
         zorder=4,
     )
 
@@ -90,46 +90,62 @@ def generate_ast_hls_latency(output_dir: Path) -> None:
         zorder=1,
     )
     ax.text(
-        120,
+        150000,
         4200,
-        "HLS Tool Timeout Threshold (1 hour)",
-        fontsize=5.8,
+        "HLS Tool Timeout (1 hour)",
+        fontsize=6.0,
         color=COLORS["muted"],
         fontweight="bold",
     )
 
-    # Annotation arrow for abstraction gap at 500,000 nodes
+    # Annotation arrow for abstraction gap at 500,000 nodes placed cleanly in bottom whitespace
     ax.annotate(
         "24.8x HLS Latency Gap\n(hierarchical vs flat IR)",
-        xy=(500000, 117),
-        xytext=(30000, 1200),
+        xy=(480000, 1500),
+        xytext=(150000, 25),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["ink"],
-            lw=0.9,
-            connectionstyle="arc3,rad=-0.15",
+            lw=0.8,
+            connectionstyle="arc3,rad=0.15",
         ),
-        fontsize=6.2,
+        fontsize=5.2,
         fontweight="bold",
         color=COLORS["workload_ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.25",
+            facecolor="white",
+            edgecolor=COLORS["workload_ink"],
+            alpha=0.92,
+            lw=0.6,
+        ),
+        zorder=5,
     )
 
     # Axis settings
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(100, 1000000)
-    ax.set_ylim(0.1, 20000)
+    ax.set_ylim(0.08, 30000)
 
     ax.set_title(
         "HLS Synthesis Latency Scaling Across AST and Graph IR Node Count",
-        fontsize=8.0,
-        pad=9,
+        fontsize=7.8,
+        pad=8,
         fontweight="bold",
     )
-    ax.set_xlabel("Intermediate Representation Node Count (log scale)", fontsize=6.8)
-    ax.set_ylabel("HLS Synthesis Latency (seconds, log scale)", fontsize=6.8)
+    ax.set_xlabel("Intermediate Representation Node Count (log scale)", fontsize=6.6)
+    ax.set_ylabel("HLS Synthesis Latency (seconds, log scale)", fontsize=6.6)
 
-    ax.legend(frameon=False, fontsize=5.8, loc="upper left")
+    # Legend placed in upper left outside of the timeout line collision
+    ax.legend(
+        frameon=True,
+        facecolor="white",
+        edgecolor="none",
+        fontsize=5.0,
+        loc="upper left",
+        borderpad=0.3,
+    )
     ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
     ax.grid(True, which="both", color=COLORS["grid"], linewidth=0.45, zorder=0)
 
@@ -139,9 +155,13 @@ def generate_ast_hls_latency(output_dir: Path) -> None:
     ax.spines["bottom"].set_color(COLORS["ink"])
 
     svg_path = output_dir / "fig-ch04-ast-hls-latency.svg"
+    pdf_path = output_dir / "fig-ch04-ast-hls-latency.pdf"
+    png_path = output_dir / "fig-ch04-ast-hls-latency.png"
     plt.savefig(svg_path, format="svg", bbox_inches="tight")
+    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    plt.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"Generated {svg_path}")
+    print(f"Generated {svg_path}, {pdf_path}, and {png_path}")
 
 
 if __name__ == "__main__":

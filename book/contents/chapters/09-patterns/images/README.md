@@ -17,6 +17,8 @@ Executable Quarto figures in the chapter:
   acceleration after communication cost.
 - `fig-rejection-bound-ceiling`: the service-work ceiling set by validated
   coverage when routing, audit, and rework overhead are set to zero.
+- `fig-ch09-mlperf-software-dividend`: the fixed-silicon software dividend
+  and generational scaling steps across MLCommons MLPerf benchmarks.
 
 Only the artifacts listed above are active Chapter 9 media. Older generated
 flywheel, queue, delayed-control, feedback-clock, and hardware-efficiency

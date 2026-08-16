@@ -16,6 +16,7 @@ Active hand-authored figures:
 - `fig-independent-checks`: shared failure assumptions versus a
   claim-specific checking path.
 - `fig-sva-bmc-coverage-depth`: SystemVerilog Assertion (SVA) formal coverage versus BMC unroll depth across accelerator control units.
+- `fig-ch07-wilson-verification-scissors`: 22-year verification schedule share, staffing scissors ratio, and silicon respin root causes (Wilson Research / Siemens EDA).
 - `fig-synthesis-verification-funnel`: Physical signoff verification funnel across automated hardware generation.
 
 A retired mitigation-overhead chart used
