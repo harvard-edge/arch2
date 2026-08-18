@@ -1,0 +1,651 @@
+---
+pagetitle: "arXiv Search - Architecture 2.0"
+description: "Live search over arXiv preprints related to AI-assisted computer architecture and chip design."
+format:
+  html:
+    page-layout: custom
+    toc: false
+---
+
+```{=html}
+<div class="site-wrap">
+<header class="site-masthead">
+  <span class="pill">Architecture 2.0</span>
+  <span class="pill hot">Live search</span>
+</header>
+
+<section class="site-hero">
+  <div class="hub-kicker">Paper search</div>
+  <h1>arXiv search</h1>
+  <p class="subtitle">Search arXiv preprints on AI-assisted computer architecture and chip design</p>
+</section>
+
+<p class="site-lede">
+This page searches the titles and abstracts of arXiv preprints live from your
+browser through the
+<a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a>
+scholarly index; every result links to its paper page and PDF on arxiv.org.
+Use it to scan recent work around Architecture 2.0 topics. Unlike the
+<a href="/readings.html">curated reading list</a>, results here are not
+reviewed or endorsed by the project. Combine a few plain keywords, or wrap
+an exact phrase in quotes.
+</p>
+
+<nav class="site-actions" aria-label="Paper search actions">
+  <a class="site-action secondary" href="/readings.html">Curated reading list</a>
+  <a class="site-action secondary" href="/submit-resource.html">Submit a resource</a>
+  <a class="site-action tertiary" id="arxiv-native-link" href="https://arxiv.org/search/" target="_blank" rel="noopener">Open this search on arXiv <span class="arr" aria-hidden="true">&nearr;</span></a>
+</nav>
+
+<form id="arxiv-form" class="arxiv-search" role="search" aria-label="Search arXiv preprints">
+  <input id="arxiv-query" type="search" name="q" autocomplete="off"
+         placeholder='e.g. LLM Verilog generation, "design space exploration"'
+         aria-label="Search query for arXiv preprints">
+  <button type="submit" class="site-action submit-button">Search <span class="arr" aria-hidden="true">&rarr;</span></button>
+</form>
+
+<div class="arxiv-search-controls">
+  <label for="arxiv-sort">Sort by
+    <select id="arxiv-sort">
+      <option value="relevance" selected>Relevance</option>
+      <option value="newest">Newest first</option>
+    </select>
+  </label>
+  <label for="arxiv-since">Published
+    <select id="arxiv-since">
+      <option value="" selected>Any time</option>
+      <option value="1">Past year</option>
+      <option value="3">Past 3 years</option>
+      <option value="5">Past 5 years</option>
+    </select>
+  </label>
+</div>
+
+<div class="arxiv-topics" role="group" aria-label="Suggested searches">
+  <button type="button" data-query='"computer architecture" machine learning'>AI for computer architecture</button>
+  <button type="button" data-query="LLM chip design">LLMs for chip design</button>
+  <button type="button" data-query='"design space exploration" accelerator'>Design space exploration</button>
+  <button type="button" data-query="machine learning electronic design automation">ML for EDA</button>
+  <button type="button" data-query="LLM Verilog RTL generation">RTL generation</button>
+  <button type="button" data-query="deep learning hardware accelerator">Hardware accelerators</button>
+</div>
+
+<p id="arxiv-status" class="arxiv-status" role="status" aria-live="polite"></p>
+
+<section id="arxiv-trend" class="arxiv-trend" hidden>
+  <div class="arxiv-trend-head">
+    <h2>Publication trend</h2>
+    <div class="arxiv-trend-toggle" role="group" aria-label="Trend view">
+      <button type="button" id="arxiv-trend-yearly" aria-pressed="true">Per year</button>
+      <button type="button" id="arxiv-trend-cumulative" aria-pressed="false">Cumulative</button>
+    </div>
+  </div>
+  <p id="arxiv-trend-caption" class="arxiv-trend-caption"></p>
+  <svg id="arxiv-trend-svg" viewBox="0 0 720 210" role="img"
+       aria-label="arXiv preprints per year matching the current query"></svg>
+</section>
+<div id="arxiv-trend-tip" class="arxiv-trend-tip" role="presentation" hidden></div>
+
+<div id="arxiv-results" class="reading-listing arxiv-results"></div>
+
+<div class="arxiv-more">
+  <button type="button" id="arxiv-more-btn" class="site-action secondary submit-button" hidden>Load more results</button>
+</div>
+
+<p class="arxiv-note">
+Results are arXiv preprints fetched live from the
+<a href="https://docs.openalex.org" target="_blank" rel="noopener">OpenAlex API</a>
+(data licensed CC0). Paper pages and PDFs open on
+<a href="https://arxiv.org" target="_blank" rel="noopener">arxiv.org</a>.
+</p>
+</div>
+```
+
+```{=html}
+<script>
+(function () {
+  "use strict";
+
+  var API = "https://api.openalex.org/works";
+  var PAGE_SIZE = 12;
+  var SELECT = "id,title,publication_date,authorships,abstract_inverted_index," +
+    "primary_location,primary_topic";
+
+  var form = document.getElementById("arxiv-form");
+  var queryInput = document.getElementById("arxiv-query");
+  var sortSelect = document.getElementById("arxiv-sort");
+  var sinceSelect = document.getElementById("arxiv-since");
+  var status = document.getElementById("arxiv-status");
+  var results = document.getElementById("arxiv-results");
+  var moreButton = document.getElementById("arxiv-more-btn");
+  var nativeLink = document.getElementById("arxiv-native-link");
+
+  var state = {
+    query: "",
+    page: 1,
+    total: 0,
+    shown: 0,
+    controller: null
+  };
+
+  function setStatus(message, isError) {
+    status.textContent = message;
+    status.classList.toggle("error", Boolean(isError));
+  }
+
+  function cleanWhitespace(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function truncate(value, limit) {
+    if (value.length <= limit) {
+      return value;
+    }
+    var cut = value.slice(0, limit);
+    var lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut) + "…";
+  }
+
+  // OpenAlex stores abstracts as a word -> positions inverted index.
+  function abstractText(inverted) {
+    if (!inverted) {
+      return "";
+    }
+    var words = [];
+    Object.keys(inverted).forEach(function (word) {
+      inverted[word].forEach(function (position) {
+        words[position] = word;
+      });
+    });
+    return cleanWhitespace(words.join(" "));
+  }
+
+  function workCard(work) {
+    var location = work.primary_location || {};
+    var landing = location.landing_page_url || work.id || "#";
+    var pdfUrl = location.pdf_url || "";
+    var title = cleanWhitespace(work.title) || "Untitled";
+    var published = work.publication_date || "";
+    var summary = truncate(abstractText(work.abstract_inverted_index), 340);
+    var topic = work.primary_topic && work.primary_topic.display_name;
+
+    var arxivId = "";
+    var idMatch = String(landing).match(/arxiv\.org\/abs\/(.+)$/);
+    if (idMatch) {
+      arxivId = idMatch[1];
+    }
+
+    var authors = (work.authorships || []).map(function (authorship) {
+      return authorship.author && authorship.author.display_name;
+    }).filter(Boolean);
+    var authorLine = authors.slice(0, 8).join(", ");
+    if (authors.length > 8) {
+      authorLine += ", et al.";
+    }
+
+    var card = document.createElement("article");
+    card.className = "reading-card";
+    var body = document.createElement("div");
+    body.className = "reading-card-body";
+    card.appendChild(body);
+
+    var top = document.createElement("div");
+    top.className = "tool-card-top";
+    body.appendChild(top);
+
+    var heading = document.createElement("div");
+    top.appendChild(heading);
+
+    var kind = document.createElement("p");
+    kind.className = "reading-kind";
+    kind.textContent = (arxivId ? "arXiv:" + arxivId : "arXiv") +
+      (published ? " · " + published : "");
+    heading.appendChild(kind);
+
+    var titleNode = document.createElement("h3");
+    titleNode.className = "listing-title";
+    var titleLink = document.createElement("a");
+    titleLink.href = landing;
+    titleLink.target = "_blank";
+    titleLink.rel = "noopener";
+    titleLink.textContent = title;
+    titleNode.appendChild(titleLink);
+    heading.appendChild(titleNode);
+
+    var arrow = document.createElement("a");
+    arrow.className = "tool-card-arrow";
+    arrow.href = landing;
+    arrow.target = "_blank";
+    arrow.rel = "noopener";
+    arrow.setAttribute("aria-label", "Open " + title + " on arXiv");
+    arrow.innerHTML = "&nearr;";
+    top.appendChild(arrow);
+
+    if (summary) {
+      var description = document.createElement("p");
+      description.className = "listing-description";
+      description.textContent = summary;
+      body.appendChild(description);
+    }
+
+    var meta = document.createElement("dl");
+    meta.className = "tool-card-meta";
+    if (authorLine) {
+      var authorRow = document.createElement("div");
+      var authorLabel = document.createElement("dt");
+      authorLabel.textContent = "Authors";
+      var authorValue = document.createElement("dd");
+      authorValue.textContent = authorLine;
+      authorRow.appendChild(authorLabel);
+      authorRow.appendChild(authorValue);
+      meta.appendChild(authorRow);
+    }
+    if (pdfUrl) {
+      var pdfRow = document.createElement("div");
+      var pdfLabel = document.createElement("dt");
+      pdfLabel.textContent = "PDF";
+      var pdfValue = document.createElement("dd");
+      var pdfLink = document.createElement("a");
+      pdfLink.href = pdfUrl;
+      pdfLink.target = "_blank";
+      pdfLink.rel = "noopener";
+      pdfLink.textContent = "Download PDF";
+      pdfValue.appendChild(pdfLink);
+      pdfRow.appendChild(pdfLabel);
+      pdfRow.appendChild(pdfValue);
+      meta.appendChild(pdfRow);
+    }
+    if (meta.childNodes.length) {
+      body.appendChild(meta);
+    }
+
+    if (topic) {
+      var chips = document.createElement("div");
+      chips.className = "listing-categories tool-card-categories";
+      var chip = document.createElement("span");
+      chip.className = "tool-card-category";
+      chip.textContent = topic;
+      chips.appendChild(chip);
+      body.appendChild(chips);
+    }
+
+    return card;
+  }
+
+  function requestUrl() {
+    // Matching titles and abstracts gives far more on-topic results than
+    // OpenAlex's default full-text search. Commas would split the filter
+    // list, so they are stripped from the query.
+    var filters = [
+      "title_and_abstract.search:" + state.query.replace(/,/g, " "),
+      "indexed_in:arxiv"
+    ];
+    var years = Number(sinceSelect.value);
+    if (years) {
+      var cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - years);
+      filters.push("from_publication_date:" + cutoff.toISOString().slice(0, 10));
+    }
+    var sort = sortSelect.value === "newest" ?
+      "publication_date:desc" : "relevance_score:desc";
+    return API +
+      "?filter=" + encodeURIComponent(filters.join(",")) +
+      "&sort=" + encodeURIComponent(sort) +
+      "&page=" + state.page +
+      "&per-page=" + PAGE_SIZE +
+      "&select=" + encodeURIComponent(SELECT);
+  }
+
+  function fetchPage(append) {
+    if (state.controller) {
+      state.controller.abort();
+    }
+    state.controller = new AbortController();
+
+    moreButton.hidden = true;
+    setStatus(append ? "Loading more results…" : "Searching arXiv preprints…");
+    if (!append) {
+      results.textContent = "";
+      state.shown = 0;
+    }
+
+    fetch(requestUrl(), { signal: state.controller.signal })
+      .then(function (response) {
+        if (response.status === 429) {
+          throw new Error("rate-limited");
+        }
+        if (!response.ok) {
+          throw new Error("the search API returned " + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        state.total = (data.meta && data.meta.count) || 0;
+        (data.results || []).forEach(function (work) {
+          results.appendChild(workCard(work));
+          state.shown += 1;
+        });
+
+        if (!state.shown) {
+          setStatus("No arXiv preprints match “" + state.query +
+            "”. Try fewer or broader terms.");
+          return;
+        }
+
+        setStatus("Showing " + state.shown + " of " +
+          state.total.toLocaleString() + " arXiv preprints for “" +
+          state.query + "”.");
+        moreButton.hidden = state.shown >= state.total;
+      })
+      .catch(function (error) {
+        if (error.name === "AbortError") {
+          return;
+        }
+        if (error.message === "rate-limited") {
+          setStatus("The search API is rate-limited right now. " +
+            "Wait a minute and try again.", true);
+        } else {
+          setStatus("Search failed (" + error.message +
+            "). Check your connection and try again.", true);
+        }
+        moreButton.hidden = state.shown === 0;
+      });
+  }
+
+  var trendSection = document.getElementById("arxiv-trend");
+  var trendSvg = document.getElementById("arxiv-trend-svg");
+  var trendCaption = document.getElementById("arxiv-trend-caption");
+  var trendTip = document.getElementById("arxiv-trend-tip");
+  var trendYearlyBtn = document.getElementById("arxiv-trend-yearly");
+  var trendCumulativeBtn = document.getElementById("arxiv-trend-cumulative");
+  var trend = { years: [], counts: [], mode: "yearly", controller: null };
+  var THIS_YEAR = new Date().getFullYear();
+
+  function svgNode(name, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", name);
+    Object.keys(attrs).forEach(function (key) {
+      el.setAttribute(key, attrs[key]);
+    });
+    return el;
+  }
+
+  function niceCeil(value) {
+    var pow = Math.pow(10, Math.floor(Math.log10(value || 1)));
+    var steps = [1, 2, 5, 10];
+    for (var i = 0; i < steps.length; i += 1) {
+      if (steps[i] * pow >= value) {
+        return steps[i] * pow;
+      }
+    }
+    return 10 * pow;
+  }
+
+  function tickLabel(value) {
+    return value % 1 ? value.toFixed(1) : String(value);
+  }
+
+  function renderTrend() {
+    var W = 720, H = 210;
+    var M = { top: 14, right: 48, bottom: 26, left: 42 };
+    var years = trend.years;
+    var counts = trend.counts;
+    var cumulativeCounts = [];
+    var running = 0;
+    counts.forEach(function (count) {
+      running += count;
+      cumulativeCounts.push(running);
+    });
+    var data = trend.mode === "cumulative" ? cumulativeCounts : counts;
+    var max = niceCeil(Math.max.apply(null, data));
+    var xPos = function (i) {
+      return M.left + (W - M.left - M.right) *
+        (years.length === 1 ? 0.5 : i / (years.length - 1));
+    };
+    var yPos = function (v) {
+      return H - M.bottom - (H - M.top - M.bottom) * (v / max);
+    };
+
+    while (trendSvg.firstChild) {
+      trendSvg.removeChild(trendSvg.firstChild);
+    }
+
+    [max, max / 2].forEach(function (tick) {
+      trendSvg.appendChild(svgNode("line", {
+        x1: M.left, x2: W - M.right, y1: yPos(tick), y2: yPos(tick),
+        stroke: "var(--arch2-line)", "stroke-width": 1
+      }));
+      var label = svgNode("text", {
+        x: M.left - 7, y: yPos(tick) + 3.5, "text-anchor": "end",
+        fill: "var(--arch2-muted)", "font-size": 11,
+        style: "font-variant-numeric: tabular-nums"
+      });
+      label.textContent = tickLabel(tick);
+      trendSvg.appendChild(label);
+    });
+    trendSvg.appendChild(svgNode("line", {
+      x1: M.left, x2: W - M.right, y1: yPos(0), y2: yPos(0),
+      stroke: "var(--arch2-line-strong)", "stroke-width": 1
+    }));
+    var tickYears = years.length > 2 ?
+      [years[0], years[Math.floor((years.length - 1) / 2)], years[years.length - 1]] :
+      years;
+    tickYears.forEach(function (year) {
+      var label = svgNode("text", {
+        x: xPos(years.indexOf(year)), y: H - 8, "text-anchor": "middle",
+        fill: "var(--arch2-muted)", "font-size": 11,
+        style: "font-variant-numeric: tabular-nums"
+      });
+      label.textContent = year;
+      trendSvg.appendChild(label);
+    });
+
+    var points = data.map(function (value, i) {
+      return [xPos(i), yPos(value)];
+    });
+    var toPath = function (list) {
+      return list.map(function (point, i) {
+        return (i ? "L" : "M") + point[0].toFixed(1) + " " + point[1].toFixed(1);
+      }).join(" ");
+    };
+    trendSvg.appendChild(svgNode("path", {
+      d: toPath(points) +
+        " L" + points[points.length - 1][0].toFixed(1) + " " + yPos(0).toFixed(1) +
+        " L" + points[0][0].toFixed(1) + " " + yPos(0).toFixed(1) + " Z",
+      fill: "var(--arch2-blue-deep)", "fill-opacity": 0.09
+    }));
+    if (points.length > 1) {
+      trendSvg.appendChild(svgNode("path", {
+        d: toPath(points.slice(0, points.length - 1)),
+        fill: "none", stroke: "var(--arch2-blue-deep)", "stroke-width": 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round"
+      }));
+      // The last segment covers the in-progress year, so it is dashed.
+      trendSvg.appendChild(svgNode("path", {
+        d: toPath(points.slice(points.length - 2)),
+        fill: "none", stroke: "var(--arch2-blue-deep)", "stroke-width": 2,
+        "stroke-dasharray": "4 4", "stroke-linecap": "round"
+      }));
+    }
+    var endPoint = points[points.length - 1];
+    trendSvg.appendChild(svgNode("circle", {
+      cx: endPoint[0], cy: endPoint[1], r: 4,
+      fill: "var(--arch2-panel)", stroke: "var(--arch2-blue-deep)",
+      "stroke-width": 2
+    }));
+    var endLabel = svgNode("text", {
+      x: endPoint[0] + 9, y: endPoint[1] + 4, fill: "var(--arch2-ink)",
+      "font-size": 12, "font-weight": 700,
+      style: "font-variant-numeric: tabular-nums"
+    });
+    endLabel.textContent = data[data.length - 1].toLocaleString();
+    trendSvg.appendChild(endLabel);
+
+    var crosshair = svgNode("line", {
+      x1: 0, x2: 0, y1: M.top, y2: H - M.bottom,
+      stroke: "var(--arch2-line-strong)", "stroke-width": 1,
+      visibility: "hidden"
+    });
+    var hoverDot = svgNode("circle", {
+      cx: 0, cy: 0, r: 4, fill: "var(--arch2-blue-deep)",
+      stroke: "var(--arch2-panel)", "stroke-width": 2, visibility: "hidden"
+    });
+    trendSvg.appendChild(crosshair);
+    trendSvg.appendChild(hoverDot);
+
+    var hitArea = svgNode("rect", {
+      x: M.left, y: M.top, width: W - M.left - M.right,
+      height: H - M.top - M.bottom, fill: "transparent"
+    });
+    trendSvg.appendChild(hitArea);
+    hitArea.addEventListener("mousemove", function (event) {
+      var box = trendSvg.getBoundingClientRect();
+      var mx = (event.clientX - box.left) * (W / box.width);
+      var i = Math.max(0, Math.min(years.length - 1, Math.round(
+        (mx - M.left) / (W - M.left - M.right) * (years.length - 1))));
+      crosshair.setAttribute("x1", points[i][0]);
+      crosshair.setAttribute("x2", points[i][0]);
+      crosshair.setAttribute("visibility", "visible");
+      hoverDot.setAttribute("cx", points[i][0]);
+      hoverDot.setAttribute("cy", points[i][1]);
+      hoverDot.setAttribute("visibility", "visible");
+      trendTip.textContent = years[i] +
+        (years[i] === THIS_YEAR ? " (year-to-date)" : "") +
+        " · " + counts[i].toLocaleString() + " new · " +
+        cumulativeCounts[i].toLocaleString() + " total";
+      trendTip.hidden = false;
+      trendTip.style.left =
+        Math.min(event.clientX + 14, window.innerWidth - 230) + "px";
+      trendTip.style.top = (event.clientY + 14) + "px";
+    });
+    hitArea.addEventListener("mouseleave", function () {
+      crosshair.setAttribute("visibility", "hidden");
+      hoverDot.setAttribute("visibility", "hidden");
+      trendTip.hidden = true;
+    });
+
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    trendCaption.textContent = total.toLocaleString() +
+      " arXiv preprints since " + years[0] + " match “" + state.query +
+      "”. " + THIS_YEAR + " is year-to-date.";
+  }
+
+  function fetchTrend(query) {
+    if (trend.controller) {
+      trend.controller.abort();
+    }
+    trend.controller = new AbortController();
+    var filters = "title_and_abstract.search:" + query.replace(/,/g, " ") +
+      ",indexed_in:arxiv";
+    var url = API + "?filter=" + encodeURIComponent(filters) +
+      "&group_by=publication_year&per-page=200";
+    fetch(url, { signal: trend.controller.signal })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("trend request returned " + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        var byYear = {};
+        (data.group_by || []).forEach(function (group) {
+          var year = parseInt(group.key, 10);
+          if (year >= 1991 && year <= THIS_YEAR) {
+            byYear[year] = group.count;
+          }
+        });
+        var seen = Object.keys(byYear).map(Number);
+        if (!seen.length) {
+          trendSection.hidden = true;
+          return;
+        }
+        var first = Math.min.apply(null, seen);
+        first = Math.max(first, THIS_YEAR - 30);
+        first = Math.min(first, THIS_YEAR - 5);
+        trend.years = [];
+        trend.counts = [];
+        for (var year = first; year <= THIS_YEAR; year += 1) {
+          trend.years.push(year);
+          trend.counts.push(byYear[year] || 0);
+        }
+        trendSection.hidden = false;
+        renderTrend();
+      })
+      .catch(function (error) {
+        if (error.name !== "AbortError") {
+          trendSection.hidden = true;
+        }
+      });
+  }
+
+  function setTrendMode(next) {
+    trend.mode = next;
+    trendYearlyBtn.setAttribute("aria-pressed", String(next === "yearly"));
+    trendCumulativeBtn.setAttribute("aria-pressed", String(next === "cumulative"));
+    if (trend.years.length) {
+      renderTrend();
+    }
+  }
+  trendYearlyBtn.addEventListener("click", function () {
+    setTrendMode("yearly");
+  });
+  trendCumulativeBtn.addEventListener("click", function () {
+    setTrendMode("cumulative");
+  });
+
+  function runSearch(raw, updateUrl) {
+    var query = cleanWhitespace(raw);
+    if (!query) {
+      setStatus("Enter a few search terms first.");
+      return;
+    }
+    state.query = query;
+    state.page = 1;
+    nativeLink.href = "https://arxiv.org/search/?searchtype=all&query=" +
+      encodeURIComponent(query);
+    if (updateUrl !== false) {
+      var params = new URLSearchParams(window.location.search);
+      params.set("q", query);
+      window.history.replaceState(null, "", "?" + params.toString());
+    }
+    fetchPage(false);
+    fetchTrend(query);
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    runSearch(queryInput.value);
+  });
+
+  moreButton.addEventListener("click", function () {
+    state.page += 1;
+    fetchPage(true);
+  });
+
+  sortSelect.addEventListener("change", function () {
+    if (state.query) {
+      state.page = 1;
+      fetchPage(false);
+    }
+  });
+
+  sinceSelect.addEventListener("change", function () {
+    if (state.query) {
+      state.page = 1;
+      fetchPage(false);
+    }
+  });
+
+  document.querySelectorAll(".arxiv-topics button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      queryInput.value = button.getAttribute("data-query") || "";
+      runSearch(queryInput.value);
+    });
+  });
+
+  var fromUrl = new URLSearchParams(window.location.search).get("q");
+  var initial = fromUrl || '"computer architecture" machine learning';
+  queryInput.value = initial;
+  runSearch(initial, Boolean(fromUrl));
+})();
+</script>
+```
