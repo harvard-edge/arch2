@@ -233,3 +233,70 @@ def test_build_selects_coherent_format_set(
     result = runner.invoke(arch2_cli.app, ["build", *args])
     assert result.exit_code == 0, result.output
     assert calls == [expected]
+
+
+def test_abbreviations_findings_empty_on_repository() -> None:
+    findings = arch2_cli.abbreviations_findings()
+    assert findings == [], f"Found abbreviation issues: {[f.message for f in findings]}"
+
+
+def test_abbreviations_findings_catches_unexpanded_and_overcapitalized(
+    tmp_path,
+) -> None:
+    chapter = tmp_path / "chapter.qmd"
+    chapter.write_text(
+        "First mention of RTL without definition.\n"
+        "And Process Design Kit (PDK) with overcapitalized expansion.\n",
+        encoding="utf-8",
+    )
+    findings = arch2_cli.abbreviations_findings([chapter])
+    codes = {f.code for f in findings}
+    assert "unexpanded-abbreviation" in codes
+    assert "overcapitalized-expansion" in codes
+
+
+def test_abbreviations_cli_command() -> None:
+    result = runner.invoke(arch2_cli.app, ["check", "abbreviations"])
+    assert result.exit_code == 0, result.output
+    assert "passed abbreviations & acronyms" in result.output
+
+
+def test_glossary_findings_empty_on_repository() -> None:
+    findings = arch2_cli.glossary_findings()
+    assert findings == [], f"Found glossary issues: {[f.message for f in findings]}"
+
+
+def test_glossary_findings_detects_drift(tmp_path, monkeypatch) -> None:
+    fake_qmd = tmp_path / "apdx-d-glossary.qmd"
+    fake_qmd.write_text("Stale content\n", encoding="utf-8")
+    monkeypatch.setattr(arch2_cli, "GLOSSARY_PATH", fake_qmd)
+    findings = arch2_cli.glossary_findings()
+    codes = {f.code for f in findings}
+    assert "glossary-drift" in codes
+
+
+def test_glossary_cli_commands() -> None:
+    # Test check glossary
+    check_res = runner.invoke(arch2_cli.app, ["check", "glossary"])
+    assert check_res.exit_code == 0, check_res.output
+    assert "passed glossary & acronym catalog" in check_res.output
+
+    # Test generate glossary
+    gen_res = runner.invoke(arch2_cli.app, ["generate", "glossary"])
+    assert gen_res.exit_code == 0, gen_res.output
+    assert "generated" in gen_res.output
+
+
+def test_abbreviations_detects_unregistered_terms(tmp_path: Path) -> None:
+    chapter = tmp_path / "01-sample.qmd"
+    chapter.write_text(
+        "# Sample\n\nWe introduce low-density parity-check (LDPC) codes for memory protection.\n",
+        encoding="utf-8",
+    )
+    findings = arch2_cli.abbreviations_findings([chapter])
+    unregistered = [f for f in findings if f.code == "unregistered-abbreviation"]
+    assert len(unregistered) == 1
+    assert unregistered[0].severity == "warning"
+    assert "LDPC" in unregistered[0].message
+    assert "CMOS_ABBREVIATIONS" in unregistered[0].message
+    assert "./arch2 generate glossary" in unregistered[0].message

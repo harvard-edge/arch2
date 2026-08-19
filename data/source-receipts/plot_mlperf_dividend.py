@@ -159,6 +159,7 @@ def main():
     ax1.set_ylim(0.8, 4.3)
     ax1.set_xlabel("Months Since Silicon Hardware Deployment", fontsize=6.6)
     ax1.set_ylabel("Normalized In-Place Throughput Multiplier", fontsize=6.6)
+    ax1.tick_params(axis="both", labelsize=5.8)
     ax1.set_title(
         "Panel A: The Fixed-Silicon Software Dividend",
         fontsize=7.6,
@@ -222,6 +223,7 @@ def main():
     ax2.set_ylabel(
         "BERT-Large Throughput (rel. to V100 Debut, Log Scale)", fontsize=6.6
     )
+    ax2.tick_params(axis="both", labelsize=5.8)
     ax2.set_title(
         "Panel B: Hardware Steps vs. Software Expansion",
         fontsize=7.6,

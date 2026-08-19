@@ -105,6 +105,10 @@ review_app = typer.Typer(
 loop_app = typer.Typer(
     help="Run self-improving manuscript review loops.", no_args_is_help=True
 )
+generate_app = typer.Typer(
+    help="Generate derived assets, schemas, and backmatter appendices.",
+    no_args_is_help=True,
+)
 
 
 class FindingFormat(str, Enum):
@@ -143,6 +147,7 @@ def main(
 
 app.add_typer(check_app, name="check")
 app.add_typer(validate_app, name="validate")
+app.add_typer(generate_app, name="generate")
 app.add_typer(migrate_app, name="migrate")
 app.add_typer(verify_app, name="verify")
 app.add_typer(layout_app, name="layout")
@@ -2535,11 +2540,7 @@ def generated_asset_findings() -> list[Finding]:
             continue
         if path.suffix.lower() not in GENERATED_ASSET_SUFFIXES:
             continue
-        if path.suffix.lower() == ".svg" and status.strip() == "M":
-            current_path = ROOT / path
-            continue
-
-        if path.suffix.lower() == ".pdf" and status.strip() == "M":
+        if path.suffix.lower() in {".svg", ".pdf", ".png"} and status.strip() == "M":
             current_path = ROOT / path
             continue
         findings.append(
@@ -4880,6 +4881,1490 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     return findings
 
 
+GLOSSARY_DOMAINS: list[tuple[str, str, str, str]] = [
+    (
+        "hardware",
+        "Hardware Architecture & Microarchitecture",
+        "tbl-glossary-hardware",
+        "sec-glossary-hardware",
+    ),
+    (
+        "physical",
+        "Physical Design, Manufacturing & Signoff",
+        "tbl-glossary-physical",
+        "sec-glossary-physical",
+    ),
+    (
+        "compilers",
+        "EDA, Compilers & Intermediate Representations",
+        "tbl-glossary-compilers",
+        "sec-glossary-compilers",
+    ),
+    (
+        "verification",
+        "Verification, Power & Standards",
+        "tbl-glossary-verification",
+        "sec-glossary-verification",
+    ),
+    (
+        "interconnects",
+        "Bus Protocols & Interconnect Interfaces",
+        "tbl-glossary-interconnects",
+        "sec-glossary-interconnects",
+    ),
+    ("ai", "AI, Modeling & Design Automation", "tbl-glossary-ai", "sec-glossary-ai"),
+]
+
+# Canonical technical abbreviations registry (CMOS Chapter 10 style contract)
+# Format: (canonical_expansion, is_proper_noun, phonetic_article, domain_key, engineering_definition, regex_pattern, exempt_first_mention)
+CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
+    # Hardware Architecture & Microarchitecture
+    "ABI": (
+        "application binary interface",
+        False,
+        "an",
+        "hardware",
+        "The low-level binary interface between software programs and the operating system or hardware register state.",
+        r"application binary interface",
+        True,
+    ),
+    "ASIC": (
+        "application-specific integrated circuit",
+        False,
+        "an",
+        "hardware",
+        "A custom-manufactured integrated circuit tailored to execute a specific computing workload with maximal energy and area efficiency.",
+        r"application-specific integrated circuit",
+        False,
+    ),
+    "CPU": (
+        "central processing unit",
+        False,
+        "a",
+        "hardware",
+        "The primary general-purpose execution engine that sequences and executes instruction streams in a computer system.",
+        r"central processing unit",
+        True,
+    ),
+    "DMA": (
+        "direct memory access",
+        False,
+        "a",
+        "hardware",
+        "A hardware feature allowing peripheral devices or accelerators to transfer data directly to and from main memory without processor intervention.",
+        r"direct memory access",
+        True,
+    ),
+    "FIFO": (
+        "first-in, first-out",
+        False,
+        "a",
+        "hardware",
+        "A queue data structure or buffer hardware where the earliest stored data elements are retrieved first.",
+        r"first-in,?\s+first-out",
+        False,
+    ),
+    "FPGA": (
+        "field-programmable gate array",
+        False,
+        "an",
+        "hardware",
+        "A reconfigurable integrated circuit containing programmable logic blocks and routing channels configured post-fabrication.",
+        r"field-programmable gate array",
+        False,
+    ),
+    "GEMM": (
+        "general matrix multiply",
+        False,
+        "a",
+        "hardware",
+        "The canonical linear algebra compute kernel forming the computational core of deep neural network acceleration.",
+        r"general(?:ized)? matrix multiply|general matrix multiplication",
+        False,
+    ),
+    "GPU": (
+        "graphics processing unit",
+        False,
+        "a",
+        "hardware",
+        "A massively parallel processor optimized for high-throughput rasterization, linear algebra, and tensor operations.",
+        r"graphics processing unit",
+        True,
+    ),
+    "HDL": (
+        "hardware description language",
+        False,
+        "an",
+        "hardware",
+        "A specialized formal language (such as SystemVerilog or VHDL) used to model the structure, behavior, and timing of digital electronic circuits.",
+        r"hardware description language",
+        True,
+    ),
+    "HPC": (
+        "high-performance computing",
+        False,
+        "an",
+        "hardware",
+        "The practice of aggregating computing power to perform complex calculations at massively parallel scales.",
+        r"high[- ]performance computing",
+        True,
+    ),
+    "IPC": (
+        "instructions per cycle",
+        False,
+        "an",
+        "hardware",
+        "A standard microarchitectural throughput metric measuring the average number of instructions executed per clock cycle.",
+        r"instructions? per cycle",
+        True,
+    ),
+    "ISA": (
+        "instruction set architecture",
+        False,
+        "an",
+        "hardware",
+        "The abstract model and boundary defining instructions, registers, addressing modes, and memory consistency for a processor.",
+        r"instruction[- ]set architecture",
+        False,
+    ),
+    "KGD": (
+        "known-good die",
+        False,
+        "a",
+        "hardware",
+        "A bare semiconductor die or chiplet that has been comprehensively tested and verified to meet functional and electrical specifications prior to multi-die package assembly.",
+        r"known[- ]good[- ]die",
+        True,
+    ),
+    "MSHR": (
+        "miss status holding register",
+        False,
+        "an",
+        "hardware",
+        "A specialized hardware buffer in non-blocking caches tracking in-flight memory requests to allow cache lookups to continue during outstanding misses.",
+        r"miss status holding register",
+        True,
+    ),
+    "NoC": (
+        "network-on-chip",
+        False,
+        "a",
+        "hardware",
+        "An on-die packet-switched communication subsystem connecting processing elements, caches, and memory controllers.",
+        r"network[- ]on[- ]chip",
+        False,
+    ),
+    "NPU": (
+        "neural processing unit",
+        False,
+        "an",
+        "hardware",
+        "A specialized hardware accelerator designed specifically for accelerating tensor operations and deep neural network workloads.",
+        r"neural processing unit",
+        False,
+    ),
+    "PE": (
+        "processing element",
+        False,
+        "a",
+        "hardware",
+        "An individual arithmetic compute node or execution unit within a systolic array or parallel accelerator matrix.",
+        r"processing[- ]element",
+        True,
+    ),
+    "RISC": (
+        "reduced instruction set computer",
+        False,
+        "a",
+        "hardware",
+        "A processor design philosophy based on simplified instructions that execute in a single cycle with load-store memory access.",
+        r"reduced instruction set computer",
+        True,
+    ),
+    "ROB": (
+        "reorder buffer",
+        False,
+        "an",
+        "hardware",
+        "A circular FIFO buffer in out-of-order execution processors tracking in-flight speculative instructions to ensure in-order retirement and precise exceptions.",
+        r"reorder buffer",
+        False,
+    ),
+    "RTL": (
+        "register-transfer level",
+        False,
+        "an",
+        "hardware",
+        "A digital design modeling abstraction describing synchronous signal and data transfers between hardware registers through combinational logic.",
+        r"register-transfer[- ]level",
+        False,
+    ),
+    "SoC": (
+        "system-on-chip",
+        False,
+        "an",
+        "hardware",
+        "An integrated circuit consolidating an entire electronic or computing system onto a single semiconductor die.",
+        r"system[- ]on[- ]chip",
+        False,
+    ),
+    "SRAM": (
+        "static random-access memory",
+        False,
+        "an",
+        "hardware",
+        "Fast, volatile semiconductor memory using bistable latching circuitry used for on-chip caches and scratchpads.",
+        r"static random[- ]access memory",
+        False,
+    ),
+    "TCM": (
+        "tightly-coupled memory",
+        False,
+        "a",
+        "hardware",
+        "Fast, deterministic on-chip static RAM mapped directly into the processor core's memory map with zero wait states.",
+        r"tightly[- ]coupled memory",
+        True,
+    ),
+    "TDP": (
+        "thermal design power",
+        False,
+        "a",
+        "hardware",
+        "The maximum sustained power consumption that a cooling system is engineered to dissipate under worst-case operational workloads.",
+        r"thermal design power",
+        False,
+    ),
+    "TLB": (
+        "translation lookaside buffer",
+        False,
+        "a",
+        "hardware",
+        "A dedicated hardware cache that stores recent virtual-to-physical address translations to accelerate memory access.",
+        r"translation lookaside buffer",
+        False,
+    ),
+    "TSO": (
+        "Total Store Order",
+        True,
+        "a",
+        "hardware",
+        "A hardware memory consistency model guaranteeing that store operations from a given thread appear in program order to all processors.",
+        r"Total Store Order",
+        True,
+    ),
+    "WSC": (
+        "warehouse-scale computing",
+        False,
+        "a",
+        "hardware",
+        "Massive datacenter computing systems engineered as a unified, coordinated warehouse of compute nodes, storage, and networking.",
+        r"warehouse[- ]scale computing",
+        True,
+    ),
+    # Physical Design, Manufacturing & Signoff
+    "BSPDN": (
+        "backside power delivery network",
+        False,
+        "a",
+        "physical",
+        "A 3D semiconductor manufacturing technology that moves the power distribution metal grid to the backside of the silicon wafer to reduce IR-drop and routing congestion.",
+        r"backside power delivery network",
+        True,
+    ),
+    "DRC": (
+        "design rule check",
+        False,
+        "a",
+        "physical",
+        "Automated verification checking that a physical IC layout complies with the geometric constraints dictated by the semiconductor foundry's manufacturing process.",
+        r"design rule check(?:ing)?",
+        False,
+    ),
+    "EVM": (
+        "emergency voltage mitigation",
+        False,
+        "an",
+        "physical",
+        "Dynamic hardware circuitry that rapidly detects supply voltage droop and temporarily throttles clock frequency or compute activity.",
+        r"emergency voltage mitigation",
+        True,
+    ),
+    "IR-drop": (
+        "voltage drop",
+        False,
+        "an",
+        "physical",
+        "The parasitic reduction in supply voltage across a power distribution network caused by current flow through resistive on-chip metal tracks.",
+        r"(?:dynamic\s+|static\s+)?voltage[- ]drop|IR[- ]drop",
+        True,
+    ),
+    "LVS": (
+        "layout versus schematic",
+        False,
+        "an",
+        "physical",
+        "Verification confirming that drawn physical layout mask geometry matches the electrical connectivity of the synthesized netlist.",
+        r"layout versus schematic",
+        False,
+    ),
+    "MPW": (
+        "multi-project wafer",
+        False,
+        "an",
+        "physical",
+        "A shared semiconductor fabrication shuttle run combining multiple distinct customer designs onto common reticle masks to amortize tooling charges.",
+        r"multi[- ]project wafer",
+        False,
+    ),
+    "MTBF": (
+        "mean time between failures",
+        False,
+        "an",
+        "physical",
+        "The predicted elapsed time between inherent operational failures of a hardware system during normal operation.",
+        r"mean time between failures",
+        True,
+    ),
+    "NDA": (
+        "non-disclosure agreement",
+        False,
+        "an",
+        "physical",
+        "A confidential legal contract protecting proprietary process design kits, standard cell libraries, and foundry yield data from unauthorized disclosure.",
+        r"non[- ]disclosure agreement",
+        True,
+    ),
+    "NRE": (
+        "non-recurring engineering",
+        False,
+        "an",
+        "physical",
+        "The one-time, upfront engineering and mask tooling costs required to design, verify, and fabricate a new chip design before mass production.",
+        r"non-recurring engineering",
+        False,
+    ),
+    "PDK": (
+        "process design kit",
+        False,
+        "a",
+        "physical",
+        "A collection of device models, design rules, standard-cell libraries, and verification decks supplied by a foundry for a specific fabrication process.",
+        r"process design kit",
+        False,
+    ),
+    "PDN": (
+        "power delivery network",
+        False,
+        "a",
+        "physical",
+        "The on-die, package, and board-level metal interconnect network distributing supply voltage and ground across all active circuitry.",
+        r"power delivery network",
+        False,
+    ),
+    "PVT": (
+        "process, voltage, and temperature",
+        False,
+        "a",
+        "physical",
+        "The three primary operational variation axes evaluated during static timing and power signoff across fast/slow silicon corners.",
+        r"process,?\s+voltage,?\s+(?:and )?temperature",
+        False,
+    ),
+    "SEU": (
+        "single-event upset",
+        False,
+        "an",
+        "physical",
+        "A soft error or radiation-induced state change in a microelectronic device caused by ionizing radiation.",
+        r"single[- ]event upset",
+        True,
+    ),
+    "STA": (
+        "static timing analysis",
+        False,
+        "an",
+        "physical",
+        "A deterministic verification method calculating circuit delays across all signal paths to verify setup and hold timing without dynamic simulation.",
+        r"static timing analysis",
+        False,
+    ),
+    "TCO": (
+        "total cost of ownership",
+        False,
+        "a",
+        "physical",
+        "A financial estimate encompassing all direct and indirect capital expenditures and operational costs over the lifetime of a computing system.",
+        r"total cost of ownership",
+        True,
+    ),
+    "VLSI": (
+        "very-large-scale integration",
+        False,
+        "a",
+        "physical",
+        "The process of creating integrated circuits by combining millions or billions of MOS transistors onto a single silicon chip.",
+        r"very[- ]large[- ]scale integration",
+        True,
+    ),
+    # EDA, Compilers & Intermediate Representations
+    "AIG": (
+        "and-inverter graph",
+        False,
+        "an",
+        "compilers",
+        "A directed acyclic graph representation of a combinational logic circuit composed entirely of two-input AND nodes and logical inverters.",
+        r"and[- ]inverter graph",
+        True,
+    ),
+    "AST": (
+        "abstract syntax tree",
+        False,
+        "an",
+        "compilers",
+        "A tree representation of the abstract syntactic structure of source code, capturing grammatical hierarchy without formatting tokens.",
+        r"abstract syntax tree",
+        False,
+    ),
+    "CAD": (
+        "computer-aided design",
+        False,
+        "a",
+        "compilers",
+        "Software tools used by engineers to create, modify, analyze, and optimize physical hardware and circuit designs.",
+        r"computer[- ]aided design",
+        True,
+    ),
+    "CDFG": (
+        "control-data flow graph",
+        False,
+        "a",
+        "compilers",
+        "A directed graph representation capturing both control branches and data dependencies within a computational block.",
+        r"control[- ]data[- ]flow graph|control and data flow graph",
+        False,
+    ),
+    "CIRCT": (
+        "Circuit IR Compilers and Tools",
+        True,
+        "a",
+        "compilers",
+        "An open-source, LLVM/MLIR-based hardware compiler infrastructure providing dialect-driven lowering from high-level abstractions to synthesizable RTL.",
+        r"Circuit (?:IR|Intermediate Representation) Compilers and Tools",
+        False,
+    ),
+    "EDA": (
+        "electronic design automation",
+        False,
+        "an",
+        "compilers",
+        "The category of software tools, algorithms, and workflows used to design, simulate, verify, and physically layout electronic systems and semiconductors.",
+        r"electronic design automation",
+        False,
+    ),
+    "FSDB": (
+        "Fast Signal Database",
+        True,
+        "an",
+        "compilers",
+        "A high-performance proprietary binary waveform database format widely used for storing simulation and emulation signal traces.",
+        r"Fast Signal Database",
+        True,
+    ),
+    "HLS": (
+        "high-level synthesis",
+        False,
+        "an",
+        "compilers",
+        "An automated compilation process transforming algorithmic descriptions into cycle-accurate register-transfer level hardware.",
+        r"high-level synthesis",
+        False,
+    ),
+    "IR": (
+        "intermediate representation",
+        False,
+        "an",
+        "compilers",
+        "A standardized internal data structure or code format used by compilers to represent program or hardware semantics between passes.",
+        r"intermediate representation",
+        False,
+    ),
+    "MLIR": (
+        "Multi-Level Intermediate Representation",
+        True,
+        "an",
+        "compilers",
+        "A modular compiler infrastructure within LLVM providing extensible dialects for domain-specific transformations and multi-stage hardware/software lowering.",
+        r"Multi-Level Intermediate Representation",
+        False,
+    ),
+    "TLM": (
+        "transaction-level model",
+        False,
+        "a",
+        "compilers",
+        "A high-level abstraction for modeling digital systems where module communication is represented as abstract transactions rather than pin-level clock cycles.",
+        r"transaction-level model(?:ing)?",
+        False,
+    ),
+    "VCD": (
+        "value change dump",
+        False,
+        "a",
+        "compilers",
+        "An ASCII-based industry standard waveform file format capturing signal value transitions during digital logic simulation.",
+        r"value change dump",
+        True,
+    ),
+    # Verification, Power & Standards
+    "BMC": (
+        "bounded model checking",
+        False,
+        "a",
+        "verification",
+        "A formal verification technique unrolling sequential circuit transitions up to a fixed depth k and querying a SAT/SMT solver to prove or disprove properties.",
+        r"bounded model checking",
+        False,
+    ),
+    "CDC": (
+        "clock-domain crossing",
+        False,
+        "a",
+        "verification",
+        "An interface where a signal generated in one clock domain is sampled in an asynchronous or unrelated clock domain, risking metastability.",
+        r"clock-domain crossing",
+        False,
+    ),
+    "CEC": (
+        "combinational equivalence checking",
+        False,
+        "a",
+        "verification",
+        "A formal verification technique using SAT/BDD methods to prove that two combinational logic circuits produce identical Boolean outputs for all inputs.",
+        r"combinational equivalence checking",
+        True,
+    ),
+    "CEGAR": (
+        "counterexample-guided abstraction refinement",
+        False,
+        "a",
+        "verification",
+        "An iterative formal verification algorithm that starts with a coarse abstract model and progressively refines it using concrete counterexamples.",
+        r"counterexample[- ]guided abstraction refinement",
+        True,
+    ),
+    "IEEE": (
+        "Institute of Electrical and Electronics Engineers",
+        True,
+        "an",
+        "verification",
+        "The professional engineering organization responsible for international standards including SystemVerilog (1800), SystemC (1666), and UPF (1801).",
+        r"Institute of Electrical and Electronics Engineers",
+        False,
+    ),
+    "PMP": (
+        "Physical Memory Protection",
+        True,
+        "a",
+        "verification",
+        "A RISC-V architectural standard providing hardware-enforced memory isolation and access permissions for physical memory regions.",
+        r"Physical Memory Protection",
+        True,
+    ),
+    "PRD": (
+        "product requirements document",
+        False,
+        "a",
+        "verification",
+        "A formal engineering document defining the functionality, performance targets, physical constraints, and delivery requirements for a hardware system.",
+        r"product requirements document",
+        False,
+    ),
+    "PST": (
+        "power state table",
+        False,
+        "a",
+        "verification",
+        "A tabular specification within IEEE 1801 UPF describing valid combinations of power domain voltage states and operating modes.",
+        r"power state table",
+        True,
+    ),
+    "RDC": (
+        "reset domain crossing",
+        False,
+        "an",
+        "verification",
+        "An asynchronous structural boundary where a signal originates in one reset domain and enters logic reset by an unrelated reset controller.",
+        r"reset[- ]domain crossing",
+        True,
+    ),
+    "RVWMO": (
+        "RISC-V Weak Memory Ordering",
+        True,
+        "an",
+        "verification",
+        "The canonical hardware memory consistency model for the RISC-V architecture defining legal ordering for multithreaded loads, stores, and fences.",
+        r"RISC-V Weak Memory Ordering",
+        False,
+    ),
+    "SEC": (
+        "sequential equivalence checking",
+        False,
+        "an",
+        "verification",
+        "A formal verification method that mathematically proves two digital sequential circuits have identical input-output behavior over all cycles.",
+        r"sequential equivalence checking",
+        True,
+    ),
+    "SDC": (
+        "Synopsys Design Constraints",
+        True,
+        "an",
+        "verification",
+        "The industry-standard Tcl-based timing and physical constraint format specifying clock frequencies, input/output delays, and multi-cycle false paths.",
+        r"Synopsys Design Constraints",
+        False,
+    ),
+    "SPEC": (
+        "Standard Performance Evaluation Corporation",
+        True,
+        "a",
+        "verification",
+        "A non-profit organization establishing standardized benchmark suites to measure computing system performance.",
+        r"Standard Performance Evaluation Corporation",
+        True,
+    ),
+    "SVA": (
+        "SystemVerilog Assertions",
+        True,
+        "an",
+        "verification",
+        "A declarative language extension within IEEE 1800 SystemVerilog used to specify temporal and boolean properties for formal verification and dynamic simulation.",
+        r"SystemVerilog Assertions",
+        False,
+    ),
+    "UPF": (
+        "Unified Power Format",
+        True,
+        "a",
+        "verification",
+        "The standard declarative language (IEEE 1801) specifying power intent, power domains, isolation cells, level shifters, and power switches across physical synthesis.",
+        r"(?:IEEE 1801 )?Unified Power Format",
+        False,
+    ),
+    # Bus Protocols & Interconnect Interfaces
+    "AMBA": (
+        "Arm Microcontroller Bus Architecture",
+        True,
+        "an",
+        "interconnects",
+        "An open-standard on-chip interconnect specification governing the connection and management of functional blocks in SoC designs.",
+        r"(?:Arm|ARM) Microcontroller Bus Architecture",
+        False,
+    ),
+    "AXI": (
+        "Advanced eXtensible Interface",
+        True,
+        "an",
+        "interconnects",
+        "A high-performance, high-frequency, burst-based point-to-point interconnect protocol defined under the AMBA specification.",
+        r"Advanced e?Xtensible Interface",
+        False,
+    ),
+    "CXL": (
+        "Compute Express Link",
+        True,
+        "a",
+        "interconnects",
+        "An open industry-standard cache-coherent interconnect protocol running over PCIe physical layers for high-speed CPU-to-device and CPU-to-memory expansion.",
+        r"Compute Express Link",
+        False,
+    ),
+    "OCP": (
+        "Open Compute Project",
+        True,
+        "an",
+        "interconnects",
+        "An open collaborative community standardizing datacenter hardware, server architectures, and open accelerator specifications.",
+        r"Open Compute Project",
+        False,
+    ),
+    "UCIe": (
+        "Universal Chiplet Interconnect Express",
+        True,
+        "a",
+        "interconnects",
+        "An open industry standard defining die-to-die physical, protocol, and software connectivity for 2.5D and 3D multi-chiplet integration.",
+        r"Universal Chiplet Interconnect Express",
+        False,
+    ),
+    # AI, Modeling & Design Automation
+    "AWC": (
+        "Autonomous Workflow Certified",
+        True,
+        "an",
+        "ai",
+        "A proposed artifact evaluation credential attesting to the computational reproducibility and explicit audit scope of an automated design workflow.",
+        r"Autonomous Workflow Certified",
+        False,
+    ),
+    "BO": (
+        "Bayesian optimization",
+        False,
+        "a",
+        "ai",
+        "A sequential design strategy for global optimization of black-box objective functions using Gaussian process surrogate models and acquisition functions.",
+        r"Bayesian optimization",
+        True,
+    ),
+    "CNN": (
+        "convolutional neural network",
+        False,
+        "a",
+        "ai",
+        "A class of deep neural networks using spatial convolution kernels, widely used in computer vision and structured tensor representations.",
+        r"convolutional neural network",
+        True,
+    ),
+    "DNN": (
+        "deep neural network",
+        False,
+        "a",
+        "ai",
+        "An artificial neural network with multiple hidden layers between input and output capable of learning hierarchical feature representations.",
+        r"deep[- ]neural[- ]network|deep neural network",
+        True,
+    ),
+    "DQN": (
+        "Deep Q-Network",
+        True,
+        "a",
+        "ai",
+        "A model-free reinforcement learning algorithm combining Q-learning with deep neural network function approximators.",
+        r"Deep Q[- ]Network",
+        True,
+    ),
+    "DSE": (
+        "design-space exploration",
+        False,
+        "a",
+        "ai",
+        "The systematic evaluation of architectural and microarchitectural parameters to identify Pareto-optimal trade-offs across power, performance, and area.",
+        r"design[- ]space exploration",
+        False,
+    ),
+    "ECE": (
+        "Expected Calibration Error",
+        True,
+        "an",
+        "ai",
+        "A statistical metric measuring the difference between predicted model confidence probabilities and actual empirical accuracy.",
+        r"Expected Calibration Error",
+        True,
+    ),
+    "FP8": (
+        "8-bit floating-point",
+        False,
+        "an",
+        "ai",
+        "A low-precision floating-point arithmetic format standardized for high-throughput deep learning training and inference.",
+        r"(?:8[- ]bit )?floating[- ]point",
+        True,
+    ),
+    "GNN": (
+        "graph neural network",
+        False,
+        "a",
+        "ai",
+        "A class of deep learning architectures operating directly on graph-structured data via message-passing between nodes and edges.",
+        r"graph neural network",
+        True,
+    ),
+    "INT4": (
+        "4-bit integer",
+        False,
+        "an",
+        "ai",
+        "A quantized integer numeric representation using 4 bits per weight or activation to minimize memory bandwidth and footprint in deep learning accelerators.",
+        r"4[- ]bit integer",
+        True,
+    ),
+    "KV": (
+        "key-value",
+        False,
+        "a",
+        "ai",
+        "A pair of tensors storing intermediate attention projections in transformer models, frequently cached across decoding steps.",
+        r"key[- ]value",
+        True,
+    ),
+    "LLM": (
+        "large language model",
+        False,
+        "an",
+        "ai",
+        "A deep neural network trained on vast text or code corpora, capable of autoregressive token generation for natural language reasoning and code synthesis.",
+        r"large language model",
+        False,
+    ),
+    "MCTS": (
+        "Monte Carlo tree search",
+        True,
+        "an",
+        "ai",
+        "A heuristic search algorithm for decision processes combining tree traversal with Monte Carlo rollouts to evaluate candidate actions.",
+        r"Monte Carlo (?:tree )?search",
+        True,
+    ),
+    "MDP": (
+        "Markov decision process",
+        False,
+        "an",
+        "ai",
+        "A formal mathematical framework for modeling decision-making in discrete stochastic environments defined by states, actions, transition probabilities, and rewards.",
+        r"Markov decision process",
+        False,
+    ),
+    "MoE": (
+        "mixture of experts",
+        False,
+        "a",
+        "ai",
+        "A neural network architecture routing individual input tokens to specialized expert sub-networks to scale parameter capacity with constant compute.",
+        r"mixture[- ]of[- ]experts",
+        True,
+    ),
+    "PPA": (
+        "power, performance, and area",
+        False,
+        "a",
+        "ai",
+        "The tripartite metric vector governing semiconductor optimization and architectural figure-of-merit evaluation.",
+        r"power,?\s+performance,?\s+and area",
+        False,
+    ),
+    "PPO": (
+        "Proximal Policy Optimization",
+        True,
+        "a",
+        "ai",
+        "A model-free policy gradient reinforcement learning algorithm using clipped surrogate objectives to maintain stable policy updates.",
+        r"Proximal Policy Optimization",
+        True,
+    ),
+    "RL": (
+        "reinforcement learning",
+        False,
+        "an",
+        "ai",
+        "A machine learning paradigm where an autonomous agent learns to optimize a policy by taking actions in an environment to maximize cumulative reward signals.",
+        r"reinforcement learning",
+        False,
+    ),
+    "SLSA": (
+        "Supply Chain Levels for Software Artifacts",
+        True,
+        "an",
+        "ai",
+        "A security framework defining machine-readable, cryptographically signed metadata attestations for build provenance and supply chain integrity.",
+        r"Supply Chain Levels for Software Artifacts",
+        False,
+    ),
+}
+
+CMOS_ARTICLE_CHECKS: dict[str, str] = {
+    abbr: data[2] for abbr, data in CMOS_ABBREVIATIONS.items()
+}
+
+IGNORED_PROSE_ACRONYMS: set[str] = {
+    # General English & document abbreviations
+    "AI",
+    "ML",
+    "DL",
+    "OS",
+    "UI",
+    "UX",
+    "IO",
+    "ID",
+    "IP",
+    "PR",
+    "CI",
+    "CD",
+    "QA",
+    "QC",
+    "OK",
+    "TV",
+    "DC",
+    "AC",
+    "RF",
+    "HW",
+    "SW",
+    "VS",
+    "PM",
+    "AM",
+    "PDF",
+    "HTML",
+    "EPUB",
+    "SVG",
+    "PNG",
+    "JSON",
+    "YAML",
+    "XML",
+    "CSV",
+    "CLI",
+    "URL",
+    "HTTP",
+    "HTTPS",
+    "UTF",
+    "ASCII",
+    "USA",
+    "UK",
+    "EU",
+    "FAQ",
+    "N/A",
+    "TBD",
+    "TODO",
+    "I",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "VI",
+    "VII",
+    "VIII",
+    "IX",
+    "X",
+    "XI",
+    "XII",
+    "UUID",
+    "IC",
+    "UVM",
+    "RNG",
+    "PLA",
+    "DRAM",
+    "ILP",
+    "FSM",
+    "DFT",
+    "ATPG",
+    "ECC",
+    "EPIC",
+    "SAT",
+    "SMT",
+    "DSP",
+    "SMAC",
+    "MAC",
+    "OOM",
+    "WNS",
+    # Organizations, venues & institutions
+    "MIT",
+    "ACM",
+    "NSF",
+    "DARPA",
+    "SRC",
+    "NASA",
+    "DAC",
+    "MICRO",
+    "ISCA",
+    "ASPLOS",
+    "DATE",
+    "ICCAD",
+    "MLCommons",
+    "CEDA",
+    "IBS",
+    "NVIDIA",
+    "Google",
+    "Intel",
+    "AMD",
+    "Arm",
+    "Apple",
+    "Qualcomm",
+    "Meta",
+    "Micron",
+    "Synopsys",
+    "Cadence",
+    "Siemens",
+    "Ansys",
+    # Software tools & suites
+    "OpenROAD",
+    "OpenSTA",
+    "Yosys",
+    "Verilator",
+    "KernelBench",
+    "XRBench",
+    "MLPerf",
+    "SCALE-Sim",
+    "RV64GCV",
+    "RVV",
+    "OAI",
+    "MAPT",
+    "Partha",
+    "LInc",
+    "DPC",
+    "CBP",
+    # Measurement units
+    "MiB",
+    "GiB",
+    "KiB",
+    "TiB",
+    "MHz",
+    "GHz",
+    "MIPS",
+    "FLOPS",
+    "TFLOPS",
+    "GFLOPS",
+    "TOPS",
+}
+
+GLOSSARY_PATH = (
+    BOOK_DIR / "contents" / "backmatter" / "apdx-d-glossary" / "apdx-d-glossary.qmd"
+)
+LUA_GLOSSARY_FILTER_PATH = BOOK_DIR / "filters" / "glossary.lua"
+
+
+def generate_glossary_markdown() -> str:
+    """Generate the canonical markdown source for Appendix D: Glossary."""
+    lines = [
+        "---",
+        "format:",
+        "  html:",
+        "    output-file: index.html",
+        "---",
+        "",
+        "# Acronyms and Technical Glossary {#sec-appendix-d-glossary}",
+        "",
+        "::: {.abstract}",
+        "This reference appendix consolidates and categorizes the technical acronyms, standards, formal representations, and abbreviations used throughout *Architecture 2.0*. Each entry lists the canonical abbreviation, its spelled-out form per the Chicago Manual of Style (CMOS), its technical domain, and a concise engineering definition across hardware microarchitecture (@tbl-glossary-hardware), physical design and signoff (@tbl-glossary-physical), EDA and compilers (@tbl-glossary-compilers), verification and standards (@tbl-glossary-verification), bus interconnects (@tbl-glossary-interconnects), and AI automation (@tbl-glossary-ai).",
+        ":::",
+        "",
+    ]
+
+    for domain_key, domain_title, table_anchor, sec_anchor in GLOSSARY_DOMAINS:
+        lines.append(f"## {domain_title} {{#{sec_anchor}}}")
+        lines.append("")
+        lines.append(
+            "| **Acronym** | **Spelled-Out Form (CMOS)** | **Engineering Definition** |"
+        )
+        lines.append("| :--- | :--- | :--- |")
+
+        domain_abbrs = [
+            (abbr, data)
+            for abbr, data in sorted(CMOS_ABBREVIATIONS.items())
+            if data[3] == domain_key
+        ]
+
+        for abbr, (
+            canonical,
+            is_proper,
+            article,
+            dom,
+            definition,
+            pattern,
+            exempt,
+        ) in domain_abbrs:
+            lines.append(f"| **{abbr}** | {canonical} | {definition} |")
+
+        lines.append(
+            f': **{domain_title} Glossary.** {{#{table_anchor} tbl-colwidths="[15,30,55]"}}'
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def generate_glossary_lua() -> str:
+    """Generate the Lua filter for Quarto HTML interactive tooltips."""
+    lines = [
+        "-- filters/glossary.lua",
+        "-- Architecture 2.0 Quarto Filter: Injects semantic <abbr> tooltips for technical acronyms in HTML output.",
+        "-- Auto-generated by './arch2 generate glossary' from cli/arch2.py; do not edit directly.",
+        "",
+        "local acronyms = {",
+    ]
+
+    for abbr, (
+        canonical,
+        is_proper,
+        article,
+        dom,
+        definition,
+        pattern,
+        exempt,
+    ) in sorted(CMOS_ABBREVIATIONS.items()):
+        safe_def = definition.replace('"', '\\"')
+        safe_canonical = canonical.replace('"', '\\"')
+        lines.append(f'  ["{abbr}"] = "{safe_canonical}: {safe_def}",')
+
+    lines.extend(
+        [
+            "}",
+            "",
+            "if not quarto.doc.is_format('html') then",
+            "  return {}",
+            "end",
+            "",
+            "local function replace_inlines(inlines)",
+            "  local result = pandoc.Inlines({})",
+            "  for i, inline in ipairs(inlines) do",
+            "    if inline.t == 'Str' then",
+            "      local clean, punct = inline.text:match('^([%a%-%d]+)([%p]*)$')",
+            "      if clean and acronyms[clean] then",
+            "        local title = acronyms[clean]:gsub('\"', '&quot;')",
+            "        local html = '<abbr class=\"arch2-abbr\" title=\"' .. title .. '\">' .. clean .. '</abbr>' .. punct",
+            "        table.insert(result, pandoc.RawInline('html', html))",
+            "      else",
+            "        table.insert(result, inline)",
+            "      end",
+            "    elseif inline.t == 'Link' or inline.t == 'Code' or inline.t == 'Math' or inline.t == 'RawInline' then",
+            "      table.insert(result, inline)",
+            "    elseif inline.content and type(inline.content) == 'table' then",
+            "      inline.content = replace_inlines(inline.content)",
+            "      table.insert(result, inline)",
+            "    else",
+            "      table.insert(result, inline)",
+            "    end",
+            "  end",
+            "  return result",
+            "end",
+            "",
+            "function Para(el)",
+            "  el.content = replace_inlines(el.content)",
+            "  return el",
+            "end",
+            "",
+            "function Plain(el)",
+            "  el.content = replace_inlines(el.content)",
+            "  return el",
+            "end",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def glossary_findings() -> list[Finding]:
+    """Verify that the Glossary appendix and Lua filter are present, registered, and up to date."""
+    findings: list[Finding] = []
+
+    # 1. Check QMD file
+    if not GLOSSARY_PATH.exists():
+        findings.append(
+            Finding(
+                "error",
+                "missing-glossary-file",
+                _relative(GLOSSARY_PATH),
+                "Glossary appendix file is missing; run './arch2 generate glossary' to create it.",
+            )
+        )
+    else:
+        actual_qmd = GLOSSARY_PATH.read_text(encoding="utf-8").strip()
+        expected_qmd = generate_glossary_markdown().strip()
+        if actual_qmd != expected_qmd:
+            findings.append(
+                Finding(
+                    "error",
+                    "glossary-drift",
+                    _relative(GLOSSARY_PATH),
+                    "Glossary appendix content is out of sync with CMOS_ABBREVIATIONS; run './arch2 generate glossary' to update.",
+                )
+            )
+
+    # 2. Check Lua filter file
+    if not LUA_GLOSSARY_FILTER_PATH.exists():
+        findings.append(
+            Finding(
+                "error",
+                "missing-glossary-filter",
+                _relative(LUA_GLOSSARY_FILTER_PATH),
+                "Glossary Lua filter file is missing; run './arch2 generate glossary' to create it.",
+            )
+        )
+    else:
+        actual_lua = LUA_GLOSSARY_FILTER_PATH.read_text(encoding="utf-8").strip()
+        expected_lua = generate_glossary_lua().strip()
+        if actual_lua != expected_lua:
+            findings.append(
+                Finding(
+                    "error",
+                    "glossary-filter-drift",
+                    _relative(LUA_GLOSSARY_FILTER_PATH),
+                    "Glossary Lua filter content is out of sync with CMOS_ABBREVIATIONS; run './arch2 generate glossary' to update.",
+                )
+            )
+
+    # 3. Check _quarto.yml registration
+    manifest_path = BOOK_DIR / "_quarto.yml"
+    if manifest_path.exists():
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        if (
+            "contents/backmatter/apdx-d-glossary/apdx-d-glossary.qmd"
+            not in manifest_text
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    "missing-glossary-manifest",
+                    _relative(manifest_path),
+                    "_quarto.yml is missing 'contents/backmatter/apdx-d-glossary/apdx-d-glossary.qmd' under appendices",
+                )
+            )
+        if "filters/glossary.lua" not in manifest_text:
+            findings.append(
+                Finding(
+                    "error",
+                    "missing-glossary-filter-manifest",
+                    _relative(manifest_path),
+                    "_quarto.yml is missing 'filters/glossary.lua' under filters",
+                )
+            )
+
+    return findings
+
+
+def run_glossary_check() -> None:
+    _exit_on_findings(glossary_findings(), title="glossary & acronym catalog")
+
+
+def run_glossary_generation() -> None:
+    GLOSSARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GLOSSARY_PATH.write_text(generate_glossary_markdown(), encoding="utf-8")
+    LUA_GLOSSARY_FILTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LUA_GLOSSARY_FILTER_PATH.write_text(generate_glossary_lua(), encoding="utf-8")
+    console.print(f"[green]generated[/green] {_relative(GLOSSARY_PATH)}")
+    console.print(f"[green]generated[/green] {_relative(LUA_GLOSSARY_FILTER_PATH)}")
+
+
+def abbreviations_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Validate abbreviations against CMOS Chapter 10 standards and first-mention rules.
+
+    Checks:
+    1. First-mention expansion: Every technical abbreviation must be defined on or before
+       its first occurrence in running prose within each chapter file.
+    2. Lowercase common nouns: Common nouns must be lowercase when spelled out
+       (e.g., 'register-transfer level (RTL)', not 'Register-Transfer Level (RTL)').
+    3. Phonetic article agreement: 'a' vs 'an' matching pronunciation ('an RTL', 'a CPU').
+    4. Plural apostrophe misuse: Flag 'SoC\'s' or 'ASIC\'s' when used as plurals.
+    """
+    targets = paths if paths is not None else content_qmd_files()
+    findings: list[Finding] = []
+
+    for path in targets:
+        # Skip the Glossary appendix itself from first-mention self-referencing check
+        if path.resolve() == GLOSSARY_PATH.resolve():
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+
+        # Step 1: Map all explicit definitions in the file
+        definitions: dict[str, int] = {}
+        for lineno, line in enumerate(lines, start=1):
+            for abbr, data in CMOS_ABBREVIATIONS.items():
+                canonical = data[0]
+                is_proper = data[1]
+                pattern = data[5]
+                def_regex = re.compile(
+                    rf"(?i:\b(?:{pattern})s?\b)\s*\([^)]*\b{abbr}s?\b[^)]*\)"
+                )
+                for match in def_regex.finditer(line):
+                    if abbr not in definitions:
+                        definitions[abbr] = lineno
+
+                    # Check for over-capitalization if it is a common noun
+                    if not is_proper:
+                        full_term = match.group(0).split("(")[0].strip()
+                        words = full_term.split()
+                        cap_words = [
+                            w
+                            for w in words
+                            if w[0].isupper()
+                            and w.lower()
+                            not in ("and", "or", "in", "of", "the", "a", "an")
+                        ]
+                        if len(cap_words) >= 2:
+                            findings.append(
+                                Finding(
+                                    "error",
+                                    "overcapitalized-expansion",
+                                    f"{_relative(path)}:{lineno}",
+                                    f"spelled-out form '{full_term}' for '{abbr}' has "
+                                    f"over-capitalized common nouns; use lowercase: '{canonical} ({abbr})'",
+                                )
+                            )
+
+        # Step 2: Check running prose occurrences
+        in_fence = False
+        flagged_unexpanded: set[str] = set()
+
+        for lineno, line in enumerate(lines, start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence or stripped.startswith("<!--") or stripped.startswith(":::"):
+                continue
+
+            # Strip non-prose elements (inline code, link/image URLs, cross-refs, citations, math)
+            prose = re.sub(r"`[^`]+`", "", line)
+            prose = re.sub(r"\]\([^)]+\)", "]", prose)
+            prose = re.sub(r"[@{#]*(?:fig|tbl|sec|lst|eq)-[a-z0-9-]+", "", prose)
+            prose = re.sub(r"@[A-Za-z0-9_:]+", "", prose)
+            prose = re.sub(r"\$[^\$]+\$", "", prose)
+
+            # Check phonetic article agreement ('a' vs 'an')
+            for match in re.finditer(r"\b(a|an)\s+([A-Z]{2,}|SoC|NoC)\b", prose):
+                art = match.group(1).lower()
+                abbr_found = match.group(2)
+                if abbr_found in CMOS_ARTICLE_CHECKS:
+                    expected_art = CMOS_ARTICLE_CHECKS[abbr_found]
+                    if art != expected_art:
+                        findings.append(
+                            Finding(
+                                "error",
+                                "abbreviation-article-mismatch",
+                                f"{_relative(path)}:{lineno}",
+                                f"use '{expected_art} {abbr_found}' instead of '{art} {abbr_found}' based on pronunciation",
+                            )
+                        )
+
+            # Check for plural apostrophe misuse (e.g. 'SoC\'s' used as plural)
+            for match in re.finditer(r"\b([A-Z]{2,}|SoC|NoC)'s\b", prose):
+                abbr_base = match.group(1)
+                match_span = match.start()
+                preceding = prose[max(0, match_span - 25) : match_span].lower()
+                if any(
+                    quant in preceding
+                    for quant in (
+                        "multiple",
+                        "two",
+                        "three",
+                        "four",
+                        "several",
+                        "many",
+                        "all",
+                        "different",
+                        "across",
+                        "between",
+                        "both",
+                        "various",
+                        "these",
+                        "those",
+                    )
+                ):
+                    findings.append(
+                        Finding(
+                            "error",
+                            "abbreviation-plural-apostrophe",
+                            f"{_relative(path)}:{lineno}",
+                            f"do not use an apostrophe for plural abbreviation '{match.group(0)}'; use '{abbr_base}s'",
+                        )
+                    )
+
+            # Check unexpanded abbreviations in running prose (flag first unexpanded occurrence per file)
+            for abbr, data in CMOS_ABBREVIATIONS.items():
+                canonical = data[0]
+                pattern = data[5]
+                exempt = data[6]
+                if exempt or abbr in flagged_unexpanded:
+                    continue
+                for match in re.finditer(rf"\b({abbr}s?)\b", prose):
+                    span_start = match.start()
+                    span_end = match.end()
+                    # Skip if preceded by '(' (part of a definition or parenthetical)
+                    if span_start > 0 and prose[span_start - 1] == "(":
+                        continue
+                    # Skip 'IR' when it is part of 'IR-drop' or 'IR drop' (voltage drop)
+                    if abbr == "IR" and re.match(
+                        r"^[- ](?:drop|droop)", prose[span_end:], re.IGNORECASE
+                    ):
+                        continue
+                    # Skip if this line itself defines the abbreviation
+                    def_regex = re.compile(
+                        rf"(?i:\b(?:{pattern})s?\b)\s*\([^)]*\b{abbr}s?\b[^)]*\)"
+                    )
+                    if def_regex.search(line):
+                        continue
+
+                    # If this abbreviation was never defined in this file or used before its definition
+                    if abbr not in definitions or definitions[abbr] > lineno:
+                        findings.append(
+                            Finding(
+                                "error",
+                                "unexpanded-abbreviation",
+                                f"{_relative(path)}:{lineno}",
+                                f"'{abbr}' is used before/without first-mention definition in this chapter "
+                                f"(define as '{canonical} ({abbr})' on first use)",
+                            )
+                        )
+                        flagged_unexpanded.add(abbr)
+                        break
+
+        # Step 3: Check for unregistered technical abbreviations expanded in prose
+        for lineno, line in enumerate(lines, start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence or stripped.startswith("<!--") or stripped.startswith(":::"):
+                continue
+
+            for match in re.finditer(
+                r"\b([A-Za-z0-9][A-Za-z0-9\s\-]{2,60}?)\s*\(([A-Z0-9]{2,8})\)",
+                line,
+            ):
+                expansion = match.group(1).strip()
+                abbr = match.group(2).strip()
+
+                # Skip registered entries or recognized plurals of registered entries
+                base_abbr = (
+                    abbr[:-1]
+                    if abbr.endswith("s") and abbr[:-1] in CMOS_ABBREVIATIONS
+                    else abbr
+                )
+                if (
+                    base_abbr in CMOS_ABBREVIATIONS
+                    or abbr in IGNORED_PROSE_ACRONYMS
+                    or base_abbr in IGNORED_PROSE_ACRONYMS
+                ):
+                    continue
+
+                # Verify initial correspondence between acronym and expansion words
+                words = [w for w in re.split(r"[\s\-]+", expansion) if w]
+                initials = "".join(w[0].upper() for w in words if w[0].isalpha())
+                if not (abbr[0] in initials or initials.startswith(abbr[:2])):
+                    continue
+
+                # Recommend proper article and formatting snippet
+                first_letter = abbr[0].upper()
+                art_hint = (
+                    "an"
+                    if first_letter
+                    in ("A", "E", "F", "H", "I", "L", "M", "N", "O", "R", "S", "X")
+                    else "a"
+                )
+                is_proper = any(
+                    w[0].isupper()
+                    for w in words
+                    if w.lower() not in ("and", "or", "in", "of", "the", "a", "an")
+                )
+
+                findings.append(
+                    Finding(
+                        "warning",
+                        "unregistered-abbreviation",
+                        f"{_relative(path)}:{lineno}",
+                        f"'{abbr}' is expanded as '{expansion}' in prose but is not registered in CMOS_ABBREVIATIONS in cli/arch2.py; "
+                        f'add entry: \'"{abbr}": ("{expansion.lower()}", {is_proper}, "{art_hint}", "<domain_key>", "<1-sentence definition>", r"{re.escape(expansion)}", False)\' '
+                        f"and run './arch2 generate glossary' to update Appendix D and tooltips.",
+                    )
+                )
+
+    return findings
+
+
+def run_abbreviations_check(paths: list[Path] | None = None) -> None:
+    _exit_on_findings(abbreviations_findings(paths), title="abbreviations & acronyms")
+
+
 PERMISSIONS_LEDGER_PATH = ROOT / "compliance" / "permissions-ledger.yml"
 
 # Phrases that mark a ledger note as an unresolved obligation rather than a
@@ -6472,7 +7957,33 @@ def source_repairable_findings() -> list[Finding]:
     for path in content_qmd_files():
         findings.extend(footnote_punctuation_findings(path))
     findings.extend(prose_style_findings())
+    findings.extend(abbreviations_findings())
+    findings.extend(glossary_findings())
     return findings
+
+
+@generate_app.command("glossary")
+def generate_glossary() -> None:
+    """Generate the canonical Glossary appendix and Lua filter from CMOS_ABBREVIATIONS."""
+    run_glossary_generation()
+
+
+@check_app.command("abbreviations")
+def check_abbreviations() -> None:
+    """Check abbreviations and acronyms against CMOS first-use disclosure standards."""
+    run_abbreviations_check()
+
+
+@check_app.command("acronyms", hidden=True)
+def check_acronyms() -> None:
+    """Alias for check abbreviations."""
+    run_abbreviations_check()
+
+
+@check_app.command("glossary")
+def check_glossary() -> None:
+    """Check that Glossary appendix and Lua filter match CMOS_ABBREVIATIONS without drift."""
+    run_glossary_check()
 
 
 @check_app.command("precommit")
@@ -6486,6 +7997,8 @@ def check_precommit() -> None:
     run_bibliography_check()
     run_footnote_check()
     run_prose_style_check()
+    run_abbreviations_check()
+    run_glossary_check()
     run_permissions_check()
     run_concept_check()
     run_disclosure_check()
@@ -6502,6 +8015,9 @@ def check_standard(
     run_refs_check()
     run_bibliography_check()
     run_footnote_check()
+    run_prose_style_check()
+    run_abbreviations_check()
+    run_glossary_check()
     run_figures_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()
@@ -6521,6 +8037,9 @@ def check_strict(
     run_refs_check()
     run_bibliography_check()
     run_footnote_check()
+    run_prose_style_check()
+    run_abbreviations_check()
+    run_glossary_check()
     run_figures_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()

@@ -37,6 +37,7 @@ COLORS = {
     "blue": "#1683A6",  # teal  -> workload / objective (brand anchor)
     "green": "#1E9E48",  # green -> evidence / verification
     "orange": "#E68A17",  # amber -> methods / generation
+    "amber": "#E68A17",  # amber alias
     "purple": "#6A4FC7",  # violet-> design space / artifact
     "red": "#DE3D3C",  # red   -> constraints / budget
     "magenta": "#D24D96",  # magenta-> decision / deliverable
@@ -101,6 +102,12 @@ def apply_style() -> None:
     plt.style.use(STYLE_PATH)
     mpl.rcParams["font.family"] = "sans-serif"
     mpl.rcParams["font.sans-serif"] = BRAND_SANS
+    mpl.rcParams["font.size"] = 6.5
+    mpl.rcParams["axes.labelsize"] = 6.5
+    mpl.rcParams["axes.titlesize"] = 7.2
+    mpl.rcParams["xtick.labelsize"] = 5.8
+    mpl.rcParams["ytick.labelsize"] = 5.8
+    mpl.rcParams["legend.fontsize"] = 5.8
     # HTML display width = figsize x dpi under Quarto's retina pipeline; 150
     # sizes data figures to roughly the text column. PDF output is vector
     # (sized by out-width), so this affects HTML only.
