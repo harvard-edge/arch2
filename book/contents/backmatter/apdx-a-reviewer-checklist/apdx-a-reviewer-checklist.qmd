@@ -6,11 +6,11 @@ format:
 
 # Evaluating AI-for-Architecture Claims: A Research Reviewer's Rubric {#sec-appendix-a-reviewer-checklist}
 
-When assessing research publications, benchmark proposals, and peer submissions in AI-assisted and AI-native computer architecture, the central challenge is separating genuine microarchitectural innovation from tool gaming, uncalibrated proxies, data leakage, and mismatched tuning budgets. Decades of machine learning research have demonstrated that evaluating empirical claims requires a top-down discipline: interrogating problem formulation and baseline fairness before inspecting representations, training data hygiene, proxy fidelity, and execution governance [@SculleyEtAl2015Hidden; @AgarwalEtAl2021StatisticalPrecipice].
+When evaluating research publications, benchmark proposals, and peer submissions in AI-assisted and AI-native computer architecture, the central goal is verifying that empirical advances reflect genuine microarchitectural progress. Decades of machine learning research have demonstrated that assessing empirical claims requires a top-down discipline: examining problem formulation and baseline fairness before inspecting representations, data hygiene, proxy fidelity, and execution governance [@SculleyEtAl2015Hidden; @AgarwalEtAl2021StatisticalPrecipice].
 
-In computer architecture, this discipline is doubly critical because hardware has physical and formal ground truth. A machine learning model that achieves high statistical accuracy can fail when mapped to silicon. Crucially, empirical research spans multiple abstraction layers across the stack. Demanding full silicon tapeout signoff for a high-level microarchitectural policy paper is unreasonable; conversely, accepting un-synthesized, unlinted register-transfer level (RTL) code for an automated circuit synthesis paper is an unacceptable methodological flaw.
+In computer architecture, this discipline is doubly critical because hardware has physical and formal ground truth. A machine learning model that achieves high statistical correlation can fail when translated to silicon. Crucially, empirical research spans multiple abstraction layers across the design stack. Demanding full silicon tapeout signoff for a high-level microarchitectural policy paper is unreasonable; conversely, accepting un-synthesized, unlinted register-transfer level (RTL) code for an automated circuit synthesis paper overlooks physical realizability.
 
-This rubric provides peer reviewers and researchers with an authoritative, layer-calibrated evaluation guide. It begins with the Scope-to-Signoff Calibration Spectrum (@tbl-scope-to-signoff-spectrum) to calibrate reviewer expectations, followed by a five-tier top-down checklist descending from system-level framing down to operational governance:
+This rubric provides peer reviewers and researchers with a structured, five-tier top-down checklist descending from system-level framing down to operational governance:
 
 1. **Tier 1: System Framing, Problem Scope, and Method Justification** (Is machine learning warranted, or is it overkill? Strict baseline parity; @sec-from-architecture-10-to-architecture-20)
 2. **Tier 2: Data Representations and Physical Grounding** (Hardware semantics, abstract syntax tree (AST) and hypergraph faithfulness, legal decodability; @sec-data-representations-world-models)
@@ -18,164 +18,63 @@ This rubric provides peer reviewers and researchers with an authoritative, layer
 4. **Tier 4: Learning Methods and Proxy Fidelity** (Generative physical signoff, tail-ranking correlation, optimizer anti-gaming, multi-objective Pareto bounds; @sec-methods-generation-prediction-optimization)
 5. **Tier 5: System Orchestration, Reproducibility, and Ownership** (Lineage, container receipts, gross economic accounting, human commitment authority; @sec-running-the-loop; @sec-evaluating-agentic-architect; @sec-what-architect-owns)
 
-## The Scope-to-Signoff Calibration Spectrum
-
-Reviewers must match their evaluation expectations to the paper's specific abstraction layer and claimed research contribution (@tbl-scope-to-signoff-spectrum).
-
-| Research Archetype | Primary Focus & Abstraction | Appropriate Ground-Truth Oracle | Minimum Required Evidence Floor | Out-of-Scope Demands (Do Not Require) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Microarchitectural Policy & Control** | Online/offline learned policies (prefetchers, branch predictors, cache replacement, DVFS). | Cycle-accurate architectural simulators (gem5, FireSim, ChampSim) across standard benchmarks (SPEC CPU, MLPerf). | Microarchitectural latency budget adherence (must complete within cycle limits); hardware storage overhead (in bits or kilobytes); baseline comparison against competitive state-of-the-art heuristics. | Full physical chip place-and-route; design rule check (DRC) and layout versus schematic (LVS) clean layouts for entire processor cores. |
-| **Design-space exploration (DSE)** | Macro-architectural search (accelerator tiling, network-on-chip (NoC) topology, cache hierarchy sizing). | Validated architectural cost models (Timeloop, Accelergy, McPAT) and cycle-approximate simulators. | Compute-matched comparison against tuned conventional heuristics (Bayesian optimization, simulated annealing); post-synthesis spot-checks on Pareto-optimal points to confirm ranking stability. | Detailed routing DRC for every explored intermediate candidate point during search. |
-| **Fast Point-Tool & Physical Surrogates** | Learned proxies for wire delay, congestion maps, IR drop, or static timing analysis (STA). | Golden signoff tools (Cadence Innovus, Synopsys PrimeTime, OpenROAD) on unseen netlists and macros. | Tail-ranking correlation ($\tau_{top-k}$, $\rho_{top-k}$) on the top-performing candidate boundary; out-of-distribution validity boundaries across distinct technology nodes. | End-to-end multi-agent loop orchestration; physical tapeout signoff. |
-| **Generative RTL & Logic Synthesis** | Automated Verilog/VHDL drafting, assertion synthesis, testbench generation. | Multi-stage verification: strict linting (`verilator -Wall`), clock-domain crossing (CDC) checks, formal property verification, logic synthesis. | Syntactic correctness with zero inferred latches; formal equivalence checking (LEC) or bounded model checking (BMC); macro-level logic synthesis on an open process design kit (PDK) (SkyWater 130\ nm or ASAP7\ nm). | Commercial advanced-node (3\ nm) physical tapeouts for isolated unit modules. |
-| **Closed-Loop Physical Layout** | Automated floorplanning, macro placement, routing optimization, or gate sizing. | Complete physical design flows through detailed routing and post-route timing closure. | Zero macro overlaps; 100% legal, routable placements; signoff wirelength (HPWL), worst negative slack (WNS), and power under matched compute budgets. | Workload benchmark simulation if the paper's contribution is strictly geometric and physical optimization. |
-| **Autonomous / Agentic Workflows** | Closed-loop multi-tool agentic orchestration from intent to verified implementation. | End-to-end toolchains combining large language models (LLMs), synthesis tools, and physical verifiers. | Comprehensive gross compute accounting (including failed agent trajectories and electronic design automation (EDA) license costs); transparent logs of human intervention; reproducible run receipts. | Complete autonomy without human architect review or commitment gates. |
-: **The Scope-to-Signoff Calibration Spectrum.** Matching reviewer evaluation expectations and ground-truth validation oracles to the paper's specific layer within the computer architecture stack. {#tbl-scope-to-signoff-spectrum tbl-colwidths="[18,20,22,22,18]"}
-
 ## Tier 1: System Framing, Problem Scope, and Method Justification
 
-Before evaluating machine learning architectures or training curves, peer reviewers must examine whether the research problem is framed rigorously and whether learned models are genuinely warranted.
+Before assessing model architectures or training loss curves, an evaluation must confirm that the problem formulation is sound and that machine learning is the right technical tool for the task.
 
-- **Check 1.1: Method Justification and the "AI Overkill" Test.**
-  - *Methodological Challenge:* Applying complex deep neural networks, transformer models, or reinforcement learning loops to problems that are solved faster, cheaper, and more reliably by closed-form analytical formulas, dynamic programming, integer linear programming, or deterministic greedy heuristics [@Williams2009Roofline; @AgarwalEtAl2021StatisticalPrecipice].
-  - *Reviewer Audit Probes:*
-    - Does the paper articulate why a learned model is necessary instead of domain-specific heuristics, analytical models (such as the Roofline model), or classical compiler transformations?
-    - Does the proposed machine learning approach provide meaningful advantages in execution latency, sample efficiency, or solution quality when accounting for model training and inference compute overhead?
-  - *Minimum Defensible Evidence:* Ablation against competitive classical baselines (such as list scheduling, linear programming, or simulated annealing) demonstrating that the learned method discovers non-trivial architectural trade-offs that simpler analytical methods miss.
+- **Check 1.1: The Method Justification and "AI Overkill" Test.** Confirm that simpler analytical formulations, dynamic programming, integer linear programming, or greedy heuristics cannot solve the problem faster and with deterministic guarantees. Established analytical bounds, such as the Roofline model [@Williams2009Roofline], provide fast performance ceilings that help determine whether a learned surrogate is necessary. When a deep model is proposed, the evaluation should demonstrate that it captures complex physical trade-offs or non-linear interactions that classical heuristics miss [@AgarwalEtAl2021StatisticalPrecipice].
 
-- **Check 1.2: Strict Baseline and Compute Budget Parity.**
-  - *Methodological Challenge:* Comparing an advanced AI search framework that consumed 500 GPU-hours against an untuned classical heuristic (such as default simulated annealing or unguided random search) executed for 10 minutes on a single CPU core [@AgarwalEtAl2021StatisticalPrecipice; @ChengEtAl2023MacroPlacement].
-  - *Reviewer Audit Probes:*
-    - Is the proposed method compared against the strongest practical conventional baselines (such as expert-tuned commercial EDA autotuners, budget-matched simulated annealing, or multi-start Bayesian optimization)?
-    - Were all comparison arms allocated strictly identical compute budgets, simulator execution limits, and hyperparameter tuning effort (@tbl-matched-system-comparison)?
-  - *Minimum Defensible Evidence:* Budget-matched quality-of-results (QoR) curves plotted against total wall-clock time, consumed CPU/GPU hours, and simulator license invocations for every evaluated algorithm.
+- **Check 1.2: Matched Compute Budgets and Baseline Parity.** Verify that learned search algorithms (such as reinforcement learning, Bayesian optimization, or neural tree search) are benchmarked against budget-matched, expert-tuned conventional baselines [@AgarwalEtAl2021StatisticalPrecipice; @ChengEtAl2023MacroPlacement]. Comparing a multi-GPU learned optimizer against an untuned, single-threaded simulated annealing script run for ten minutes is a baseline failure. The evaluation should present quality-of-results (QoR) curves plotted against identical wall-clock runtime, CPU/GPU sample limits, and simulator license invocations across all comparison arms (@tbl-matched-system-comparison).
 
-- **Check 1.3: Algorithmic Innovation versus Prompt Wrapper Accounting.**
-  - *Methodological Challenge:* Presenting a contribution whose sole novelty is a handcrafted prompt template applied to a commercial closed-source model, claiming an architectural or design automation algorithmic breakthrough [@ThakurEtAl2023VeriGen].
-  - *Reviewer Audit Probes:*
-    - Does the paper introduce a reproducible methodological contribution (such as AST-guided decoding, neuro-symbolic grammar verification, reinforcement learning with formal verification rewards, or closed-loop compiler repair)?
-    - If the paper is prompt-centric, does it systematically analyze prompt sensitivity, variance across random seeds, and component contributions under ablation?
-  - *Minimum Defensible Evidence:* Systematic ablations demonstrating that the algorithmic framework outperforms naive zero-shot and few-shot prompting under identical foundation model weights.
+- **Check 1.3: Methodological Innovation versus Prompt Wrapper Accounting.** Distinguish between genuine methodological contributions (such as AST-guided decoding, neuro-symbolic grammar verification, or closed-loop compiler repair) and thin prompt wrappers on commercial foundation models. As demonstrated by foundational hardware code generation studies [@ThakurEtAl2023VeriGen], prompt-centric workflows should include systematic ablations across temperatures, random seeds, and prompt variants to isolate the algorithmic contribution from underlying model capabilities.
 
-- **Check 1.4: End-to-End Workflow Speedup and Amdahl's Law.**
-  - *Methodological Challenge:* Celebrating automated drafting speedups (such as generating an accelerator block in seconds) while omitting the human engineering hours required to craft prompt templates, triage syntax errors, and manually patch timing glitches [@Amdahl1967ValiditySingleProcessor; @AltafWood2017LogCA].
-  - *Reviewer Audit Probes:*
-    - What total human engineering effort was invested in prompt refinement, error triage, and manual post-generation code editing?
-    - When accounting for human verification and manual qualification time, does the workflow achieve a net project-level speedup under Amdahl's Law of design pipelines (@sec-data-scarcity-verification-load)?
-  - *Minimum Defensible Evidence:* Transparent logs of human interaction time, prompt iteration counts, and manual repair interventions compared against an unassisted senior design team baseline.
+- **Check 1.4: End-to-End Workflow Speedup and Amdahl's Law.** Audit the total human engineering effort required across the complete design workflow. As established by classical pipeline speedup models [@Amdahl1967ValiditySingleProcessor] and service queue cost analysis [@AltafWood2017LogCA], automated drafting gains can be diminished if manual prompt refinement, error triage, and downstream timing fixes dominate the schedule. The evaluation should report human interaction time and manual repair interventions alongside automated generation times (@sec-data-scarcity-verification-load).
 
 ## Tier 2: Data Representations and Physical Grounding
 
 Learned models in computer architecture operate on abstract representations of circuits and systems. The choice of representation dictates whether generated or optimized candidates are physically realizable.
 
-- **Check 2.1: Hardware Semantic and Structural Representation Faithfulness.**
-  - *Methodological Challenge:* Representing complex hardware as flat token sequences or generic text embeddings, destroying essential microarchitectural semantics such as hierarchy, clock domains, bitwidths, control-data flow, and spatial adjacency [@BachrachEtAl2012Chisel].
-  - *Reviewer Audit Probes:*
-    - Does the representation capture circuit hierarchy, multi-clock domains, and spatial layout constraints without lossy flattening (@sec-hardware-representation-formats)?
-    - Are graph and hypergraph representations verified to preserve semantic netlist connectivity rather than treating wires as unstructured edges?
-  - *Minimum Defensible Evidence:* Formal demonstration that the data representation unambiguously encodes circuit interfaces, timing constraints, and structural relationships without loss of critical microarchitectural context.
+- **Check 2.1: Hardware Semantic and Structural Representation Faithfulness.** Verify that the representation preserves essential circuit semantics, including hierarchy, multi-clock domains, bitwidths, control-data flow, and spatial adjacency without lossy flattening. Hardware construction frameworks and intermediate representations [@BachrachEtAl2012Chisel] demonstrate the necessity of maintaining typed ports, explicit module hierarchies, and netlist hypergraphs rather than treating circuits as flat token streams (@sec-hardware-representation-formats).
 
-- **Check 2.2: Automated Legalization Robustness and Post-Legalization QoR Delta.**
-  - *Methodological Challenge:* Continuous generative models (such as diffusion models or variational autoencoders) generate continuous spatial approximations that decode to overlapping macros, illegal cell densities, or unroutable pin configurations [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2026UpdatedAssessment].
-  - *Reviewer Audit Probes:*
-    - Can generated spatial candidates be legalized and routed deterministically by standard tools (such as OpenROAD or commercial placers) without manual intervention?
-    - What is the QoR degradation (displacement distance, wirelength increase, or timing degradation) between the raw model prediction and the post-legalization physical layout?
-  - *Minimum Defensible Evidence:* A reported automated legalization success rate (targeting 100%) alongside quantified pre- and post-legalization QoR metrics proving that surrogate optimizations survive physical legalization.
+- **Check 2.2: Automated Legalization Robustness and Post-Legalization QoR Delta.** When continuous generative models (such as diffusion models or variational autoencoders) optimize floorplans or macro placements, verify that candidate geometries can be legalized deterministically by automated placement tools without manual intervention [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2026UpdatedAssessment]. The evaluation should report the automated legalization success rate (targeting 100%) alongside quantified pre- and post-legalization QoR metrics to prove that layout optimizations survive design rule check (DRC) and layout versus schematic (LVS) legalization.
 
-- **Check 2.3: Multi-Fidelity Representation Consistency.**
-  - *Methodological Challenge:* Formulating models on high-level representations (such as transaction-level models (TLMs) or abstract instruction traces) that fail to preserve timing and resource invariants when translated down to RTL or gate-level netlists [@AkramSawalha2019SimulatorSurvey].
-  - *Reviewer Audit Probes:*
-    - Are candidates verified for cross-representation consistency across fidelity transitions, from cycle-approximate simulators to cycle-accurate RTL and physical layout?
-    - Does the workflow detect when high-level abstractions omit physical resource contention?
-  - *Minimum Defensible Evidence:* Empirical cross-validation showing that performance rankings established at abstract representation layers match gate-level signoff results.
+- **Check 2.3: Multi-Fidelity Representation Consistency.** Confirm that models formulated on high-level abstractions (such as transaction-level models (TLMs) or instruction traces) preserve timing and resource invariants when translated down to RTL and gate-level netlists. Architectural simulation surveys [@AkramSawalha2019SimulatorSurvey] emphasize that rankings established at high abstraction levels must be cross-validated against cycle-accurate models to prevent unmodeled resource contention from distorting results.
 
 ## Tier 3: Data Integrity, Leakage, and Generalization Boundaries
 
-Data leakage and evaluation contamination represent pervasive failure modes in learned hardware design tools, routinely generating illusory benchmark gains.
+Data leakage and evaluation contamination represent pervasive failure modes in learned hardware tools, often creating illusory benchmark gains.
 
-- **Check 3.1: Benchmark Decontamination, Canary Probing, and Parameterized Mutations.**
-  - *Methodological Challenge:* Autoregressive models trained on public code repositories memorize public hardware benchmark suites (such as VerilogEval or RTLLM), inflating scores without demonstrating genuine synthesis capability [@VerilogEval; @WangEtAl2025VeriContaminated; @WangEtAl2025ChiPBench].
-  - *Reviewer Audit Probes:*
-    - Did the authors audit their training corpora for exact or near-duplicate prompt contamination [@WangEtAl2025VeriContaminated]?
-    - Did the authors evaluate on parameterized module variants that alter canonical defaults (such as non-power-of-two first-in, first-out (FIFO) depths, inverted handshake polarities, or custom arbitration priority rules)?
-    - Does the model generalize zero-shot to unseen instruction set architecture (ISA) extensions, custom interconnect protocols, or novel packaging constraints?
-  - *Minimum Defensible Evidence:* Data decontamination disclosures, canary string probing, and evaluation results on parameterized mutants and non-public hardware modules with withheld interface contracts.
+- **Check 3.1: Benchmark Decontamination, Canary Probing, and Parameterized Mutations.** Ensure that autoregressive models have not simply memorized public hardware benchmark suites, such as VerilogEval [@VerilogEval] or ChiPBench [@WangEtAl2025ChiPBench]. Authors should follow established decontamination methodologies [@WangEtAl2025VeriContaminated], including canary string disclosures, training corpus filtering, and evaluation on parameterized module mutants (such as non-power-of-two first-in, first-out (FIFO) depths or inverted handshake polarities) to verify true logic synthesis over rote recall.
 
-- **Check 3.2: Temporal, Hierarchical, and Feature Data Leakage.**
-  - *Methodological Challenge:* Allowing test-set circuit structures, downstream placement hints, or post-synthesis timing metrics to leak into upstream feature extraction, embedding normalization, or model training sets [@BaggerlyCoombes2009; @Balloccu2024Leakage].
-  - *Reviewer Audit Probes:*
-    - Are training, validation, and test datasets strictly partitioned across design blocks, distinct system families, and chronological tapeout revisions?
-    - Does the feature extraction pipeline avoid computing global normalization statistics that span both training and evaluation designs?
-  - *Minimum Defensible Evidence:* Documented data-split isolation protocols proving that no evaluation-block subcircuits, macros, or global statistics were accessible during training or surrogate fitting.
+- **Check 3.2: Temporal, Hierarchical, and Feature Data Leakage.** Verify that training, validation, and test datasets are strictly partitioned across design blocks, distinct system families, and chronological tapeout revisions. In accordance with established machine learning evaluation principles [@BaggerlyCoombes2009; @Balloccu2024Leakage], the feature extraction pipeline must avoid computing global normalization statistics that span both training and evaluation designs.
 
-- **Check 3.3: Multi-Axis Out-of-Distribution Validity Envelopes.**
-  - *Methodological Challenge:* Surrogates trained on planar CMOS or fixed aspect ratios fail when extrapolated across process technologies (PDK migration), distinct microarchitectural topologies, or larger design scales [@AmodeiEtAl2016Concrete].
-  - *Reviewer Audit Probes:*
-    - What are the explicit physical boundaries of the surrogate's validity region, and was it evaluated on out-of-envelope architectures (@sec-support-limits)?
-    - Does the surrogate incorporate physics-informed constraints (such as RC wire delay scaling, power-grid IR-drop limits, or thermal equations) to bound predictions?
-  - *Minimum Defensible Evidence:* Measured prediction accuracy across technology node transfers, unseen aspect ratios, and varying operating voltages, supported by automated uncertainty quantification.
+- **Check 3.3: Multi-Axis Out-of-Distribution Validity Envelopes.** Explicitly define the physical boundaries of the surrogate's validity region across process design kit (PDK) migration (such as moving from planar SkyWater 130\ nm to FinFET nodes), microarchitectural topology shifts, and circuit scale. Drawing on foundational AI safety and generalization research [@AmodeiEtAl2016Concrete], models should incorporate physics-informed constraints (such as RC wire delay scaling and power-grid IR-drop equations) alongside uncertainty quantification to bound predictions (@sec-support-limits).
 
-## Tier 4: Learning Methods and Evaluation Proxies
+## Tier 4: Learning Methods and Proxy Fidelity
 
 Once representations and data hygiene are verified, the learning methods themselves (generative models, predictive surrogates, and optimization loops) must be audited against physical reality.
 
-- **Check 4.1: Generative Synthesis: Microarchitectural Correctness Beyond Lexical Pass@1.**
-  - *Methodological Challenge:* High Pass@1 metrics on trivial leaf modules (such as multiplexers or shift registers) demonstrate basic syntax fluency but zero multi-cycle microarchitectural reasoning [@ThakurEtAl2023VeriGen; @VerilogEval]. Furthermore, generated RTL often introduces unconstrained latches, combinational loops, or CDC bugs.
-  - *Reviewer Audit Probes:*
-    - Does the evaluation benchmark stateful protocols, credit-based interfaces, hazard resolution, and multi-cycle execution pipelines?
-    - Are correctness claims backed by formal property verification with SystemVerilog Assertions (SVA) or bounded model checking (BMC) while checking property non-vacuity [@BeerEtAl2001Vacuity]?
-    - For RTL generation, does the code pass strict linting (`verilator --lint-only -Wall`) and synthesize cleanly without inferred latches on an open standard cell library [@AjayiEtAl2019OpenROAD; @SkyWater2020SKY130PDK]?
-  - *Minimum Defensible Evidence:* Lint reports, SVA/BMC formal verification proofs, toggle/branch coverage metrics, and logic synthesis reports under declared operating constraints.
+- **Check 4.1: Generative Synthesis: Microarchitectural Correctness Beyond Lexical Pass@1.** Move beyond simple syntax compilation by auditing generated RTL for stateful microarchitectural correctness [@ThakurEtAl2023VeriGen; @VerilogEval]. Evaluations should verify clean linting (`verilator --lint-only -Wall`), absence of inferred latches, clock-domain crossing (CDC) integrity, non-vacuous formal property proofs using SystemVerilog Assertions (SVA) and bounded model checking (BMC) [@BeerEtAl2001Vacuity], and successful macro logic synthesis on open PDKs via standard open-source tools [@AjayiEtAl2019OpenROAD; @SkyWater2020SKY130PDK].
 
-- **Check 4.2: Predictive Surrogates: Tail-Ranking Fidelity and the Optimizer's Curse.**
-  - *Methodological Challenge:* A surrogate achieves high aggregate $R^2$ or low root-mean-square error (RMSE) across a broad design space, yet exhibits zero or negative rank correlation in the top 1% candidate region where optimizers concentrate (the Optimizer's Curse, @sec-evaluating-agentic-architect; @SmithWinkler2006OptimizersCurse).
-  - *Reviewer Audit Probes:*
-    - Is ranking fidelity (Kendall's $\tau$ or Spearman's $\rho$) measured specifically within the top-$k$ candidate region, rather than averaged across the entire training space?
-    - When the surrogate selects its top candidate architectures, do those specific designs remain Pareto-optimal under high-fidelity signoff tools?
-  - *Minimum Defensible Evidence:* Top-$k$ recall curves and rank correlation coefficients restricted strictly to the active search boundary, paired with uncertainty quantification to penalize ungrounded surrogate extrema.
+- **Check 4.2: Predictive Surrogates: Tail-Ranking Fidelity and the Optimizer's Curse.** When evaluating surrogate models for design-space exploration (DSE), measure ranking correlation (such as Kendall's $\tau$ or Spearman's $\rho$) specifically within the top 1%–5% candidate region where optimizers concentrate. As established in decision analysis by Smith and Winkler [@SmithWinkler2006OptimizersCurse], high global $R^2$ across millions of unviable designs often masks severe ranking inversion at the optimal frontier, causing optimizers to select over-estimated candidates (@sec-evaluating-agentic-architect).
 
-- **Check 4.3: Closed-Loop Optimizers: Anti-Gaming and Simulator Loophole Defense.**
-  - *Methodological Challenge:* Autonomous search algorithms aggressively exploit inaccuracies, omitted corner cases, or missing constraints in fast simulators (such as omitting DRAM refresh, ignoring cache coherence traffic, or violating bus handshake wait states) to achieve artificial performance gains [@Strathern1997Goodhart; @AmodeiEtAl2016Concrete].
-  - *Reviewer Audit Probes:*
-    - Were winning candidates independently verified in a higher-fidelity environment (such as cycle-accurate RTL simulation in Verilator, field-programmable gate array (FPGA) emulation in FireSim, or post-layout static timing analysis (STA)) [@Veripool2026Verilator]?
-    - Does the loop enforce invariant assertion checkers to prevent the optimizer from loosening timing constraints or altering reference baselines?
-  - *Minimum Defensible Evidence:* Independent multi-fidelity verification logs proving that reported gains persist under cycle-accurate hardware emulation and gate-level physical signoff.
+- **Check 4.3: Closed-Loop Optimizers: Anti-Gaming and Simulator Loophole Defense.** Guard against autonomous search algorithms exploiting inaccuracies or omitted constraints in fast simulators (such as omitted DRAM refresh cycles, bypassed cache coherence serialization, or ignored bus wait states). Drawing on classical analyses of proxy gaming [@Strathern1997Goodhart; @AmodeiEtAl2016Concrete], winning candidate designs should be independently cross-validated using cycle-accurate RTL simulation in Verilator [@Veripool2026Verilator] or field-programmable gate array (FPGA) emulation in FireSim.
 
-- **Check 4.4: Multi-Objective Pareto and Constraint Integrity.**
-  - *Methodological Challenge:* Claiming substantial speedup on one metric while silently violating unrewarded constraints, such as exceeding thermal design power (TDP), blowing out static random-access memory (SRAM) area budgets, or inducing severe voltage droop [@BaiEtAl2021BOOMExplorer; @ZhengEtAl2020Ansor].
-  - *Reviewer Audit Probes:*
-    - Does the evaluation report the complete multi-objective Pareto vector (power, performance, area, thermal dissipation, and latency) at identical operating points?
-    - Are hard physical constraints treated as non-negotiable boundaries, with violating candidates strictly rejected?
-  - *Minimum Defensible Evidence:* Full Pareto frontier plots across all competing objectives, demonstrating that all advancing candidates satisfy thermal, electrical, and area bounds.
+- **Check 4.4: Multi-Objective Pareto and Constraint Integrity.** Ensure that candidate improvements along one objective do not silently violate unmodeled physical boundaries, such as thermal design power (TDP), static random-access memory (SRAM) area budgets, or voltage droop limits. Multi-objective architectural exploration frameworks [@BaiEtAl2021BOOMExplorer; @ZhengEtAl2020Ansor] demonstrate the necessity of reporting complete Pareto vectors at matched operating points and strictly rejecting violating points.
 
 ## Tier 5: System Orchestration, Reproducibility, and Ownership
 
 At the top of the workflow hierarchy, AI-native design systems combine multiple tools into closed loops requiring scrutiny of reproducibility, economic cost, and decision governance.
 
-- **Check 5.1: Execution Lineage, Deterministic Replay, and Pinned Environments.**
-  - *Methodological Challenge:* Experimental results cannot be reproduced because model weights rely on floating API aliases (`model-latest`), random seeds were unlogged, or EDA container environments were undocumented [@ACM2020ArtifactReview].
-  - *Reviewer Audit Probes:*
-    - Are all tool versions, EDA script flags, container image digests (`sha256:...`), and random seeds explicitly recorded?
-    - When commercial large language model (LLM) endpoints are used, did the authors record exact checkpoint dates, temperature settings, and prompt transcripts?
-  - *Minimum Defensible Evidence:* Versioned container receipts, seed logs, and cryptographic execution hashes enabling independent end-to-end replay from intent to signoff.
+- **Check 5.1: Execution Lineage, Deterministic Replay, and Pinned Environments.** In alignment with standard artifact evaluation guidelines [@ACM2020ArtifactReview], all experimental results should provide complete execution lineage. This includes recording container image digests (`sha256:...`), specific electronic design automation (EDA) script flags, random seeds, and exact checkpoint timestamps when commercial large language model (LLM) endpoints are utilized.
 
-- **Check 5.2: Comprehensive Gross Cost and License Accounting.**
-  - *Methodological Challenge:* Reporting only the compute used for the single winning run, concealing the hundreds of crashed simulations, failed synthesis jobs, and commercial EDA license fees consumed during exploration [@SculleyEtAl2015Hidden].
-  - *Reviewer Audit Probes:*
-    - Does the cost model account for the total gross cost of exploration, including failed, timed-out, and pruned candidate runs?
-    - Does the economic model balance cheap token generation against scarce, expensive EDA licenses (@sec-sample-efficiency-under-expensive-feedback)?
-  - *Minimum Defensible Evidence:* Complete attempt cost records (@tbl-attempt-cost-record) detailing token consumption, cloud compute spend, EDA license-hours, and wall-clock execution time.
+- **Check 5.2: Comprehensive Gross Cost and License Accounting.** Account for the total gross compute and economic cost of exploration, including failed runs, timed-out simulations, and commercial EDA license fees consumed during search. In accordance with system technical debt principles [@SculleyEtAl2015Hidden], evaluations should present complete attempt cost records (@tbl-attempt-cost-record) balancing token generation costs against scarce EDA license-hours (@sec-sample-efficiency-under-expensive-feedback).
 
-- **Check 5.3: Decoupled Decision Rights and Non-Delegable Human Governance.**
-  - *Methodological Challenge:* Conflating automated candidate generation with engineering signoff, or claiming an autonomous system "taped out" a chip without human architectural governance [@Bainbridge1983Ironies].
-  - *Reviewer Audit Probes:*
-    - Who holds named commitment authority for advancing candidates across life-cycle stages and authorizing physical tapeout (@sec-what-architect-owns)?
-    - How does the system present Pareto trade-offs and residual risks to human architects to prevent ceremonial rubber-stamping?
-  - *Minimum Defensible Evidence:* Explicit governance declarations and action rights matrices (@tbl-lighthouse-action-rights), clearly separating automated proposal generation from non-delegable human commitment authority.
+- **Check 5.3: Decoupled Decision Rights and Non-Delegable Human Governance.** Maintain clear separation between automated candidate proposal generation and named human commitment authority for advancing designs across life-cycle stages [@sec-what-architect-owns]. Grounded in classical human factors engineering [@Bainbridge1983Ironies], the system should present transparent Pareto trade-offs and residual risk assessments to prevent human oversight from degrading into ceremonial rubber-stamping (@tbl-lighthouse-action-rights).
 
 ## The Top-Down AI-for-Architecture Reviewer Scorecard
 
-The consolidated scorecard (@tbl-ai-arch-evaluation-matrix) provides reviewers with a quick-reference audit guide summarizing the core targets, required evidence, and red-flag failure modes across all five evaluation tiers.
+The consolidated scorecard (@tbl-ai-arch-evaluation-matrix) provides reviewers with a quick-reference audit guide summarizing the core targets, required evidence, and common failure modes across all five evaluation tiers.
 
 | **Evaluation Tier** | **Primary Audit Target** | **Minimum Defensible Evidence** | **Common Red Flags & Failure Modes** |
 | :--- | :--- | :--- | :--- |
