@@ -5855,6 +5855,7 @@ IGNORED_PROSE_ACRONYMS: set[str] = {
     "MAC",
     "OOM",
     "WNS",
+    "RMSE",
     # Organizations, venues & institutions
     "MIT",
     "ACM",
