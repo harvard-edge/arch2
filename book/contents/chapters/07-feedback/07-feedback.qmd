@@ -101,13 +101,13 @@ Passing admission criteria qualifies a metric as eligible for comparison; it doe
 
 ## Formal Bounds and Sequential Equivalence
 
-Formal verification establishes exact mathematical bounds over a property, model, and assumption triad without requiring a comparator design.
+Formal verification establishes exact mathematical bounds over a property, model, and assumption triad without requiring a comparator design. While dynamic simulation exercises individual execution traces, formal methods prove whether an implementation satisfies an architectural invariant across all reachable states within declared operating assumptions. In Architecture 2.0 design loops, formal verification serves as an indispensable gatekeeper: it mathematically proves interface protocol invariants, eliminates corner-case control hazards, and certifies equivalence before expensive downstream physical synthesis and simulation passes are scheduled.
 
-### Proof Statuses and Traces
+### Proof Statuses and Contract Equivalence
 
-Properties (expressed as SystemVerilog Assertions [SVA]) mathematically specify microarchitectural contracts. Assumptions in formal tools (JasperGold, VC Formal) constrain inputs, resets, and clock domains [@Clarke2018ModelChecking]. Abstract models must preserve verified correspondence to synthesizable RTL.
+Properties (expressed as SystemVerilog Assertions [SVA]) mathematically specify microarchitectural contracts. Assumptions in formal tools (JasperGold, VC Formal) constrain inputs, resets, and clock domains [@Clarke2018ModelChecking]. Abstract models must preserve verified correspondence to synthesizable RTL. In counterexample-guided abstraction refinement (CEGAR), *spurious counterexamples* refine the abstract model, whereas *realizable counterexamples* expose RTL defects or specification errors [@ClarkeEtAl2000CEGAR].
 
-In counterexample-guided abstraction refinement (CEGAR), *spurious counterexamples* refine the abstract model, whereas *realizable counterexamples* expose RTL defects or specification errors [@ClarkeEtAl2000CEGAR].
+Beyond property checking on individual blocks, formal verification establishes behavioral equivalence across representations. *Combinational equivalence checking* (CEC) compares logic between aligned state elements, confirming that logic synthesis preserves gate-level truth tables. *Sequential equivalence checking* (SEC) verifies aggressive microarchitectural transformations that alter pipeline register boundaries, retiming stages, or transaction latencies [@Kropf1999FormalVerification]. At system interfaces, *assume-guarantee reasoning* modularly verifies block contracts, proving that if a bus fabric satisfies transaction ordering assumptions, the connected accelerator guarantees credit-queue safety [@BenvenisteEtAl2018Contracts].
 
 ### Bounded Search and Vacuity
 
@@ -131,10 +131,6 @@ Automated generative pipelines frequently introduce four distinct semantic RTL d
 To prevent the *self-verification paradox* (where the same learned model generates both the RTL implementation and its testbench, producing tautological testbenches that pass because they mirror the model's own false assumptions), verification harnesses enforce mutation testing and fault injection. Harnesses systematically inject synthetic faults (mutating logic operators, inverting conditional branches, and forcing stuck-at-0 or stuck-at-1 faults) into candidate RTL. A testbench is qualified only if it successfully detects and rejects every seeded mutant.
 
 Verification environments balance turnaround time by deploying lightweight Python-based testbenches (Cocotb) for rapid unit regression during inner-loop exploration, while reserving full IEEE 1800.2 UVM constrained-random environments with functional covergroups for final architectural signoff.
-
-### Equivalence and Refinement
-
-*Combinational equivalence checking* (CEC) compares logic between aligned state elements. *Sequential equivalence checking* (SEC) verifies transformations that alter pipeline registers or latency [@Kropf1999FormalVerification]. *Assume-guarantee reasoning* modularly verifies block contracts across interfaces [@BenvenisteEtAl2018Contracts].
 
 ### Formal Bounds Versus Dynamic Coverage
 
@@ -172,7 +168,7 @@ Formal verification statuses dictate distinct downstream engineering actions (@t
 
 ## Scoping a Comparison to the Claim It Supports {#sec-evidence-specific-to-claim-and-scope}
 
-Comparative evaluation isolates hardware gains from confounding experimental noise under matched workloads.
+Comparative evaluation isolates authentic hardware gains from confounding experimental noise under matched workloads. Proving that an architectural candidate improves upon an existing baseline requires strict control over compiler lowering, memory initial conditions, simulator versions, and operating corners. An uncalibrated delta measured in isolation cannot distinguish genuine microarchitectural superiority from incidental simulation jitter, cache warm-up artifacts, or compiler optimization shifts.
 
 Every comparison binds candidate and comparator revisions to a measured difference and uncertainty model under explicit operating conditions (@fig-claim-frame).
 
@@ -184,25 +180,17 @@ $$
 d_j = y(\text{candidate}, c_j) - y(\text{comparator}, c_j),
 $$
 
-where $y(\cdot)$ denotes the evaluated architectural metric.
+where $y(\cdot)$ denotes the evaluated architectural metric. Normalized performance ratios across benchmark suites require geometric means to preserve rank consistency [@FlemingWallace1986HowNotToLie].
 
-Normalized performance ratios across benchmark suites require geometric means to preserve rank consistency [@FlemingWallace1986HowNotToLie].
+**Confounding factors and selection bias mitigation.** Confounding factors (simulator versions, compiler flags, thermal states, and cache warm-up intervals) can create apparent performance deltas independent of architectural interventions [@GutierrezEtAl2014SourcesOfError; @PeherstorferWillcoxGunzburger2018Multifidelity]. Paired block resampling computes confidence intervals directly over the difference sequence $d_j$, capturing temporal correlation across benchmark execution traces [@Kunsch1989BlockBootstrap]. When a confidence interval crosses zero or falls within the measurement margin $m$, the outcome remains unresolved.
 
-### Confounding Factors and Paired Differences
-
-Confounding factors (simulator versions, compiler flags, thermal states, and cache warm-up intervals) can create apparent performance deltas independent of architectural interventions [@GutierrezEtAl2014SourcesOfError; @PeherstorferWillcoxGunzburger2018Multifidelity]. Paired block resampling computes confidence intervals directly over the difference sequence $d_j$, capturing temporal correlation across benchmark execution traces [@Kunsch1989BlockBootstrap]. When a confidence interval crosses zero or falls within the measurement margin $m$, the outcome remains unresolved.
-
-### Confirming a Selected Winner Independently
-
-Selecting the top performer among thousands of noisy evaluations introduces selection bias (the *optimizer's curse*). Validating a candidate requires fresh evaluation on unseen random seeds, disjoint workloads, or held-out operating conditions.
+Furthermore, selecting the top performer among thousands of noisy evaluations introduces severe selection bias (the *optimizer's curse*). When an automated optimizer screens high-dimensional candidate pools against noisy simulation proxies, the apparent winning margin often reflects extreme positive estimation noise rather than true architectural superiority. Validating a candidate therefore requires independent confirmatory evaluation: rerunning the selected winner on fresh random seeds, disjoint workload kernels, and held-out operating conditions before committing design changes.
 
 ## Qualifying Proxies and Calibration {#sec-proxy-mismatch-metric-gaming-and-calibration}
 
-Cheaper evaluation proxies must track target architectural properties without enabling optimization gaming.
+Cheaper evaluation proxies must track target architectural properties without enabling optimization gaming. High-throughput exploration loops rely on analytical models, cycle-approximate simulators, and learned surrogate estimators to evaluate candidate designs rapidly. However, if a surrogate metric diverges from true physical behavior, optimizers aggressively exploit those modeling omissions (such as ignoring dynamic random-access memory (DRAM) bank serialization, interconnect contention, or thermal dissipation limits) at the expense of manufacturable chip quality.
 
-### Proxy Metric Gaming
-
-Optimizing directly against incomplete surrogates (nominal instructions per cycle (IPC), zero-cost memory models, and wirelength) induces microarchitectural *proxy gaming*, where search algorithms exploit modeling approximations (such as ignoring dynamic random-access memory (DRAM) bank serialization or thermal throttling) at the expense of true physical performance [@Goodhart1975MonetaryManagement; @Strathern1997Goodhart].
+**Proxy metric gaming and discrete qualification strata.** Optimizing directly against incomplete surrogates (nominal instructions per cycle (IPC), zero-cost memory models, and wirelength) induces microarchitectural *proxy gaming*, where search algorithms exploit modeling approximations at the expense of true physical performance [@Goodhart1975MonetaryManagement; @Strathern1997Goodhart].
 
 Surrogate validity requires distinguishing *observed qualification strata* from *unsampled evaluation gaps* (@fig-trust-calibration) [@WunderlichEtAl2003SMARTS; @SherwoodEtAl2002SimPoint; @ForresterSobesterKeane2008Surrogate].
 
@@ -222,19 +210,15 @@ Evaluating surrogate fitness pairs specific failure modes with dedicated diagnos
 
 Multi-objective trade-offs between performance, power, and area require explicit Pareto dominance rules rather than ad hoc scalarization [@Deb2001MultiObjective].
 
-### Outcomes Versus Causal Mechanisms
+## Outcome, Mechanism, and Counterfactual Reasoning
 
-Decoupling top-line outcomes from causal mechanisms prevents spurious design revisions.
+Determining whether an architectural candidate satisfies a product requirement requires strictly separating observed top-line *outcomes* from explanatory *mechanisms* (@tbl-outcome-mechanism). When an automated optimizer modifies a microarchitectural feature, recording an improvement in top-line latency or throughput does not prove that the intended mechanism produced the gain. For instance, a cache resizing candidate might post improved frame rendering times not because larger static random-access memory (SRAM) capacity reduced conflict misses, but because incidental compiler instruction alignment masked a memory bus serialization stall. Establishing genuine architectural causality requires counterfactual testing: constructing controlled contrast experiments that hold confounding compiler, memory, and operating variables fixed while probing the isolated mechanism.
 
 ::: {.callout-lighthouse title="A lower miss count is not the architecture result"}
 **Context.** Evaluating an L2 cache configuration under matched workload conditions.
 
 **Required distinction.** A lower miss count supports an intermediate cache effect. Establishing a frame-time outcome and proving that fewer misses caused it require separate comparative tests.
 :::
-
-## Outcome, Mechanism, and Counterfactual Reasoning
-
-Determining whether a candidate satisfies a requirement requires distinguishing observed *outcomes* from explanatory *mechanisms* (@tbl-outcome-mechanism).
 
 | **Evaluation question** | **Possible qualified status** | **Why the distinction matters** |
 | --- | --- | --- |
@@ -246,9 +230,9 @@ Determining whether a candidate satisfies a requirement requires distinguishing 
 
 ## Verification and Falsification Boundaries {#sec-independent-checks-and-correlated-errors}
 
-Assurance engineering links architectural claims directly to supporting checks and explicit assumptions [@Kelly2004GSN].
+Assurance engineering structures architectural verification by linking high-level performance and correctness claims directly to supporting tool checks and explicit assumptions [@Kelly2004GSN]. In an automated loop, verification harnesses must systematically map target requirements across heterogeneous toolchains, ensuring that physical limits, functional contracts, and quality-of-service bounds each receive rigorous, non-substitutable evaluations rather than relying on uncalibrated proxy approximations.
 
-### Mapping Requirements
+### Mapping Requirements to Verification Toolchains
 
 Hard physical constraints (timing slack, thermal envelopes, and design rule checking (DRC) rules) demand signoff tools (Cadence Tempus, Ansys RedHawk-SC, and Siemens Calibre) operating across declared process corners. Point estimates cannot substitute for bounded signoff passes.
 
@@ -262,7 +246,7 @@ Hard physical constraints (timing slack, thermal envelopes, and design rule chec
 **Takeaway.** Unqualified results represent missing evidence; uncovered requirements represent missing checks.
 :::
 
-### Scoping Observations
+### Scoping Observations and Check Fidelity
 
 Checks are decisive only for the properties they observe (@tbl-check-scope).
 
@@ -293,7 +277,7 @@ Feedback plans scale across three consequence tiers (@tbl-feedback-by-consequenc
 | High-consequence commitment | Multimillion-dollar respin or tape-out failure. | Signoff checks covering all material claims, decision-margin bounds, and independent verifiers. |
 : **Feedback plans must follow consequence and reversibility.** Verification rigor matches the cost of error propagation. {#tbl-feedback-by-consequence tbl-colwidths="[26,34,40]"}
 
-### Correlated Blind Spots
+### Correlated Blind Spots and Diverse Checkers
 
 Superficially distinct verifiers often share underlying specifications, training corpora, or simplified timing abstractions, producing correlated errors (@fig-independent-checks) [@KnightLeveson1986Multiversion; @PanicksseryEtAl2024SelfPreference].
 
@@ -335,13 +319,9 @@ Feedback updates persistent optimization state across iterative design cycles. C
 | **Reopening trigger** | Process corner shift, EDA license change, or ISA revision. | Distribution shift detected by conformal prediction bounds or residual drift. |
 : **Feedback separation prevents optimizer feedback contamination.** Durable project lineage records verified signoff evidence, while quarantined optimizer state isolates learned heuristics to prevent self-reinforcing bias. {#tbl-retention-vs-quarantine tbl-colwidths="[20,40,40]"}
 
-### Quarantining Heuristics
+**Quarantining heuristics and models.** Surrogate models and search heuristics must be versioned and quarantined before deployment to prevent hidden feedback loops and policy-induced dataset bias [@SculleyEtAl2015Hidden; @Settles2009ActiveLearning]. Holdout benchmarks must remain untouched or refreshed to avoid adaptive-reuse overfitting [@DworkEtAl2015ReusableHoldout].
 
-Surrogate models and search heuristics must be versioned and quarantined before deployment to prevent hidden feedback loops and policy-induced dataset bias [@SculleyEtAl2015Hidden; @Settles2009ActiveLearning]. Holdout benchmarks must remain untouched or refreshed to avoid adaptive-reuse overfitting [@DworkEtAl2015ReusableHoldout].
-
-### Requalifying Checks Under Distribution Shift
-
-Changes in workloads, tool versions, or PVT corners introduce distribution shift, reopening dependent architectural claims [@QuinoneroCandelaEtAl2009DatasetShift]. Tracing claims to exact execution bindings enables rerunning only the minimum affected check subset.
+**Requalifying checks under distribution shift.** Changes in workloads, tool versions, or PVT corners introduce distribution shift, reopening dependent architectural claims [@QuinoneroCandelaEtAl2009DatasetShift]. Tracing claims to exact execution bindings enables rerunning only the minimum affected check subset.
 
 ## Common Pitfalls
 

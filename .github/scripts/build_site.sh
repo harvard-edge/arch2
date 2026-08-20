@@ -82,7 +82,7 @@ if stats_output="$(python3 .github/scripts/manuscript_stats.py 2>/dev/null)"; th
 else
   echo "warning: manuscript stats unavailable; landing strip will be empty" >&2
 fi
-quarto render www "${stat_args[@]}"
+quarto render www ${stat_args[@]+"${stat_args[@]}"}
 cp -r www/_site/* _site/
 
 echo "==> Rewriting assembled-site links"
