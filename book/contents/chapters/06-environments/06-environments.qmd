@@ -56,12 +56,13 @@ The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-in
 
 In our XR SoC environment, wrappers encapsulate simulators, formal provers, logic synthesizers, and physical design flows. A central harness binds outputs (from NPU multiply-accumulate (MAC) utilization to post-route timing slack) to candidate identities. Modern hardware design systems deploy hardware-native workflow engines such as SiliconCompiler [@SiliconCompiler] and Hammer [@Hammer], which interpret electronic design automation (EDA) technology-mapping views, process design kit (PDK) corner trees, and design rule checks, rather than generic software build systems (like Make or Celery) that lack hardware semantic awareness.
 
-Robust hardware evaluation environments enforce four infrastructure rules:
+Robust hardware evaluation environments enforce five infrastructure rules:
 
 1. **EDA Floating License Management & Token Pooling:** Commercial EDA engines (Synopsys VCS/PrimeTime, Cadence Innovus/Xcelium, Siemens Questa) operate under strict floating license daemons (FlexLM and Sentinel). When automated multi-agent systems launch dozens of parallel exploration attempts, unmanaged scripts trigger severe license starvation, cascading job timeouts, and queuing thrash. Harnesses must manage explicit license token pools, queuing jobs with priority weights, enforcing bounded leases, and running daemon heartbeat monitors (`lmutil lmstat` / `lmremove`) to harvest orphan license tokens when worker nodes or containers abort unexpectedly.
 2. **On-premises and cloud NDA air-gap architecture:** Commercial process design kits (e.g., TSMC N3E, Intel 18A) operate under strict foundry non-disclosure agreements (NDAs) that strictly prohibit uploading Graphic Database System II (GDSII) streams, Library Exchange Format (LEF) / Design Exchange Format (DEF) layout views, or transistor-level SPICE (Simulation Program with Integrated Circuit Emphasis) models to third-party cloud AI endpoints. AI-native design systems bridge this boundary via an *air-gapped proxy architecture*; high-level prompts, abstract syntax tree (AST) rewrites, and anonymized feature vectors communicate with external foundation models over encrypted gRPC (gRPC Remote Procedure Calls) channels, while all PDK-dependent synthesis, physical layout, and signoff design rule check (DRC) and layout versus schematic (LVS) runs execute strictly on-premises inside isolated, air-gapped compute enclaves.
 3. **Host Nondeterminism and CPU Pinning:** Hardware simulators and multi-threaded logic synthesizers exhibit runtime variance when host OS thread schedulers migrate worker threads across asymmetric CPU cores or when dynamic frequency scaling throttles CPU clocks. Harnesses eliminate host-level timing noise by pinning execution threads to dedicated physical cores (`taskset -c`), locking CPU governors to fixed frequencies, and isolating filesystem I/O onto local RAM-backed scratchdisks.
 4. **Sandboxed Execution and Tcl Shell Escape Defenses:** EDA toolchains (such as Vivado, OpenROAD, and Design Compiler) provide interactive Tcl script environments with full shell access (`exec`, `system`). When an automated generator or large language model (LLM) produces synthetic synthesis scripts or floorplan constraints, untrusted Tcl commands can inadvertently overwrite project root directories or execute unauthorized network requests. Harnesses execute EDA tools strictly inside sandboxed Linux containers (Docker/OCI, Open Container Initiative) with restricted user privileges, read-only PDK mounts, and seccomp filters blocking arbitrary system calls.
+5. **High-Throughput Filesystem I/O and Checkpoint Isolation:** Physical design and signoff tools generate multi-gigabyte intermediate database checkpoints (such as Synopsys NDM, Cadence DEF, Standard Parasitic Exchange Format [SPEF], and GDSII streams). Launching parallel exploration agents against shared network-attached storage (NFS or Lustre) quickly saturates storage bandwidth, stalling compute clusters. Harnesses isolate active tool runs to local NVMe scratch storage, storing only lightweight parasitic diffs and final signoff reports in shared persistent volumes while pruning unpromoted layout checkpoints.
 
 Tool wrappers separate raw execution state from semantic interpretation (@fig-environment-tool-interface).
 
@@ -292,14 +293,14 @@ Evaluation environments establish operational trade-offs across throughput, setu
 ```{python}
 #| label: fig-ch06-simulation-spectrum
 #| fig-cap: |
-#|   **Hardware evaluation tools balance simulation throughput against timing and physical fidelity.**
-#|   Tool categories span six orders of magnitude in execution rate (from $10^2$ cycles/s for gate-level
-#|   simulation to $10^8$ cycles/s for FPGA emulation and analytical models), while setup latency scales
-#|   inversely. Open-source flows (Icarus, Verilator, OpenROAD) provide rapid-setup evaluation environments,
-#|   while commercial EDA suites and FPGA platforms demand multi-day setup in exchange for high throughput
+#|   **Hardware evaluation tools balance verification throughput against timing and physical fidelity.**
+#|   Tool categories span six orders of magnitude in effective execution rate (from $10^2$ cycles/s for gate-level
+#|   timing simulation to $10^8$ cycles/s for FPGA emulation and analytical models), while setup latency scales
+#|   inversely. Physical design rates reflect toggle-driven dynamic power analysis and timing extraction throughput. Open-source flows (Icarus, Verilator, OpenROAD) provide rapid-setup evaluation environments,
+#|   while commercial EDA suites and enterprise emulation platforms demand multi-day setup in exchange for high throughput
 #|   or signoff-grade physical fidelity.
 #| out-width: "100%"
-#| fig-alt: "Scatter plot of simulation rate in cycles per second on a logarithmic y-axis versus setup and calibration time on a logarithmic x-axis, comparing analytical models, cycle-level simulators, RTL simulation, FPGA emulation, and physical synthesis tools across open-source and commercial suites."
+#| fig-alt: "Scatter plot of effective verification rate in cycles per second on a logarithmic y-axis versus setup and calibration time on a logarithmic x-axis, comparing analytical models, cycle-level simulators, RTL simulation, FPGA and enterprise hardware emulation, and physical signoff tools across open-source and commercial suites."
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -318,6 +319,7 @@ tools = [
     {"name": "Verilator (RTL)", "rate": 2e5, "setup_h": 0.5, "cat": "rtl"},
     {"name": "VCS (RTL)", "rate": 8e4, "setup_h": 2.0, "cat": "rtl"},
     {"name": "VCS (Gate+SDF)", "rate": 5e2, "setup_h": 8.0, "cat": "rtl"},
+    {"name": "ZeBu / Palladium", "rate": 1e6, "setup_h": 16.0, "cat": "fpga"},
     {"name": "FireSim (FPGA)", "rate": 5e7, "setup_h": 12.0, "cat": "fpga"},
     {"name": "OpenROAD (Signoff)", "rate": 1e2, "setup_h": 6.0, "cat": "pnr"},
     {"name": "Innovus (Signoff)", "rate": 5e1, "setup_h": 24.0, "cat": "pnr"},
@@ -335,8 +337,8 @@ cat_labels = {
     "analytical": "Analytical model",
     "sim": "Microarch simulator",
     "rtl": "HDL / Gate simulation",
-    "fpga": "FPGA emulation",
-    "pnr": "Physical synthesis & signoff",
+    "fpga": "Hardware emulation & FPGA",
+    "pnr": "Physical signoff & toggle analysis",
 }
 
 fig, ax = plt.subplots(figsize=(6.2, 2.8))
@@ -367,6 +369,8 @@ for t in tools:
         offset_y = 0.65
     elif t["name"] == "gem5 (SE)":
         offset_y = 1.35
+    elif t["name"] == "ZeBu / Palladium":
+        offset_y = 1.45
     elif t["name"] == "OpenROAD (Signoff)":
         offset_y = 1.5
     elif t["name"] == "Innovus (Signoff)":
@@ -380,7 +384,7 @@ for t in tools:
 ax.set_xscale("log")
 ax.set_yscale("log")
 ax.set_xlabel("Setup & calibration time (hours)", fontsize=6.5)
-ax.set_ylabel("Execution throughput (cycles / s)", fontsize=6.5)
+ax.set_ylabel("Effective verification rate (cycles / s)", fontsize=6.5)
 ax.set_xlim(0.02, 60)
 ax.set_ylim(20, 5e8)
 ax.tick_params(axis="both", labelsize=5.8, length=2.5, width=0.6, pad=2)

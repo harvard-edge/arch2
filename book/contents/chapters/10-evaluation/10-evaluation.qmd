@@ -209,7 +209,7 @@ Comprehensive cost accounting spans every resource class the workflow consumes (
 | **Human operation** | Supervision, intervention, failure triage, and manual design work |
 | **Human review and decision work** | Independent checking, design review, documentation, approval preparation, and unresolved follow-up |
 | **Model and general compute** | Model calls and tokens, inference time, accelerator time, training or adaptation, memory, storage, energy, and orchestration |
-| **Engineering tools** | Compiler builds; invocations by tool type, fidelity, and status; simulation runs and cycles; formal, synthesis, physical, field-programmable gate array (FPGA) / emulation, and lab measurements; license occupancy and queue time |
+| **Engineering tools** | Compiler builds; invocations by tool type, fidelity, and status; simulation runs and cycles; formal, synthesis, physical, field-programmable gate array (FPGA) / emulation, and lab measurements; license peak concurrency limits, token checkout duration, queue denial wait latency, and backoff throttling |
 | **Data and samples** | Workload traces, training/adaptation data, reference outputs, implementation samples, and silicon measurements |
 | **Verification and integration** | Check development, proof and simulation work, debug, interface and software integration, regressions, and closing evidence |
 | **Future change and ECO work** | Expected design edits, affected modules/interfaces, verification reruns, implementation work, and review for declared scenarios |
@@ -226,11 +226,11 @@ Tool tracking demands fidelity, clear lineage, and precise cost accounting. Uniq
 The attempt-level cost record extends operational tracking so workflows cannot conceal failed attempts, tool crashes, or manual repair sessions behind finalists (@tbl-attempt-cost-record).
 
 | **Evaluation attribute group** | **Attributes added or made explicit for comparison** |
-| --- | --- |
+| :--- | :--- |
 | **Comparison placement** | Comparison arm, paired task, candidate/attempt identifiers, evaluator-owned stage/fidelity, and promotion status |
 | **Engineering outcome** | Passed, violated, infeasible, inconclusive, or unreached; coverage, waiver status, and deepest evidence stage |
 | **Censoring and disposition** | Completed, crashed, timed out, canceled; censoring reason; partial output; and inclusion rules |
-| **Resources and cost** | Model/tool calls; core-hours, accelerator-hours, peak memory, storage, network, energy, license occupancy, queue/run time, retries, and recovery |
+| **Resources and cost** | Model/tool calls; core-hours, accelerator-hours, peak memory, storage, network, energy, license peak concurrency, queue wait latency, backoff throttling status, retries, and recovery |
 | **Recovery and state** | State invalidated/restored, preserved descendants, and checkpoint lineage |
 | **Human-work linkage** | Active engineering minutes by role, independent review, intervention, and waiting linked to affected attempts |
 : **Evaluation records extend operational tracking across all attempts.** Capturing outcomes, censoring, resource consumption, and linked human effort across all attempts prevents artificial cost erasure from finalist-only reporting. {#tbl-attempt-cost-record}
@@ -699,7 +699,7 @@ set_false_path -from [get_pins {npu_top/mac_array/*/clk}] \
 
 To a naive verification wrapper that checks only the top-level STA return code, the candidate appears to achieve clean timing closure. In reality, the critical sequential paths within the matrix engine remain completely unanalyzed during logic synthesis (Yosys, Synopsys Design Compiler) and physical place-and-route (OpenROAD, Cadence Innovus), risking functional breakdown in physical silicon, unindemnified IP exposure, and a wasted non-recurring engineering (NRE) tapeout investment.
 
-To combat these attacks, evaluation frameworks must enforce immutable, evaluator-owned SDC validation, structural clock-domain crossing (CDC) analysis, and formal equivalence verification (using Yosys EQY, an open-source equivalence checker, or Cadence Logic Equivalence Checker (LEC)) alongside gate-level simulation with back-annotated timing in Synopsys VCS or Cadence Xcelium.
+In advanced physical design nodes, timing closure requires multi-corner multi-mode matrices with on-chip variation models. Optimizing setup slack at a single slow-process corner (such as slow-slow, high-temperature conditions) frequently creates severe hold-time violations at fast-process, sub-zero corners. An optimization pass is qualified only when it satisfies all setup, hold, transition, and clock-uncertainty bounds across the entire operational corner envelope. To combat constraint-tampering attacks, evaluation frameworks must enforce immutable, evaluator-owned SDC validation, structural clock-domain crossing (CDC) analysis, and formal equivalence verification (using Yosys EQY, an open-source equivalence checker, or Cadence Logic Equivalence Checker) alongside gate-level simulation with back-annotated timing in Synopsys VCS or Cadence Xcelium.
 
 Other attack variants strip out error correction codes, memory protection units, security isolation boundaries, or speculative-execution mitigations because those features consume power, area, or clock cycles. The required architectural check depends on the property under threat. While standard RTL assertions and bounded model checking verify selected single-execution safety properties (such as basic permission enforcement), single-execution methods fall short when the target is a complex, relational information-flow property spanning multiple parallel executions [@ClarksonSchneider2010Hyperproperties]. For instance, when analyzing speculative execution vulnerabilities, tools like SPECTECTOR deploy symbolic execution to verify speculative noninterference under explicitly defined speculative semantics [@GuarnieriEtAl2020SPECTECTOR]. This provides a property-specific example of how to secure a microarchitecture, rather than mandating that every timing anomaly requires heavyweight analysis. Accepting a generic "formal equivalence passed" flag from a toolchain is never sufficient.
 
