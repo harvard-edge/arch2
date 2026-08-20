@@ -4884,35 +4884,35 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
 GLOSSARY_DOMAINS: list[tuple[str, str, str, str]] = [
     (
         "hardware",
-        "Hardware Architecture & Microarchitecture",
+        "Hardware Architecture and Microarchitecture",
         "tbl-glossary-hardware",
         "sec-glossary-hardware",
     ),
     (
         "physical",
-        "Physical Design, Manufacturing & Signoff",
+        "Physical Design, Manufacturing and Signoff",
         "tbl-glossary-physical",
         "sec-glossary-physical",
     ),
     (
         "compilers",
-        "EDA, Compilers & Intermediate Representations",
+        "EDA, Compilers and Intermediate Representations",
         "tbl-glossary-compilers",
         "sec-glossary-compilers",
     ),
     (
         "verification",
-        "Verification, Power & Standards",
+        "Verification, Power and Standards",
         "tbl-glossary-verification",
         "sec-glossary-verification",
     ),
     (
         "interconnects",
-        "Bus Protocols & Interconnect Interfaces",
+        "Bus Protocols and Interconnect Interfaces",
         "tbl-glossary-interconnects",
         "sec-glossary-interconnects",
     ),
-    ("ai", "AI, Modeling & Design Automation", "tbl-glossary-ai", "sec-glossary-ai"),
+    ("ai", "AI, Modeling and Design Automation", "tbl-glossary-ai", "sec-glossary-ai"),
 ]
 
 # Canonical technical abbreviations registry (CMOS Chapter 10 style contract)
@@ -5118,7 +5118,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
     ),
     "TCM": (
-        "tightly-coupled memory",
+        "tightly coupled memory",
         False,
         "a",
         "hardware",
@@ -5227,7 +5227,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         True,
     ),
     "NDA": (
-        "non-disclosure agreement",
+        "nondisclosure agreement",
         False,
         "an",
         "physical",
@@ -5422,7 +5422,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
         "a",
         "verification",
-        "A formal verification technique unrolling sequential circuit transitions up to a fixed depth k and querying a SAT/SMT solver to prove or disprove properties.",
+        "A formal verification technique unrolling sequential circuit transitions up to a fixed depth $k$ and querying a SAT/SMT solver to prove or disprove properties.",
         r"bounded model checking",
         False,
     ),
@@ -5539,7 +5539,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         True,
         "an",
         "verification",
-        "A declarative language extension within IEEE 1800 SystemVerilog used to specify temporal and boolean properties for formal verification and dynamic simulation.",
+        "A declarative language extension within IEEE 1800 SystemVerilog used to specify temporal and Boolean properties for formal verification and dynamic simulation.",
         r"SystemVerilog Assertions",
         False,
     ),
@@ -5578,15 +5578,6 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         "interconnects",
         "An open industry-standard cache-coherent interconnect protocol running over PCIe physical layers for high-speed CPU-to-device and CPU-to-memory expansion.",
         r"Compute Express Link",
-        False,
-    ),
-    "OCP": (
-        "Open Compute Project",
-        True,
-        "an",
-        "interconnects",
-        "An open collaborative community standardizing datacenter hardware, server architectures, and open accelerator specifications.",
-        r"Open Compute Project",
         False,
     ),
     "UCIe": (
@@ -5636,12 +5627,12 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         True,
     ),
     "DQN": (
-        "Deep Q-Network",
-        True,
+        "deep Q-network",
+        False,
         "a",
         "ai",
         "A model-free reinforcement learning algorithm combining Q-learning with deep neural network function approximators.",
-        r"Deep Q[- ]Network",
+        r"[Dd]eep Q[- ][Nn]etwork",
         True,
     ),
     "DSE": (
@@ -5654,12 +5645,12 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
     ),
     "ECE": (
-        "Expected Calibration Error",
-        True,
+        "expected calibration error",
+        False,
         "an",
         "ai",
         "A statistical metric measuring the difference between predicted model confidence probabilities and actual empirical accuracy.",
-        r"Expected Calibration Error",
+        r"[Ee]xpected [Cc]alibration [Ee]rror",
         True,
     ),
     "FP8": (
@@ -5744,12 +5735,12 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
     ),
     "PPO": (
-        "Proximal Policy Optimization",
-        True,
+        "proximal policy optimization",
+        False,
         "a",
         "ai",
         "A model-free policy gradient reinforcement learning algorithm using clipped surrogate objectives to maintain stable policy updates.",
-        r"Proximal Policy Optimization",
+        r"[Pp]roximal [Pp]olicy [Oo]ptimization",
         True,
     ),
     "RL": (
@@ -5934,7 +5925,7 @@ def generate_glossary_markdown() -> str:
         "# Acronyms and Technical Glossary {#sec-appendix-d-glossary}",
         "",
         "::: {.abstract}",
-        "This reference appendix consolidates and categorizes the technical acronyms, standards, formal representations, and abbreviations used throughout *Architecture 2.0*. Each entry lists the canonical abbreviation, its spelled-out form per the Chicago Manual of Style (CMOS), its technical domain, and a concise engineering definition across hardware microarchitecture (@tbl-glossary-hardware), physical design and signoff (@tbl-glossary-physical), EDA and compilers (@tbl-glossary-compilers), verification and standards (@tbl-glossary-verification), bus interconnects (@tbl-glossary-interconnects), and AI automation (@tbl-glossary-ai).",
+        "This reference appendix consolidates and categorizes the technical acronyms, standards, formal representations, and abbreviations used throughout *Architecture 2.0*. Each entry lists the canonical abbreviation, its spelled-out form per the *Chicago Manual of Style*, and a concise engineering definition, grouped by technical domain across hardware microarchitecture (@tbl-glossary-hardware), physical design and signoff (@tbl-glossary-physical), EDA and compilers (@tbl-glossary-compilers), verification and standards (@tbl-glossary-verification), bus interconnects (@tbl-glossary-interconnects), and AI automation (@tbl-glossary-ai).",
         ":::",
         "",
     ]
@@ -5943,13 +5934,15 @@ def generate_glossary_markdown() -> str:
         lines.append(f"## {domain_title} {{#{sec_anchor}}}")
         lines.append("")
         lines.append(
-            "| **Acronym** | **Spelled-Out Form (CMOS)** | **Engineering Definition** |"
+            "| **Acronym** | **Spelled-out form** | **Engineering definition** |"
         )
         lines.append("| :--- | :--- | :--- |")
 
         domain_abbrs = [
             (abbr, data)
-            for abbr, data in sorted(CMOS_ABBREVIATIONS.items())
+            for abbr, data in sorted(
+                CMOS_ABBREVIATIONS.items(), key=lambda item: item[0].casefold()
+            )
             if data[3] == domain_key
         ]
 
@@ -5990,7 +5983,7 @@ def generate_glossary_lua() -> str:
         definition,
         pattern,
         exempt,
-    ) in sorted(CMOS_ABBREVIATIONS.items()):
+    ) in sorted(CMOS_ABBREVIATIONS.items(), key=lambda item: item[0].casefold()):
         safe_def = definition.replace('"', '\\"')
         safe_canonical = canonical.replace('"', '\\"')
         lines.append(f'  ["{abbr}"] = "{safe_canonical}: {safe_def}",')

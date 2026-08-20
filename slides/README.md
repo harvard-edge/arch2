@@ -1,7 +1,7 @@
 # Architecture 2.0 lecture
 
 This folder contains the standalone one-hour LaTeX Beamer lecture for
-*Architecture 2.0: Principles for AI-Assisted System and Chip Design*.
+*Architecture 2.0: Principles of AI-Native System and Chip Design*.
 
 Build it from this directory:
 
