@@ -4767,6 +4767,13 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     # through..."), which evaded the original pattern and hid a live instance.
     by_gerund = re.compile(r"(?:^|[.!?]\s+|\*\*\s+)By\s+(?:\w+ly\s+)?(\w+ing)\b")
     line_opener = re.compile(r"^(?:[-*+>]\s+|\d+\.\s+|\*\*)+")
+    raw_tilde = re.compile(r"(?<![a-zA-Z0-9_\`\$\~])~\s*(\d+[\w\.\,]*)")
+    spatial_float = re.compile(
+        r"\b(?:figure|table|listing|chart|diagram)\s+(?:below|above)\b"
+        r"|\b(?:below|above)\s+in\s+@(fig|tbl|lst)\b"
+        r"|\b(?:as\s+shown\s+below)\b",
+        re.IGNORECASE,
+    )
     bare_si_unit = re.compile(
         r"(?<![\\\w])(\d+(?:\.\d+)?) "
         r"(W|nm|mm|GHz|MHz|Hz|kB|MB|GB|TB|ms|ns|ps|pJ|nJ|mW|mV|V|\u00b0C)\b"
@@ -4834,6 +4841,31 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                         "explicit-et-al",
                         f"{_relative(path)}:{lineno}",
                         'explicit "et al." in running prose is non-standard; use proper Quarto citations [@key] or @key instead of typing "et al."',
+                    )
+                )
+            tilde_match = raw_tilde.search(prose)
+            if (
+                tilde_match
+                and "http" not in prose
+                and "git" not in prose
+                and not stripped.startswith("#")
+            ):
+                findings.append(
+                    Finding(
+                        "error",
+                        "raw-tilde-approximation",
+                        f"{_relative(path)}:{lineno}",
+                        f'raw tilde "{tilde_match.group(0)}" in running prose; use "about {tilde_match.group(1)}" or "$\\approx {tilde_match.group(1)}$" per CMOS',
+                    )
+                )
+            spatial_match = spatial_float.search(prose)
+            if spatial_match:
+                findings.append(
+                    Finding(
+                        "error",
+                        "spatial-float-reference",
+                        f"{_relative(path)}:{lineno}",
+                        f'deictic spatial float reference "{spatial_match.group(0)}" is non-standard; cite the float anchor directly (e.g. @fig-slug or @tbl-slug) without relative spatial adjectives (CMOS §§ 3.9, 3.83)',
                     )
                 )
             for match in by_gerund.finditer(line_opener.sub("", prose)):
