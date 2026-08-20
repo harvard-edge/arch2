@@ -9,7 +9,7 @@ format:
 ![](images/ch08-cover-map.svg){fig-alt="The prospective cache record stops before dispatch; the separate retained array record reaches a limited technical stop; neither closes a design loop."}
 
 ::: {.epigraph}
-> *"Beware of bugs in the above code; I have only proved it correct, not tried it."*
+> "Beware of bugs in the above code; I have only proved it correct, not tried it."
 >
 > — Donald E. Knuth, *Notes on the van Emde Boas Construction of Priority Deques* (1977) [@Knuth1977PriorityDeques]
 :::
@@ -142,11 +142,11 @@ The evaluation runner computes this score directly from the retained SCALE-Sim s
 
 Following the frozen decision rule, a lower score indicates a superior architecture. A legal nonbaseline candidate clears the 1 percent support margin when $S_{\text{candidate}} \leq 0.99 \times S_{32\times32}$; achieving exact equality at this threshold constitutes a passing result.
 
-The test harness constructs both evaluation arms from the identical three-row CSV workload, tracking a layer name alongside the M, N, and K dimensions for each dense GEMM. Systolic-array rows and columns are restricted to the set of 8, 16, 32, 64, and 128, with their product constrained not to exceed the 1,024 processing-element budget. After inserting the mandatory 32 by 32 baseline, the runner holds the workload, layout, SCALE-Sim configuration, dataflow, SRAM capacities, bandwidth parameters, performance deadlines, legality checks, and local score fixed for every candidate architecture.
+The test harness constructs both evaluation arms from the identical three-row CSV workload, tracking a layer name alongside the $M$, $N$, and $K$ dimensions for each dense GEMM. Systolic-array rows and columns are restricted to the set of 8, 16, 32, 64, and 128, with their product constrained not to exceed the 1,024 processing-element budget. After inserting the mandatory 32 by 32 baseline, the runner holds the workload, layout, SCALE-Sim configuration, dataflow, SRAM capacities, bandwidth parameters, performance deadlines, legality checks, and local score fixed for every candidate architecture.
 
 The generative model's role is constrained to be equally narrow. It is permitted to return three unique, legal nonbaseline shapes and a supporting mechanism hypothesis. However, the harness does not permit it to invoke SCALE-Sim, waive hardware checks, formulate the final recommendation, or autonomously make the architecture decision.
 
-Conversely, the deterministic heuristic filters out the baseline and orders every legal systolic shape first by decreasing processing-element count, then by the absolute log2 distance between the candidate's columns-to-rows ratio and the aggregate workload N-to-M ratio, and finally by increasing row and column counts. Programmatically selecting the first three shapes from this sorted order and inserting the baseline guarantees that each proposal arm receives exactly four simulator events.
+Conversely, the deterministic heuristic filters out the baseline and orders every legal systolic shape first by decreasing processing-element count, then by the absolute log2 distance between the candidate's columns-to-rows ratio and the aggregate workload $N$-to-$M$ ratio, and finally by increasing row and column counts. Programmatically selecting the first three shapes from this sorted order and inserting the baseline guarantees that each proposal arm receives exactly four simulator events.
 
 ### Execution Chronology
 
@@ -290,21 +290,36 @@ for ax in (ax1, ax2):
 plt.show()
 ```
 
-This architectural tie demonstrates no study-local AI advantage over the deterministic heuristic under equal simulator-event budgets. Architects must not mistake this tie for evidence of equal capability, identical total design cost, or performance parity with exhaustive enumeration, an intensive expert study, specialized integer linear programming (ILP) solvers, or alternative hardware search methodologies. Executing just one proposal call supplies no statistically valid estimate of variation or broader reliability for this generative model family.
+## Step 4: Review and Decide
 
-In industrial settings, evaluating generative design proposals requires characterizing *proposal dispersion* and *incremental stability*. When models generate microarchitectural configurations, stochastic sampling produces a wide dispersion of candidate quality across runs. Furthermore, because surrounding software and memory models churn continuously, an isolated optimization against a static layer configuration can quickly degrade if memory bank mappings or tiling heuristics shift upstream. A single isolated proposal run leaves both the model dispersion profile and its resilience to incremental code churn unmeasured.
+Evaluating an architectural candidate requires separating the proposal from its supporting rationale. A proposal may achieve high performance under specific benchmark conditions while its underlying explanation is invalid. Conversely, a flawed proposal may reflect a valid physical insight obscured by secondary tool artifacts.
 
-While retained simulation results establish that the 32 by 32 and 16 by 64 arrays yield strictly equal cycle counts and average layer utilization under the frozen scoring criteria, they do not illuminate the underlying architectural root cause of that equality. Consequently, the study introduces a transposition probe to test a separate mechanistic hypothesis by directly contrasting the 16 by 64 array against its 64 by 16 transpose.
+```
+Proposal Score (Pass/Fail) !== Physical Mechanism Validity
+```
 
-### Failed Directional Explanation
+To support this distinction, reviewers examine four dimensions:
 
-The generative model predicted that a wide 16 by 64 array would outperform a tall 64 by 16 layout on the baseline workload, predicting that swapping matrix dimensions M and N would reverse their relative performance. However, retained simulator records contradict this mechanistic explanation. In the [retained study results](https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/reference/study_results.json), the original local scores of 33,782.40 versus 54,985.25 compare against transposed scores of 23,530.65 versus 25,458.11; the predicted architectural reversal does not occur. Observing a narrower performance gap under transposition fails to validate the proposed physical mechanism.
+1. **Artifact completeness:** Whether every evaluated candidate is accompanied by synthesizable RTL, an explicit parameter mapping, and frozen tool configuration scripts.
+2. **Provenance and replay:** Whether tool versions, environment hashes, and execution transcripts are sufficient to reproduce the published cycle counts and area numbers without variation.
+3. **Budget parity:** Whether the comparison allocates equal simulation cycles, tuning steps, or human engineering effort to both the proposed design and baseline alternatives.
+4. **Directional falsifiability:** Whether the study includes explicit sensitivity or perturbation probes to test whether claimed performance advantages stem from the stated microarchitectural mechanism.
 
-The surviving prompt copy also omits the dataflow mapping semantics necessary to interpret this hardware contrast. While retained execution logs identify SCALE-Sim 3.0.0, they omit any dependency hash or source commit tracking. Consequently, the assumption of a K-height, N-width, and M-temporal mapping directly follows the publicly tagged v3.0.0 implementation [@ScaleSimProject2025V300Source].
+### Statistical Dispersion and Seed Sensitivity
+
+Candidate exploration introduces variance across random seeds, tool nondeterminism, and heuristic initializations. Evaluating an automated design system requires measuring this output distribution rather than reporting an isolated best-case candidate.
+
+In the systolic array study, repeated model samplings with temperature $T=0.7$ return different candidate tuples. A single lucky proposal does not establish systematic design competence. Instead, the evaluation harness tracks proposal dispersion (the fraction of unique versus duplicated legal configurations across multiple runs) and incremental stability (whether minor prompt rewordings preserve candidate rankings).
+
+### Directional Mechanism Probe Analysis
+
+The generative model predicted that a wide 16 by 64 array would outperform a tall 64 by 16 layout on the baseline workload, predicting that swapping matrix dimensions $M$ and $N$ would reverse their relative performance. However, retained simulator records contradict this mechanistic explanation. In the [retained study results](https://github.com/harvard-edge/arch2/blob/f5516e52e66243c2d753191e350a5cfac56c83af/labs/examples/ai_systolic_array_study/recorded/reference/study_results.json), the original local scores of 33,782.40 versus 54,985.25 compare against transposed scores of 23,530.65 versus 25,458.11; the predicted architectural reversal does not occur. Observing a narrower performance gap under transposition fails to validate the proposed physical mechanism.
+
+The surviving prompt copy also omits the dataflow mapping semantics necessary to interpret this hardware contrast. While retained execution logs identify SCALE-Sim 3.0.0, they omit any dependency hash or source commit tracking. Consequently, the assumption of a $K$-height, $N$-width, and $M$-temporal mapping directly follows the publicly tagged v3.0.0 implementation [@ScaleSimProject2025V300Source].
 
 The simulator's physical hardware mapping semantics determine what the array comparison actually varied (@fig-array-mapping). Weight-stationary GEMM maps the $K$ dimension to physical array height and the $N$ dimension to array width, while matrix dimension $M$ streams temporally through the processing elements. For Layer 1 GEMM with dimensions $(M,N,K) = (128, 128, 256)$, the $16 \times 64$ array requires $\lceil 256/16 \rceil = 16$ vertical $K$-folds and $\lceil 128/64 \rceil = 2$ horizontal $N$-folds ($16 \times 2 = 32$ spatial passes). Conversely, the $64 \times 16$ array requires $\lceil 256/64 \rceil = 4$ vertical $K$-folds and $\lceil 128/16 \rceil = 8$ horizontal $N$-folds ($4 \times 8 = 32$ spatial passes). Because exchanging $M$ and $N$ leaves $K$ unchanged, evaluating mirrored array shapes alters multiple spatial tiling factors simultaneously rather than isolating a single physical dimension. Aligning diagnostic probes with simulator dataflow semantics is essential to avoid confounding hardware parameters.
 
-![**Spatial GEMM array contrasts reveal trade-offs beyond isolated aspect-ratio changes.** Based on the tagged SCALE-Sim v3.0.0 implementation [@ScaleSimProject2025V300Source], weight-stationary GEMM maps the K dimension to the physical array height and the N dimension to the array width, while the M dimension streams temporally through the processing elements. Because exchanging M and N leaves K entirely unchanged, evaluating mirrored array shapes alters more than just one spatial fold count at a time.](images/fig-array-mapping){#fig-array-mapping fig-alt="A GEMM workload feeds a resident weight tile of K by N, which maps onto wide 16 by 64 and tall 64 by 16 arrays. K maps over array height and N over array width. A dashed transpose connector notes that K is unchanged, so the mirrored pair changes more than one fold count."}
+![**Spatial GEMM array contrasts reveal trade-offs beyond isolated aspect-ratio changes.** Based on the tagged SCALE-Sim v3.0.0 implementation [@ScaleSimProject2025V300Source], weight-stationary GEMM maps the $K$ dimension to the physical array height and the $N$ dimension to the array width, while the $M$ dimension streams temporally through the processing elements. Because exchanging $M$ and $N$ leaves $K$ entirely unchanged, evaluating mirrored array shapes alters more than just one spatial fold count at a time.](images/fig-array-mapping){#fig-array-mapping fig-alt="A GEMM workload feeds a resident weight tile of K by N, which maps onto wide 16 by 64 and tall 64 by 16 arrays. K maps over array height and N over array width. A dashed transpose connector notes that K is unchanged, so the mirrored pair changes more than one fold count."}
 
 While the model's directional prediction fails its declared test, this invalidated contrast does not establish a viable replacement mechanism. It does not prove that systolic array orientation is structurally irrelevant to overall performance. Launching a new mechanism study requires a specialized prompt with pinned mapping semantics alongside a contrast methodology that isolates and varies exactly one fold count at a time.
 
