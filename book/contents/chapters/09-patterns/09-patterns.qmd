@@ -237,7 +237,19 @@ $$
 g^* = \frac{o}{C_h\left(1 - \frac{1}{A}\right) - \frac{d}{B}}.
 $${#eq-logca-breakeven-g}
 
-@eq-logca-breakeven-g reveals a physical feasibility boundary. If per-unit data transfer overhead exceeds local compute time savings ($d/B \ge C_h(1 - 1/A)$), the denominator becomes nonpositive and $g^*$ is undefined. Under this condition, offloading cannot break even at any operation granularity, and local compute acceleration $A$ is entirely erased by interface communication. Connecting this bound to Williams' Roofline model [@Williams2009Roofline], per-work-unit transfer $d$ is the reciprocal of operational intensity ($d = 1/\mathrm{OI}$). When kernel operational intensity falls below the system balance point ($\mathrm{OI} \le \frac{1}{B \cdot C_h(1 - 1/A)}$), the offload is fundamentally link-bandwidth bound, and scaling batch size $g$ can never overcome communication latency.
+Connecting this bound directly to Williams' Roofline model [@Williams2009Roofline], the per-work-unit data transfer $d$ is the reciprocal of kernel operational intensity ($d = 1/\mathrm{OI}$, expressed in bytes per operation). Substituting operational intensity into @eq-logca-breakeven-g defines the break-even payload as:
+
+$$
+g^* = \frac{o}{C_h\left(1 - \frac{1}{A}\right) - \frac{1}{\mathrm{OI} \cdot B}}.
+$$
+
+This relation defines an absolute physical feasibility ceiling. If the kernel's operational intensity falls at or below the critical balance threshold:
+
+$$
+\mathrm{OI} \le \mathrm{OI}^* = \frac{1}{B \cdot C_h\left(1 - \frac{1}{A}\right)}
+$$
+
+the denominator becomes nonpositive and $g^*$ is undefined. Under this condition, per-unit link transport overhead alone consumes more time than the baseline host computation. The workload is strictly link-bandwidth bound, and scaling payload batch size $g$ can never achieve speedup ($S(g) \le 1$ for all $g$). Compute acceleration $A$ is completely erased by interface communication.
 
 The physical parameters in @eq-logca-speedup-bound depend heavily on the target interconnect technology regime:
 
@@ -381,7 +393,13 @@ During compilation, Triton's MLIR pipeline passes the block representation from 
     bnez    a3, .Lloop                # Loop while N > 0
 ```
 
-This lowered sequence directly operationalizes the LogCA parameters. The instruction `vsetvli t0, a3, e32, m8, ta, ma` configures 32-bit floating-point elements (`e32`), sets vector register grouping ($LMUL=8$, `m8`, binding registers `v8`--`v15`, `v16`--`v23`, and `v24`--`v31` into eight-register groups), and declares tail-agnostic (`ta`) and mask-agnostic (`ma`) policies. This register grouping maximizes execution bandwidth per instruction, eliminating instruction-cache pressure and loop control branches. The instruction writes the actual number of processed elements (bounded by remaining count `a3` and hardware $\text{VLEN} \times LMUL / 32$) to `t0`, enabling single-binary portability from 128-bit mobile vector pipelines to 2,048-bit server arrays without recompilation. Keeping vector data resident in vector registers amortizes loop control overhead while avoiding redundant off-chip memory traffic $d$. End-to-end compiler, runtime, interface, and performance claims remain incomplete until workload semantics pass through lowering and execute on the target platform. For the Lighthouse architecture, a compiler-generated interface check and execution run verify correctness while measuring cycle ordering, latency, traffic, and bandwidth against a pinned configuration. Portability claims require demonstrating successful rebuilding and execution across compiler, runtime, library, interface, and hardware changes named in scope.
+This lowered sequence directly operationalizes the LogCA parameters through dynamic vector-length-agnostic (VLA) strip-mining. The instruction `vsetvli t0, a3, e32, m8, ta, ma` configures the selected element width ($SEW = 32\text{ bits}$, `e32`), sets vector register grouping ($LMUL = 8$, `m8`), and declares tail-agnostic (`ta`) and mask-agnostic (`ma`) policies. Under $LMUL=8$, the 32 architectural vector registers ($v_0\text{--}v_{31}$) are dynamically aggregated into four eight-register groups ($v_0, v_8, v_{16}, v_{24}$), each providing $8 \times \text{VLEN}$ bits of vector storage. The instruction `vfadd.vv v24, v8, v16` executes floating-point addition across register groups $v_8\text{--}v_{15}$ and $v_{16}\text{--}v_{23}$, writing results into $v_{24}\text{--}v_{31}$. The maximum hardware vector length per instruction is:
+
+$$
+\text{VLMAX} = \frac{LMUL \cdot \text{VLEN}}{SEW} = \frac{8 \cdot \text{VLEN}}{32} = \frac{\text{VLEN}}{4}
+$$
+
+The processor writes the active vector length $\text{VL} = \min(\text{AVL}, \text{VLMAX})$ to register `t0`. This dynamically adapts each iteration from 32 elements on a 128-bit mobile pipeline ($\text{VLEN}=128\text{ bits}$) up to 512 elements on a 2,048-bit server array ($\text{VLEN}=2048\text{ bits}$) using the identical compiled machine binary. Register grouping maximizes compute and memory bandwidth per instruction, amortizes loop control overhead, and eliminates register spilling by keeping vector operands resident in register state, directly curbing off-chip memory traffic $d$. End-to-end compiler, runtime, interface, and performance claims remain incomplete until workload semantics pass through lowering and execute on the target platform. For the Lighthouse architecture, a compiler-generated interface check and execution run verify correctness while measuring cycle ordering, latency, traffic, and bandwidth against a pinned configuration. Portability claims require demonstrating successful rebuilding and execution across compiler, runtime, library, interface, and hardware changes named in scope.
 
 Target studies must retain both the hardware context and lowering path, recording kernel structures, execution schedules, compiler (Triton, LLVM) and runtime versions, driver and firmware states, interfaces, and specific hardware revisions. Microarchitectural candidates that post large isolated kernel speedups often degrade when compilers cannot sustain instruction and data throughput or when memory traffic dominates execution. Evaluating candidates requires compiler-generated end-to-end measurements that preserve intended numerics, memory-ordering semantics, ABIs, and device contracts.
 
