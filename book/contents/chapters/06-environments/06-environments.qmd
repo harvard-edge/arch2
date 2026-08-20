@@ -24,9 +24,7 @@ What boundary must enclose architecture tools so automated methods can drive the
 
 A tool command is not an execution environment. Launching a simulator, compiler, formal engine, or synthesis flow without an enclosing harness leaves candidate identities unrecorded, environment variables unpinned, and retries untracked. Interactive computer-aided design (CAD) workflows absorbed these gaps through manual inspection. Automated search, generation, and surrogate loops (@sec-methods-generation-prediction-optimization) dispatch runs at rates that preclude human oversight. Without state-isolated, typed boundaries, automated exploration produces nonreproducible execution noise.
 
-In our prospective Lighthouse study, evaluating a mobile extended-reality (XR) system-on-chip (SoC) (such as our $3\ \text{W}$ design balancing RISC-V application cores, a neural processing unit (NPU) accelerator tile, and dual LPDDR5X channels on a TSMC N3E process node) requires filtering candidates with analytical models before dispatching cycle-level simulations, formal property checks, and physical synthesis runs. If execution state is unrecorded or tool versions drift, outputs become invalid for comparative evaluation.
-
-Tool-connected execution environments provide containerized harnesses that insulate automated loops from CAD toolchain complexity. The environment guarantees that requested work reaches tools in declared states and records produced artifacts. It does not establish scientific validity or architectural merit; measurement qualification and trade-off evaluation belong to the verification harness in @sec-feedback-verification-trust.
+In our prospective Lighthouse study, evaluating a mobile extended-reality (XR) system-on-chip (SoC) (such as our $3\ \text{W}$ design balancing RISC-V application cores, a neural processing unit (NPU) accelerator tile, and dual LPDDR5X channels on a TSMC N3E process node) requires filtering candidates with analytical models before dispatching cycle-level simulations, formal property checks, and physical synthesis runs. If execution state is unrecorded or tool versions drift, outputs become invalid for comparative evaluation. Tool-connected execution environments provide containerized harnesses that insulate automated loops from CAD toolchain complexity. The environment guarantees that requested work reaches tools in declared states and records produced artifacts. It does not establish scientific validity or architectural merit; measurement qualification and trade-off evaluation belong to the verification harness in @sec-feedback-verification-trust.
 
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
@@ -64,50 +62,19 @@ Robust hardware evaluation environments enforce five infrastructure rules:
 4. **Sandboxed execution and Tcl shell-escape defenses:** EDA toolchains (such as Vivado, OpenROAD, and Design Compiler) provide interactive Tcl script environments with full shell access (`exec`, `system`). When an automated generator or large language model (LLM) produces synthetic synthesis scripts or floorplan constraints, untrusted Tcl commands can inadvertently overwrite project root directories or execute unauthorized network requests. Harnesses execute EDA tools strictly inside sandboxed Open Container Initiative (OCI) containers with restricted user privileges, read-only PDK mounts, and seccomp filters blocking arbitrary system calls.
 5. **High-throughput filesystem I/O and checkpoint isolation:** Physical design and signoff tools generate multi-gigabyte intermediate database checkpoints (such as Synopsys NDM, Cadence DEF, Standard Parasitic Exchange Format [SPEF], and GDSII streams). Launching parallel exploration agents against shared network-attached storage (NFS or Lustre) quickly saturates storage bandwidth, stalling compute clusters. Harnesses isolate active tool runs to local NVMe scratch storage, storing only lightweight parasitic diffs and final signoff reports in shared persistent volumes while pruning unpromoted layout checkpoints.
 
-Tool wrappers separate raw execution state from semantic interpretation (@fig-environment-tool-interface).
+Tool wrappers separate raw execution state from semantic interpretation by enforcing typed input contracts and structured output parsing (@fig-environment-tool-interface).
 
 ![**Tool wrappers separate raw execution state from semantic result interpretation.** The wrapper validates and translates incoming typed requests before invoking backend tools; the isolated tool executes declared operations; the parser extracts structured attributes while retaining unclassified residual output; and the harness binds runtime outcomes, parse statuses, compute costs, and lineage into immutable execution records.](images/fig-environment-tool-interface){#fig-environment-tool-interface width="100%" fig-alt="An architecture question and workload, action schema, constraints, and metric definitions enter the tool-connected environment as a typed request. The wrapper validates and translates the request before calling the tool. An invalid request goes directly to the harness record. The tool separately produces raw returned material and a runtime outcome that can be failed, partial, or complete. The parser turns retained raw material into structured attributes, unclassified residual output, and a parse status. The harness records request and attempt identity, conditions, runtime outcome, artifacts, parse status, cost, and lineage."}
 
-The wrapper validates action schemas and parameter bounds prior to invocation, intercepting malformed requests before they consume costly license tokens or trigger unrecoverable CAD crashes. When backend execution completes, the parser extracts structured metrics into typed schemas while isolating unclassified residual text, ensuring that novel EDA warnings remain visible for downstream auditing rather than being discarded.
-
-```yaml
-# Typed Action Request Schema
-tool_request:
-  candidate_id: "XR_L2_3MiB_v2"
-  tool: "gem5"
-  tool_version: "24.0.0"
-  container_digest: "sha256:4a8b9c..."
-  parameters:
-    l2_capacity_mib: 3
-    l2_assoc: 16
-    workload_trace: "xrbench_pose_v1.trace"
-  resource_limits:
-    timeout_seconds: 1800
-    max_memory_gb: 32
-
-# Typed Execution Return Schema
-tool_execution_result:
-  execution_status: "COMPLETE_SUCCESS"
-  exit_code: 0
-  wall_clock_seconds: 412.8
-  license_hours_consumed: 0.115
-  structured_metrics:
-    l2_miss_rate: 0.0412
-    simulated_cycles: 1428590
-    ipc: 1.84
-  residual_log_lines:
-    - "WARN (gem5/cache): Port 3 experienced 4-cycle contention spike."
-```
+Before invoking a backend simulator or synthesis engine, the wrapper validates action schemas and parameter bounds against frozen contracts (verifying that candidate identifiers, cache associativity configurations, workload trace digests, and memory caps lie strictly within permissible ranges). This pre-execution validation intercepts malformed requests before they consume expensive floating EDA licenses or trigger unrecoverable CAD crashes. When execution completes, the wrapper parses raw simulator stdout and transcripts into structured performance attributes (such as miss rates, simulated cycle counts, and instructions per cycle), records runtime telemetry and consumed license-hours, and preserves unclassified residual log lines so that unexpected tool warnings or contention spikes remain visible for downstream auditing.
 
 ## Stateful Tools and Partial Execution Returns
 
-EDA and architecture tools operate statefully; they leave files in working directories, hold license tokens, mutate design databases, and inherit host environment variables. Evaluating candidates reliably requires validating tool state prior to invocation and preserving raw transcripts.
-
-Tools such as OpenROAD, Vivado, VCS, and formal provers (SVA/BMC) maintain persistent compilation state and intermediate databases [@OpenROADDocs; @Clarke2018ModelChecking]. Wrappers must validate declared preconditions, capture exit codes, serialize recognized parameters, and retain complete transcripts.
+EDA and architecture tools operate statefully; they leave files in working directories, hold license tokens, mutate design databases, and inherit host environment variables. Evaluating candidates reliably requires validating tool state prior to invocation and preserving raw transcripts. Tools such as OpenROAD, Vivado, VCS, and formal provers (SVA/BMC) maintain persistent compilation state and intermediate databases [@OpenROADDocs; @Clarke2018ModelChecking]. Wrappers must validate declared preconditions, capture exit codes, serialize recognized parameters, and retain complete transcripts to ensure auditability across repeated invocations.
 
 Physical design flows illustrate view-consistency hazards. OpenROAD ingests Liberty (`.lib`) timing/power views and LEF physical layout data [@OpenROADDocs], Yosys maps logic gates, and Institute of Electrical and Electronics Engineers (IEEE) 1801 Unified Power Format (UPF) defines power domains. In an XR SoC design, an NPU or memory controller appears as a behavioral C++ model in Verilator, a Liberty timing view in synthesis, a UPF specification during power gating, and a LEF macro in physical layout. If an engineer updates behavioral register-transfer level (RTL) code while cached Liberty models or UPF power rules remain stale, downstream tools evaluate conflicting views, producing deceptively clean timing reports for physically nonfunctional silicon. Environments must bind compatible views to a single candidate identity or refuse execution.
 
-Parameter translations must be exact; wrappers must not round cache sizes, alter array dimensions, or substitute idle simulators to force completion. Syntax errors may be repaired if meaning is preserved; semantic mutations must be refused and returned to candidate generators.
+Parameter translations must be exact; wrappers must not round cache sizes, alter array dimensions, or substitute idle simulators to force completion. Syntax errors may be repaired if meaning is preserved, but semantic mutations must be refused and returned to candidate generators with explicit diagnostics.
 
 ::: {.callout-lighthouse title="One XR SoC request, several exact translations"}
 In our Lighthouse study, a 3\ MiB cache, $16 \times 16$ NPU array, and dual LPDDR5X candidate serializes into an analytical model input under declared process, voltage, and temperature (PVT) conditions. It simultaneously maps to gem5 and Verilator configurations linked to an NPU model, memory traffic generators, XR workload traces, and baseline software images. Wrappers may format syntax and file paths, but they cannot alter cache policies, systolic topologies, or memory arbitration. Mismatched translations are refused and logged.
@@ -115,11 +82,9 @@ In our Lighthouse study, a 3\ MiB cache, $16 \times 16$ NPU array, and dual LPDD
 
 ## Environment Lineage and Reproducibility
 
-*Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate.
+*Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate. Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints), ensuring that resets regenerate working state deterministically from pinned inputs.
 
-Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints). Resets regenerate working state from pinned inputs.
-
-Tools ingest lowered representations; high-level specifications lower into ASTs, control-data flow graphs (CDFGs), and gate netlists. Complete transformation records preserve:
+Tools ingest lowered representations; high-level specifications lower into ASTs, control-data flow graphs (CDFGs), and gate netlists. Complete transformation records preserve the following metadata across each lowering stage:
 
 - Parent candidate and request identifiers.
 - Transformation tool and compiler versions.
@@ -128,13 +93,11 @@ Tools ingest lowered representations; high-level specifications lower into ASTs,
 - Architectural preservation status.
 - Authorized downstream consumers.
 
-Evaluated artifacts must explicitly inherit identity from root intent (@fig-artifact-lineage).
+Evaluated software and hardware artifacts must explicitly inherit identity from root architectural intent (@fig-artifact-lineage).
 
 ![**Evaluated software and hardware artifacts retain explicit parent transformation lineage.** A single architectural intent branches into parallel software compilation and hardware elaboration paths. Each intermediate artifact (binary executable, Verilog RTL, gate netlist) inherits cryptographic parent hashes, tool versions, and operating conditions. Modifying any upstream input or configuration generates a distinct evaluation identity rather than overwriting existing records.](images/fig-artifact-lineage){#fig-artifact-lineage width="100%" fig-alt="A single Lighthouse intent branches into a software variant and a hardware variant. The software compiles into an identified binary, and the hardware elaborates into an identified RTL artifact. An evaluation instance binds both artifacts to the tool and version, workload, and operating conditions. Hashes and evaluation keys distinguish exact artifacts and paths but do not prove functional equivalence or reproducibility."}
 
-Evaluation instances bind compiled binaries and elaborated RTL netlists under immutable evaluation keys that incorporate tool versions, container digests, and workload snapshots. Because every transformation step records cryptographic parent–child links, updating an upstream compiler pass or regenerating an RTL module automatically generates a distinct evaluation identity rather than silently overwriting previous simulation records.
-
-Operating conditions (process, voltage, temperature, link order, environment variables) must be recorded alongside numeric returns [@Mytkowicz2009WrongData]. A timing slack of $-12\text{ ps}$ at a slow corner is not comparable to the same value at a typical corner; numbers are meaningful only within their recorded conditions.
+Evaluation instances bind compiled binaries and elaborated RTL netlists under immutable evaluation keys that incorporate tool versions, container digests, and workload snapshots. Because every transformation step records cryptographic parent–child links, updating an upstream compiler pass or regenerating an RTL module automatically generates a distinct evaluation identity rather than silently overwriting previous simulation records. Furthermore, operating conditions (process, voltage, temperature, link order, environment variables) must be recorded alongside numeric returns [@Mytkowicz2009WrongData]. A timing slack of $-12\text{ ps}$ at a slow corner is not comparable to the same value at a typical corner; numbers are meaningful only within their recorded conditions.
 
 ## Typed Contracts for Hardware Tool Interfaces
 
@@ -146,13 +109,7 @@ Tool interfaces enforce typed schemas across heterogeneous execution engines:
 - **Physical design flows:** Yosys, OpenROAD, Design Compiler, Innovus wrapped for synthesis and signoff timing slack [@Yosys; @AjayiEtAl2019OpenROAD; @OpenROADDocs].
 - **FPGA-accelerated platforms:** FireSim wrapped for mapped target execution on field-programmable gate arrays (FPGAs) [@KarandikarEtAl2018FireSim].
 
-These interfaces maintain identical contracts across open-source and commercial EDA engines. Open-source flows provide accessible calibration environments, while commercial tools slot into identical schemas under enterprise NDAs for foundry node signoff.
-
-Interfaces expose permitted parameter mutations while locking fixed attributes. Standardizing request identities, job statuses, error types, and cancellation semantics allows methods to target compatible tool paths without reimplementing scheduling logic.
-
-Structured hardware intermediate representations (e.g., Circuit IR Compilers and Tools (CIRCT) Multi-Level Intermediate Representation (MLIR) dialects [@CIRCT]) enable direct programmatic manipulation of ASTs and CDFGs rather than fragile source text edits.
-
-Tool wrappers are validated using unit fixtures (pairing typed requests with expected command lines and parsed outputs) and failure injection (verifying timeouts, process kills, and corrupted outputs) [@GunawiEtAl2011FATEDestini].
+These interfaces maintain identical contracts across open-source and commercial EDA engines. Open-source flows provide accessible calibration environments, while commercial tools slot into identical schemas under enterprise NDAs for foundry node signoff. Interfaces expose permitted parameter mutations while locking fixed attributes, standardizing request identities, job statuses, error types, and cancellation semantics across tool paths. Structured hardware intermediate representations (such as Circuit IR Compilers and Tools (CIRCT) Multi-Level Intermediate Representation (MLIR) dialects [@CIRCT]) enable direct programmatic manipulation of ASTs and CDFGs rather than fragile source text edits. Tool wrappers are validated using unit fixtures (pairing typed requests with expected command lines and parsed outputs) and failure injection (verifying timeouts, process kills, and corrupted outputs) [@GunawiEtAl2011FATEDestini].
 
 ## Managing Asynchronous Tool Execution
 
@@ -160,17 +117,13 @@ Hardware evaluation environments depart fundamentally from synchronous reinforce
 
 ### Asynchronous Scheduling and Idempotency
 
-Architecture toolchains operate asynchronously; cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers).
-
-Standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium]. Architecture workflows cannot be reduced to synchronous exchanges; execution runtimes must manage queues, dependency graphs, and persistent state.
+Architecture toolchains operate asynchronously; cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers). While standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium], architecture workflows cannot be reduced to synchronous exchanges. Execution runtimes must manage queues, dependency graphs, and persistent state across multi-step campaigns.
 
 Authorized requests instantiate single attempt records that track backend tool executions (@fig-runtime-object-state).
 
 ![**Single attempt records track zero, one, or multiple backend tool executions.** An attempt record anchors all backend tool executions to the authorized request, whether the request is refused prior to execution, creates a single tool job, or spawns multiple parallel execution segments. The record preserves returned raw artifacts, realized compute and license costs, and independent status attributes including scheduling state, terminal cause, parser health, and retry parent links.](images/fig-runtime-object-state){#fig-runtime-object-state width="100%" fig-alt="An authorized request creates one attempt. The attempt may be refused before a backend job exists, may create one job, or may create several jobs or execution segments. All paths feed one attempt record. The attempt record points separately to returned artifacts and realized cost. Scheduling state, terminal cause, artifact completeness, parser status, cancellation confirmation, and retry parent remain independent attributes."}
 
-Decoupling attempt identity from process completion ensures that interrupted or preempted cluster jobs remain fully auditable. When a Slurm or LSF scheduler evicts a running simulation, the harness records the partial wall-clock time and license-hours consumed, captures intermediate logs, and links subsequent retries to the original attempt without corrupting the candidate's core identity.
-
-Harnesses attach jobs to attempts upon submission. Schedulers use idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs].
+Decoupling attempt identity from process completion ensures that interrupted or preempted cluster jobs remain fully auditable. When a Slurm or LSF scheduler evicts a running simulation, the harness records the partial wall-clock time and license-hours consumed, captures intermediate logs, and links subsequent retries to the original attempt without corrupting the candidate's core identity. Harnesses attach jobs to attempts upon submission, using idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs].
 
 ### Fault Containment and Execution Quarantines
 
@@ -182,13 +135,9 @@ Execution boundaries enforce least privilege [@SaltzerSchroeder1975ProtectionInf
 **The application:** Execution wrappers and harnesses must enforce hermetic tool boundaries, explicit time and memory budgets, and complete lineage tracking, ensuring that infrastructure failures never pollute hardware evaluation records.
 :::
 
-Resource limits are enforced independently across model invocations, tool submissions, CPU/accelerator time, memory, storage, and license allocations. When shared compute clusters saturate, harnesses apply backpressure and queue limits.
+Resource limits are enforced independently across model invocations, tool submissions, CPU/accelerator time, memory, storage, and license allocations. When shared compute clusters saturate, harnesses apply backpressure and queue limits. Cancellations require explicit confirmation of descendant process termination and license release, while unconfirmed or timed-out executions are quarantined to prevent late writes from corrupting live project state.
 
-Cancellations require explicit confirmation of descendant process termination and license release. Unconfirmed or timed-out executions are quarantined to prevent late writes from corrupting live project state.
-
-`candidate_id` identifies the architectural design across tool paths; `configuration_id` identifies the tool-specific configuration record. Translating configurations produces distinct artifact hashes.
-
-Realized costs track compute, memory, storage, license-hours, and human engineering effort, recording failed and retried attempts alongside successful runs.
+Candidate identity (`candidate_id`) identifies the architectural design across tool paths, while configuration records (`configuration_id`) identify tool-specific parameters whose translation produces distinct artifact hashes. Realized costs track compute, memory, storage, license-hours, and human engineering effort, recording failed and retried attempts alongside successful runs to establish true experimental budgets.
 
 ::: {.callout-design-principle title="An unrecorded execution cannot justify an architectural claim"}
 **The principle:** Every tool attempt must produce an immutable execution record detailing what ran, what configuration was passed, how the environment behaved, and what compute was spent.
@@ -213,15 +162,11 @@ Execution status (what ran) must remain strictly separate from architectural eva
 | **Complete tool return** | Expected artifacts exist and parse cleanly (including limit violations). | Typed metrics, units, conditions, warnings, raw logs, cost, lineage. | Retain return for measurement qualification. |
 : **Execution status determines what ran, not what the architecture means.** Operational failures, partial returns, parser errors, and physical violations remain separate so recovery targets exact causes. {#tbl-failure-taxonomy}
 
-Formal verification tools report specialized outcomes (bounded proofs, counterexample traces, solver timeouts) [@Clarke2018ModelChecking]. Harnesses preserve exact formal statuses rather than reducing proofs to binary success flags.
-
-Signoff returns remain bound to tool versions, libraries, operating corners, and constraint waivers; they do not certify unmodeled physical properties. Wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, preventing novel tool warnings from being silently discarded [@Liu2024LostInTheMiddle].
+Formal verification tools report specialized outcomes (bounded proofs, counterexample traces, solver timeouts) [@Clarke2018ModelChecking], requiring harnesses to preserve exact formal statuses rather than reducing proofs to binary success flags. Signoff returns remain bound to tool versions, libraries, operating corners, and constraint waivers; they do not certify unmodeled physical properties. Wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, preventing novel tool warnings from being silently discarded [@Liu2024LostInTheMiddle].
 
 ## State Recovery, Caching, and Artifact Reuse
 
-Recovery mechanisms depend on failure classification; invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting.
-
-Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions. Context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
+Recovery mechanisms depend on failure classification; invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
 
 ::: {.callout-failure-mode title="The stale library view"}
 **The trap.** A team updates RTL and timing constraints for an accelerated clock, reruns static timing analysis, and receives a clean signoff report for a design that fails bus timing.
@@ -252,9 +197,7 @@ Execution records capture:
 - **Lineage and retries:** Parent inputs, transformations, retry/reset parent links.
 - **Realized cost:** Consumed wall-clock time, CPU/accelerator hours, peak memory, storage, license-hours, and billable amounts.
 
-ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay submits identical retained requests and recorded states; it does not guarantee identical realized execution if unpinned host dependencies drift [@JimenezEtAl2017PopperConvention].
-
-Transformation records bridge content hashes to architectural semantics, verifying whether lowered representations preserve original design intent.
+ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay submits identical retained requests and recorded states; it does not guarantee identical realized execution if unpinned host dependencies drift [@JimenezEtAl2017PopperConvention]. Transformation records bridge content hashes to architectural semantics, verifying whether lowered representations preserve original design intent.
 
 ## Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
 
@@ -286,9 +229,7 @@ Chipyard illustrates shared parameter lineage fanning out into distinct tool pat
 
 ![**Unified design configurations anchor multi-tool evaluation flows.** In this architectural flow based on the Chipyard SoC framework [@chipyard], a single root configuration lowers through Chisel generation and FIRRTL transformations before fanning out into specialized evaluation toolchains: software RTL simulation (Verilator/VCS), very-large-scale integration (VLSI) physical design (OpenROAD), and FPGA-accelerated simulation (FireSim). Shared configuration lineage preserves parameter traceability across fidelity tiers without conflating distinct physical returns.](images/fig-chipyard-framework){#fig-chipyard-framework width="100%" fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
 
-While a unified configuration ensures that RTL generators, physical synthesis scripts, and FPGA emulators evaluate identical architectural parameters, the resulting metrics operate in fundamentally different semantic regimes. Cycle counts from an unannotated Verilator testbench cannot substitute for post-route signoff timing slack from OpenROAD, nor can FPGA wall-clock rates be treated as ASIC clock frequencies.
-
-Evaluation environments establish operational trade-offs across throughput, setup cost, and timing abstraction (@fig-ch06-simulation-spectrum).
+While a unified configuration ensures that RTL generators, physical synthesis scripts, and FPGA emulators evaluate identical architectural parameters, the resulting metrics operate in fundamentally different semantic regimes. Cycle counts from an unannotated Verilator testbench cannot substitute for post-route signoff timing slack from OpenROAD, nor can FPGA wall-clock rates be treated as ASIC clock frequencies. Evaluation environments establish operational trade-offs across throughput, setup cost, and timing abstraction (@fig-ch06-simulation-spectrum).
 
 ```{python}
 #| label: fig-ch06-simulation-spectrum
@@ -399,15 +340,11 @@ ax.spines["left"].set_color(COLORS["ink"])
 ax.spines["bottom"].set_color(COLORS["ink"])
 ```
 
-No single platform simultaneously optimizes throughput, setup latency, and property coverage (@fig-ch06-simulation-spectrum); requests must route to the tool capable of observing the specific property within budget.
-
-Frameworks such as ArchGym and CHIA demonstrate uniform interfaces for architecture exploration across simulators and synthesis tools [@KrishnanEtAl2023ArchGym; @CuiEtAl2026CHIA]. Workflow engines (Nextflow, Snakemake) separate dependency scheduling from study methodology [@DiTommasoEtAl2017Nextflow; @KosterEtAl2012Snakemake]. Inexpensive prerequisite checks (syntax linting, interface verification, formal equivalence) must prune invalid candidates before dispatching heavy synthesis or simulation stages.
+No single platform simultaneously optimizes throughput, setup latency, and property coverage (@fig-ch06-simulation-spectrum); requests must route to the tool capable of observing the specific property within budget. Frameworks such as ArchGym and CHIA demonstrate uniform interfaces for architecture exploration across simulators and synthesis tools [@KrishnanEtAl2023ArchGym; @CuiEtAl2026CHIA]. Workflow engines (Nextflow, Snakemake) separate dependency scheduling from study methodology [@DiTommasoEtAl2017Nextflow; @KosterEtAl2012Snakemake], while inexpensive prerequisite checks (syntax linting, interface verification, formal equivalence) prune invalid candidates before dispatching heavy synthesis or simulation stages.
 
 ## Mobile XR Subsystem Evaluation Environment {#sec-mobile-xr-evaluation}
 
-In our mobile XR SoC co-design study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\text{ MiB}$) under a 3\ W thermal design power (TDP) envelope on a TSMC 3\ nm process.
-
-A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
+In our mobile XR SoC co-design study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\text{ MiB}$) under a 3\ W thermal design power (TDP) envelope on a TSMC 3\ nm process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
 
 | **Run category** | **Prospective XR SoC co-design study run specification** |
 | --- | --- |
@@ -421,9 +358,7 @@ A prospective run specification formalizes runtime governance prior to tool invo
 | **Decisions left outside** | Environment does not decide measurement validity, comparative superiority, or candidate advancement. |
 : **Prospective run specifications define runtime governance before execution.** Request schemas, translations, state pinning, failure recovery, and budgets are fixed prior to invocation. {#tbl-environment-contract}
 
-To show how the specification would govern a run, consider an illustrative walk-through with constructed values; no run has occurred (@sec-running-the-loop records the study's actual status). The evaluation would begin with three analytical screening runs: a 2\ MiB baseline (say $1.2\text{ mm}^2$, 2.1\ ns), 3\ MiB ($1.4\text{ mm}^2$, 2.4\ ns), and 4\ MiB ($1.7\text{ mm}^2$, 2.8\ ns). A 4\ MiB candidate that violates the area and latency thresholds would suppress its dependent cycle-level dispatch.
-
-The surviving candidates (2\ MiB and 3\ MiB) would then enter cycle-level simulation within the four-attempt budget. A transient setup failure on the 3\ MiB run would trigger a clean reset and retry, followed by the planned repeat, consuming the remaining budget. Downstream verification in @sec-feedback-verification-trust would qualify whether such returns support advancing the candidate.
+To show how the specification would govern a run, consider an illustrative walk-through with constructed values; no run has occurred (@sec-running-the-loop records the study's actual status). The evaluation would begin with three analytical screening runs: a 2\ MiB baseline (say $1.2\text{ mm}^2$, 2.1\ ns), 3\ MiB ($1.4\text{ mm}^2$, 2.4\ ns), and 4\ MiB ($1.7\text{ mm}^2$, 2.8\ ns). A 4\ MiB candidate that violates the area and latency thresholds would suppress its dependent cycle-level dispatch. The surviving candidates (2\ MiB and 3\ MiB) would then enter cycle-level simulation within the four-attempt budget. A transient setup failure on the 3\ MiB run would trigger a clean reset and retry, followed by the planned repeat, consuming the remaining budget. Downstream verification in @sec-feedback-verification-trust would qualify whether such returns support advancing the candidate.
 
 ## Common Pitfalls
 
@@ -451,7 +386,7 @@ Bridging automated exploration algorithms to industrial EDA toolchains and emula
 
 ## Summary
 
-Tool-connected execution environments provide the structural boundary between automated exploration algorithms and raw CAD toolchains. Tools perform transformations; wrappers validate and parse individual tools; harnesses coordinate multi-tool workflows and record costs; and environments bind the observable state, permitted actions, and return schemas.
+Tool-connected execution environments provide the structural boundary between automated exploration algorithms and raw CAD toolchains. Tools perform transformations; wrappers validate and parse individual tools; harnesses coordinate multi-tool workflows and record costs; and environments bind the observable state, permitted actions, and return schemas. Five core takeaways govern execution environments and tool isolation:
 
 ::: {.callout-takeaways title="Hermetic execution and its records"}
 - **Hermetic tool wrappers and contracts.** Encapsulate simulation and EDA tools within typed wrappers that validate inputs, enforce exact parameter translations, and preserve raw transcripts.
