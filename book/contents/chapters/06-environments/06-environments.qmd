@@ -62,7 +62,7 @@ Robust hardware evaluation environments enforce five infrastructure rules:
 4. **Sandboxed execution and Tcl shell-escape defenses:** EDA toolchains (such as Vivado, OpenROAD, and Design Compiler) provide interactive Tcl script environments with full shell access (`exec`, `system`). When an automated generator or large language model (LLM) produces synthetic synthesis scripts or floorplan constraints, untrusted Tcl commands can inadvertently overwrite project root directories or execute unauthorized network requests. Harnesses execute EDA tools strictly inside sandboxed Open Container Initiative (OCI) containers with restricted user privileges, read-only PDK mounts, and seccomp filters blocking arbitrary system calls.
 5. **High-throughput filesystem I/O and checkpoint isolation:** Physical design and signoff tools generate multi-gigabyte intermediate database checkpoints (such as Synopsys NDM, Cadence DEF, Standard Parasitic Exchange Format [SPEF], and GDSII streams). Launching parallel exploration agents against shared network-attached storage (NFS or Lustre) quickly saturates storage bandwidth, stalling compute clusters. Harnesses isolate active tool runs to local NVMe scratch storage, storing only lightweight parasitic diffs and final signoff reports in shared persistent volumes while pruning unpromoted layout checkpoints.
 
-Tool wrappers separate raw execution state from semantic interpretation by enforcing typed input contracts and structured output parsing (@fig-environment-tool-interface).
+While these five containment rules secure the physical host and network boundaries, automated search loops also require an operational contract governing data exchange across the container perimeter. Tool wrappers establish this interface by separating raw execution mechanics from semantic interpretation through typed input validation and structured output parsing (@fig-environment-tool-interface).
 
 ![**Tool wrappers separate raw execution state from semantic result interpretation.** The wrapper validates and translates incoming typed requests before invoking backend tools; the isolated tool executes declared operations; the parser extracts structured attributes while retaining unclassified residual output; and the harness binds runtime outcomes, parse statuses, compute costs, and lineage into immutable execution records.](images/fig-environment-tool-interface){#fig-environment-tool-interface width="100%" fig-alt="An architecture question and workload, action schema, constraints, and metric definitions enter the tool-connected environment as a typed request. The wrapper validates and translates the request before calling the tool. An invalid request goes directly to the harness record. The tool separately produces raw returned material and a runtime outcome that can be failed, partial, or complete. The parser turns retained raw material into structured attributes, unclassified residual output, and a parse status. The harness records request and attempt identity, conditions, runtime outcome, artifacts, parse status, cost, and lineage."}
 
@@ -82,7 +82,7 @@ In our Lighthouse study, a candidate configured with a 3\ MiB cache, an NPU arra
 
 ## Environment Lineage and Reproducibility
 
-*Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate. Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints), ensuring that resets regenerate working state deterministically from pinned inputs.
+Because hardware evaluation binds multiple lowered representations (behavioral C++, Liberty timing views, UPF power intent, and LEF layout macros) to a single architectural candidate, any modification to an upstream input ripples through downstream transformations. Tracking these dependencies requires an explicit, immutable lineage model. *Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate. Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints), ensuring that resets regenerate working state deterministically from pinned inputs.
 
 Tools ingest lowered representations; high-level specifications lower into ASTs, control-data flow graphs (CDFGs), and gate netlists. Complete transformation records preserve the following metadata across each lowering stage:
 
@@ -101,7 +101,7 @@ Evaluation instances bind compiled binaries and elaborated RTL netlists under im
 
 ## Typed Contracts for Hardware Tool Interfaces
 
-Tool interfaces enforce typed schemas across heterogeneous execution engines:
+Recording immutable evaluation keys and operating conditions guarantees reproducibility only if the underlying tools are invoked and parsed under strict, typed semantics. Tool interfaces operationalize these lineage requirements by enforcing typed schemas across heterogeneous execution engines:
 
 - **Architectural simulators:** gem5 wrapped for instructions per cycle (IPC) and memory contention metrics [@BinkertEtAl2011Gem5].
 - **RTL simulators / testbenches:** Verilator and cocotb wrapped for cycle execution and waveform traces [@Veripool2026Verilator].
@@ -127,7 +127,7 @@ Decoupling attempt identity from process completion ensures that interrupted or 
 
 ### Fault Containment and Execution Quarantines
 
-Execution boundaries enforce least privilege [@SaltzerSchroeder1975ProtectionInformation]. Wrappers receive only designated filesystem paths, network routes, credentials, and license features. Generated scripts and RTL are treated as untrusted until validated in sandboxed working directories.
+When asynchronous jobs execute across distributed compute nodes over hours or days, background evictions, host crashes, and unconfirmed terminations will inevitably occur. The orchestrator must therefore combine idempotent scheduling with strict fault containment and quarantine mechanisms to isolate failures and protect shared cluster state. Execution boundaries enforce least privilege [@SaltzerSchroeder1975ProtectionInformation]. Wrappers receive only designated filesystem paths, network routes, credentials, and license features. Generated scripts and RTL are treated as untrusted until validated in sandboxed working directories.
 
 ::: {.callout-design-principle title="Automate tool actions only inside a recoverable boundary"}
 **The principle:** Autonomous tools and agentic scripts must execute generation, simulation, and parsing actions strictly within sandboxed, resource-bounded environments.
@@ -209,7 +209,7 @@ A complementary operational challenge that execution harnesses must govern is st
 
 ## Orchestrating Multi-Tool Toolchains
 
-Hardware evaluation requires balancing evaluation throughput and physical fidelity across a multi-fidelity spectrum (@tbl-multi-fidelity-spectrum).
+Because full-system physical signoff is too computationally expensive to run across hundreds of statistical seeds or amidst rapid daily mainline churn, practical design systems compose tools into hierarchical pipelines. Exploring large candidate spaces economically requires balancing evaluation throughput against physical fidelity across a multi-fidelity spectrum (@tbl-multi-fidelity-spectrum).
 
 | **Tool class** | **Representative use** | **What it models or checks** | **Preserved environment state** |
 | --- | --- | --- | --- |

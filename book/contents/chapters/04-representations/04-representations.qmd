@@ -362,7 +362,7 @@ Timing or power failures constrain candidates when identical conditions recur, w
 
 ## Extracting Architectural Knowledge from Raw Data
 
-Raw tool returns do not constitute project knowledge or active state. *Raw data* records what a tool returned under historical conditions; *durable knowledge* distills reusable design principles, verified specifications, and architectural rationale; and *live project state* defines authoritative hardware, software, workload, and constraint parameters governing current work. These components change at different rates and originate from distinct sources (@tbl-knowledge-objects). Foundation models supply prior knowledge but cannot serve as the authoritative source of record for current project state.
+Collecting and curating multi-fidelity tool runs, execution traces, and negative outcomes yields a rich repository of historical measurements. However, raw tool returns do not constitute project knowledge or active state on their own. *Raw data* records what a tool returned under historical conditions; *durable knowledge* distills reusable design principles, verified specifications, and architectural rationale; and *live project state* defines authoritative hardware, software, workload, and constraint parameters governing current work. These components change at different rates and originate from distinct sources (@tbl-knowledge-objects). Foundation models supply prior knowledge but cannot serve as the authoritative source of record for current project state.
 
 | **Object** | **Preserved state** | **Responsible source and freshness rule** |
 | --- | --- | --- |
@@ -383,7 +383,7 @@ Explicit regeneration and hash checks detect state drift before proposals reach 
 
 ## Machine-Usable Hardware Representations {#sec-hardware-representation-formats}
 
-Passing an architectural design into machine learning algorithms or optimization loops requires selecting a structural feature representation. The encodings chosen (flat tokens, ASTs, CDFGs, layout matrices, and learned embeddings) dictate which design variations are expressible, which structural dependencies survive, and which candidates downstream methods consider similar.
+Once authoritative project state is established, that state must be formatted so that automated methods (learned predictors, generative models, and search optimizers) can ingest and manipulate it without violating hardware invariants. Passing an architectural design into machine learning algorithms or optimization loops requires selecting a structural feature representation. The encodings chosen (flat tokens, ASTs, CDFGs, layout matrices, and learned embeddings) dictate which design variations are expressible, which structural dependencies survive, and which candidates downstream methods consider similar.
 
 The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-integration) impose fundamentally different representation requirements:
 
@@ -391,7 +391,7 @@ The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-in
 - **Layer 2 (AI-Driven Subsystem Optimization):** Operates on domain-specific structured state vectors, cost matrices, and localized circuit graphs (such as and-inverter graphs, macro-placement grid canvases, and DRAM access histograms). These representations enable deep local search (e.g., reinforcement-learning floorplanning) within a fixed container, but remain specialized to one subsystem and cannot represent cross-boundary trade-offs.
 - **Layer 3 (AI-Native System Design):** Requires unified multi-level intermediate representations (such as Circuit IR Compilers and Tools (CIRCT) and MLIR dialect lowering) and coupled world-model state vectors $s = \langle s_{\text{design}}, s_{\text{env}} \rangle$ that preserve syntax, typing, control-flow semantics, and physical constraints across the entire hardware–software vertical stack.
 
-Parameter schemas enumerate legal values; ASTs and CDFGs preserve structural and dataflow relationships obscured by token sequences. Clang/LLVM ASTs expose software control flow; MLIR dialects and Spatial IR capture tensor dependencies, loop tilings, and scratchpad allocations; Triton and CUDA PTX ASTs represent thread-block tiling and Tensor Core scheduling. Typed intermediate representations reject malformed constructions before execution.
+Parameter schemas enumerate legal configurations directly, while ASTs, CDFGs, and MLIR spatial dialects preserve control flow, tensor dependencies, and memory-hierarchy staging that flat token sequences obscure. Typed intermediate representations reject malformed structural transformations and illegal operand types before tool execution.
 
 Representation structure also governs turnaround. Passes over an unpartitioned, flat syntax tree must reinspect the whole design on every change, so high-level synthesis (HLS) and compiler time grow faster than linearly with design size, whereas progressive multi-level IRs in CIRCT/MLIR keep most analyses local to the dialect and module being lowered. Turnaround must be measured on the chosen toolchain rather than assumed from the representation class. Modern representation stacks deploy four specialized representations to bridge the hardware semantic gap:
 
@@ -432,6 +432,8 @@ Embeddings accelerate similarity queries and continuous optimization, but remain
 
 ### World-Model State Representations
 
+Continuous latent embeddings compress static code, circuit netlists, and dynamic traces into dense vectors ($\mathbf{z}_{\text{code}}, \mathbf{z}_{\text{graph}}, \mathbf{z}_{\text{trace}}$). However, architectural exploration is rarely an isolated one-shot similarity lookup; multi-step optimization, sequential placement, and compiler lowering require simulating how the entire system state evolves over consecutive design actions. To enable multi-step planning without drifting into physically unconstructible or unsimulated states, continuous embeddings and typed intermediate representations must be composed into a structured state space.
+
 Before automated optimizers or reinforcement learning agents execute multi-step planning rollouts, representation pipelines must define a formal state space. Architecture *world models* serve as learned surrogate transition predictors simulating environmental responses and structural consequences under proposed actions (@sec-methods-generation-prediction-optimization). The world-model state vector $s$ is defined as a coupled tuple:
 
 $$s = \left\langle s_{\text{design}}, s_{\text{env}} \right\rangle$$
@@ -444,6 +446,8 @@ When an agent executes an action $a$ (such as modifying cache capacity, adding a
 - **State lineage and invariant preservation:** Intermediate states $s'$ retain immutable links to parent design revisions, PDK corner rules, and verification constraints (@tbl-represented-problem).
 - **Multi-fidelity state linkage:** State representations link analytical bounds, cycle-level traces, and implementation returns without treating them as interchangeable observations. Exploratory rollouts remain bounded by model support and must return to explicit state and verified checks before affecting project records.
 - **Round-trip legalization contracts:** Continuous latent updates must map back to explicit parameter schemas and native netlists, passing syntax, typing, and EDA checks before updating authoritative project state.
+
+Hardware is inherently concurrent and relational: netlists function as graphs, memory hierarchies form topologies, and floorplans add spatial coordinates. Graph encodings preserve fan-in, fan-out, connectivity, and structural locality directly, as demonstrated in DeepGate2's learned representations over AIGs [@ShiEtAl2023DeepGate2]. Similarly, learned macro placement represents chips via connectivity graphs and spatial grid canvases [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement]. Graph and canvas structures remain derived views of native placement state rather than independent sources of truth.
 
 Native sources map to structured and learned representations that enable specific analytical capabilities while keeping ground-truth artifacts linked (@tbl-source-representation-capability).
 
@@ -468,7 +472,7 @@ Proposed changes based on derived views must write back through authoritative da
 **The lesson.** Textual HDL syntax checks cannot replace explicit multi-domain representations. Illegal voltage crossings require mask respins rather than software patches; representations must carry power-domain relationships and voltage-crossing contracts in mechanically verifiable forms.
 :::
 
-Hardware is concurrent and relational: netlists function as graphs, memory hierarchies form topologies, and floorplans add spatial coordinates. Graph encodings preserve fan-in, fan-out, connectivity, and structural locality directly, as demonstrated in DeepGate2's learned representations over AIGs [@ShiEtAl2023DeepGate2]. Similarly, learned macro placement represents chips via connectivity graphs and spatial grid canvases [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement]. Graph and canvas structures remain derived views of native placement state rather than independent sources of truth.
+Because no single format captures every semantic, dynamic, and physical property simultaneously, robust AI-native design systems must assemble discrete formats into linked representation pipelines.
 
 ## Representation Pipelines and Data Handoffs
 
