@@ -15,8 +15,6 @@ Image-backed figures currently used by the chapter:
   conditions that produced it.
 - `fig-architecture-data-scarcity`: domain corpus volume and data scarcity spectrum
   across five engineering tiers.
-- `fig-ch04-ast-hls-latency`: HLS synthesis latency scaling across intermediate
-  representation node count.
 
 Moved to Chapter 5 with their owning method material:
 
