@@ -4973,6 +4973,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"field-programmable gate array",
         False,
     ),
+    "GDDR5": (
+        "Graphics Double Data Rate 5",
+        True,
+        "a",
+        "hardware",
+        "A high-bandwidth synchronous graphics random-access memory interface standard tailored for parallel data-intensive computing.",
+        r"Graphics\ Double\ Data\ Rate\ 5",
+        False,
+    ),
     "GEMM": (
         "general matrix multiply",
         False,
@@ -4990,6 +4999,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         "A massively parallel processor optimized for high-throughput rasterization, linear algebra, and tensor operations.",
         r"graphics processing unit",
         True,
+    ),
+    "HBM": (
+        "High Bandwidth Memory",
+        True,
+        "an",
+        "hardware",
+        "A high-speed 3D-stacked DRAM memory architecture providing massive memory bandwidth through wide through-silicon via (TSV) interconnects.",
+        r"High\ Bandwidth\ Memory",
+        False,
     ),
     "HDL": (
         "hardware description language",
