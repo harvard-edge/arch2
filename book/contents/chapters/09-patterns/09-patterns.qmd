@@ -348,7 +348,7 @@ Offload granularity and operational intensity bound different aspects of perform
 
 The analytical LogCA bounds establish that hardware acceleration succeeds only when operation granularity $g$ exceeds the break-even threshold $g^*$ and operational intensity is sustained. In a complete system, these mathematical boundaries are not governed by hardware netlists in isolation; they are dictated by the compiler lowering and software runtime pipeline (@fig-codegen-narrow-waist). The compiler controls whether operations are fused into sufficiently large offload payloads $g$, whether intermediate tensor allocations in off-chip memory are eliminated to reduce transfer cost $d$, and whether loop schedules exploit target vector registers without pipeline stalls. High-level domain-specific abstract syntax trees (ASTs, such as Python or Triton DSLs) descend through mid-level control-data flow graphs (CDFGs) (MLIR dialects) and LLVM IR down to where workload intent meets architectural mechanisms (CPU ISA extensions or NPU systolic dataflows) and silicon constraints. Lowering is the primary interface where hardware constraints and workload requirements must be jointly qualified for performance, correctness, portability, and maintainability.
 
-![**Executable target software paths connect developer intent to verification checks.** High-level domain-specific ASTs (Python, Triton DSLs) lower through mid-level CDFGs (MLIR dialects) and LLVM IR at the compiler narrow waist, where workload intent, architectural mechanisms (CPU ISA extensions, NPU dataflows), and silicon constraints converge. Lowered machine code and runtimes are subsequently evaluated against verification checks for correctness, performance, portability, and maintainability.](images/fig-codegen-narrow-waist){#fig-codegen-narrow-waist width="100%" fig-alt="Executable target software path showing programming models, compiler representations, libraries, runtimes, and generated code connecting hardware constraints to correctness, performance, portability, and maintainability checks."}
+![**Executable target software paths connect developer intent to verification checks.** High-level domain-specific ASTs (Python, Triton DSLs) lower through mid-level CDFGs (MLIR dialects) and LLVM IR at the compiler narrow waist, where workload intent, architectural mechanisms (CPU ISA extensions, NPU dataflows), and silicon constraints converge. Lowered machine code and runtimes are subsequently evaluated against verification checks for correctness, performance, portability, and maintainability.](images/fig-codegen-narrow-waist){#fig-codegen-narrow-waist width="80%" fig-alt="Executable target software path showing programming models, compiler representations, libraries, runtimes, and generated code connecting hardware constraints to correctness, performance, portability, and maintainability checks."}
 
 The compiler narrow waist allows multiple programming models and hardware targets to converge on shared intermediate representations where correctness, performance, portability, and maintainability can be qualified once. Establishing an intermediate lowering bridge between domain-specific tensor languages and low-level target machine code ensures that high-level algorithmic expressiveness does not sacrifice architectural control. Lowering a high-level Triton block operation (@lst-triton-rvv-lowering) into RISC-V Vector (RVV 1.0) assembly primitives (@lst-rvv-lowering-asm) illustrates this end-to-end path in practice.
 
@@ -359,13 +359,11 @@ import triton.language as tl
 @triton.jit
 def add_kernel(x_ptr, y_ptr, z_ptr, N, BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
-    block_start = pid * BLOCK_SIZE
-    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offsets < N
     x = tl.load(x_ptr + offsets, mask=mask)
     y = tl.load(y_ptr + offsets, mask=mask)
-    z = x + y
-    tl.store(z_ptr + offsets, z, mask=mask)
+    tl.store(z_ptr + offsets, x + y, mask=mask)
 ```
 
 During compilation, Triton's MLIR pipeline passes the block representation from ASTs through dialect-specific CDFGs down to LLVM IR, lowering Triton's single-program, multiple-data (SPMD) 1D block iterations (`pid * BLOCK_SIZE + tl.arange(...)`) into dynamically strip-mined vector loops (@lst-rvv-lowering-asm). Rather than hardcoding fixed 128-bit or 512-bit register widths, the generated loop uses `vsetvli` to query the runtime hardware vector length (`VLEN`), issuing vector loads (`vle32.v`), vector arithmetic (`vfadd.vv`), and stores (`vse32.v`) across chunks of elements until array exhaustion:
