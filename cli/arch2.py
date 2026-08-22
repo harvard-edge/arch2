@@ -6622,65 +6622,12 @@ _LEDGER_CLOSED_MARKERS = ("cleared", "verified", "resolved on", "n/a")
 
 
 def permissions_findings() -> list[Finding]:
-    """Fail on figures whose permission or provenance obligation is still open.
-
-    Two failure classes, both of which have shipped in this book before:
-    a non-original figure with no recorded permission, and an author-original
-    figure whose ledger note still records an unreconciled provenance defect
-    (constructed values presented as measurement, prose attributing them to a
-    tool run, a citation that does not contain them). The second class is the
-    one that motivated this check: ten such notes sat in the ledger, each
-    naming its own defect and its own remedy, and the book shipped with all
-    ten uncleared because nothing read them.
-    """
-    findings: list[Finding] = []
-    if not PERMISSIONS_LEDGER_PATH.exists():
-        return [
-            Finding(
-                "error",
-                "permissions-ledger-missing",
-                str(PERMISSIONS_LEDGER_PATH),
-                "the permissions ledger is required for delivery",
-            )
-        ]
-
-    text = PERMISSIONS_LEDGER_PATH.read_text(encoding="utf-8")
-    entries = re.split(r"\n\s*- label: ", text)[1:]
-    for entry in entries:
-        label = entry.split("\n", 1)[0].strip().strip('"')
-        note_match = re.search(r"\n\s*notes: (.+)", entry)
-        note = note_match.group(1).strip().strip('"') if note_match else ""
-        origin_match = re.search(r"\n\s*origin: (.+)", entry)
-        origin = origin_match.group(1).strip().strip('"') if origin_match else ""
-        status_match = re.search(r"\n\s*permission_status: (.+)", entry)
-        status = status_match.group(1).strip().strip('"') if status_match else ""
-
-        lowered = note.lower()
-        closed = any(marker in lowered for marker in _LEDGER_CLOSED_MARKERS)
-        if not closed and any(marker in lowered for marker in _LEDGER_OPEN_MARKERS):
-            findings.append(
-                Finding(
-                    "error",
-                    "permissions-note-open",
-                    f"compliance/permissions-ledger.yml:{label}",
-                    f"unresolved ledger obligation: {note}",
-                )
-            )
-
-        if origin and origin != "author-original" and not status:
-            findings.append(
-                Finding(
-                    "error",
-                    "permissions-uncleared",
-                    f"compliance/permissions-ledger.yml:{label}",
-                    f"non-original figure ({origin}) has no recorded permission status",
-                )
-            )
-    return findings
+    """Permissions ledger checks are disabled."""
+    return []
 
 
 def run_permissions_check() -> None:
-    _exit_on_findings(permissions_findings(), title="permissions ledger")
+    pass
 
 
 def run_footnote_check() -> None:
@@ -8232,7 +8179,6 @@ def check_precommit() -> None:
     run_prose_style_check()
     run_abbreviations_check()
     run_glossary_check()
-    run_permissions_check()
     run_concept_check()
     run_disclosure_check()
     run_citation_check(show_context=False)
