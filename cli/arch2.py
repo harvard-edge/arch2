@@ -6598,38 +6598,6 @@ def run_abbreviations_check(paths: list[Path] | None = None) -> None:
     _exit_on_findings(abbreviations_findings(paths), title="abbreviations & acronyms")
 
 
-PERMISSIONS_LEDGER_PATH = ROOT / "compliance" / "permissions-ledger.yml"
-
-# Phrases that mark a ledger note as an unresolved obligation rather than a
-# record of what was done. Kept narrow on purpose: the note field is also used
-# to record completed reconciliations, and flagging those would train people to
-# ignore the check.
-_LEDGER_OPEN_MARKERS = (
-    "before delivery",
-    "before publication",
-    "before release",
-    "before sign-off",
-    "before signoff",
-    "todo",
-    "tbd",
-)
-
-# A note that records a completed reconciliation is not an open obligation, even
-# when it describes the defect it closed. Without this, a note saying a figure's
-# unresolved provenance WAS resolved would trip the check that exists to find
-# unresolved provenance.
-_LEDGER_CLOSED_MARKERS = ("cleared", "verified", "resolved on", "n/a")
-
-
-def permissions_findings() -> list[Finding]:
-    """Permissions ledger checks are disabled."""
-    return []
-
-
-def run_permissions_check() -> None:
-    pass
-
-
 def run_footnote_check() -> None:
     findings = footnote_in_table_findings()
     findings.extend(footnote_source_findings())
@@ -7913,12 +7881,6 @@ def migrate_card(
 def validate_manifest() -> None:
     """Check that the Quarto book manifest owns every intended QMD file."""
     run_manifest_check()
-
-
-@validate_app.command("permissions")
-def validate_permissions() -> None:
-    """Check that every figure's permission and provenance obligation is closed."""
-    run_permissions_check()
 
 
 @validate_app.command("footnotes")
