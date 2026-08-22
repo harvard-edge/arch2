@@ -346,6 +346,86 @@ Offload granularity and operational intensity bound different aspects of perform
 
 ### Executable Software Path
 
+The physical reality of hardware specialization is that microarchitectural innovations remain inaccessible without software enablement. When architects introduce specialized hardware primitives (such as warp-level `wmma`, warp-group `wgmma`, tensor memory accelerators, and fifth-generation tensor cores `tcgen05`), the burden shifts to low-level software libraries. In vendor template libraries such as NVIDIA CUTLASS, architecture-specific code exploded by $29\times$ (from $13\text{K}$ to $372\text{K}$ lines of code) between 2019 and 2025, expanding from 23% to 58% of the entire library codebase (@fig-ch09-cutlass-software-wall). This exponential maintenance tax illustrates why manual template programming cannot scale across rapid hardware iterations, creating a *software porting wall* that isolates custom hardware from production software stacks.
+
+```{python}
+#| label: fig-ch09-cutlass-software-wall
+#| fig-cap: "**The software porting wall in hardware specialization.** NVIDIA CUTLASS library include line counts across releases (2019–2025). As basic tensor operations grow in microarchitectural complexity (from warp-level `wmma` to warp-group `wgmma` and Blackwell `tcgen05`), architecture-specific template code explodes by $29\\times$ (from $13\\text{K}$ to $372\\text{K}$ lines of code), expanding from 23% to 58% of the entire library. This exponential maintenance tax illustrates why manual template libraries fail to scale across emerging hardware and why compiler narrow waists are essential."
+#| fig-alt: "Stacked bar chart of CUTLASS line-of-code growth from v2.0 in 2019 to v4.0 in 2025. Shared infrastructure grows from 40K to 266K lines, while architecture-specific code expands 29-fold from 13K to 372K lines, reaching 58% of total code."
+#| fig-width: 6.4
+#| fig-height: 3.4
+#| echo: false
+
+import matplotlib.pyplot as plt
+import numpy as np
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+versions = ["v2.0\n(2019)", "v2.5\n(2021)", "v2.11\n(2022)", "v3.0\n(2023)", "v3.5\n(2024)", "v4.0\n(2025)"]
+shared_loc = [40, 104, 188, 208, 241, 266]
+arch_loc = [13, 31, 33, 60, 94, 372]
+totals = [s + a for s, a in zip(shared_loc, arch_loc)]
+
+fig, ax = plt.subplots(figsize=(6.4, 3.4))
+fig.subplots_adjust(left=0.12, right=0.96, top=0.88, bottom=0.18)
+
+x = np.arange(len(versions))
+width = 0.52
+
+p1 = ax.bar(x, shared_loc, width, label="Shared Infrastructure", color="#CBD5E1", edgecolor="#94A3B8", linewidth=0.8, zorder=3)
+p2 = ax.bar(x, arch_loc, width, bottom=shared_loc, label="Arch-Specific Code", color="#2D7C5D", edgecolor="#1B4D3E", linewidth=0.8, zorder=3)
+
+for i, (s, a, tot) in enumerate(zip(shared_loc, arch_loc, totals)):
+    if i == 5:
+        ax.text(i, tot + 14, "372K (58%)\n+Blackwell", ha="center", va="bottom", fontsize=6.2, fontweight="bold", color="#1B4D3E")
+    elif i == 3:
+        ax.text(i, tot + 10, "60K (22%)\n+Hopper", ha="center", va="bottom", fontsize=5.8, fontweight="bold", color="#1B4D3E")
+    else:
+        ax.text(i, tot + 8, f"{a}K ({int(round(a/tot*100))}%)", ha="center", va="bottom", fontsize=5.8, fontweight="bold", color="#1B4D3E")
+
+    if s >= 100:
+        ax.text(i, s / 2, f"{s}K", ha="center", va="center", fontsize=5.8, color="#334155")
+
+ax.annotate(
+    "Arch-specific: 29x growth\n(13K -> 372K LOC)",
+    xy=(4.8, 480), xytext=(2.2, 500),
+    fontsize=6.5, fontweight="bold", color="#1B4D3E",
+    bbox=dict(boxstyle="round,pad=0.4", facecolor="#EDF7F1", edgecolor="#2D7C5D", linewidth=1.0),
+    arrowprops=dict(arrowstyle="->", color="#2D7C5D", lw=1.1, connectionstyle="arc3,rad=-0.15"),
+    zorder=5
+)
+
+ax.set_ylabel("CUTLASS include/ LOC (thousands)", fontsize=6.8, color=COLORS["ink"])
+ax.set_xticks(x)
+ax.set_xticklabels(versions, fontsize=6.2)
+ax.set_ylim(0, 750)
+ax.set_yticks(range(0, 800, 100))
+ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.2)
+ax.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+legend = ax.legend(
+    loc="upper left",
+    fontsize=6.2,
+    frameon=True,
+    facecolor="white",
+    edgecolor="#E2E8F0",
+    framealpha=0.95,
+    borderpad=0.25,
+    labelspacing=0.3
+)
+for text in legend.get_texts():
+    text.set_color(COLORS["ink"])
+
+plt.show()
+plt.close(fig)
+```
+
 The analytical LogCA bounds establish that hardware acceleration succeeds only when operation granularity $g$ exceeds the break-even threshold $g^*$ and operational intensity is sustained. In a complete system, these mathematical boundaries are not governed by hardware netlists in isolation; they are dictated by the compiler lowering and software runtime pipeline (@fig-codegen-narrow-waist). The compiler controls whether operations are fused into sufficiently large offload payloads $g$, whether intermediate tensor allocations in off-chip memory are eliminated to reduce transfer cost $d$, and whether loop schedules exploit target vector registers without pipeline stalls. High-level domain-specific abstract syntax trees (ASTs, such as Python or Triton DSLs) descend through mid-level control-data flow graphs (CDFGs) (MLIR dialects) and LLVM IR down to where workload intent meets architectural mechanisms (CPU ISA extensions or NPU systolic dataflows) and silicon constraints. Lowering is the primary interface where hardware constraints and workload requirements must be jointly qualified for performance, correctness, portability, and maintainability.
 
 ![**Executable target software paths connect developer intent to verification checks.** High-level domain-specific ASTs (Python, Triton DSLs) lower through mid-level CDFGs (MLIR dialects) and LLVM IR at the compiler narrow waist, where workload intent, architectural mechanisms (CPU ISA extensions, NPU dataflows), and silicon constraints converge. Lowered machine code and runtimes are subsequently evaluated against verification checks for correctness, performance, portability, and maintainability.](images/fig-codegen-narrow-waist){#fig-codegen-narrow-waist width="80%" fig-alt="Executable target software path showing programming models, compiler representations, libraries, runtimes, and generated code connecting hardware constraints to correctness, performance, portability, and maintainability checks."}
