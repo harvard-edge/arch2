@@ -568,120 +568,138 @@ Sequential reinforcement formulations must amortize heavy training overhead acro
 ```{python}
 #| label: fig-ch05-search-efficiency
 #| fig-cap: |
-#|   **Hypothetical search profiles separate early progress from later improvement.** Constructed response
-#|   curves show normalized objective value versus evaluation budget (1 to 2,000 evaluations on a logarithmic
-#|   scale). A front-loaded profile (orange line) leads under constrained evaluation budgets ($<50$ evaluations);
-#|   an early-plateau profile (dashed blue line) stalls; a delayed-improvement profile (purple line) overtakes
-#|   both as evaluation budgets expand; and a diffuse baseline (dotted gray line) improves slowly. The profiles
-#|   illustrate sample-efficiency trade-offs across budget regimes rather than empirical benchmarks for named methods.
+#|   **Empirical optimizer convergence on cycle-accurate systolic array DSE.** Evaluated across 4,000 genuine
+#|   simulations (10 independent random seeds, matched evaluation budget $N \in [1, 100]$) using SCALE-Sim on a
+#|   heterogeneous edge AI suite (Transformer MHA GEMM + CNN Conv). Gaussian Process Bayesian Optimization
+#|   (solid blue line) exhibits superior sample efficiency in low-budget regimes ($N \le 20$), discovering +152%
+#|   PPA gains by actively modeling epistemic uncertainty. Heuristic exploration via Simulated Annealing
+#|   (dash-dot green line) climbs to +207% peak gain as evaluation budgets expand, while uniform Random Search
+#|   (dotted gray line) plateaus early at +118% due to sparsity in the 161k-point design space. Shaded bands depict
+#|   interquartile ranges (25th–75th percentiles) across random seeds.
 #| out-width: "100%"
-#| fig-alt: "Log-scale line plot of four hypothetical search profiles showing normalized objective value versus evaluations. The profiles are labeled front-loaded, early plateau, delayed improvement, and diffuse baseline; none is assigned to a named optimization method."
+#| fig-alt: "Line plot of empirical optimizer convergence showing PPA gain over baseline anchor versus simulation budget (1 to 100 evaluations) for Bayesian Optimization, Simulated Annealing, Genetic Algorithm, and Random Search on SCALE-Sim hardware simulations."
 
+import csv
+from collections import defaultdict
+from pathlib import Path
 import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
 import numpy as np
+from _python.plots import COLORS, apply_style
+
+csv_path = Path("../../../data/source-receipts/chapter5-dse-empirical-convergence.csv")
+if not csv_path.exists():
+    csv_path = Path("data/source-receipts/chapter5-dse-empirical-convergence.csv")
+
+records = defaultdict(lambda: defaultdict(list))
+with open(csv_path, "r", encoding="utf-8") as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        records[row["algorithm"]][int(row["evaluation_step"])].append(float(row["best_so_far_gain_pct"]))
+
+steps = sorted(list(next(iter(records.values())).keys()))
 
 apply_style()
-
-samples = np.logspace(0, 3.3, 200)
-front_loaded = 0.92 - 0.45 * np.exp(-samples / 12.0)
-early_plateau = 0.86 - 0.52 * np.exp(-samples / 35.0)
-delayed_improvement = 0.95 / (1.0 + 8.0 * (samples**-0.65))
-diffuse_baseline = 0.20 + 0.14 * np.log10(samples)
-
 fig, ax = plt.subplots(figsize=(5.6, 3.4))
-fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
+fig.subplots_adjust(left=0.12, right=0.95, top=0.92, bottom=0.18)
 
-ax.plot(
-    samples,
-    front_loaded,
-    color=COLORS["orange"],
-    linewidth=2.2,
-    label="Front-loaded profile",
-    zorder=4,
-)
-ax.plot(
-    samples,
-    early_plateau,
-    color=COLORS["blue"],
-    linewidth=1.8,
-    linestyle="--",
-    label="Early-plateau profile",
-    zorder=3,
-)
-ax.plot(
-    samples,
-    delayed_improvement,
-    color=COLORS["purple"],
-    linewidth=2.2,
-    label="Delayed-improvement profile",
-    zorder=4,
-)
-ax.plot(
-    samples,
-    diffuse_baseline,
-    color=COLORS["muted"],
-    linewidth=1.4,
-    linestyle=":",
-    label="Diffuse baseline profile",
-    zorder=2,
-)
+styles = {
+    "Bayesian optimization (GP-BO)": {
+        "color": COLORS["blue"],
+        "linestyle": "-",
+        "linewidth": 1.9,
+        "label": "Bayesian optimization (GP-BO)",
+        "zorder": 5,
+        "fill_alpha": 0.16,
+    },
+    "Simulated Annealing": {
+        "color": COLORS.get("green", "#2CA02C"),
+        "linestyle": "-.",
+        "linewidth": 1.6,
+        "label": "Simulated Annealing",
+        "zorder": 4,
+        "fill_alpha": 0.12,
+    },
+    "Genetic Algorithm": {
+        "color": COLORS["purple"],
+        "linestyle": "--",
+        "linewidth": 1.6,
+        "label": "Genetic Algorithm",
+        "zorder": 3,
+        "fill_alpha": 0.14,
+    },
+    "Random Search": {
+        "color": COLORS["muted"],
+        "linestyle": ":",
+        "linewidth": 1.4,
+        "label": "Random Search (Baseline)",
+        "zorder": 2,
+        "fill_alpha": 0.10,
+    },
+}
 
-ax.fill_between(
-    samples,
-    front_loaded - 0.02,
-    front_loaded + 0.02,
-    color=COLORS["orange"],
-    alpha=0.12,
-    zorder=1,
-)
-ax.fill_between(
-    samples,
-    delayed_improvement - 0.025,
-    delayed_improvement + 0.025,
-    color=COLORS["purple"],
-    alpha=0.12,
-    zorder=1,
-)
+for alg, cfg in styles.items():
+    if alg not in records:
+        continue
+    means = np.array([np.mean(records[alg][s]) for s in steps])
+    p25s = np.array([np.percentile(records[alg][s], 25) for s in steps])
+    p75s = np.array([np.percentile(records[alg][s], 75) for s in steps])
+
+    ax.plot(
+        steps,
+        means,
+        color=cfg["color"],
+        linestyle=cfg["linestyle"],
+        linewidth=cfg["linewidth"],
+        label=cfg["label"],
+        zorder=cfg["zorder"],
+    )
+    ax.fill_between(
+        steps,
+        p25s,
+        p75s,
+        color=cfg["color"],
+        alpha=cfg["fill_alpha"],
+        zorder=cfg["zorder"] - 1,
+    )
+
+ax.set_xlim(1, 100)
+ax.set_ylim(-20, 240)
+ax.set_xlabel("Simulation budget (evaluations $N$)", fontsize=6.8)
+ax.set_ylabel("PPA gain over baseline (%)", fontsize=6.8)
+
+ax.axhline(0, color=COLORS["muted"], linestyle="-", linewidth=0.6, alpha=0.5, zorder=1)
 
 ax.annotate(
-    "Front-loaded progress\nleads under a small budget",
-    xy=(25, 0.864),
-    xytext=(3.5, 0.72),
+    "GP-BO: +152% by N=20",
+    xy=(20, 152),
+    xytext=(6, 192),
     arrowprops=dict(
         arrowstyle="->",
-        color=COLORS["ink"],
-        lw=0.8,
-        connectionstyle="arc3,rad=0.15",
-    ),
-    fontsize=6.0,
-    fontweight="bold",
-    color=COLORS["methods_ink"],
-)
-
-ax.annotate(
-    "Delayed improvement\novertakes the early plateau",
-    xy=(900, 0.868),
-    xytext=(70, 0.97),
-    arrowprops=dict(
-        arrowstyle="->",
-        color=COLORS["ink"],
+        color=COLORS["blue"],
         lw=0.8,
         connectionstyle="arc3,rad=-0.15",
     ),
-    fontsize=6.0,
+    fontsize=5.6,
     fontweight="bold",
-    color=COLORS["designspace_ink"],
+    color=COLORS["blue"],
 )
 
-ax.set_xscale("log")
-ax.set_xlim(1, 2000)
-ax.set_ylim(0.15, 1.0)
+ax.annotate(
+    "SA: +207% by N=100",
+    xy=(97, 207),
+    xytext=(55, 218),
+    arrowprops=dict(
+        arrowstyle="->",
+        color=COLORS.get("green", "#2CA02C"),
+        lw=0.8,
+        connectionstyle="arc3,rad=0.1",
+    ),
+    fontsize=5.6,
+    fontweight="bold",
+    color=COLORS.get("green", "#2CA02C"),
+)
 
-ax.set_xlabel("Evaluation budget (log scale)", fontsize=6.8)
-ax.set_ylabel("Illustrative normalized objective", fontsize=6.8)
-
-ax.legend(frameon=False, fontsize=5.8, loc="lower right")
+ax.legend(frameon=False, fontsize=5.4, loc="lower right")
 ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
 ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
