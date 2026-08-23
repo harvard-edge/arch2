@@ -36,7 +36,7 @@ This chapter establishes the following learning objectives:
 
 ## Hardware and Software Evaluation Environments
 
-Automated evaluation pipelines decouple execution mechanics into five distinct architectural roles:
+To support this rigorous state tracking, automated evaluation pipelines decouple execution mechanics into five distinct architectural roles:
 
 - **Tool:** Transforms an artifact or analyzes a stated property under declared inputs (e.g., LLVM, TVM, SCALE-Sim, Ramulator 2, gem5, Verilator, Synopsys VCS, cocotb, SystemVerilog Assertions (SVA) paired with bounded model checking (BMC), Yosys, Vivado, OpenROAD, OpenSTA).
 - **Simulator:** A domain-specific tool modeling hardware or software behavior, exposing only modeled properties.
@@ -68,7 +68,7 @@ Before invoking a backend simulator or synthesis engine, the wrapper validates a
 
 ## Stateful Tools and Partial Execution Returns
 
-EDA and architecture tools operate statefully: they write scratch files, hold floating license tokens, mutate shared databases, and inherit host environment variables. Tools such as OpenROAD, Vivado, Synopsys VCS, and formal assertion provers maintain persistent compilation state and intermediate database checkpoints [@OpenROADDocs; @Clarke2018ModelChecking]. To guarantee auditability across repeated invocations, wrappers must validate declared preconditions prior to launch, serialize recognized parameters, capture exact exit codes, and preserve raw execution transcripts alongside structured returns.
+This defensive wrapping is necessary because EDA and architecture tools operate statefully: they write scratch files, hold floating license tokens, mutate shared databases, and inherit host environment variables. Tools such as OpenROAD, Vivado, Synopsys VCS, and formal assertion provers maintain persistent compilation state and intermediate database checkpoints [@OpenROADDocs; @Clarke2018ModelChecking]. To guarantee auditability across repeated invocations, wrappers must validate declared preconditions prior to launch, serialize recognized parameters, capture exact exit codes, and preserve raw execution transcripts alongside structured returns.
 
 Physical design flows illustrate view-consistency hazards. OpenROAD ingests Liberty (`.lib`) timing/power views and LEF physical layout data [@OpenROADDocs], Yosys maps logic gates, and Institute of Electrical and Electronics Engineers (IEEE) 1801 Unified Power Format (UPF) defines power domains. In an XR SoC design, an NPU or memory controller appears as a behavioral C++ model in Verilator, a Liberty timing view in synthesis, a UPF specification during power gating, and a LEF macro in physical layout. If an automated generator updates behavioral register-transfer level (RTL) code while cached Liberty models characterized at nominal voltage ($0.75\ \text{V}$) or stale UPF power rules remain in place, downstream tools evaluate conflicting views, producing deceptively clean timing reports for physically nonfunctional or deadlocked silicon. Environments must bind compatible views to a single candidate identity or refuse execution.
 
@@ -111,11 +111,11 @@ These interfaces maintain identical contracts across open-source and commercial 
 
 ## Managing Asynchronous Tool Execution
 
-Hardware evaluation environments depart fundamentally from synchronous reinforcement learning sandboxes. In semiconductor design, a single tool invocation (whether a full-system cycle-accurate gem5 simulation, a bounded formal model checker unrolling deep pipeline transitions, or an OpenROAD physical layout run) operates over timescales ranging from minutes to days. Managing these heterogeneous execution latencies requires an asynchronous runtime orchestrator that decouples candidate proposal from evaluation resolution. The runtime must handle distributed cluster scheduling, concurrent EDA license queueing, and intermediate log streaming without stalling the overarching search process or losing design state during infrastructure restarts.
+Even with typed contracts and validated wrappers, hardware evaluation environments depart fundamentally from synchronous reinforcement learning sandboxes. In semiconductor design, a single tool invocation (whether a full-system cycle-accurate gem5 simulation, a bounded formal model checker unrolling deep pipeline transitions, or an OpenROAD physical layout run) operates over timescales ranging from minutes to days. Managing these heterogeneous execution latencies requires an asynchronous runtime orchestrator that decouples candidate proposal from evaluation resolution. The runtime must handle distributed cluster scheduling, concurrent EDA license queueing, and intermediate log streaming without stalling the overarching search process or losing design state during infrastructure restarts.
 
 ### Asynchronous Scheduling and Idempotency
 
-Architecture toolchains operate asynchronously: cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers). While standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium], architecture workflows cannot be reduced to synchronous exchanges. Execution runtimes must manage queues, dependency graphs, and persistent state across multi-step campaigns.
+To implement this orchestrator role, the harness must natively support distributed cluster management. Architecture toolchains operate asynchronously: cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers). While standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium], architecture workflows cannot be reduced to synchronous exchanges. Execution runtimes must manage queues, dependency graphs, and persistent state across multi-step campaigns.
 
 Authorized requests instantiate single attempt records that track backend tool executions (@fig-runtime-object-state).
 
@@ -145,7 +145,7 @@ Candidate identity (`candidate_id`) identifies the architectural design across t
 
 ## Categorizing Tool and Environment Failures
 
-Autonomous exploration loops fail for reasons spanning cluster infrastructure drops to true physical design violations. If a harness conflates a FlexLM license checkout denial or a host out-of-memory crash with hardware unroutability, it permanently corrupts the study's dataset with false negatives. To protect dataset integrity, execution harnesses classify runtime failures into four non-overlapping domains: malformed input requests (repaired or rejected at admission), infrastructure and license faults (triggering policy-bounded retries), backend tool crashes (triggering checkpoint resumes), and verified physical limit violations (recorded as valid negative design evidence) (@tbl-failure-taxonomy). Execution status (what ran) remains strictly separate from architectural evaluation (what the outcome means).
+Even with robust containment and quarantines in place, autonomous exploration loops fail for reasons spanning cluster infrastructure drops to true physical design violations. If a harness conflates a FlexLM license checkout denial or a host out-of-memory crash with hardware unroutability, it permanently corrupts the study's dataset with false negatives. To protect dataset integrity, execution harnesses classify runtime failures into four non-overlapping domains: malformed input requests (repaired or rejected at admission), infrastructure and license faults (triggering policy-bounded retries), backend tool crashes (triggering checkpoint resumes), and verified physical limit violations (recorded as valid negative design evidence) (@tbl-failure-taxonomy). Execution status (what ran) remains strictly separate from architectural evaluation (what the outcome means).
 
 | **Execution outcome** | **How it appears** | **Preserved evidence** | **Runtime response** |
 | --- | --- | --- | --- |
@@ -164,7 +164,7 @@ Formal verification tools report specialized outcomes (bounded proofs, counterex
 
 ## State Recovery, Caching, and Artifact Reuse
 
-Recovery mechanisms depend on failure classification: invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
+Once a tool completes or fails and its logs are preserved, the harness must decide what to do next. Recovery mechanisms depend on failure classification: invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
 
 ::: {.callout-failure-mode title="The stale library view"}
 **The trap.** A team updates RTL and timing constraints for an accelerated clock, reruns static timing analysis, and receives a clean signoff report for a design that fails bus timing.
@@ -176,7 +176,7 @@ Recovery mechanisms depend on failure classification: invalid requests are corre
 
 ## Execution Records {#sec-operational-attempt-record}
 
-Auditable execution records pair raw transcripts and netlists with structured metadata, ensuring that every tool invocation can be inspected, reproduced, or repaired. An execution record is not a passive logfile; it is the definitive, immutable unit of evidence that bridges low-level CAD execution to high-level architectural decision-making. When automated methods drive exploration loops, every tool invocation must produce an immutable receipt that binds candidate identity to environment state, tool versions, and consumed compute resources.
+To prevent such catastrophic cache hits from corrupting project data, environments rely on auditable execution records. Auditable execution records pair raw transcripts and netlists with structured metadata, ensuring that every tool invocation can be inspected, reproduced, or repaired. An execution record is not a passive logfile; it is the definitive, immutable unit of evidence that bridges low-level CAD execution to high-level architectural decision-making. When automated methods drive exploration loops, every tool invocation must produce an immutable receipt that binds candidate identity to environment state, tool versions, and consumed compute resources.
 
 ::: {.callout-historical-perspective title="MIT Whirlwind and the core memory reliability threshold"}
 **The breakthrough.** Jay Forrester's group introduced magnetic core storage in 1951, replacing electrostatic storage tubes in Whirlwind by 1953 [@Forrester1951DigitalInformationStorage].
@@ -225,7 +225,7 @@ ACM artifact review guidelines distinguish *repeatability* (same team, same setu
 
 ## Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
 
-Industrial architecture teams rarely operate on static, immutable codebase snapshots. In high-velocity commercial SoC and datacenter accelerator development, the active codebase undergoes continuous daily churn. While an automated search loop or learned surrogate executes a multi-day optimization pass against a frozen repository revision, software runtimes evolve, instruction set architecture (ISA) extensions receive minor patches, compiler passes shift, and upstream RTL interfaces move. An optimization discovered against snapshot $t_0$ risks becoming invalid or unmergeable at snapshot $t_0 + \Delta t$ because underlying pipeline invariants or interface structures shifted during the search run.
+While capturing a perfect execution record might seem to freeze a design in time, industrial architecture teams rarely operate on static, immutable codebase snapshots. In high-velocity commercial SoC and datacenter accelerator development, the active codebase undergoes continuous daily churn. While an automated search loop or learned surrogate executes a multi-day optimization pass against a frozen repository revision, software runtimes evolve, instruction set architecture (ISA) extensions receive minor patches, compiler passes shift, and upstream RTL interfaces move. An optimization discovered against snapshot $t_0$ risks becoming invalid or unmergeable at snapshot $t_0 + \Delta t$ because underlying pipeline invariants or interface structures shifted during the search run.
 
 This operational reality creates an essential tension between *whole-chip regeneration* and *local delta evaluation*. If modifying a single memory-mapped register, bus arbiter, or cache replacement policy requires an automated design system to regenerate the entire accelerator hierarchy and rerun days of physical synthesis, the tool is discarded in daily engineering practice. Practical execution harnesses maintain fine-grained structural dependency graphs (using CIRCT MLIR dialect dependency analysis, Chisel module hierarchy content hashes, or dependency-graph build systems such as Bazel) that isolate the localized cone of logic affected by an incremental commit, selectively invalidating and re-evaluating only those simulation traces, formal assertions, and timing paths that cross the affected dependency boundary. The harness must also continuously track the distance between the reference design snapshot used by an active search loop and the moving mainline branch, triggering an early abort or automated resynchronization when upstream drift invalidates foundational interface assumptions.
 
@@ -373,7 +373,7 @@ No single platform simultaneously optimizes throughput, setup latency, and prope
 
 ## Mobile XR Subsystem Evaluation Environment {#sec-mobile-xr-evaluation}
 
-In our mobile XR SoC co-design study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\ \text{MiB}$) under a $3\ \text{W}$ thermal design power (TDP) envelope on a TSMC $3\ \text{nm}$ process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
+To see how these abstract tools, queues, and pipelines resolve into a practical workflow, we can return to the book's guiding example. In our mobile XR SoC co-design study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\ \text{MiB}$) under a $3\ \text{W}$ thermal design power (TDP) envelope on a TSMC $3\ \text{nm}$ process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
 
 | **Run category** | **Prospective XR SoC co-design study run specification** |
 | --- | --- |
@@ -391,7 +391,7 @@ To show how the specification would govern a run, consider an illustrative walk-
 
 ## Common Pitfalls
 
-Operating multi-tool execution harnesses without strict environmental controls introduces subtle operational failure modes. In each case below, the tools run, the output transcripts look complete, but the underlying execution state has quietly drifted:
+Even with a clear run specification, operating multi-tool execution harnesses without strict environmental controls introduces subtle operational failure modes. In each case below, the tools run, the output transcripts look complete, but the underlying execution state has quietly drifted:
 
 - **Silent drift in simulator configurations:** Default parameter changes across minor version bumps or unpinned memory hierarchy flags corrupt execution lineage without raising runtime errors [@Dolstra2006Purely].
 - **Unmanaged license preemption in EDA simulation flows:** Treating license checkout denials or cluster preemptions as hard design failures corrupts dataset provenance by conflating cluster infrastructure limits with hardware infeasibility.
