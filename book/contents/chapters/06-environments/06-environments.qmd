@@ -195,6 +195,32 @@ To guarantee post-execution auditability across distributed clusters, execution 
 - **Lineage and retries:** Parent inputs, transformations, retry/reset parent links.
 - **Realized cost:** Consumed wall-clock time, CPU/accelerator hours, peak memory, storage, license-hours, and billable amounts.
 
+A structured attempt receipt binds these dimensions into an immutable machine-readable artifact (@lst-execution-record-schema).
+
+```{.yaml #lst-execution-record-schema lst-cap="**Structured execution attempt record schema.** Captures immutable starting state, tool versions, parsed metrics, and realized compute and license costs."}
+study_id: "lighthouse-xr-soc-v1"
+attempt_id: "att-8f3a91c2-7b1e"
+candidate_id: "cand-l2-3mib-npu16x16"
+starting_state:
+  git_commit: "9a2f1b4c"
+  container_digest: "sha256:d4e7b1a8c9e..."
+  tool_version: "OpenROAD-v2.0-1124"
+  pdk_variant: "TSMC_N3E_1.0a"
+outcome:
+  status: "COMPLETED"
+  terminal_cause: "NORMAL_EXIT"
+  exit_code: 0
+metrics:
+  worst_negative_slack_ps: -12.4
+  macro_area_mm2: 1.42
+  subsystem_power_w: 2.84
+costs:
+  wall_clock_seconds: 4128
+  cpu_hours: 18.2
+  peak_rss_gb: 14.8
+  license_token_hours: 1.15
+```
+
 ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay submits identical retained requests and recorded states; it does not guarantee identical realized execution if unpinned host dependencies drift [@JimenezEtAl2017PopperConvention]. Transformation records bridge content hashes to architectural semantics, verifying whether lowered representations preserve original design intent.
 
 ## Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
@@ -203,7 +229,13 @@ Industrial architecture teams rarely operate on static, immutable codebase snaps
 
 This operational reality creates an essential tension between *whole-chip regeneration* and *local delta evaluation*. If modifying a single memory-mapped register, bus arbiter, or cache replacement policy requires an automated design system to regenerate the entire accelerator hierarchy and rerun days of physical synthesis, the tool is discarded in daily engineering practice. Practical execution harnesses maintain fine-grained structural dependency graphs (using CIRCT MLIR dialect dependency analysis, Chisel module hierarchy content hashes, or dependency-graph build systems such as Bazel) that isolate the localized cone of logic affected by an incremental commit, selectively invalidating and re-evaluating only those simulation traces, formal assertions, and timing paths that cross the affected dependency boundary. The harness must also continuously track the distance between the reference design snapshot used by an active search loop and the moving mainline branch, triggering an early abort or automated resynchronization when upstream drift invalidates foundational interface assumptions.
 
-A complementary operational challenge that execution harnesses must govern is stochastic dispersion. Repeated executions of identical high-level design intents across nondeterministic generative models, stochastic search passes, or distributed EDA schedulers exhibit significant output variance [@BouthillierEtAl2021UnreproducibleML]. An exploration methodology that reports only the peak result of an uncontrolled distribution introduces severe proxy gaming, mistaking an anomalous lucky seed for a superior microarchitecture. Robust execution harnesses treat candidate evaluation as a statistical process, measuring variance across random seeds, logging sensitivity to prompt and constraint perturbations, and establishing confidence intervals before advancing recommendations toward physical signoff (@fig-eda-runtime-variance-dispersion).
+A complementary operational challenge that execution harnesses must govern is stochastic dispersion. Repeated executions of identical high-level design intents across nondeterministic generative models, stochastic search passes, or distributed EDA schedulers exhibit significant output variance [@BouthillierEtAl2021UnreproducibleML]. To diagnose and isolate execution variance across automated exploration campaigns, execution harnesses categorize variance across three orthogonal dimensions:
+
+- *Infrastructure Jitter:* Transient host OS variations (CPU thermal throttling, NUMA socket migration, memory bandwidth contention) producing $15\text{--}30\%$ runtime fluctuations on identical binaries, neutralized via physical core pinning and RAM scratchdisks.
+- *Algorithmic Stochasticity:* Randomized EDA optimization pass schedules and non-deterministic neural generation producing $3\text{--}8\%$ Quality of Results (QoR) area spreads across seeds, managed via statistical distribution budgets.
+- *Interface Drift:* Upstream repository churn mutating bus protocols or register maps during multi-hour exploration runs, governed via fine-grained dependency cone invalidation.
+
+An exploration methodology that reports only the peak result of an uncontrolled distribution introduces severe proxy gaming, mistaking an anomalous lucky seed for a superior microarchitecture. Robust execution harnesses treat candidate evaluation as a statistical process, measuring variance across random seeds, logging sensitivity to prompt and constraint perturbations, and establishing confidence intervals before advancing recommendations toward physical signoff (@fig-eda-runtime-variance-dispersion).
 
 ![**Empirical dispersion in logic synthesis Quality of Results (QoR) and compute resource footprint across optimization pass schedules.** Panel A tracks the percentage silicon area dispersion relative to design median across 150 genuine synthesis runs (25 randomized pass schedules per architecture on Nangate 45nm standard cells). In unseeded or single-shot evaluation, stochastic pass schedules induce a $3\text{--}8\%$ area spread on *identical* RTL code (reaching a $-6.3\%$ lucky seed gain on GCD and a $+8.7\%$ dispersion penalty on SHA-256), easily masquerading as microarchitectural progress. Panel B plots the simultaneous volatility in peak resident set size (RSS memory) and wall-clock execution runtime, demonstrating wide container jitter ($20\text{--}40\%$ dynamic range) that requires dynamic resource quotas and lease timeouts.](images/fig-eda-runtime-variance-dispersion){#fig-eda-runtime-variance-dispersion width="100%" fig-alt="Two-panel visualization showing logic synthesis area dispersion across six hardware architectures alongside tool memory and runtime jitter across 150 genuine benchmark runs on Nangate 45nm standard cells."}
 
