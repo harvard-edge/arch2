@@ -258,7 +258,7 @@ The physical parameters in @eq-logca-speedup-bound depend heavily on the target 
 - **Coherent Socket Interconnect (CXL 3.1 over PCIe PHY):** Operates at moderate latency ($o \sim 80\text{--}150\ \text{ns}$) and energy ($\sim 5\text{--}10\ \text{pJ/bit}$), suitable for memory pooling and coarse-grained accelerator kernel offloads.
 - **Board-Level Peripheral Interconnect (PCIe Gen 5/6):** Imposes significant round-trip invocation latency ($o > 500\text{--}1000\ \text{ns}$) and transport energy ($\sim 20\ \text{pJ/bit}$), requiring large workload batch sizes ($g \gg 10^5\ \text{operations}$) to amortize host–device driver serialization, direct memory access (DMA) descriptor setup, and bus transport overheads.
 
-Fixed startup cost and transfer time share units with compute time, combining Amdahl's serial-fraction principle [@Amdahl1967ValiditySingleProcessor] with explicit communication costs. Excessive invocations ($N \cdot o$) or transfer overhead ($d g / B$) can erase local compute gains, shifting the operational break-even point where offloading achieves net acceleration (@fig-logca-breakeven). An offload provides a genuine system benefit only after the offloaded payload $g$ is sufficiently large to amortize both driver invocation latency and physical link transport overheads.
+Fixed startup cost and transfer time share units with compute time, combining Amdahl's serial-fraction principle [@Amdahl1967ValiditySingleProcessor] with explicit communication costs. Excessive invocations ($N \cdot o$) or transfer overhead ($d g / B$) can erase local compute gains, shifting the operational break-even point where offloading achieves net acceleration (@fig-ch09-logca-phase-diagram). An offload provides a genuine system benefit only after the offloaded payload $g$ is sufficiently large to amortize both driver invocation latency and physical link transport overheads.
 
 ::: {.callout-failure-mode title="The unamortized offload wall"}
 **The trap.** In an illustrative scenario consistent with the model above, a mobile NPU adds a 1,024-MAC systolic tensor engine capable of $100\times$ local matrix-multiply acceleration ($A=100$) over scalar RISC-V execution, and the team treats that local factor as the expected system speedup.
@@ -268,163 +268,17 @@ Fixed startup cost and transfer time share units with compute time, combining Am
 **The lesson.** Local compute acceleration ($A$) cannot overcome unamortized startup ($o$) and transfer ($d g/B$) costs. Offload mechanisms must be co-designed with compiler layer fusion so that payload size $g$ stays well above the break-even threshold.
 :::
 
-```{python}
-#| label: fig-logca-breakeven
-#| fig-cap: |
-#|   **Offload conditions determine the break-even granularity.** In this illustrative LogCA-style model [@AltafWood2017LogCA; @Williams2009Roofline], end-to-end speedup ($S(g)$, y-axis) is plotted against operation granularity ($g$, x-axis) across three interconnect regimes for a $100\times$ local accelerator ($A=100$): low startup with zero transfer ($o=2\text{ cycles}$, orange), medium startup and transfer ($o=40\text{ cycles}$, green), and high startup and transfer ($o=1500\text{ cycles}$, red). Dots mark break-even thresholds ($S(g)=1\times$), below which offloading loses to baseline host execution. High transfer overhead reduces asymptotic speedup from the $100\times$ local compute ceiling to $\approx 17\times$. Parameter sets are constructed for illustration.
-#| out-width: "100%"
-#| fig-alt: "Line plot showing three illustrative offload-speedup curves for low startup with zero transfer cost, medium startup and transfer cost, and high startup and transfer cost."
+![**LogCA break-even offload frontiers across physical interconnect regimes.** Break-even operation granularity ($g^*$, minimum FLOPs required to achieve net $S(g) \ge 1.0\times$ acceleration over a 2.5\ GHz host core) plotted against kernel operational intensity ($\text{FLOP/byte}$) across seven physical interconnect standards [@AltafWood2017LogCA; @Williams2009Roofline]. Advanced 2.5D die-to-die packaging (UCIe 2.0 on CoWoS/EMIB: 1,600\ GB/s, 2.5\ ns latency) achieves break-even at fine-grained payloads ($g^* \approx 320\ \text{FLOPs}$) down to low operational intensities ($\text{OI} = 0.1\ \text{FLOP/byte}$). In contrast, board-level PCIe Gen 5 x16 (64\ GB/s, 140\ ns) and Ultra Ethernet 800G (100\ GB/s, 450\ ns) enforce steep asymptotic bandwidth walls ($\text{OI}^* = 3.9\ \text{FLOP/byte}$), requiring massive coarse-grained payloads ($g^* > 10^5\ \text{FLOPs}$) to overcome driver launch overheads and avoid negative acceleration. Empirical parameters grounded in published JEDEC, UCIe, CXL, and PCIe physical specifications.](images/fig-ch09-logca-phase-diagram){#fig-ch09-logca-phase-diagram width="100%" fig-alt="Log-log plot of minimum break-even operation granularity in FLOPs versus operational intensity in FLOPs per byte across seven interconnect regimes from UCIe 2.0 to Ultra Ethernet, showing that die-to-die packaging enables fine-grained offloading while board-level PCIe enforces a steep operational intensity wall."}
 
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Constructed illustrative parameters expose the break-even structure; they are not
-# measurements from an interconnect. This LogCA-style construction normalizes host
-# cost C_h to one cycle per work unit and uses d/B as transfer cycles per work unit.
-A = 100.0
-C_h = 1.0
-g = [10 ** (6 * i / 399) for i in range(400)]
-
-curves = [
-    {"label": "low startup / zero transfer", "ovh": 2.0, "transfer_cost": 0.0, "color": COLORS["orange"]},
-    {"label": "medium startup / transfer", "ovh": 40.0, "transfer_cost": 0.005, "color": COLORS["green"]},
-    {"label": "high startup / transfer", "ovh": 1500.0, "transfer_cost": 0.05, "color": COLORS["red"]},
-]
-
-def speedup(gran, ovh, transfer_cost):
-    return C_h * gran / (ovh + C_h * gran / A + gran * transfer_cost)
-
-fig, ax = plt.subplots(figsize=(5.25, 3.0))
-fig.subplots_adjust(left=0.12, right=0.86, top=0.82, bottom=0.16)
-
-ax.axhline(A, color=COLORS["ink"], linewidth=0.8, linestyle=(0, (4, 3)), zorder=1)
-ax.text(1.35, A * 1.08, "peak acceleration A", ha="left", va="bottom", fontsize=6.2, color=COLORS["ink"])
-ax.axhline(1.0, color=COLORS["muted"], linewidth=0.7, zorder=1)
-ax.text(7.5e5, 1.10, "break-even", ha="right", va="bottom", fontsize=6.0, color=COLORS["muted"])
-
-ax.axhspan(0.25, 1.0, color=COLORS["red"], alpha=0.08, zorder=0)
-ax.text(1.5, 0.38, "offload loses", ha="left", va="center", fontsize=6.0, color=COLORS["red"], fontstyle="italic")
-
-for c in curves:
-    s = [speedup(x, c["ovh"], c["transfer_cost"]) for x in g]
-    ax.plot(g, s, color=c["color"], linewidth=1.9, zorder=3, label=c["label"])
-    denom = C_h - C_h / A - c["transfer_cost"]
-    g1 = c["ovh"] / denom if denom > 0 else 1e9
-    if g1 < 1e6:
-        ax.scatter([g1], [1.0], marker="o", s=22, facecolor=COLORS["note_fill"], edgecolor=c["color"], linewidth=1.3, zorder=4, clip_on=False)
-
-ax.set_xscale("log")
-ax.set_yscale("log")
-ax.set_xlim(1, 1e6)
-ax.set_ylim(0.25, 150)
-ax.set_xlabel("operation granularity  (work amortized per offload)", fontsize=7)
-ax.set_ylabel("end-to-end speedup", fontsize=7)
-ax.set_yticks([0.3, 1, 3, 10, 30, 100])
-ax.set_yticklabels([r"0.3$\times$", r"1$\times$", r"3$\times$", r"10$\times$", r"30$\times$", r"100$\times$"], fontsize=6.4)
-ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.4)
-ax.grid(axis="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-legend = fig.legend(loc="upper center", ncol=3, fontsize=6.0, frameon=False,
-                    bbox_to_anchor=(0.5, 1.0), handlelength=1.0, columnspacing=1.4)
-for text in legend.get_texts():
-    text.set_color(COLORS["ink"])
-
-plt.show()
-plt.close(fig)
-```
-
-These curves illustrate how invocation and transfer costs penalize a $100\times$ local compute acceleration. Low startup and zero transfer break even after minimal work per offload. Medium and high costs require substantially larger payloads before offloading helps, and nonzero transfer terms reduce asymptotic speedup. Under high-cost parameters, speedup approaches $\approx 17\times$ rather than the $100\times$ local ceiling. As product paths incur actual invocation and data-movement costs, local speedup advantages rapidly collapse.
+Evaluating physical interconnect regimes in @fig-ch09-logca-phase-diagram illustrates how invocation and transfer costs penalize local compute acceleration. Advanced packaging with ultralow startup and high shore bandwidth breaks even after minimal work per offload. Board-level peripheral links require substantially larger payloads before offloading helps, and nonzero transfer terms reduce asymptotic speedup. Under high-cost parameters, system speedup collapses toward baseline host execution. As product paths incur actual invocation and data-movement costs, local speedup advantages rapidly vanish.
 
 Offload granularity and operational intensity bound different aspects of performance. Increasing $g$ amortizes fixed launch cost $o$. Operational intensity measures operations per byte moved, a property of the workload and realized data path rather than a quantity derived from bandwidth [@Williams2009Roofline]. If one work unit represents one operation, transfer time is $d g/B$ where $d = 1/\mathrm{OI}$. Modifying $B$ changes transfer time and the bandwidth roof while leaving kernel operational intensity unchanged. Kernels operating below the hardware balance point remain bandwidth-bound even after launch costs are amortized. Target evaluations must therefore measure invocation cost, bytes moved per unit of useful work, available bandwidth, and realizable overlap independently.
 
 ### Executable Software Path
 
-The physical reality of hardware specialization is that microarchitectural innovations remain inaccessible without software enablement. When architects introduce specialized hardware primitives (such as warp-level `wmma`, warp-group `wgmma`, tensor memory accelerators, and fifth-generation tensor cores `tcgen05`), the burden shifts to low-level software libraries. In vendor template libraries such as NVIDIA CUTLASS, architecture-specific code exploded by $29\times$ (from $13\text{K}$ to $372\text{K}$ lines of code) between 2019 and 2025, expanding from 23% to 58% of the entire library codebase (@fig-ch09-cutlass-software-wall). This exponential maintenance tax illustrates why manual template programming cannot scale across rapid hardware iterations, creating a *software porting wall* that isolates custom hardware from production software stacks.
+The physical reality of hardware specialization is that microarchitectural innovations remain inaccessible without software enablement. When architects introduce specialized hardware primitives (such as warp-level `wmma`, warp-group `wgmma`, tensor memory accelerators, and fifth-generation tensor cores `tcgen05`), the burden shifts to low-level software libraries. In vendor template libraries such as NVIDIA CUTLASS, architecture-specific code exploded by $29\times$ (from $13\text{K}$ to $372\text{K}$ lines of code) between 2019 and 2025, expanding from 23% to 58% of the entire library codebase (@fig-ch09-software-porting-wall). This exponential maintenance tax illustrates why manual template programming cannot scale across rapid hardware iterations, creating a *software porting wall* that isolates custom hardware from production software stacks.
 
-```{python}
-#| label: fig-ch09-cutlass-software-wall
-#| fig-cap: "**The software porting wall in hardware specialization.** NVIDIA CUTLASS library include line counts across releases (2019–2025). As basic tensor operations grow in microarchitectural complexity (from warp-level `wmma` to warp-group `wgmma` and Blackwell `tcgen05`), architecture-specific template code explodes by $29\\times$ (from $13\\text{K}$ to $372\\text{K}$ lines of code), expanding from 23% to 58% of the entire library. This exponential maintenance tax illustrates why manual template libraries fail to scale across emerging hardware and why compiler narrow waists are essential."
-#| fig-alt: "Stacked bar chart of CUTLASS line-of-code growth from v2.0 in 2019 to v4.0 in 2025. Shared infrastructure grows from 40K to 266K lines, while architecture-specific code expands 29-fold from 13K to 372K lines, reaching 58% of total code."
-#| fig-width: 6.4
-#| fig-height: 3.4
-#| echo: false
-
-import matplotlib.pyplot as plt
-import numpy as np
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-versions = ["v2.0\n(2019)", "v2.5\n(2021)", "v2.11\n(2022)", "v3.0\n(2023)", "v3.5\n(2024)", "v4.0\n(2025)"]
-shared_loc = [40, 104, 188, 208, 241, 266]
-arch_loc = [13, 31, 33, 60, 94, 372]
-totals = [s + a for s, a in zip(shared_loc, arch_loc)]
-
-fig, ax = plt.subplots(figsize=(6.4, 3.4))
-fig.subplots_adjust(left=0.12, right=0.96, top=0.88, bottom=0.18)
-
-x = np.arange(len(versions))
-width = 0.52
-
-p1 = ax.bar(x, shared_loc, width, label="Shared Infrastructure", color="#CBD5E1", edgecolor="#94A3B8", linewidth=0.8, zorder=3)
-p2 = ax.bar(x, arch_loc, width, bottom=shared_loc, label="Arch-Specific Code", color="#2D7C5D", edgecolor="#1B4D3E", linewidth=0.8, zorder=3)
-
-for i, (s, a, tot) in enumerate(zip(shared_loc, arch_loc, totals)):
-    if i == 5:
-        ax.text(i, tot + 14, "372K (58%)\n+Blackwell", ha="center", va="bottom", fontsize=6.2, fontweight="bold", color="#1B4D3E")
-    elif i == 3:
-        ax.text(i, tot + 10, "60K (22%)\n+Hopper", ha="center", va="bottom", fontsize=5.8, fontweight="bold", color="#1B4D3E")
-    else:
-        ax.text(i, tot + 8, f"{a}K ({int(round(a/tot*100))}%)", ha="center", va="bottom", fontsize=5.8, fontweight="bold", color="#1B4D3E")
-
-    if s >= 100:
-        ax.text(i, s / 2, f"{s}K", ha="center", va="center", fontsize=5.8, color="#334155")
-
-ax.annotate(
-    "Arch-specific: 29x growth\n(13K -> 372K LOC)",
-    xy=(4.8, 480), xytext=(2.2, 500),
-    fontsize=6.5, fontweight="bold", color="#1B4D3E",
-    bbox=dict(boxstyle="round,pad=0.4", facecolor="#EDF7F1", edgecolor="#2D7C5D", linewidth=1.0),
-    arrowprops=dict(arrowstyle="->", color="#2D7C5D", lw=1.1, connectionstyle="arc3,rad=-0.15"),
-    zorder=5
-)
-
-ax.set_ylabel("CUTLASS include/ LOC (thousands)", fontsize=6.8, color=COLORS["ink"])
-ax.set_xticks(x)
-ax.set_xticklabels(versions, fontsize=6.2)
-ax.set_ylim(0, 750)
-ax.set_yticks(range(0, 800, 100))
-ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.2)
-ax.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-legend = ax.legend(
-    loc="upper left",
-    fontsize=6.2,
-    frameon=True,
-    facecolor="white",
-    edgecolor="#E2E8F0",
-    framealpha=0.95,
-    borderpad=0.25,
-    labelspacing=0.3
-)
-for text in legend.get_texts():
-    text.set_color(COLORS["ink"])
-
-plt.show()
-plt.close(fig)
-```
+![**The software porting wall in hardware specialization.** NVIDIA CUTLASS template library include line counts across releases from 2019 to 2025 [@NVIDIACUTLASS]. As basic tensor operations grow in microarchitectural complexity (from warp-level `wmma` to warp-group `wgmma` and Blackwell `tcgen05`), architecture-specific template code explodes by $29\times$ (from $13\text{K}$ to $372\text{K}$ lines of code), expanding from 23% to 58% of the entire library codebase. This exponential maintenance tax illustrates why manual template libraries fail to scale across emerging hardware and why compiler narrow waists are essential.](images/fig-ch09-software-porting-wall){#fig-ch09-software-porting-wall width="100%" fig-alt="Stacked bar chart of CUTLASS line-of-code growth from v2.0 in 2019 to v4.0 in 2025. Shared infrastructure grows from 40K to 266K lines, while architecture-specific code expands 29-fold from 13K to 372K lines, reaching 58% of total code."}
 
 The analytical LogCA bounds establish that hardware acceleration succeeds only when operation granularity $g$ exceeds the break-even threshold $g^*$ and operational intensity is sustained. In a complete system, these mathematical boundaries are not governed by hardware netlists in isolation; they are dictated by the compiler lowering and software runtime pipeline (@fig-codegen-narrow-waist). The compiler controls whether operations are fused into sufficiently large offload payloads $g$, whether intermediate tensor allocations in off-chip memory are eliminated to reduce transfer cost $d$, and whether loop schedules exploit target vector registers without pipeline stalls. High-level domain-specific abstract syntax trees (ASTs, such as Python or Triton DSLs) descend through mid-level control-data flow graphs (CDFGs) (MLIR dialects) and LLVM IR down to where workload intent meets architectural mechanisms (CPU ISA extensions or NPU systolic dataflows) and silicon constraints. Lowering is the primary interface where hardware constraints and workload requirements must be jointly qualified for performance, correctness, portability, and maintainability.
 
