@@ -4706,6 +4706,84 @@ STRIPPED_VOCABULARY: dict[str, str] = {
 BY_GERUND_EXEMPT = frozenset({"spring", "morning", "evening"})
 
 
+def find_markdown_figures(text: str) -> list[dict[str, Any]]:
+    """Parse markdown figures handling balanced brackets inside captions."""
+    results: list[dict[str, Any]] = []
+    i = 0
+    while i < len(text):
+        if text[i : i + 2] == "![":
+            start_pos = i
+            depth = 1
+            j = i + 2
+            while j < len(text) and depth > 0:
+                if text[j] == "[":
+                    depth += 1
+                elif text[j] == "]":
+                    depth -= 1
+                j += 1
+            if depth == 0:
+                caption = text[i + 2 : j - 1]
+                rest = text[j:]
+                m = re.match(
+                    r"^\((?P<path>[^)]+)\)\{#(?P<id>fig-[a-z0-9-]+)(?P<attrs>[^}]*)\}",
+                    rest,
+                )
+                if m:
+                    results.append(
+                        {
+                            "caption": caption.strip(),
+                            "path": m.group("path"),
+                            "id": m.group("id"),
+                            "attrs": m.group("attrs"),
+                            "start": start_pos,
+                        }
+                    )
+                    i = j + m.end()
+                    continue
+        i += 1
+    return results
+
+
+def caption_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Validate figure captions against the 3-Layer Pedagogical standard.
+
+    Settled by .claude/rules/captions.md and .claude/rules/figures.md:
+    1. Every figure caption must open with a bold headline (e.g. ![**Headline.** ...]).
+    2. Captions must be concise (<= 750 characters / ~90 words max) to fit page budget.
+    """
+    targets = paths if paths is not None else content_qmd_files()
+    findings: list[Finding] = []
+    for path in targets:
+        content = path.read_text(encoding="utf-8")
+        figs = find_markdown_figures(content)
+        for f in figs:
+            caption = f["caption"]
+            fig_id = f["id"]
+            start_pos = f["start"]
+            lineno = content[:start_pos].count("\n") + 1
+
+            if not (caption.startswith("**") and ("**" in caption[2:])):
+                findings.append(
+                    Finding(
+                        "error",
+                        "caption-bold-headline",
+                        f"{_relative(path)}:{lineno}",
+                        f"figure caption '{fig_id}' must begin with a bold headline lead '![**Headline.** ...]' per .claude/rules/captions.md",
+                    )
+                )
+
+            if len(caption) > 750:
+                findings.append(
+                    Finding(
+                        "error",
+                        "caption-length",
+                        f"{_relative(path)}:{lineno}",
+                        f"figure caption '{fig_id}' is too long ({len(caption)} chars > 750 chars max); streamline to 3-5 lines per .claude/rules/captions.md",
+                    )
+                )
+    return findings
+
+
 def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Flag mechanical prose-style regressions that a manual sweep cannot hold.
 
@@ -6610,6 +6688,10 @@ def run_prose_style_check() -> None:
     _exit_on_findings(prose_style_findings(), title="prose style")
 
 
+def run_caption_check() -> None:
+    _exit_on_findings(caption_findings(), title="figure captions")
+
+
 def run_html_check(html: Path = HTML_PATH) -> None:
     _exit_on_findings(html_findings(html), title="HTML site")
 
@@ -7644,17 +7726,47 @@ def preview(
 
     path = Path(chapter)
     if not path.exists():
-        chapter_dir = ROOT / "book" / "chapters" / chapter
-        chapter_qmds = sorted(chapter_dir.glob("*.qmd")) if chapter_dir.is_dir() else []
-        if chapter_qmds:
-            path = chapter_qmds[0]
-        else:
-            candidate = ROOT / "book" / "chapters" / chapter
-            if candidate.exists() and candidate.is_file():
-                path = candidate
-            else:
-                console.print(f"[red]Could not find chapter or file:[/red] {chapter}")
-                raise typer.Exit(1)
+        candidates = [
+            BOOK_DIR / "contents" / "chapters" / chapter,
+            BOOK_DIR / "contents" / "frontmatter" / chapter,
+            BOOK_DIR / "contents" / "backmatter" / chapter,
+            BOOK_DIR / "contents" / "parts" / chapter,
+            BOOK_DIR / chapter,
+        ]
+        found = False
+        for c in candidates:
+            if c.is_dir():
+                qmds = sorted(c.glob("*.qmd"))
+                if qmds:
+                    path = qmds[0]
+                    found = True
+                    break
+            elif c.is_file() and c.suffix == ".qmd":
+                path = c
+                found = True
+                break
+            elif c.with_suffix(".qmd").is_file():
+                path = c.with_suffix(".qmd")
+                found = True
+                break
+
+        if not found:
+            for c_dir in sorted(
+                (BOOK_DIR / "contents" / "chapters").glob(f"*{chapter}*")
+            ):
+                if c_dir.is_dir():
+                    qmds = sorted(c_dir.glob("*.qmd"))
+                    if qmds:
+                        path = qmds[0]
+                        found = True
+                        break
+
+        if not found:
+            console.print(f"[red]Could not find chapter or file:[/red] {chapter}")
+            raise typer.Exit(1)
+
+    _render_book_navbar()
+    _prepare_figures()
 
     chosen = [t for t, on in (("html", html), ("pdf", pdf), ("epub", epub)) if on]
     if len(chosen) > 1:
@@ -7798,9 +7910,16 @@ def serve(
 
 
 @validate_app.command("refs")
+@validate_app.command("references")
 def validate_refs() -> None:
     """Check figure, table, listing, equation, section, and path references."""
     run_refs_check()
+
+
+@validate_app.command("captions")
+def validate_captions() -> None:
+    """Check figure captions against the 3-layer pedagogical standard."""
+    run_caption_check()
 
 
 @validate_app.command("card")
@@ -8139,6 +8258,7 @@ def check_precommit() -> None:
     run_bibliography_check()
     run_footnote_check()
     run_prose_style_check()
+    run_caption_check()
     run_abbreviations_check()
     run_glossary_check()
     run_concept_check()
@@ -8157,6 +8277,7 @@ def check_standard(
     run_bibliography_check()
     run_footnote_check()
     run_prose_style_check()
+    run_caption_check()
     run_abbreviations_check()
     run_glossary_check()
     run_figures_check()
@@ -8179,6 +8300,7 @@ def check_strict(
     run_bibliography_check()
     run_footnote_check()
     run_prose_style_check()
+    run_caption_check()
     run_abbreviations_check()
     run_glossary_check()
     run_figures_check()
