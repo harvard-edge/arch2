@@ -133,11 +133,14 @@ Decoupling attempt identity from process completion ensures that interrupted or 
 
 Harnesses attach jobs to attempts upon submission, using idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs]. This strict idempotency guarantees that even if the orchestrator container crashes and restarts, it will reconnect to running jobs rather than spawning expensive duplicates.
 
-::: {.callout-failure-mode title="Law and Bottleneck: Queueing Congestion Collapse in Tool Loops"}
+::: {.callout-law title="Queueing Congestion Collapse in Tool Loops"}
 **The Classical Principle:** As job arrival rate $\lambda$ approaches tool service capacity $\mu$, mean queue waiting time explodes asymptotically ($W = \frac{1}{\mu - \lambda}$) [@Kleinrock1975QueueingSystems; @Little1961LittlesLaw].
+
 **The Hardware Trap:** In autonomous tool loops, generative agents propose candidate microarchitectures faster than expensive simulators and EDA license servers can evaluate them ($g \to \mu$). Because chip specifications, compiler branches, and interface definitions drift at rate $\gamma_{\text{drift}}$, long queue wait times cause simulation results to return after baseline assumptions have expired ($W_{\text{queue}} > 1/\gamma_{\text{drift}}$). The effective throughput of valid, fresh designs collapses to zero ($V_{\text{eff}} \to 0$), leaving compute clusters saturated with spoiled work.
+
 **The Architectural Antidote:** Implement feed-forward queue stability enforcement and telemetry-driven backpressure to throttle generation whenever downstream tool utilization approaches saturation (see @sec-law-congestion-collapse for the mathematical effective throughput derivation and stability bounds).
 :::
+
 
 ### Fault Containment and Execution Quarantines
 
@@ -186,7 +189,7 @@ Similarly, signoff returns remain permanently bound to tool versions, libraries,
 
 When a tool execution terminates and logs are preserved, recovery mechanisms depend on failure classification: invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
 
-::: {.callout-failure-mode title="The stale library view"}
+::: {.callout-war-story title="The stale library view"}
 **The trap.** A team updates RTL and timing constraints for an accelerated clock, reruns static timing analysis, and receives a clean signoff report for a design that fails bus timing.
 
 **The mechanism.** The timing analyzer loads a cached Liberty view from a previous lower-frequency corner lacking accelerated setup/hold characterizations. Because failing checks were not loaded, no violations were reported.
@@ -198,13 +201,8 @@ When a tool execution terminates and logs are preserved, recovery mechanisms dep
 
 To prevent stale cache hits and untracked environment mutations from corrupting architectural studies, environments rely on structured execution records. An execution record is not a passive logfile; it is the definitive, immutable receipt that bridges low-level CAD execution to high-level architectural decision-making. When automated methods drive exploration loops, every tool invocation produces an immutable record pairing candidate identity with environment state, tool versions, container digests, and consumed compute resources.
 
-::: {.callout-historical-perspective title="MIT Whirlwind and the core memory reliability threshold"}
-**The breakthrough.** Jay Forrester's group introduced magnetic core storage in 1951, replacing electrostatic storage tubes in Whirlwind by 1953 [@Forrester1951DigitalInformationStorage].
+Historically, scaling computational runtimes has always depended on raising the reliability threshold of intermediate state. In 1951, Jay Forrester's group developed magnetic core storage to replace electrostatic storage tubes in the MIT Whirlwind computer [@Forrester1951DigitalInformationStorage]. Electrostatic storage leaked charge continuously, causing frequent runtime drift; core memory dramatically increased mean time between failures (MTBF), establishing the hardware reliability foundation required for sustained real-time computation. In AI-native design systems where synthesis and emulation runs span hours or days across distributed cluster nodes, uncheckpointed runtimes risk outstripping infrastructure MTBF. Execution harnesses must establish dependable checkpoint intervals balanced against recovery overhead, while producing immutable execution records that distinguish host infrastructure crashes from candidate hardware defects.
 
-**The lineage.** Electrostatic tubes leaked stored charge, causing frequent drift. Core memory increased mean time between failures (MTBF), enabling dependable real-time computation.
-
-**The synthesis lesson.** When uncheckpointed runtimes approach system MTBF, expected recovery costs grow exponentially. Long-running synthesis and emulation require checkpoint intervals that balance recovery overhead against checkpoint latency, alongside attempt records distinguishing host crashes from design defects.
-:::
 
 To guarantee post-execution auditability across distributed clusters, execution records capture six core dimensions:
 

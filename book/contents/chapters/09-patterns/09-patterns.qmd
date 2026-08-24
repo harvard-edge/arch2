@@ -133,11 +133,14 @@ Terminology must remain precise. Only learned components can be retrained. Data 
 
 Diagnosing broken invariants spans five failure modes: workload-support mismatches, candidate-family shifts, proxy-reference correlation loss, executable-path disruptions, and decision-semantics changes. Machine-learning studies on distribution shift and hidden dependencies highlight three key lessons for architecture: empirical support can expire while interfaces remain unchanged; local metrics can mask system failures; and naive adaptation can perform worse than clean target-only alternatives [@WangEtAl2019NegativeTransfer; @QuinoneroCandelaEtAl2009DatasetShift; @SculleyEtAl2015Hidden].
 
-::: {.callout-failure-mode title="Paradox and Trap: Simpson's Paradox in Multi-Block SoC Integration"}
+::: {.callout-law title="Simpson's Paradox in Multi-Block SoC Integration"}
 **The Classical Principle:** A statistical trend observed across individual subgroups disappears or reverses when the subgroups are combined into an aggregated whole [@Simpson1951ContingencyTables].
+
 **The Hardware Trap:** An AI optimization engine optimizes twenty individual accelerator sub-blocks in isolation, reporting a $15\%$ area reduction and $10\%$ power saving on every single block ($\Delta P_{\text{block}, i} < 0\ \forall i$). However, when integrated onto the full system-on-chip (SoC) die, the optimized sub-blocks require fragmented routing channels and non-contiguous aspect ratios, inflating global network-on-chip (NoC) wirelength and top-level clock distribution power ($\Delta P_{\text{total}} = \sum \Delta P_{\text{block}, i} + \Delta P_{\text{NoC}} + \Delta P_{\text{clock}} > 0$). The full SoC consumes more power than the unoptimized baseline.
+
 **The Architectural Antidote:** Bound optimization and transfer scopes to the smallest enclosing architectural boundary that captures full-system interconnect and thermal coupling (see @sec-law-simpsons-paradox for the mathematical composition model and full-die floorplanning invariants).
 :::
+
 
 These lessons require distinguishing four distinct concepts.
 
@@ -258,13 +261,14 @@ The physical parameters in @eq-logca-speedup-bound depend heavily on the target 
 
 Fixed startup cost and transfer time share units with compute time, combining Amdahl's serial-fraction principle [@Amdahl1967ValiditySingleProcessor] with explicit communication costs. Excessive invocations ($N \cdot o$) or transfer overhead ($d g / B$) can erase local compute gains, shifting the operational break-even point where offloading achieves net acceleration (@fig-ch09-logca-phase-diagram). An offload provides a genuine system benefit only after the offloaded payload $g$ is sufficiently large to amortize both driver invocation latency and physical link transport overheads.
 
-::: {.callout-failure-mode title="The unamortized offload wall"}
+::: {.callout-war-story title="The unamortized offload wall"}
 **The trap.** In an illustrative scenario consistent with the model above, a mobile NPU adds a 1,024-MAC systolic tensor engine capable of $100\times$ local matrix-multiply acceleration ($A=100$) over scalar RISC-V execution, and the team treats that local factor as the expected system speedup.
 
 **The mechanism.** Because the runtime invokes the NPU through kernel-mode driver calls for each small layer (payload $g=500\ \text{operations}$), launch latency ($o=1500\ \text{cycles}$) dominates execution before any DMA descriptor setup is even counted. Instead of $100\times$, the modeled system runs at $S(g) = 0.33\times$, slower than baseline scalar execution.
 
 **The lesson.** Local compute acceleration ($A$) cannot overcome unamortized startup ($o$) and transfer ($d g/B$) costs. Offload mechanisms must be co-designed with compiler layer fusion so that payload size $g$ stays well above the break-even threshold.
 :::
+
 
 ![**LogCA break-even offload frontiers across physical interconnect regimes.** Break-even granularity ($g^*$, minimum FLOPs for net speedup $S(g) \ge 1.0$) plotted against operational intensity ($\text{FLOP/byte}$) across seven interconnect standards [@AltafWood2017LogCA; @Williams2009Roofline]. Die-to-die UCIe 2.0 (1,600\ GB/s, 2.5\ ns) breaks even at fine-grained payloads ($g^* \approx 320\ \text{FLOPs}$), whereas board-level PCIe Gen 5 and Ultra Ethernet enforce steep bandwidth walls ($\text{OI}^* = 3.9\ \text{FLOP/byte}$), requiring coarse payloads ($g^* > 10^5\ \text{FLOPs}$) to amortize driver and link overheads.](images/fig-ch09-logca-phase-diagram){#fig-ch09-logca-phase-diagram width="100%" fig-alt="Log-log plot of minimum break-even operation granularity in FLOPs versus operational intensity in FLOPs per byte across seven interconnect regimes from UCIe 2.0 to Ultra Ethernet, showing that die-to-die packaging enables fine-grained offloading while board-level PCIe enforces a steep operational intensity wall."}
 
