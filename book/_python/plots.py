@@ -285,3 +285,151 @@ def add_note_box(
         color=COLORS["note_text"],
         linespacing=1.15,
     )
+
+
+def clean_spines(ax, keep: tuple[str, ...] = ("bottom", "left")) -> None:
+    """Standardize spine styling by hiding unkept spines and coloring kept ones."""
+    for spine in ["top", "right", "left", "bottom"]:
+        if spine in keep:
+            ax.spines[spine].set_visible(True)
+            ax.spines[spine].set_color(COLORS["ink"])
+            ax.spines[spine].set_linewidth(0.7)
+        else:
+            ax.spines[spine].set_visible(False)
+
+
+def inject_svg_font_stack(svg_path: Path | str) -> None:
+    """Ensure font stack is explicitly declared in SVG for headless text rendering."""
+    path = Path(svg_path)
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    if '<style type="text/css">' not in text:
+        text = text.replace(
+            "<defs>",
+            '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+
+
+def save_figure_bundle(
+    fig,
+    output_base: Path | str,
+    formats: tuple[str, ...] = ("svg", "pdf", "png"),
+    dpi: int = 300,
+    bbox_inches: str = "tight",
+) -> dict[str, Path]:
+    """Save figure to multiple formats (SVG, PDF, PNG) with consistent font stack and settings."""
+    base_path = Path(output_base)
+    if base_path.suffix in [".svg", ".pdf", ".png"]:
+        stem = base_path.parent / base_path.stem
+    else:
+        stem = base_path
+
+    saved_paths = {}
+    for fmt in formats:
+        target = stem.with_suffix(f".{fmt}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if fmt == "png":
+            fig.savefig(target, dpi=dpi, bbox_inches=bbox_inches)
+        else:
+            fig.savefig(target, bbox_inches=bbox_inches)
+        if fmt == "svg":
+            inject_svg_font_stack(target)
+        saved_paths[fmt] = target
+
+    return saved_paths
+
+
+def draw_spectrum_bars(
+    ax,
+    categories: list[str],
+    values: list[float],
+    labels_fmt: list[str],
+    *,
+    colors: list[str] | None = None,
+    height: float = 0.50,
+    left: float | list[float] | None = None,
+    xlim: tuple[float, float] | None = None,
+    log_scale: bool = True,
+    xlabel: str | None = None,
+    threshold_inside: float = 1e10,
+    bar_edgecolor: str | None = None,
+    in_bar_color: str = "#ffffff",
+    out_bar_color: str | None = None,
+    fontsize: float = 5.8,
+) -> None:
+    """Draw standardized horizontal spectrum bars with calibrated inside/outside labels."""
+    y_pos = list(range(len(categories)))
+
+    if colors is None:
+        default_palette = [
+            COLORS["ink"],
+            COLORS["workload"],
+            COLORS["evidence"],
+            COLORS["designspace"],
+            COLORS["constraints"],
+        ]
+        colors = [
+            default_palette[i % len(default_palette)] for i in range(len(categories))
+        ]
+
+    if out_bar_color is None:
+        out_bar_color = COLORS["ink"]
+
+    bar_kwargs = {
+        "height": height,
+        "color": colors,
+        "zorder": 3,
+    }
+    if bar_edgecolor is not None:
+        bar_kwargs["edgecolor"] = bar_edgecolor
+        bar_kwargs["linewidth"] = 0.6
+
+    if left is not None:
+        bars = ax.barh(y_pos[::-1], values, left=left, **bar_kwargs)
+    else:
+        bars = ax.barh(y_pos[::-1], values, **bar_kwargs)
+
+    if log_scale:
+        ax.set_xscale("log")
+
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+
+    ax.set_yticks(y_pos[::-1])
+    ax.set_yticklabels(categories, fontsize=6.2, fontweight="bold", color=COLORS["ink"])
+
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=6.5, color=COLORS["ink"])
+
+    ax.grid(axis="x", color=COLORS["grid"], linewidth=0.55, zorder=0)
+    clean_spines(ax, keep=("bottom", "left"))
+
+    for bar, val, lbl in zip(bars, values, labels_fmt):
+        y_center = bar.get_y() + bar.get_height() / 2
+        if val >= threshold_inside:
+            ax.text(
+                val / 1.45,
+                y_center,
+                lbl,
+                va="center",
+                ha="right",
+                fontsize=fontsize,
+                fontweight="bold",
+                color=in_bar_color,
+                zorder=4,
+            )
+        else:
+            ax.text(
+                val * 1.35,
+                y_center,
+                lbl,
+                va="center",
+                ha="left",
+                fontsize=fontsize,
+                fontweight="bold",
+                color=out_bar_color,
+                zorder=4,
+            )

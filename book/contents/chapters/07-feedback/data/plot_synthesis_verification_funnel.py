@@ -24,17 +24,22 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style
+from book._python.plots import (
+    COLORS,
+    apply_style,
+    clean_spines,
+    save_figure_bundle,
+)
 
 apply_style()
 
 
 def main():
-    chapter_dir = Path(__file__).resolve().parent.parent
+    chapter_dir = Path(__file__).resolve().parents[1]
     csv_file = chapter_dir / "data" / "fig-synthesis-verification-funnel.csv"
-    out_plot_ch = chapter_dir / "images" / "fig-synthesis-verification-funnel.svg"
+    out_plot_ch = chapter_dir / "images" / "fig-synthesis-verification-funnel"
     out_plot_global = (
-        REPO_ROOT / "book" / "images" / "fig-synthesis-verification-funnel.svg"
+        REPO_ROOT / "book" / "images" / "fig-synthesis-verification-funnel"
     )
 
     stages = []
@@ -57,21 +62,28 @@ def main():
     fig, (ax1, ax2) = plt.subplots(
         1, 2, figsize=(7.0, 3.2), gridspec_kw={"width_ratios": [1.25, 1.0]}
     )
-    fig.subplots_adjust(wspace=0.42)
+    fig.subplots_adjust(wspace=0.42, bottom=0.18, top=0.90)
 
     # --- Panel A: Candidate Attrition (Log Scale Bar Chart + Yield Line) ---
     x = np.arange(len(all_stages))
     colors_bars = [
         COLORS["ink"],
-        COLORS["blue"],
-        COLORS["green"],
-        COLORS["orange"],
-        COLORS["purple"],
-        COLORS["red"],
+        COLORS["workload"],
+        COLORS["evidence"],
+        COLORS["methods"],
+        COLORS["designspace"],
+        COLORS["constraints"],
     ]
 
     bars = ax1.bar(
-        x, all_counts, bottom=1, color=colors_bars, alpha=0.85, width=0.52, zorder=3
+        x,
+        all_counts,
+        bottom=1,
+        color=colors_bars,
+        edgecolor=COLORS["note_edge"],
+        linewidth=0.6,
+        width=0.52,
+        zorder=3,
     )
     ax1.set_yscale("log")
     ax1.set_ylim(1, 400000)
@@ -80,14 +92,15 @@ def main():
     ax1.set_ylabel(
         "Passing Candidate Count (Log Scale)", fontsize=6.8, color=COLORS["ink"]
     )
-    ax1.grid(True, which="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax1.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    clean_spines(ax1, keep=("bottom", "left"))
 
     # Secondary Axis for Cumulative Yield Line
     ax1_sub = ax1.twinx()
     ax1_sub.plot(
         x,
         all_yield,
-        color=COLORS["red"],
+        color=COLORS["constraints_ink"],
         marker="o",
         linewidth=1.5,
         markersize=3.5,
@@ -96,9 +109,13 @@ def main():
     ax1_sub.set_yscale("log")
     ax1_sub.set_ylim(0.01, 200)
     ax1_sub.set_ylabel(
-        "Cumulative Yield (% Log Scale)", fontsize=6.5, color=COLORS["red"], labelpad=8
+        "Cumulative Yield (% Log Scale)",
+        fontsize=6.5,
+        color=COLORS["constraints_ink"],
+        labelpad=8,
     )
-    ax1_sub.tick_params(axis="y", colors=COLORS["red"], labelsize=5.8)
+    ax1_sub.tick_params(axis="y", colors=COLORS["constraints_ink"], labelsize=5.8)
+    clean_spines(ax1_sub, keep=("right",))
 
     for bar, count in zip(bars, all_counts):
         ax1.text(
@@ -118,7 +135,8 @@ def main():
         x_stages,
         stage_pass_rates,
         color=colors_bars[1:],
-        alpha=0.85,
+        edgecolor=COLORS["note_edge"],
+        linewidth=0.6,
         width=0.52,
         zorder=3,
     )
@@ -129,7 +147,8 @@ def main():
         [f"Stage {i+1}" for i in range(5)], fontsize=5.8, color=COLORS["ink"]
     )
     ax2.set_ylabel("Conditional Stage Pass Rate (%)", fontsize=6.8, color=COLORS["ink"])
-    ax2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax2.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    clean_spines(ax2, keep=("bottom", "left"))
 
     for bar, rate in zip(bars2, stage_pass_rates):
         ax2.text(
@@ -143,8 +162,8 @@ def main():
             color=COLORS["ink"],
         )
 
-    plt.savefig(out_plot_ch, dpi=300, bbox_inches="tight")
-    plt.savefig(out_plot_global, dpi=300, bbox_inches="tight")
+    save_figure_bundle(fig, out_plot_ch)
+    save_figure_bundle(fig, out_plot_global)
     print(f"Verification Funnel plot saved to '{out_plot_ch}' and '{out_plot_global}'")
 
 

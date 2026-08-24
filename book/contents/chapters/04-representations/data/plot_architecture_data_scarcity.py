@@ -16,34 +16,27 @@ import csv
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
-import numpy as np
 
 # Connect parent repo path to import book._python.plots
 REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style
-import matplotlib as mpl
+from book._python.plots import (
+    COLORS,
+    apply_style,
+    draw_spectrum_bars,
+    save_figure_bundle,
+)
 
 apply_style()
 
 
-def _declare_font_stack(svg_path: Path) -> None:
-    # The SVG text-fit check requires the shared font stack declared in the file.
-    text = svg_path.read_text()
-    text = text.replace(
-        "<defs>",
-        '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
-        1,
-    )
-    svg_path.write_text(text)
-
-
 def main():
-    chapter_dir = Path(__file__).resolve().parent.parent
+    chapter_dir = Path(__file__).resolve().parents[1]
     csv_file = chapter_dir / "data" / "fig-architecture-data-scarcity.csv"
-    out_plot_ch = chapter_dir / "images" / "fig-architecture-data-scarcity.svg"
+    out_plot_ch = chapter_dir / "images" / "fig-architecture-data-scarcity"
+    global_img_base = REPO_ROOT / "book" / "images" / "fig-architecture-data-scarcity"
 
     categories = []
     corpora = []
@@ -60,36 +53,16 @@ def main():
             constraints.append(row["PrimaryAccessConstraint"])
             citations.append(row["RepresentativeCitations"])
 
-    fig, ax = plt.subplots(figsize=(6.4, 3.0))
+    fig, ax = plt.subplots(figsize=(6.2, 2.7))
+    fig.subplots_adjust(left=0.34, right=0.94, top=0.90, bottom=0.18)
 
-    y_pos = np.arange(len(corpora))
     colors_bars = [
         COLORS["ink"],
-        COLORS["blue"],
-        COLORS["green"],
-        COLORS["purple"],
-        COLORS["red"],
+        COLORS["workload"],
+        COLORS["evidence"],
+        COLORS["designspace"],
+        COLORS["constraints"],
     ]
-
-    bars = ax.barh(
-        y_pos[::-1],
-        tokens,
-        left=1e2,
-        color=colors_bars,
-        alpha=0.85,
-        height=0.52,
-        zorder=3,
-    )
-    ax.set_xscale("log")
-    ax.set_xlim(1e2, 5e14)
-    ax.set_yticks(y_pos[::-1])
-    ax.set_yticklabels(categories, fontsize=6.2, fontweight="bold", color=COLORS["ink"])
-    ax.set_xlabel(
-        "Corpus Scale (log; units differ per tier)",
-        fontsize=7.0,
-        color=COLORS["ink"],
-    )
-    ax.grid(True, which="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     labels_fmt = [
         r"$\sim 1.5{\times}10^{13}$ Tokens (Llama-3 / RedPajama)",
@@ -99,33 +72,26 @@ def main():
         r"$\sim 1.5{\times}10^3$ QA Pairs (QuArch v0.1)",
     ]
 
-    for bar, val, lbl in zip(bars, tokens, labels_fmt):
-        if val >= 1e10:
-            ax.text(
-                val / 1.4,
-                bar.get_y() + bar.get_height() / 2,
-                lbl,
-                va="center",
-                ha="right",
-                fontsize=5.8,
-                fontweight="bold",
-                color="#ffffff",
-            )
-        else:
-            ax.text(
-                val * 1.35,
-                bar.get_y() + bar.get_height() / 2,
-                lbl,
-                va="center",
-                fontsize=5.8,
-                fontweight="bold",
-                color=COLORS["ink"],
-            )
+    draw_spectrum_bars(
+        ax,
+        categories=categories,
+        values=tokens,
+        labels_fmt=labels_fmt,
+        colors=colors_bars,
+        height=0.48,
+        left=1e2,
+        xlim=(1e2, 6e14),
+        xlabel="Corpus Scale (log; units differ per tier)",
+        threshold_inside=1e10,
+        bar_edgecolor=COLORS["note_edge"],
+        fontsize=5.8,
+    )
 
-    plt.tight_layout()
-    plt.savefig(out_plot_ch, dpi=300, bbox_inches="tight")
-    _declare_font_stack(out_plot_ch)
-    print(f"Data Scarcity Spectrum plot saved to '{out_plot_ch}'")
+    save_figure_bundle(fig, out_plot_ch)
+    save_figure_bundle(fig, global_img_base)
+    print(
+        f"Data Scarcity Spectrum plot saved to '{out_plot_ch}' and '{global_img_base}'"
+    )
 
 
 if __name__ == "__main__":
