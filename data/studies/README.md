@@ -39,11 +39,13 @@ done
 If you use these datasets, figures, or empirical findings in your research or teaching, please cite:
 
 ```bibtex
-@misc{arch2_empirical_observatory_2026,
-  author       = {Reddi, Vijay Janapa and Contributors},
-  title        = {The Architecture 2.0 Empirical Systems and Silicon Observatory},
-  howpublished = {\url{https://arch2.mlsysbook.ai/observatory.html}},
-  year         = {2026},
-  url          = {https://arch2.mlsysbook.ai}
+@book{arch2_2026,
+  author    = {Reddi, Vijay Janapa},
+  title     = {Architecture 2.0: Principles of AI-Native System and Chip Design},
+  year      = {2026},
+  publisher = {Morgan \& Claypool},
+  url       = {https://arch2.mlsysbook.ai}
 }
 ```
+
+> Reddi, V. J. (2026). *Architecture 2.0: Principles of AI-Native System and Chip Design*. Morgan & Claypool. Available at: `https://arch2.mlsysbook.ai`
