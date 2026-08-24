@@ -188,14 +188,6 @@ def generate_figure(output_dir: Path) -> Path:
     ax.spines["left"].set_color(COLORS["ink"])
     ax.spines["bottom"].set_color(COLORS["ink"])
 
-    ax.set_title(
-        "LogCA Break-Even Offload Frontiers Across Physical Interconnect Regimes",
-        fontsize=7.2,
-        fontweight="bold",
-        pad=8,
-        color=COLORS["ink"],
-    )
-
     legend = ax.legend(
         loc="upper right",
         fontsize=5.0,

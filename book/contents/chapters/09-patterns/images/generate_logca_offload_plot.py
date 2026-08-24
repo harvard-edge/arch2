@@ -161,11 +161,6 @@ def generate_plot(output_dir: str | None = None) -> str:
         fontweight="bold",
     )
 
-    ax.set_title(
-        "LogCA Analytical Break-Even Offload Speedup Frontier across Interconnects",
-        pad=12,
-    )
-
     ax.legend(loc="upper left", framealpha=0.9, fontsize=8.5)
 
     fig = book_style.finalize_web_figure(fig)

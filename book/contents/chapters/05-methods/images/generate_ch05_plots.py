@@ -127,12 +127,6 @@ def generate_search_efficiency(output_dir: Path) -> None:
     ax.set_xlim(1, 2000)
     ax.set_ylim(0.15, 1.0)
 
-    ax.set_title(
-        "Floorplan Search Efficiency Across Optimization Methodologies",
-        fontsize=8.0,
-        pad=9,
-        fontweight="bold",
-    )
     ax.set_xlabel("Physical Design Tool Evaluations (log scale)", fontsize=6.8)
     ax.set_ylabel("Normalized Floorplan PPA Quality Score", fontsize=6.8)
 

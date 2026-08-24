@@ -154,15 +154,7 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
     ax.set_xlim(1.0, 20000000.0)
     ax.set_ylim(-1.5, 30.0)
 
-    ax.set_title(
-        "Simulation Speedup versus Fidelity Spectrum Across Hardware Environments",
-        fontsize=8.0,
-        pad=9,
-        fontweight="bold",
-    )
-    ax.set_xlabel(
-        "Simulation Throughput (Kilo-Instructions Per Second, log scale)", fontsize=6.8
-    )
+    ax.set_xlabel("Simulation Speedup / Throughput (KIPS, log scale)", fontsize=6.8)
     ax.set_ylabel(
         "Microarchitectural Cycle Error Rate (%) (lower is better)", fontsize=6.8
     )

@@ -132,13 +132,6 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         color=COLORS["constraints_ink"],
     )
 
-    ax.set_title(
-        "Candidate arrival rate versus downstream tool stage utilization",
-        fontsize=7.5,
-        pad=10,
-        fontweight="bold",
-        color=COLORS["ink"],
-    )
     ax.set_xlabel(
         "Candidate generation arrival rate g (proposals / day)",
         fontsize=6.5,
