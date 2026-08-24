@@ -110,11 +110,11 @@ If you use this dataset, methodology, or figure in your research, course materia
 @misc{arch2_silicon_errata_2026,
   author       = {Reddi, Vijay Janapa and Contributors},
   title        = {Real-World Silicon Errata and Defect Archaeology Dataset (2016--2026)},
-  howpublished = {Architecture 2.0 Empirical Data Repository},
+  howpublished = {\url{https://arch2.mlsysbook.ai}},
   year         = {2026},
-  url          = {https://github.com/harvard-edge/arch2/tree/dev/data/studies/01-silicon-errata-archaeology}
+  url          = {https://arch2.mlsysbook.ai}
 }
 ```
 
 ### Plain Text:
-> Reddi, V. J., et al. (2026). *Real-World Silicon Errata & Defect Archaeology (2016–2026)*. In **Architecture 2.0: Autonomous AI, Accelerators, and the Future of Silicon Design**. Harvard University & Edge AI Foundation. Available at: `https://github.com/harvard-edge/arch2/tree/dev/data/studies/01-silicon-errata-archaeology`
+> Reddi, V. J., et al. (2026). *Real-World Silicon Errata & Defect Archaeology (2016–2026)*. In **Architecture 2.0: Autonomous AI, Accelerators, and the Future of Silicon Design**. Harvard University & Edge AI Foundation. Available at: `https://arch2.mlsysbook.ai`

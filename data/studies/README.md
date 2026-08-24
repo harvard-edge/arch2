@@ -31,3 +31,19 @@ for study in data/studies/*/; do
   fi
 done
 ```
+
+---
+
+## Citation
+
+If you use these datasets, figures, or empirical findings in your research or teaching, please cite:
+
+```bibtex
+@misc{arch2_empirical_observatory_2026,
+  author       = {Reddi, Vijay Janapa and Contributors},
+  title        = {The Architecture 2.0 Empirical Systems and Silicon Observatory},
+  howpublished = {\url{https://arch2.mlsysbook.ai/observatory.html}},
+  year         = {2026},
+  url          = {https://arch2.mlsysbook.ai}
+}
+```

@@ -110,11 +110,11 @@ If you use this dataset, methodology, or figure in your research, course materia
 @misc{arch2_testbench_vacuity_2026,
   author       = {Reddi, Vijay Janapa and Contributors},
   title        = {Testbench Mutation Vacuity and LLM-as-a-Judge Calibration Dataset},
-  howpublished = {Architecture 2.0 Empirical Data Repository},
+  howpublished = {\url{https://arch2.mlsysbook.ai}},
   year         = {2026},
-  url          = {https://github.com/harvard-edge/arch2/tree/dev/data/studies/08-testbench-vacuity-and-judge-bias}
+  url          = {https://arch2.mlsysbook.ai}
 }
 ```
 
 ### Plain Text:
-> Reddi, V. J., et al. (2026). *Testbench Mutation Vacuity & LLM-as-a-Judge Calibration*. In **Architecture 2.0: Autonomous AI, Accelerators, and the Future of Silicon Design**. Harvard University & Edge AI Foundation. Available at: `https://github.com/harvard-edge/arch2/tree/dev/data/studies/08-testbench-vacuity-and-judge-bias`
+> Reddi, V. J., et al. (2026). *Testbench Mutation Vacuity & LLM-as-a-Judge Calibration*. In **Architecture 2.0: Autonomous AI, Accelerators, and the Future of Silicon Design**. Harvard University & Edge AI Foundation. Available at: `https://arch2.mlsysbook.ai`
