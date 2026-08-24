@@ -23,10 +23,13 @@ data/source-receipts/
 ├── chapter2-ai-accelerator-scaling-frontier.csv  # 14-year AI accelerator scaling (2012–2026)
 ├── chapter7-wilson-verification-scissors-gap.csv # 22-year Wilson / Siemens EDA verification survey
 ├── chapter9-mlperf-software-dividend.csv         # MLCommons MLPerf software vs. hardware scaling
+├── mlperf_longitudinal_software_dividend.csv     # Extended longitudinal MLPerf software dividend dataset (2018-2026)
+├── inference_kernel_fragmentation.csv            # Custom kernel proliferation across vLLM, TensorRT-LLM, SGLang, TGI
 ├── plot_github_divide.py                    # Script generating fig-ch01-github-hardware-divide
 ├── plot_ai_accelerator_scaling.py           # Script generating fig-ch02-accelerator-scaling-frontier
 ├── plot_wilson_scissors.py                  # Script generating fig-ch07-wilson-verification-scissors
 ├── plot_mlperf_dividend.py                  # Script generating fig-ch09-mlperf-software-dividend
+├── plot_mlperf_software_dividend_extended.py # Extended plotter for longitudinal dividend & kernel fragmentation
 └── [other chapterN-*.csv receipts]          # Additional chapter-specific empirical receipts
 ```
 
@@ -98,22 +101,75 @@ data/source-receipts/
 
 ---
 
+### 2.5 Track 3: The Software Porting Wall & Inference Custom Kernel Fragmentation (2023–2026)
+* **Receipts:** `mlperf_longitudinal_software_dividend.csv` and `inference_kernel_fragmentation.csv`
+* **Scraper & Miner:** `data/scrapers/mine_mlperf_software_dividend.py`
+* **Plotting Script:** `plot_mlperf_software_dividend_extended.py`
+* **Generated Assets:**
+  - `data/source-receipts/mlperf_longitudinal_software_dividend.{svg,pdf,png}`
+  - `data/source-receipts/inference_kernel_fragmentation.{svg,pdf,png}`
+  - `data/source-receipts/mlperf_software_dividend_extended_master.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *MLCommons Benchmarks (2018–2026):* Peer-reviewed results across Training (v0.5–v5.1) and Inference (v1.0–v6.0).
+  2. *Inference Runtime Repositories:* `vLLM` (vllm-project/vllm), `TensorRT-LLM` (NVIDIA/TensorRT-LLM), `SGLang` (sgl-project/sglang), and `TGI` (huggingface/text-generation-inference).
+* **Key Empirical Metrics Tracked:**
+  - *The In-Place Software Dividend:* Measures sustained throughput maturation on frozen physical silicon over 12–36 months: V100 ($3.82\times$), A100 ($2.69\times$), TPU v4 ($1.50\times$), H100 Training ($1.48\times$), H100 Inference ($1.45\times$), TPU v6e ($1.42\times$), and MI300X ($1.32\times$).
+  - *The Software Porting Wall:* Custom handwritten kernel LOC grew from $<5\text{K LOC}$ in early 2023 to $>340\text{K LOC}$ in 2026 (an $82\times$ explosion in 36 months), fragmenting across attention (FlashAttention-3, PagedAttention, MLA), quantization (FP8, FP4, Marlin), MoE routing dispatch, and custom hardware-specific collective communications.
+
+---
+
+### 2.6 Track 6: Open Silicon Democratization & The 3,000× Fabrication Cost Collapse (1981–2026)
+* **Receipts:** `tinytapeout_democratization_census.csv` and `shuttle_cost_historical_collapse.csv`
+* **Scraper & Aggregator:** `data/scrapers/scrape_tinytapeout_census.py`
+* **Plotting Script:** `plot_tinytapeout_democratization.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig-tinytapeout-democratization-census.{svg,pdf,png}`
+  - `book/contents/chapters/01-moonshot/images/fig-ch01-tinytapeout-democratization-census.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *Tiny Tapeout Manifests & API Archives (2022–2026):* Public manifests across 27 shuttle rounds (TT01 through TT-SKY-26c, TT-IHP-26b, TT-GF-26b) via `https://app.tinytapeout.com/api/shuttles/submission-stats` and GitHub submission repositories (`tinytapeout/tinytapeout-mpw7`, `tinytapeout-02` through `09`, `tinytapeout-ihp-*`, `tinytapeout-gf-*`).
+  2. *Efabless Open MPW & Google Sponsored Shuttle Archives:* Open MPW-1 through Open MPW-8, Caravel user space specifications, and ChipIgnite commercial open-source shuttles.
+  3. *Historical Semiconductor Fabrication Tariffs:* MOSIS Historical Service Rates (Cohen & Tyree 1982, Pina IEEE 2001), TSMC CyberShuttle catalogs (2000–2016), IBS Semiconductor Node Design Cost Reports, and Mead & Conway VLSI history (1980, 2012).
+* **Key Empirical Metrics Tracked:**
+  - *Democratization Wave:* Traces explosive submission growth from 152 designs in TT01 (Aug 2022) to over $4{,}780+$ designs across 27 shuttle rounds in 2026.
+  - *Domain Specialization:* Tracks design domain evolution from early educational logic (74%) into domain-specific accelerators, custom CPUs & RISC-V cores ($5.0\%$), Neural Networks & Systolic AI accelerators ($4.8\%$), Audio/DSP synthesizers ($3.3\%$), Demoscene & VGA graphics ($5.7\%$), and High-Speed 250 GHz BiCMOS RF / Analog mixed-signal designs ($4.1\%$).
+  - *Participant Affiliations:* Highlights global grassroots adoption spanning Undergraduate VLSI courses (Stanford, UCSC, TU Wien, Columbia, IITs; $34\%$), Graduate/PhD researchers ($21\%$), Open-Source Makers & Demoscene artists ($16\%$), High School / K-12 students via Hack Club OnBoard ($15\%$), Academic Research Labs ($9\%$), and commercial hardware startups ($5\%$).
+  - *The $3{,}000\times$ Fabrication Cost Collapse:* Quantifies the historical step-function drop in custom silicon entry cost: from $\$150{,}000$ dedicated mask runs in 1981 and $\$16{,}000\text{--}\$85{,}000$ commercial MPW slots down to $\$0$ (Google Open MPW) and $\$50\text{--}\$100$ per slot in Tiny Tapeout, dismantling both the silicon mask barrier and the proprietary EDA licensing wall.
+
+### 2.7 Track 1: Real-World Silicon Errata & Defect Archaeology (2016–2026)
+* **Receipts:**
+  - `granular_processor_errata_taxonomy.csv` ($N = 1{,}771$ itemized processor errata across 19 CPU families)
+  - `hardware_errata_longitudinal_summary.csv` (19-processor family longitudinal summary)
+* **Scraper & Parser:** `data/scrapers/scrape_intel_amd_errata.py`
+* **Plotting Script:** `plot_errata_subsystem_sunburst_and_decay.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig-errata-subsystem-sunburst-and-decay.{svg,pdf,png}`
+  - `book/contents/chapters/11-ownership/images/fig-hardware-errata-lifecycle.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *Intel Specification Updates (2016–2026):* Broadwell-EP (334165-007US), Skylake-SP (336065-017US), Cascade Lake (338848-016US), Ice Lake-SP (637780-008US), Sapphire Rapids (772415-022US), Emerald Rapids (793902-008US), Coffee Lake (337346-015US), Comet/Ice Lake-U (341079-011US), Rocket Lake (634808-005US), Tiger Lake (631123-010US), Alder Lake (682436-037US), Raptor Lake (740518-019US), Meteor Lake (792254-009US), Lunar Lake (827538-003US), Arrow Lake (834774-001US).
+  2. *AMD Revision Guides (2017–2026):* Zen 1 Naples (55449 Rev 1.21), Zen 2 Rome (56323 Rev 1.15), Zen 4 Genoa (57926 Rev 1.09), Zen 5 Turin (58730 Rev 1.03).
+* **Key Empirical Metrics Tracked:**
+  - *The "ALU Fallacy":* Empirical refutation of arithmetic-centric verification. Pure arithmetic ALU bugs account for only $<1.8\%$ of total post-silicon escapes (all vector/FP arithmetic $6.8\%$), whereas Memory Hierarchy ($31.3\%$), Platform IO & PCIe ($16.5\%$), Virtualization/IOMMU ($16.1\%$), Debug/PMU ($14.0\%$), and Power/Clocking ($6.6\%$) account for over $93\%$ of escapes, confirming that hardware defects concentrate overwhelmingly at subsystem integration seams.
+  - *Errata Discovery Half-Life & Stepping Decay:* $66.4\%$ of all lifetime escapes emerge on initial A0 silicon, decaying exponentially across subsequent revisions ($\lambda = 1.12$, $t_{1/2} \approx 0.62$ steppings) with mature volume steppings (B0+) contributing $<8.8\%$.
+  - *Containment Economics:* $33.8\%$ of post-silicon escapes in production silicon are remediated without mask respins via programmable microcode chicken-bits ($18.9\%$) and software/OS workarounds ($14.9\%$), while $66.2\%$ are documented operational risk waivers ("No Fix"). Zero production stepping defects were mitigated via physical mask respins due to soaring mask costs ($\$180\text{M}$ at 2 nm).
+
+---
+
 ## 3. Reproduction Instructions
 
-To regenerate all four canonical figures and verify their vector (SVG/PDF) and visual inspection (PNG) twin assets:
+To regenerate all figures and verify their vector (SVG/PDF) and visual inspection (PNG) twin assets:
 
 ```bash
-# Ensure dependencies are available (matplotlib, numpy, python >= 3.10)
+# Ensure dependencies are available (matplotlib, numpy, pypdf, python >= 3.10)
+python3 data/scrapers/scrape_intel_amd_errata.py
+python3 data/scrapers/mine_mlperf_software_dividend.py
+python3 data/scrapers/scrape_tinytapeout_census.py
 python3 data/source-receipts/plot_github_divide.py
 python3 data/source-receipts/plot_ai_accelerator_scaling.py
 python3 data/source-receipts/plot_wilson_scissors.py
 python3 data/source-receipts/plot_mlperf_dividend.py
-```
-
-To run the full automated validation suite across all prose, reference anchors, bibliography entries, and permissions records:
-
-```bash
-PYTHONPATH=. uv run --with typer --with rich --with pybtex --with jsonschema --with pyyaml python3 -m cli.arch2 validate all
+python3 data/source-receipts/plot_mlperf_software_dividend_extended.py
+python3 data/source-receipts/plot_tinytapeout_democratization.py
+python3 data/source-receipts/plot_errata_subsystem_sunburst_and_decay.py
 ```
 
 ---
