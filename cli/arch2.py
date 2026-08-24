@@ -5083,6 +5083,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"direct memory access",
         True,
     ),
+    "DSA": (
+        "domain-specific architecture",
+        False,
+        "a",
+        "hardware",
+        "A customized processor or compute engine engineered specifically to maximize execution efficiency for a targeted family of workloads.",
+        r"domain[- ]specific architecture",
+        False,
+    ),
     "DVFS": (
         "dynamic voltage and frequency scaling",
         False,
@@ -5306,6 +5315,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         "hardware",
         "A dedicated hardware cache that stores recent virtual-to-physical address translations to accelerate memory access.",
         r"translation lookaside buffer",
+        False,
+    ),
+    "TPU": (
+        "Tensor Processing Unit",
+        True,
+        "a",
+        "hardware",
+        "A custom-developed application-specific integrated circuit engineered by Google specifically for accelerating machine learning training and inference workloads.",
+        r"Tensor\ Processing\ Unit",
         False,
     ),
     "TSO": (
