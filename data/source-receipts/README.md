@@ -25,11 +25,13 @@ data/source-receipts/
 ├── chapter9-mlperf-software-dividend.csv         # MLCommons MLPerf software vs. hardware scaling
 ├── mlperf_longitudinal_software_dividend.csv     # Extended longitudinal MLPerf software dividend dataset (2018-2026)
 ├── inference_kernel_fragmentation.csv            # Custom kernel proliferation across vLLM, TensorRT-LLM, SGLang, TGI
+├── hardware_security_cve_mitigation_tax.csv      # Longitudinal hardware CVE mitigation tax ledger (2018-2026)
 ├── plot_github_divide.py                    # Script generating fig-ch01-github-hardware-divide
 ├── plot_ai_accelerator_scaling.py           # Script generating fig-ch02-accelerator-scaling-frontier
 ├── plot_wilson_scissors.py                  # Script generating fig-ch07-wilson-verification-scissors
 ├── plot_mlperf_dividend.py                  # Script generating fig-ch09-mlperf-software-dividend
 ├── plot_mlperf_software_dividend_extended.py # Extended plotter for longitudinal dividend & kernel fragmentation
+├── plot_hardware_cve_performance_tax.py     # Script generating fig-hardware-cve-mitigation-tax
 └── [other chapterN-*.csv receipts]          # Additional chapter-specific empirical receipts
 ```
 
@@ -166,6 +168,65 @@ data/source-receipts/
   - *The Structural Complexity Cliff:* $175.3\times$ AST node count gap (median $73$ nodes in benchmarks vs. $12,800$ nodes in silicon modules and $448,000$ in SoC top-levels) and $139.7\times$ clean LoC gap (median $32$ vs. $4,400$ LoC).
   - *The Clock-Domain Crossing (CDC) Void:* $99.7\%$ of AI benchmark circuits are single-clock with $0.0$ CDCs and $0.0$ sequential hierarchy ($\text{Depth}=1$). Production silicon requires $2\text{--}12$ independent clock domains, up to $86$ CDC synchronizers, and $230\times$ larger sequential state space ($2^{1610}\text{--}2^{42000}$ state space).
 
+### 2.9 Track 1.5: Hardware Security CVEs & Microarchitectural Performance Mitigation Tax
+* **Receipt:** `hardware_security_cve_mitigation_tax.csv` ($N = 20$ major transient execution CVE records and microarchitectural attack classes)
+* **Scraper & CVE Miner:** `data/scrapers/mine_hardware_security_cves.py`
+* **Plotting Script:** `plot_hardware_cve_performance_tax.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig-hardware-cve-mitigation-tax.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *Intel Security Advisories:* INTEL-SA-00088 (Meltdown, Spectre v1/v2), INTEL-SA-00115 (Spectre v3a/v4), INTEL-SA-00161 (Foreshadow / L1TF), INTEL-SA-00233 (MDS / RIDL / Fallout / ZombieLoad), INTEL-SA-00270 (TAA), INTEL-SA-00320 (SRBDS / CrossTalk), INTEL-SA-00702 (Retbleed), INTEL-SA-00598 / INTEL-SA-00982 (BHI), INTEL-SA-00828 (Downfall / GDS).
+  2. *AMD Security Notices:* AMD-SN-1001 (Spectre v1/v2), AMD-SN-1002 (Spectre v4), AMD-SN-1037 (Retbleed), AMD-SN-1043 (Inception / SRSO), AMD-SN-1046 (ZenBleed).
+  3. *Academic Security Benchmark Literature:* Lipp et al. (USENIX Sec 2018), Kocher et al. (IEEE S&P 2019), Canella et al. (IEEE S&P 2019), Van Bulck et al. (USENIX Sec 2018), Van Schaik et al. (IEEE S&P 2019), Schwarz et al. (ACM CCS 2019), Ragab et al. (IEEE S&P 2021), Wikner & Razavi (USENIX Sec 2022), Barberis et al. (USENIX Sec 2022), Moghimi (USENIX Sec 2023), Truell et al. (USENIX Sec 2024), Bhattacharyya et al. (USENIX Sec 2024), Moghimi et al. (CISPA 2024).
+* **Key Empirical Metrics Tracked:**
+  - *The 8-Year Speculative Performance Clawback:* Cumulative mean enterprise performance tax climbed from $4.5\%$ (Meltdown/KPTI in Jan 2018) to $9.5\%$ (Spectre v2/eIBRS), $14.5\%$ (MDS/VERW clearing in 2019), $18.5\%$ (Retbleed in 2022), and $22.0\%$ (Downfall/Inception/GhostRace in 2023–2026).
+  - *Worst-Case Isolation Tax Ceiling:* Worst-case derating on system call heavy (Redis, Nginx), inter-process communication, and multi-tenant hypervisor isolation workloads reaches $28.5\%$ (with isolated vector gather penalties peaking at $50.0\%$ under Downfall AVX serializer and $95.0\%$ under GhostWrite RVV traps).
+  - *Compute-Bound Invariance:* Compute-bound SPEC CPU 2017 workloads suffer only $1.2\%\text{--}14.0\%$ cumulative derating, proving that mitigation overhead concentrates almost entirely at privilege boundaries, memory disambiguation, and context-switch seams.
+
+### 2.10 Track 5.2: Foundry Wafer Cost Inversion vs. Corporate R&D Spend (SEC EDGAR 10-K)
+* **Receipt:** `sec_edgar_semiconductor_rd_economics.csv` ($N = 189$ longitudinal firm-year records across 2000–2026)
+* **Scraper & SEC Miner:** `data/scrapers/mine_sec_edgar_semiconductor_rd.py`
+* **Plotting Script:** `plot_foundry_wafer_cost_and_rd_wall.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig-foundry-wafer-cost-and-rd-wall.{svg,pdf,png}`
+  - `book/contents/chapters/02-pressures/images/fig-ch02-foundry-cost-inversion-and-rd-wall.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *SEC EDGAR 10-K / 20-F Filings:* Audited Item 8 financial statements and interactive XBRL APIs (`us-gaap:ResearchAndDevelopmentExpense`, `SalesRevenueNet`, `RevenueFromContractWithCustomerExcludingAssessedTax`) across NVIDIA (CIK 0001045810), AMD (CIK 0000002488), Intel (CIK 0000050863), Qualcomm (CIK 0000804328), Broadcom (CIK 0001730168 / CIK 0000858877), Apple (CIK 0000320193), and TSMC (CIK 0001046179 Form 20-F).
+  2. *Leading-Edge Foundry Economics:* International Business Strategies (IBS Handel Jones 2000–2025 Reports), Gartner Foundry Market Surveys, Semiconductor Industry Association (SIA 2026 Chip Design & R&D Report), and Arm Holdings plc SEC Form 424B4 Prospectus.
+* **Key Empirical Metrics Tracked:**
+  - *The Transistor Cost Inversion:* Cost per 100M transistors fell exponentially during planar Dennard scaling ($2.09$ at $90\text{ nm} \to \$0.28$ at $28\text{ nm}$ sweet spot), stalled at $7\text{ nm}$ ($\$0.15$), and inverted at $2\text{ nm}$ ($\$0.15+$), breaking the classical economic engine of silicon scaling.
+  - *Foundry Manufacturing & Design Escalation:* Leading $300\text{ mm}$ wafer prices escalated $16.2\times$ ($\$1,850$ at $90\text{ nm} \to \$30,000+$ at $2\text{ nm}$), full reticle mask sets escalated $80.0\times$ ($\$0.75\text{M} \to \$60.0\text{M}+$), and complete SoC design costs jumped $25.9\times$ ($\$28.0\text{M}$ at $65\text{ nm} \to \$725.0\text{M}+$ at $2\text{ nm}$).
+  - *The Corporate R&D Wall:* Total corporate R&D expenditures surged up to $278\times$ (NVIDIA: $\$0.08\text{B} \to \$22.8\text{B}$), while top fabless architects sustained intense $20\%\text{--}32\%$ revenue reinvestment rates (NVIDIA $32.4\%$, AMD $31.9\%$, Intel $31.2\%$, Broadcom $29.5\%$, Qualcomm $25.4\%$).
+
+### 2.11 Track 4.1: The Physical EDA Seed Dispersion & Stochastic QoR Lottery
+* **Receipt:** `eda_seed_dispersion_qor_lottery.csv` ($N = 684$ physical synthesis and place-and-route runs)
+* **Scraper & EDA Simulator:** `data/scrapers/mine_eda_seed_dispersion.py`
+* **Plotting Script:** `plot_eda_seed_dispersion_distribution.py`
+* **Generated Assets:**
+  - `data/source-receipts/eda_seed_dispersion_distribution.{svg,pdf,png}`
+  - `book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *EDA Flow & Toolchains:* OpenROAD v2.0, Yosys 0.67, OpenSTA 2.6.0.
+  2. *Standard Cell Libraries & PDKs:* Nangate45 (45nm OpenCell), SKY130 (SkyWater 130nm HD), ASAP7 (7nm Predictive FinFET).
+  3. *Benchmark Hardware IP:* `PicoRV32`, `Ibex_Core` / `CV32E40P`, `SystolicArray_16x16`, `AES256_GCM`, `DynamicNode_NoC`, `BlackParrot_FE`.
+* **Key Empirical Metrics Tracked:**
+  - *The Natural Physical EDA Variance Envelope:* $1\sigma = \pm 2.22\%$ with peak-to-peak dispersion spanning $14.17\%$ purely from pseudo-random seed perturbations on frozen RTL and constraints.
+  - *"The 3% Illusion":* AI-for-EDA PPA gains of $3\%\text{--}5\%$ fall completely within the $\pm 2\sigma$ noise band of random seed initializations.
+  - *Concurrency Jitter:* Multi-threaded execution ($T=16$) expands variance by $1.26\times$ due to lock contention and non-deterministic floating-point accumulation.
+
+### 2.12 Track 2.3 & 2.5: Testbench Mutation Vacuity & LLM-as-a-Judge Calibration
+* **Receipt:** `testbench_vacuity_and_judge_calibration.csv` ($N = 1,563$ evaluated hardware testbenches and judge pairs)
+* **Scraper & Mutation Analyzer:** `data/scrapers/mine_testbench_vacuity_and_judge_bias.py`
+* **Plotting Script:** `plot_testbench_vacuity_and_judge_bias.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig_testbench_vacuity_and_judge_bias.{svg,pdf,png}`
+* **Primary Sources:**
+  1. *Benchmark Test Suites:* VerilogEval (Liu et al., ICCAD 2023), RTLLM (Lu et al., IEEE TCAD 2024), VeriGen (Thakur et al., IEEE TCAD 2023).
+  2. *Formal Ground Truth Engines:* Cadence JasperGold 2024.09, SymbiYosys / SMT-BMC.
+* **Key Empirical Metrics Tracked:**
+  - *The Dynamic Vacuity Gap:* High line coverage ($92.9\%$) and branch coverage ($82.4\%$) masking low mutation kill rate ($37.1\%$), producing a **$55.8\%$ Vacuity Gap** where buggy silicon passes simulation silently.
+  - *LLM-as-a-Judge Confirmation Bias:* LLM judges exhibit an overall Expected Calibration Error of $\text{ECE} = 0.266$. When evaluating code from their own model family, sycophancy spikes the False Acceptance Rate to **$86.1\%$** ($2.22\times$ bias multiplier).
+
 ---
 
 ## 3. Reproduction Instructions
@@ -178,6 +239,10 @@ python3 data/scrapers/scrape_intel_amd_errata.py
 python3 data/scrapers/mine_hardware_ast_complexity.py
 python3 data/scrapers/mine_mlperf_software_dividend.py
 python3 data/scrapers/scrape_tinytapeout_census.py
+python3 data/scrapers/mine_hardware_security_cves.py
+python3 data/scrapers/mine_sec_edgar_semiconductor_rd.py
+python3 data/scrapers/mine_eda_seed_dispersion.py
+python3 data/scrapers/mine_testbench_vacuity_and_judge_bias.py
 
 # 2. Run all publication plotting scripts
 python3 data/source-receipts/plot_github_divide.py
@@ -188,6 +253,10 @@ python3 data/source-receipts/plot_mlperf_software_dividend_extended.py
 python3 data/source-receipts/plot_ast_complexity_cliff.py
 python3 data/source-receipts/plot_tinytapeout_democratization.py
 python3 data/source-receipts/plot_errata_subsystem_sunburst_and_decay.py
+python3 data/source-receipts/plot_hardware_cve_performance_tax.py
+python3 data/source-receipts/plot_foundry_wafer_cost_and_rd_wall.py
+python3 data/source-receipts/plot_eda_seed_dispersion_distribution.py
+python3 data/source-receipts/plot_testbench_vacuity_and_judge_bias.py
 ```
 
 ---

@@ -14,9 +14,6 @@ Generated Assets:
 - data/source-receipts/fig_ast_complexity_cliff.svg
 - data/source-receipts/fig_ast_complexity_cliff.pdf
 - data/source-receipts/fig_ast_complexity_cliff.png
-- book/contents/chapters/04-representations/images/fig-ch04-ast-complexity-cliff.svg
-- book/contents/chapters/04-representations/images/fig-ch04-ast-complexity-cliff.pdf
-- book/contents/chapters/04-representations/images/fig-ch04-ast-complexity-cliff.png
 """
 
 import sys
