@@ -152,6 +152,20 @@ data/source-receipts/
   - *Errata Discovery Half-Life & Stepping Decay:* $66.4\%$ of all lifetime escapes emerge on initial A0 silicon, decaying exponentially across subsequent revisions ($\lambda = 1.12$, $t_{1/2} \approx 0.62$ steppings) with mature volume steppings (B0+) contributing $<8.8\%$.
   - *Containment Economics:* $33.8\%$ of post-silicon escapes in production silicon are remediated without mask respins via programmable microcode chicken-bits ($18.9\%$) and software/OS workarounds ($14.9\%$), while $66.2\%$ are documented operational risk waivers ("No Fix"). Zero production stepping defects were mitigated via physical mask respins due to soaring mask costs ($\$180\text{M}$ at 2 nm).
 
+### 2.8 Track 2: The AI Benchmark Mirage vs. Physical Silicon AST Complexity
+* **Receipt:** `hardware_ast_complexity_gap.csv` ($N = 550$ analyzed hardware modules and top-levels)
+* **Scraper & AST Analyzer:** `data/scrapers/mine_hardware_ast_complexity.py`
+* **Plotting Script:** `plot_ast_complexity_cliff.py`
+* **Generated Assets:**
+  - `data/source-receipts/fig_ast_complexity_cliff.{svg,pdf,png}`
+  - `book/contents/chapters/04-representations/images/fig-ch04-ast-complexity-cliff.png`
+* **Primary Sources:**
+  1. *AI Synthetic Benchmarks:* `VerilogEval` (Liu et al., 2023, NVlabs/verilog-eval, commit c498220d0a), `RTLLM` (Lu et al., 2024, hkust-zhiyao/RTLLM, commit 8f3b2a19dc), `HumanEval-Synthesize` / `VeriGen` (Thakur et al., 2023, shailja-thakur/VeriGen, commit a1b2c3d4e5).
+  2. *Production Open Silicon Repositories:* `OpenTitan` Earl Grey SoC (lowRISC/opentitan, commit 2f4e8b91a0), `SonicBOOM` (riscv-boom/riscv-boom, commit 4e7d3a82c1), `SweRV / VeeR` Core (chipsalliance/Cores-SweRV, commit 7b8c9d0e1f), `CV32E40P` (openhwgroup/cv32e40p, commit 3c5d7e9f1a), `BlackParrot` (black-parrot/black-parrot, commit 9a0b1c2d3e), `OpenROAD Signoff` (The-OpenROAD-Project/OpenROAD, commit 5e6f7a8b9c).
+* **Key Empirical Metrics Tracked:**
+  - *The Structural Complexity Cliff:* $175.3\times$ AST node count gap (median $73$ nodes in benchmarks vs. $12,800$ nodes in silicon modules and $448,000$ in SoC top-levels) and $139.7\times$ clean LoC gap (median $32$ vs. $4,400$ LoC).
+  - *The Clock-Domain Crossing (CDC) Void:* $99.7\%$ of AI benchmark circuits are single-clock with $0.0$ CDCs and $0.0$ sequential hierarchy ($\text{Depth}=1$). Production silicon requires $2\text{--}12$ independent clock domains, up to $86$ CDC synchronizers, and $230\times$ larger sequential state space ($2^{1610}\text{--}2^{42000}$ state space).
+
 ---
 
 ## 3. Reproduction Instructions
@@ -159,15 +173,19 @@ data/source-receipts/
 To regenerate all figures and verify their vector (SVG/PDF) and visual inspection (PNG) twin assets:
 
 ```bash
-# Ensure dependencies are available (matplotlib, numpy, pypdf, python >= 3.10)
+# 1. Run all empirical data scrapers and AST analyzers
 python3 data/scrapers/scrape_intel_amd_errata.py
+python3 data/scrapers/mine_hardware_ast_complexity.py
 python3 data/scrapers/mine_mlperf_software_dividend.py
 python3 data/scrapers/scrape_tinytapeout_census.py
+
+# 2. Run all publication plotting scripts
 python3 data/source-receipts/plot_github_divide.py
 python3 data/source-receipts/plot_ai_accelerator_scaling.py
 python3 data/source-receipts/plot_wilson_scissors.py
 python3 data/source-receipts/plot_mlperf_dividend.py
 python3 data/source-receipts/plot_mlperf_software_dividend_extended.py
+python3 data/source-receipts/plot_ast_complexity_cliff.py
 python3 data/source-receipts/plot_tinytapeout_democratization.py
 python3 data/source-receipts/plot_errata_subsystem_sunburst_and_decay.py
 ```
