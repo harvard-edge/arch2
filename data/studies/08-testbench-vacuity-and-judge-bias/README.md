@@ -71,13 +71,12 @@ python3 plot_testbench_vacuity_and_judge_bias.py
 ## 7. Citation
 
 ```bibtex
-@book{arch2_2026,
-  author    = {Reddi, Vijay Janapa},
+@book{reddi2026architecture2,
+  author    = {Vijay Janapa Reddi},
   title     = {Architecture 2.0: Principles of AI-Native System and Chip Design},
   year      = {2026},
-  publisher = {Morgan \& Claypool},
   url       = {https://arch2.mlsysbook.ai}
 }
 ```
 
-> Reddi, V. J. (2026). *Architecture 2.0: Principles of AI-Native System and Chip Design*. Morgan & Claypool. Available at: `https://arch2.mlsysbook.ai`
+> Vijay Janapa Reddi. *Architecture 2.0: Principles of AI-Native System and Chip Design* (2026). Available at: `https://arch2.mlsysbook.ai`
