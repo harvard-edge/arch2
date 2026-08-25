@@ -122,7 +122,7 @@ def main():
     ax1.set_xlim(0, 36)
     ax1.set_xlabel("RTL Defects Discovered (%, N=47 Total Issues)", fontsize=6.5)
     ax1.set_title(
-        "Panel A: Defect Discovery by Modality (OpenHW CV32E40P Audit)",
+        "A. Defect Discovery by Modality (OpenHW CV32E40P Audit)",
         fontsize=7.2,
         fontweight="bold",
         pad=8,
@@ -215,7 +215,7 @@ def main():
     ax2.set_xticklabels(tiers, fontsize=5.3, color=COLORS["ink"])
     ax2.set_ylabel("Verification Metric Score (%)", fontsize=6.5)
     ax2.set_title(
-        "Panel B: The Testbench Vacuity Paradox (Coverage vs. Mutation Score)",
+        "B. The Testbench Vacuity Paradox (Coverage vs. Mutation Score)",
         fontsize=7.2,
         fontweight="bold",
         pad=8,

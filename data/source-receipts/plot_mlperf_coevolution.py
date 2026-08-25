@@ -62,7 +62,7 @@ def generate_mlperf_coevolution_plot(csv_path=None):
     ax1.set_xlabel("Peak Hardware TFLOPs (BF16/FP16, log scale)", fontsize=7)
     ax1.set_ylabel("Realized System Throughput (rel. to V100, log scale)", fontsize=7)
     ax1.set_title(
-        "Panel A: Peak Hardware vs Realized Throughput",
+        "A. Peak Hardware vs Realized Throughput",
         fontsize=8,
         fontweight="bold",
         color=COLORS["ink"],
@@ -86,7 +86,7 @@ def generate_mlperf_coevolution_plot(csv_path=None):
     ax2.set_xlabel("MLPerf Submission Version", fontsize=7)
     ax2.set_ylabel("Throughput Gain (rel. to v2.1 baseline)", fontsize=7)
     ax2.set_title(
-        "Panel B: Software & Compiler Dividend on Fixed Silicon",
+        "B. Software & Compiler Dividend on Fixed Silicon",
         fontsize=8,
         fontweight="bold",
         color=COLORS["ink"],

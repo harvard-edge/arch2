@@ -125,7 +125,7 @@ def main():
     ax1.set_xlabel("Study Year (Wilson Research / Siemens EDA Biennial)", fontsize=6.6)
     ax1.set_ylabel("Share of Projects / Schedule (%)", fontsize=6.6)
     ax1.set_title(
-        "Panel A: 22-Year Verification Scissors Divergence",
+        "A. 22-Year Verification Scissors Divergence",
         fontsize=7.6,
         fontweight="bold",
         pad=8,
@@ -214,7 +214,7 @@ def main():
         "Projects Reporting Defect Cause (%, Multiple Allowed)", fontsize=6.6
     )
     ax2.set_title(
-        "Panel B: Primary Root Causes of Silicon Respins (2024)",
+        "B. Primary Root Causes of Silicon Respins (2024)",
         fontsize=7.6,
         fontweight="bold",
         pad=8,

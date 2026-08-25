@@ -335,7 +335,7 @@ def main() -> None:
     ax1_twin.tick_params(axis="y", labelcolor=COLORS["constraints_ink"], labelsize=5.8)
 
     ax1.set_title(
-        "Panel A: Foundry Wafer & Design Cost Inversion (90nm to 2nm)",
+        "A. Foundry Wafer & Design Cost Inversion (90nm to 2nm)",
         fontsize=7.4,
         fontweight="bold",
         pad=8,
@@ -502,7 +502,7 @@ def main() -> None:
     ax2.set_xlabel("Fiscal Year (SEC EDGAR 10-K / 20-F)", fontsize=6.8)
     ax2.set_ylabel(r"Annual R&D Expenditure (US\$ Billions)", fontsize=6.6)
     ax2.set_title(
-        "Panel B: Corporate R&D Escalation Wall (2000–2026)",
+        "B. Corporate R&D Escalation Wall (2000–2026)",
         fontsize=7.4,
         fontweight="bold",
         pad=8,

@@ -168,7 +168,7 @@ def generate_errata_decay_and_sunburst_plots():
         f"Share of Itemized Processor Errata (%, N={total_n:,})", fontsize=6.5
     )
     ax1.set_title(
-        "Panel A: The 'ALU Fallacy' (Subsystem Escape Concentration)",
+        "A. The 'ALU Fallacy' (Subsystem Escape Concentration)",
         fontsize=7.2,
         fontweight="bold",
         pad=8,
@@ -257,7 +257,7 @@ def generate_errata_decay_and_sunburst_plots():
     ax2.set_ylim(0, 92)
     ax2_twin.set_ylim(30, 115)
     ax2.set_title(
-        "Panel B: Silicon Errata Discovery Half-Life & Stepping Decay",
+        "B. Silicon Errata Discovery Half-Life & Stepping Decay",
         fontsize=7.2,
         fontweight="bold",
         pad=8,
@@ -395,7 +395,7 @@ def generate_errata_decay_and_sunburst_plots():
     p1.set_xlim(0, 100)
     p1.set_xlabel("Mitigation Share (%)", fontsize=6.2)
     p1.set_title(
-        "Panel A: Mitigation Pathways (19 CPUs)", fontsize=6.8, fontweight="bold", pad=6
+        "A. Mitigation Pathways (19 CPUs)", fontsize=6.8, fontweight="bold", pad=6
     )
     p1.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
     p1.legend(
@@ -440,9 +440,7 @@ def generate_errata_decay_and_sunburst_plots():
     p2.invert_yaxis()
     p2.set_xlim(0, 38)
     p2.set_xlabel(f"Escape Distribution (%, N={total_n:,})", fontsize=6.2)
-    p2.set_title(
-        "Panel B: Defect Concentration", fontsize=6.8, fontweight="bold", pad=6
-    )
+    p2.set_title("B. Defect Concentration", fontsize=6.8, fontweight="bold", pad=6)
     p2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     for bar, pct in zip(p2.patches, b_pcts):
@@ -500,9 +498,7 @@ def generate_errata_decay_and_sunburst_plots():
     )
     p3.set_ylim(0, 280)
     p3_twin.set_ylim(0, 28)
-    p3.set_title(
-        "Panel C: Mask Cost vs Derating", fontsize=6.8, fontweight="bold", pad=6
-    )
+    p3.set_title("C. Mask Cost vs Derating", fontsize=6.8, fontweight="bold", pad=6)
     p3.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     # Combined Legend for Panel C

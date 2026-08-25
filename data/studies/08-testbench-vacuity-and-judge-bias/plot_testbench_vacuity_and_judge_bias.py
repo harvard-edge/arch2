@@ -291,7 +291,7 @@ def main():
         color=COLORS["ink"],
     )
     ax1.set_title(
-        "(a) The Vacuity Gap: Dynamic Coverage vs. Fault Detection",
+        "A. The Vacuity Gap: Dynamic Coverage vs. Fault Detection",
         fontsize=10.5,
         fontweight="bold",
         pad=10,
@@ -445,7 +445,7 @@ def main():
         color=COLORS["ink"],
     )
     ax2.set_title(
-        "(b) LLM Judge Calibration & Confirmation Bias vs. Formal Proofs",
+        "B. LLM Judge Calibration & Confirmation Bias vs. Formal Proofs",
         fontsize=10.5,
         fontweight="bold",
         pad=10,

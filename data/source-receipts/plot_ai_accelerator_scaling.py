@@ -214,7 +214,7 @@ def main():
     ax1.set_xlabel("Release Year", fontsize=6.8)
     ax1.set_ylabel("Metric Value (Log Scale: TFLOPS, GB/s, Watts)", fontsize=6.6)
     ax1.set_title(
-        "Panel A: 14-Year AI Accelerator Scaling Vectors",
+        "A. 14-Year AI Accelerator Scaling Vectors",
         fontsize=7.6,
         fontweight="bold",
         pad=8,
@@ -347,7 +347,7 @@ def main():
     ax2.set_xlabel("Release Year", fontsize=6.8)
     ax2.set_ylabel("Arithmetic Ratio: Bytes per FLOP (Log Scale)", fontsize=6.6)
     ax2.set_title(
-        "Panel B: Operational Intensity Wall (Byte/FLOP Collapse)",
+        "B. Operational Intensity Wall (Byte/FLOP Collapse)",
         fontsize=7.6,
         fontweight="bold",
         pad=8,

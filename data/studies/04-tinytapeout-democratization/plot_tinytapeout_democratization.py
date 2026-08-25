@@ -275,7 +275,7 @@ def main():
     ax1.grid(True, linestyle="--", linewidth=0.45, color=COLORS["grid"], alpha=0.7)
 
     ax1.set_title(
-        "A  Open Silicon Democratization Wave (Tiny Tapeout)",
+        "A. Open Silicon Democratization Wave (Tiny Tapeout)",
         fontsize=7.2,
         fontweight="bold",
         loc="left",
@@ -459,7 +459,7 @@ def main():
     ax2.grid(True, linestyle="--", linewidth=0.45, color=COLORS["grid"], alpha=0.7)
 
     ax2.set_title(
-        "B  The 3,000× Custom Silicon Cost Collapse",
+        "B. The 3,000× Custom Silicon Cost Collapse",
         fontsize=7.2,
         fontweight="bold",
         loc="left",

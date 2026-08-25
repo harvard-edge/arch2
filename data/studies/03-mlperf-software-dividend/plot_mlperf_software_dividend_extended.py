@@ -215,7 +215,7 @@ def plot_mlperf_software_dividend() -> tuple[Path, Path, Path]:
     ax1.set_ylabel("Normalized In-Place Throughput Multiplier", fontsize=6.6)
     ax1.tick_params(axis="both", labelsize=5.6)
     ax1.set_title(
-        "Panel A: The Fixed-Silicon Software Dividend (2018-2026)",
+        "A. The Fixed-Silicon Software Dividend (2018-2026)",
         fontsize=7.4,
         fontweight="bold",
         pad=8,
@@ -278,7 +278,7 @@ def plot_mlperf_software_dividend() -> tuple[Path, Path, Path]:
     ax2.set_ylabel("BERT/LLM Throughput (rel. to V100 Debut, Log Scale)", fontsize=6.6)
     ax2.tick_params(axis="both", labelsize=5.6)
     ax2.set_title(
-        "Panel B: Hardware Steps vs. In-Place Software Expansion",
+        "B. Hardware Steps vs. In-Place Software Expansion",
         fontsize=7.4,
         fontweight="bold",
         pad=8,
@@ -391,7 +391,7 @@ def plot_inference_kernel_fragmentation() -> tuple[Path, Path, Path]:
     ax1.set_ylabel("Custom Handwritten Kernel LOC (Thousands)", fontsize=6.6)
     ax1.tick_params(axis="both", labelsize=5.6)
     ax1.set_title(
-        "Panel A: Proliferation of Custom Handwritten Kernels",
+        "A. Proliferation of Custom Handwritten Kernels",
         fontsize=7.4,
         fontweight="bold",
         pad=8,
@@ -511,7 +511,7 @@ def plot_inference_kernel_fragmentation() -> tuple[Path, Path, Path]:
     ax2.set_ylim(0, 390)
     ax2.tick_params(axis="both", labelsize=5.6)
     ax2.set_title(
-        "Panel B: Kernel Specialization Subsystems (2026 State)",
+        "B. Kernel Specialization Subsystems (2026 State)",
         fontsize=7.4,
         fontweight="bold",
         pad=8,

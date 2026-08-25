@@ -103,7 +103,7 @@ def main():
         "Deduplicated Code Volume in The Stack v2 (GB, Log Scale)", fontsize=6.6
     )
     ax1.set_title(
-        "Panel A: Public Open-Source Code Volume Gap",
+        "A. Public Open-Source Code Volume Gap",
         fontsize=7.6,
         fontweight="bold",
         pad=8,
@@ -189,7 +189,7 @@ def main():
     )
     ax2.set_ylabel("Yield / Pass Rate (% Log Scale)", fontsize=6.6)
     ax2.set_title(
-        "Panel B: Hardware Synthesizability & Signoff Funnel",
+        "B. Hardware Synthesizability & Signoff Funnel",
         fontsize=7.6,
         fontweight="bold",
         pad=8,

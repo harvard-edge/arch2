@@ -127,7 +127,7 @@ def build_figure() -> Tuple[plt.Figure, Path, Path, Path]:
     # Panel A: Longitudinal Vulnerability Timeline & Cumulative Clawback
     # =========================================================================
     ax0.set_title(
-        "Panel A: Longitudinal Vulnerability Timeline & Cumulative Speculative Execution Tax (2018–2026)",
+        "A. Longitudinal Vulnerability Timeline & Cumulative Speculative Execution Tax (2018–2026)",
         loc="left",
         fontweight="bold",
         fontsize=7.2,
@@ -467,7 +467,7 @@ def build_figure() -> Tuple[plt.Figure, Path, Path, Path]:
     # Panel B: Workload Domain Derating Spectrum & Microarchitectural Root Causes
     # =========================================================================
     ax1.set_title(
-        "Panel B: Performance Tax Derating by Workload Class & Microarchitectural Mechanism",
+        "B. Performance Tax Derating by Workload Class & Microarchitectural Mechanism",
         loc="left",
         fontweight="bold",
         fontsize=7.2,
