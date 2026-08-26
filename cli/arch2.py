@@ -4747,7 +4747,7 @@ def find_markdown_figures(text: str) -> list[dict[str, Any]]:
 def caption_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Validate figure captions against the 3-Layer Pedagogical standard.
 
-    Settled by .claude/rules/captions.md and .claude/rules/figures.md:
+    Project caption contract:
     1. Every figure caption must open with a bold headline (e.g. ![**Headline.** ...]).
     2. Captions must be concise (<= 750 characters / ~90 words max) to fit page budget.
     """
@@ -4768,7 +4768,7 @@ def caption_findings(paths: list[Path] | None = None) -> list[Finding]:
                         "error",
                         "caption-bold-headline",
                         f"{_relative(path)}:{lineno}",
-                        f"figure caption '{fig_id}' must begin with a bold headline lead '![**Headline.** ...]' per .claude/rules/captions.md",
+                        f"figure caption '{fig_id}' must begin with a bold headline lead '![**Headline.** ...]'",
                     )
                 )
 
@@ -4778,7 +4778,7 @@ def caption_findings(paths: list[Path] | None = None) -> list[Finding]:
                         "error",
                         "caption-length",
                         f"{_relative(path)}:{lineno}",
-                        f"figure caption '{fig_id}' is too long ({len(caption)} chars > 750 chars max); streamline to 3-5 lines per .claude/rules/captions.md",
+                        f"figure caption '{fig_id}' is too long ({len(caption)} chars > 750 chars max); streamline to 3-5 lines",
                     )
                 )
     return findings
@@ -4787,9 +4787,8 @@ def caption_findings(paths: list[Path] | None = None) -> list[Finding]:
 def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Flag mechanical prose-style regressions that a manual sweep cannot hold.
 
-    Five classes, settled by ``.claude/rules/prose-style.md`` and
-    ``.claude/rules/emphasis.md``, all prone to silent reintroduction whenever a
-    passage is rewritten.
+    Five classes in the project prose and emphasis contract are prone to silent
+    reintroduction whenever a passage is rewritten.
 
     Stripped vocabulary. An earlier sweep replaced a set of process metaphors
     with plainer terms, but nothing enforced the result, so survivors persisted
