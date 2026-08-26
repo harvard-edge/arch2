@@ -22,7 +22,8 @@ jobs:
   publish_guard:
     name: Authorize publish ref
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Allows the bounded wait for the main push that follows a release tag.
+    timeout-minutes: 10
     permissions:
       contents: read
 
@@ -54,10 +55,30 @@ jobs:
                 exit 1
               fi
 
-              git fetch --no-tags origin \
-                "+refs/heads/main:refs/remotes/origin/main"
-              if ! git merge-base --is-ancestor \
-                "$event_commit" refs/remotes/origin/main; then
+              # A release pushes the tag and fast-forwards main as two
+              # separate pushes, so the tag event can arrive while origin/main
+              # still points at the previous release. Re-fetch for a bounded
+              # window before deciding the tag is unauthorized, rather than
+              # failing the publish on push ordering alone.
+              # Overridable so the contract tests can exercise the refusal
+              # path without waiting out the real release window.
+              attempts="${PUBLISH_GUARD_MAIN_WAIT_ATTEMPTS:-10}"
+              interval="${PUBLISH_GUARD_MAIN_WAIT_SECONDS:-30}"
+              authorized=false
+              for attempt in $(seq 1 "$attempts"); do
+                git fetch --no-tags origin \
+                  "+refs/heads/main:refs/remotes/origin/main"
+                if git merge-base --is-ancestor \
+                  "$event_commit" refs/remotes/origin/main; then
+                  authorized=true
+                  break
+                fi
+                echo "Attempt ${attempt}/${attempts}: tag commit not yet on origin/main; waiting for the main push."
+                if [ "$attempt" -lt "$attempts" ]; then
+                  sleep "$interval"
+                fi
+              done
+              if [ "$authorized" != true ]; then
                 echo "Release tag commit is not an ancestor of origin/main." >&2
                 exit 1
               fi

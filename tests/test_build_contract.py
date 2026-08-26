@@ -240,6 +240,73 @@ def test_abbreviations_findings_empty_on_repository() -> None:
     assert findings == [], f"Found abbreviation issues: {[f.message for f in findings]}"
 
 
+@pytest.mark.parametrize(
+    ("prose", "abbr", "expected"),
+    [
+        # The expansion stops at the acronym's own words, and does not run
+        # backwards into whatever preceded them.
+        ("chips and Google Tensor Processing Unit", "TPU", "Tensor Processing Unit"),
+        ("Each integrated domain-specific architecture", "DSA", "domain-specific architecture"),
+        ("a plain frames per second", "FPS", "frames per second"),
+        ("a destructive complementary metal-oxide-semiconductor", "CMOS", "complementary metal-oxide-semiconductor"),
+        ("aspect-ratio limits and minimum static noise margins", "SNM", "static noise margins"),
+        # Function words inside an expansion are skipped, not counted.
+        (
+            "whether Pareto rankings survive dynamic voltage and frequency scaling",
+            "DVFS",
+            "dynamic voltage and frequency scaling",
+        ),
+        ("scored with Holistic Evaluation of Language Models", "HELM", "Holistic Evaluation of Language Models"),
+        # An all-caps or numeric tail contributes all of its characters.
+        (
+            "processes that prohibit uploading Graphic Database System II",
+            "GDSII",
+            "Graphic Database System II",
+        ),
+        (
+            "lowered through the Flexible Intermediate Representation for RTL",
+            "FIRRTL",
+            "Flexible Intermediate Representation for RTL",
+        ),
+        ("the bus speaks Advanced eXtensible Interface 5", "AXI5", "Advanced eXtensible Interface 5"),
+        # Parentheticals that are not expansions yield nothing to register.
+        ("governed by International Organization for Standardization", "ISO", None),
+        ("demonstrated by the historic Pentium floating-point division", "FDIV", None),
+        ("quantized to 8-bit integer", "INT8", None),
+        ("as reported by prior work", "AI", None),
+    ],
+)
+def test_prose_expansion_matches_only_the_acronyms_own_words(prose, abbr, expected) -> None:
+    assert arch2_cli._match_prose_expansion(prose, abbr) == expected
+
+
+def test_unregistered_abbreviation_reports_the_real_expansion(tmp_path) -> None:
+    """A registry suggestion must be pasteable, not padded with stray prose."""
+    chapter = tmp_path / "chapter.qmd"
+    chapter.write_text(
+        "Modern accelerators and Google Zonal Tensor Unit (ZTU) parts diverge.\n",
+        encoding="utf-8",
+    )
+    findings = arch2_cli.abbreviations_findings([chapter])
+    unregistered = [f for f in findings if f.code == "unregistered-abbreviation"]
+    assert len(unregistered) == 1
+    assert "'ZTU' is expanded as 'Zonal Tensor Unit'" in unregistered[0].message
+    assert "and Google" not in unregistered[0].message
+
+
+def test_expansion_may_span_a_comma(tmp_path) -> None:
+    """Comma-separated expansions are real abbreviations, not invisible ones."""
+    chapter = tmp_path / "chapter.qmd"
+    chapter.write_text(
+        "The kernel uses a bespoke, unregistered wide instruction, multiple lanes (WIML) form.\n",
+        encoding="utf-8",
+    )
+    findings = arch2_cli.abbreviations_findings([chapter])
+    unregistered = [f for f in findings if f.code == "unregistered-abbreviation"]
+    assert len(unregistered) == 1
+    assert "'WIML' is expanded as 'wide instruction, multiple lanes'" in unregistered[0].message
+
+
 def test_abbreviations_findings_catches_unexpanded_and_overcapitalized(
     tmp_path,
 ) -> None:
