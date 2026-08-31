@@ -1,0 +1,138 @@
+---
+format:
+  html:
+    output-file: index.html
+---
+
+# Design Principles {#sec-appendix-c-design-principles}
+
+This book carries eight core design principles and eighteen chapter principles that specialize them. The eighteen appear in the chapters as `Design Principle` callouts, each stated where the chapter's own argument earns it. The eight cores are the portable set: the rules a reader should be able to carry into an architecture problem this book never discusses and still reach a more defensible decision.
+
+Each core is stated in four parts. The danger names the failure the principle predicts. The rule states what the principle requires. The review question is the test that makes compliance inspectable by someone who did not do the work. The boundary marks where the principle stops applying, because a principle without a boundary is a slogan. A closing table maps every chapter principle, under its exact chapter title, to the cores it instantiates.
+
+## The Eight Core Principles
+
+### 1. Grounded exploration: bind prompts to executable tool contracts
+
+**The danger.** A language model produces SystemVerilog or C++ that parses and reads well but cannot simulate, synthesize, or close timing, because the interfaces, workload dependencies, and acceptance criteria were never written down. Search that runs over ungrounded text, while the system constraints stay implicit, produces candidates that no flow can integrate.
+
+**The rule.** Do not permit automated search over ungrounded text. Every prompt and every generative sweep binds to an executable harness with typed interfaces, stated physical constraints, and automated pass/fail criteria.
+
+**The review question.** What architectural decision is being evaluated, under which physical constraints, and what observation distinguishes the candidates? Can an independent reviewer inspect the harness before search begins?
+
+**The boundary.** Qualitative exploration may precede formal execution while a study is being scoped. Exploratory output cannot support an architectural commitment until runnable tools have verified it.
+
+**Chapter applications.** @sec-moonshot expands a compact natural-language request into an executable architecture decision. @sec-what-architect-owns returns to the cross-layer framing, abstraction choices, and engineering judgment that keep full-system decisions coherent.
+
+### 2. Amdahl's law for design work: accelerate the limiting stage, not the generation rate
+
+**The danger.** Candidate generation drops from hours to seconds while cycle-accurate simulation, place-and-route, and formal verification still take weeks. The workflow is now unbalanced, and the fast stage accumulates a backlog of unverified candidates without shortening the time to a supported decision.
+
+**The rule.** Aim automation at the stage that limits the decision path. Measure productivity by end-to-end time to a supported result, not by candidate throughput.
+
+**The review question.** Which engineering task limits the decision path today, and where does the limit move once that stage is accelerated? Does the method shorten time to a supported result, or does it accumulate unverified work?
+
+**The boundary.** Capability research may measure generation speed in isolation. A production acceleration claim must measure the complete path through physical verification and human review.
+
+**Chapter applications.** @sec-design-loop-no-longer-scales diagnoses the physical and verification limits that constrain architecture progress. @sec-methods-generation-prediction-optimization uses that diagnosis to select the smallest sufficient method for the identified limit.
+
+### 3. Semantic invariance: preserve physical invariants across every lowering
+
+**The danger.** Code translation, abstract syntax tree rewriting, and high-level synthesis can silently strip power-state retention declared in Unified Power Format (UPF), clock-domain-crossing synchronizers, or timing exceptions while leaving the surface syntax intact.
+
+**The rule.** Every intermediate transformation preserves the declared physical and architectural invariants, and every lowering boundary, including the multi-level intermediate representations (IRs) of Circuit IR Compilers and Tools (CIRCT) and Multi-Level Intermediate Representation (MLIR), verifies semantic equivalence rather than assuming it.
+
+**The review question.** Which physical invariants must remain true across this transformation, and how does the workflow verify equivalence? Which automated checks guard against silent semantic loss?
+
+**The boundary.** An abstraction may drop details irrelevant to the immediate decision, but the omission must be explicit. A transformation that changes meaning creates a distinct candidate that requires fresh verification.
+
+**Chapter applications.** @sec-data-representations-world-models selects representation formats by the physical properties an architecture decision must preserve. @sec-architecture-environments-tool-interfaces applies the rule to tool translation, containerized execution, and returned artifacts.
+
+### 4. Condition-bound surrogates: every learned prediction carries its support and its envelope
+
+**The danger.** A learned surrogate or graph neural network is queried outside its training distribution, for instance a delay model fit on a planar node applied to nanosheet routing at a far smaller node. The result is confident output with no support across changing process, voltage, temperature, and microarchitectural conditions.
+
+**The rule.** Every surrogate prediction declares its training support, its operating envelope (process corners and workload regimes), its model version, and its uncertainty alongside the scalar it returns.
+
+**The review question.** Under which operating conditions was this surrogate validated, and which changes to the target invalidate the prediction? Does the workflow detect queries outside the support?
+
+**The boundary.** Condition metadata may be stored by reference to a lineage record rather than repeated. Reusing an IP block does not carry its performance or timing claims with it once the operating conditions or interfaces change.
+
+**Chapter applications.** @sec-data-representations-world-models binds observations to the conditions that give them meaning. @sec-architecture-environments-tool-interfaces preserves runtime identity and lineage. @sec-loop-patterns-across-stack determines what remains applicable after a design target changes.
+
+### 5. Root-cause fault routing: never route a physical violation to a generic retry
+
+**The danger.** Downstream tool errors are fed back into a prompt as raw text. Negative slack, design-rule violations, and routing congestion returned to a language model produce syntax churn that never addresses the physical cause.
+
+**The rule.** Route failures by causal domain: syntax and interface errors to prompt repair, functional invariant violations to formal model checking, and physical timing or power violations to constraint renegotiation and microarchitectural retiming.
+
+**The review question.** Which property failed, where was the defect introduced, and which tool can resolve its root cause? Does the harness separate syntax repair from floorplan and timing adjustment?
+
+**The boundary.** One automation script may manage several repair paths, provided diagnostics decide the routing rather than an unguided retry loop.
+
+**Chapter applications.** @sec-architecture-20-ontology separates the six life-cycle responsibilities by their questions, failures, and repairs. @sec-architecture-environments-tool-interfaces contains execution failures inside recoverable tool boundaries. @sec-feedback-verification-trust routes qualified results to the next eligible technical action.
+
+### 6. Consequence-tiered qualification: match check strength to what the claim risks
+
+**The danger.** High line coverage on synthetic benchmarks is read as proof of silicon readiness, although a testbench can reach that coverage while killing few of the mutants that a defect would produce (@sec-feedback-verification-trust). The opposite failure also occurs: demanding signoff-grade SPICE or formal proof during early exploration halts iteration.
+
+**The rule.** Match verification strength to the consequence of the claim. Fast surrogates are permissible for reversible exploration; a tapeout commitment requires independent formal proof, static timing across corners, and mutation-tested testbenches.
+
+**The review question.** Can this check falsify the claim at its stated consequence level? Is the check independent of the search that produced the candidate?
+
+**The boundary.** Approximate proxies may guide early exploration when their error bounds are declared. As a decision approaches tapeout, the checks scale in fidelity, assertion coverage, corner coverage, and adversarial stress.
+
+**Chapter applications.** @sec-moonshot separates intermediate artifacts from valid architecture results. @sec-feedback-verification-trust matches checks to claims and qualifies the resulting action. @sec-running-the-loop stops at the limit of its checked record. @sec-evaluating-agentic-architect keeps decisive evaluation checks outside the system being evaluated.
+
+### 7. Symmetric cost accounting: credit assistance only after deducting the whole cost
+
+**The danger.** A team reports a large design speedup while omitting prompt engineering hours, testbench debugging, cluster compute and energy, and electronic design automation (EDA) license time. Generation speed has been mistaken for net engineering productivity.
+
+**The rule.** Evaluate candidates against matched baselines under identical constraints, and account for assistance inside a symmetric boundary that includes human triage, model training, compute, and tool cost on both sides of the comparison.
+
+**The review question.** Did the architecture improve over the conventional baseline under identical constraints, and does the gain persist after the complete human and compute cost is deducted?
+
+**The boundary.** Exploratory research may report isolated metrics if it says so. A claim of engineering superiority requires complete cost accounting and evaluation of microarchitectural quality.
+
+**Chapter applications.** @sec-moonshot introduces separate tests for the architecture result and for the complete approach. @sec-evaluating-agentic-architect owns the matched evaluation required to attribute value to the assistance.
+
+### 8. Nondelegable human authority: machines propose and prove; a named architect owns residual risk
+
+**The danger.** Automated recommendations are treated as decisions, and accountability diffuses when silicon fails through silent data corruption, a timing violation, or unroutable congestion.
+
+**The rule.** Automate candidate generation and verification, but keep commitment authority with a named person. A named architect reviews the evidence and signs before physical commitment; in this book the signature lands on the Design-Loop Card.
+
+**The review question.** Which actions may the automated system take on its own, and which named architect accepts the residual risk? Which post-silicon anomaly reopens the decision?
+
+**The boundary.** Routine, reversible actions may run without a human decision inside a bounded sandbox. The designated architect retains the technical authority and the institutional standing to halt, commit, or reopen the design.
+
+**Chapter applications.** @sec-architecture-environments-tool-interfaces bounds and contains automated tool actions. @sec-evaluating-agentic-architect preserves evaluator control over decisive checks. @sec-what-architect-owns defines the architect's technical role, commitment authority, and continuing accountability. @sec-bootstrapping-ecosystem grounds shared consortium governance and workforce certification.
+
+## Chapter Principles and the Cores They Instantiate
+
+Each chapter states its principles where its argument earns them, under the titles reproduced verbatim in @tbl-chapter-principles-map. The right-hand column names the cores each chapter principle instantiates; a chapter principle that maps to two cores resolves a choice where both apply at once.
+
+| **Chapter** | **Chapter principle** | **Core principle** |
+| --- | --- | --- |
+| @sec-moonshot | Expand Expressible and Checkable Space | 1, 6 |
+| @sec-design-loop-no-longer-scales | Relieve the True Limiting Constraint | 2 |
+| @sec-architecture-20-ontology | Isolate Failure Domains for Repair | 5 |
+| @sec-data-representations-world-models | Represent What Decisions Must Preserve | 3 |
+| @sec-data-representations-world-models | Bind Observations to Generating Context | 4 |
+| @sec-methods-generation-prediction-optimization | Select the Smallest Sufficient Method | 2 |
+| @sec-architecture-environments-tool-interfaces | Automate Within Recoverable Boundaries | 5, 8 |
+| @sec-architecture-environments-tool-interfaces | Unrecorded Runs Cannot Justify Claims | 4, 5 |
+| @sec-feedback-verification-trust | Stronger Claims Require Stronger Checks | 6 |
+| @sec-feedback-verification-trust | Drive Actions Only from Qualified Results | 5, 6 |
+| @sec-running-the-loop | Decouple Intent from Executed Evidence | 4, 6 |
+| @sec-running-the-loop | Claim Only What Checked Records Support | 4, 6 |
+| @sec-loop-patterns-across-stack | Transfer Components, Not Conclusions | 4 |
+| @sec-evaluating-agentic-architect | Prioritize Soundness Over Tool Credit | 7 |
+| @sec-evaluating-agentic-architect | Isolate Decisive Checks from Tested Systems | 6, 8 |
+| @sec-what-architect-owns | Judgment Precedes and Governs Automation | 1, 8 |
+| @sec-what-architect-owns | Delegate Execution, Retain Accountability | 8 |
+| @sec-bootstrapping-ecosystem | Anchor AI-Native Design Tools in Open Foundations | 8 |
+
+: **Eighteen chapter principles instantiate the eight core principles across the design life cycle.** Each chapter principle grounds one or two cores in the engineering choice its chapter faces, from formulation and representation through search, verification, execution, evaluation, ownership, and ecosystem development. Titles match the chapter callouts exactly. {#tbl-chapter-principles-map tbl-colwidths="[28,58,14]"}
+
+The two levels serve different readers. A reader inside a chapter meets the specialized principle at the point where the argument makes it necessary. A reader facing a new problem starts from the eight cores, asks each core's review question, and checks each boundary before deciding which of them applies.

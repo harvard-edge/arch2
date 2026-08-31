@@ -18,25 +18,29 @@ format:
 **Author's Note.** John Culkin, a media scholar explaining Marshall McLuhan's theories, used this line to show how tools reshape human practice. In computer architecture, I treat execution harnesses as the boundaries that define what an automated method can adjust and what it can observe. Isolating tool environments ensures that hidden software quirks do not distort architectural search or mask physical failure modes.
 :::
 
-A raw tool invocation is not an execution environment, and an unconstrained candidate stream will quickly overwhelm finite tool capacity. An AI-native design system must establish an explicit operational boundary: what containment and interface contracts must enclose architecture tools so automated methods can drive them safely, reproducibly, and within declared budgets?
+A tool command is not an environment. An architect can launch a simulator, compiler, formal engine, or physical-design flow and still be unable to say which candidate ran, which state the tool inherited, what an unfamiliar warning meant, or whether a retry repeated the same work. An environment is the set of containment and interface contracts that closes those four gaps, so that an automated method can drive the tools reproducibly and within a declared budget, and an architect can still answer the questions afterward.
 
-When generative models and automated optimizers propose candidates at machine speed (@sec-methods-generation-prediction-optimization), invoking a simulator, formal prover, or synthesis engine without an enclosing harness leaves candidate identities unrecorded, environment variables unpinned, floating licenses unmanaged, and retries untracked. While interactive computer-aided design (CAD) workflows historically absorbed these gaps through manual engineer inspection, automated exploration dispatches runs at rates that preclude human oversight. Without state-isolated, typed boundaries and queue-managed execution, automated search quickly degenerates into nonreproducible execution noise, license server collapse, and uncontained cluster crashes.
+When generative models and automated optimizers propose candidates at machine speed (@sec-methods-generation-prediction-optimization), invoking a simulator, formal prover, or synthesis engine without an enclosing harness leaves candidate identities unrecorded, environment variables unpinned, floating licenses unmanaged, and retries untracked. Interactive computer-aided design (CAD) workflows absorbed these gaps through an engineer's inspection of each run; automated exploration dispatches runs at rates that preclude it. Without state-isolated, typed boundaries and queue-managed execution, automated search degenerates into nonreproducible execution noise, license server collapse, and uncontained cluster crashes.
 
-Tool-connected execution environments solve this challenge by decoupling execution into five distinct roles: tools, simulators, wrappers, harnesses, and enclosing environments. In our prospective Lighthouse mobile extended-reality (XR) system-on-chip (SoC) study (3\ W thermal design power (TDP) across RISC-V application cores, a neural processing unit (NPU) accelerator tile, and dual LPDDR5X channels on a TSMC N3E process), containerized harnesses insulate automated loops from underlying CAD complexity. The environment guarantees that requested operations reach backend tools in declared states, enforces least-privilege sandboxing, and records produced artifacts as immutable execution records. The environment certifies *what ran and what returned*; qualifying scientific validity and evaluating architectural trade-offs belong to the verification harness developed in @sec-feedback-verification-trust.
+Tool-connected execution environments answer this by giving containment, translation, coordination, and recording to separate roles rather than to one script. In our prospective Lighthouse mobile extended-reality (XR) system-on-chip (SoC) study (3\ W thermal design power (TDP) across RISC-V application cores, a neural processing unit (NPU) accelerator tile, and dual LPDDR5X channels on a TSMC N3E process), containerized harnesses insulate automated loops from underlying CAD complexity. The environment guarantees that requested operations reach backend tools in declared states, enforces least-privilege sandboxing, and records produced artifacts in execution records. The environment certifies *what ran and what returned*; qualifying scientific validity and evaluating architectural trade-offs belong to the verification harness developed in @sec-feedback-verification-trust.
 
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
 
-- **Differentiate** tools and simulators from wrappers, harnesses, and enclosing environments across the three operational layers to establish modular containment boundaries.
-- **Distinguish** host wall-clock/runtime variance from simulated guest cycle-count determinism, and explain how CPU core pinning (`taskset -c`) and RAM scratchdisks can reduce host runtime jitter without establishing guest-cycle determinism.
-- **Construct** typed tool wrappers that enforce pre-execution schema validation, exact parameter translation, structured metric extraction, and unclassified log retention.
-- **Coordinate** asynchronous multi-tool cluster executions using idempotent submission tokens, floating-license token pools, and process group containment (`cgroups` v2).
-- **Budget** repeated randomized tool runs, recording seeds, thread counts, declared conditions, and every returned observation, while governing continuous mainline churn with fine-grained dependency graphs and immutable attempt records.
+- **Differentiate** tools and simulators from the wrappers, harnesses, and environments that enclose them, and assign each containment and recording duty to its role.
+- **Distinguish** host runtime variance from simulated guest-cycle determinism, and explain why pinning execution to fixed cores reduces the first without establishing the second.
+- **Construct** typed tool wrappers that validate requests before launch, translate parameters exactly, extract structured metrics, and retain unclassified log output.
+- **Coordinate** asynchronous cluster execution with idempotent submission, pooled floating licenses, and termination of the whole process tree when a lease expires.
+- **Budget** repeated randomized tool runs, record seeds, thread counts, conditions, returns, and cost in the execution record, and bound a search's drift from the moving mainline.
 :::
 
-## Hardware and Software Evaluation Environments
+## Environment Structure
 
-To enforce rigorous state tracking, automated evaluation pipelines decouple execution mechanics into five distinct architectural roles.
+The four questions the opening posed are answered by different pieces of infrastructure. Treating a simulator as the environment, or asking a wrapper script to do a harness's bookkeeping, leaves some of them unanswerable by construction, because the component that could have recorded the answer was never in the path.
+
+### Five Execution Roles
+
+Automated evaluation pipelines separate execution into five roles.
 
 - **Tool:** Transforms an artifact or analyzes a stated property under declared inputs (e.g., LLVM, TVM, SCALE-Sim, Ramulator 2, gem5, Verilator, Synopsys VCS, cocotb, SystemVerilog Assertions (SVA) paired with bounded model checking (BMC), Yosys, Vivado, OpenROAD, OpenSTA).
 - **Simulator:** A domain-specific tool modeling hardware or software behavior, exposing only modeled properties.
@@ -44,37 +48,37 @@ To enforce rigorous state tracking, automated evaluation pipelines decouple exec
 - **Harness:** Coordinates multiple wrappers, recording attempts, state, costs, failures, retries, resets, and artifacts.
 - **Environment:** The complete infrastructure connecting a study to underlying tools, defining observable state, permissible requests, accessible tools, and return schemas.
 
-Execution infrastructure must adapt to the differing demands of the three operational layers of AI in architecture (@fig-ch01-three-layers-ai-integration).
+How much of this apparatus a project needs scales with the operational layer it occupies (@fig-ch01-three-layers-ai-integration): an engineer launching tools by hand needs none of it, a closed-loop optimizer driving one tool inside a fixed container needs a wrapper and a small harness, and an AI-native design system coordinating compilers, simulators, formal checkers, and signoff flows across the stack needs every role below.
 
-- **Layer 1 (AI-Assisted Engineering):** Operates without an automated harness. The engineer launches tools interactively or via shell scripts, manually copying prompts, managing floating license tokens, and interpreting tool errors.
-- **Layer 2 (AI-Driven Subsystem Optimization):** Uses a domain-specific sandbox or episodic harness (such as a reinforcement learning (RL) gym wrapper for macro floorplanning or an autotuner script for compiler search) to drive a single tool closed-loop within a fixed container.
-- **Layer 3 (AI-Native System Design):** Requires an air-gapped, multi-tool execution harness (such as SiliconCompiler or Hammer) coordinating compilers, microarchitectural simulators, formal assertion checkers, and signoff flows across the entire hardware–software stack, tracking daily mainline churn and statistical output dispersion under immutable execution records.
+In our XR SoC environment, wrappers encapsulate simulators, formal provers, logic synthesizers, and physical design flows. A central harness binds outputs (from NPU multiply-accumulate (MAC) utilization to post-route timing slack) to candidate identities. Modern hardware design systems deploy hardware-native workflow engines such as SiliconCompiler [@SiliconCompiler] and Hammer [@Hammer], which interpret electronic design automation (EDA) technology-mapping views, process design kit (PDK) corner trees, and design rule checks, rather than generic software build systems (such as Make) that lack hardware semantic awareness.
 
-In our XR SoC environment, wrappers encapsulate simulators, formal provers, logic synthesizers, and physical design flows. A central harness binds outputs (from NPU multiply-accumulate (MAC) utilization to post-route timing slack) to candidate identities. Modern hardware design systems deploy hardware-native workflow engines such as SiliconCompiler [@SiliconCompiler] and Hammer [@Hammer], which interpret electronic design automation (EDA) technology-mapping views, process design kit (PDK) corner trees, and design rule checks, rather than generic software build systems (like Make or Celery) that lack hardware semantic awareness.
+### Host and Network Boundaries
 
 Hardware evaluation environments secure the physical host and network boundaries by enforcing five infrastructure rules.
 
-1. **EDA floating-license management and token pooling:** Commercial EDA engines (Synopsys VCS and PrimeTime, Cadence Innovus and Xcelium, Siemens Questa) operate under centralized floating-license daemons (FlexLM and Sentinel). When automated multi-agent systems launch dozens of parallel exploration attempts, unmanaged scripts trigger severe license starvation, cascading job timeouts, and queueing thrash that lock out entire engineering teams. Harnesses must manage explicit license token pools, queueing jobs with priority weights, enforcing bounded leases, and running daemon heartbeat monitors (`lmutil lmstat` and `lmremove`) to harvest orphan license tokens when worker nodes or containers abort unexpectedly.
-2. **On-premises and cloud NDA air-gap architecture:** Commercial process design kits (such as TSMC N3E or Intel 18A) operate under foundry nondisclosure agreements (NDAs) that strictly prohibit uploading Graphic Database System II (GDSII) streams, Library Exchange Format (LEF) / Design Exchange Format (DEF) layout views, or transistor-level SPICE models to third-party cloud endpoints. AI-native design systems bridge this boundary through an *air-gapped proxy architecture*. High-level prompts, abstract syntax tree (AST) rewrites, and anonymized feature vectors communicate with external foundation models over encrypted gRPC channels, while all PDK-dependent synthesis, physical layout, and signoff design rule check (DRC) and layout versus schematic (LVS) runs execute strictly on-premises inside isolated, air-gapped compute enclaves.
-3. **Host runtime variance and CPU pinning:** Hardware simulators and multi-threaded logic synthesizers can take different amounts of wall-clock time when the host operating system (OS) migrates worker threads across non-uniform memory access (NUMA) nodes, contends for memory bandwidth, or changes central processing unit (CPU) frequency under thermal load. These effects alter elapsed time and tool throughput. They do not generally alter the guest or target cycle count returned by a deterministic cycle-driven simulator with fixed inputs and state. Pinning execution threads to dedicated physical cores (`taskset -c`), fixing CPU performance governors, and isolating filesystem I/O on local RAM-backed scratchdisks (`/dev/shm` or tmpfs) can reduce host runtime jitter, but they cannot make a nondeterministic tool deterministic.
-4. **Sandboxed execution and Tcl shell-escape defenses:** EDA toolchains (such as Vivado, OpenROAD, and Synopsys Design Compiler) provide interactive Tcl script environments with unrestricted host shell execution (`exec`, `system`, `open |...`). When an automated generator or large language model (LLM) produces synthetic synthesis scripts or floorplan constraints, untrusted Tcl commands can inadvertently overwrite project root directories, leak proprietary environment variables, or execute unauthorized network requests. Harnesses execute EDA tools strictly inside unprivileged Open Container Initiative (OCI) containers with user namespaces (`uid_map`), read-only PDK and LEF/Liberty root mounts, isolated loopback-only network namespaces (blocking outbound socket creation), and strict seccomp profiles blocking arbitrary subprocess execution and host filesystem traversal.
-5. **High-throughput filesystem I/O and checkpoint isolation:** Physical design and signoff tools generate multi-gigabyte intermediate database checkpoints (such as Synopsys NDM, Cadence DEF, Standard Parasitic Exchange Format [SPEF], and GDSII streams). Launching parallel exploration agents against shared network-attached storage (NFS or Lustre) quickly saturates metadata servers and storage fabrics, stalling compute clusters. Harnesses isolate active tool runs to local NVMe scratch storage, storing only lightweight parasitic diffs and final signoff reports in shared persistent volumes while automatically pruning unpromoted layout checkpoints.
+1. **EDA floating-license management and token pooling:** Commercial EDA engines (Synopsys VCS and PrimeTime, Cadence Innovus and Xcelium, Siemens Questa) operate under centralized floating-license daemons (FlexLM and Sentinel). When automated methods launch dozens of parallel exploration attempts, unmanaged scripts trigger license starvation, cascading job timeouts, and queueing thrash that lock out entire engineering teams. Harnesses must manage explicit license token pools, queueing jobs with priority weights, enforcing bounded leases, and running daemon heartbeat monitors (`lmutil lmstat` and `lmremove`) to harvest orphan license tokens when worker nodes or containers abort unexpectedly.
+2. **NDA segmentation across on-premises and cloud resources:** Commercial process design kits (such as TSMC N3E or Intel 18A) operate under foundry nondisclosure agreements (NDAs) that prohibit uploading Graphic Database System II (GDSII) streams, Library Exchange Format (LEF) / Design Exchange Format (DEF) layout views, or transistor-level SPICE models to third-party cloud endpoints. AI-native design systems bridge this boundary through an *NDA-segmented proxy architecture*. High-level prompts, abstract syntax tree (AST) rewrites, and anonymized feature vectors cross to external foundation models over encrypted gRPC channels, while all PDK-dependent synthesis, physical layout, and signoff design rule check (DRC) and layout versus schematic (LVS) runs execute on-premises inside PDK-confined compute enclaves with no outbound path to those endpoints.
+3. **Host runtime variance and CPU pinning:** Hardware simulators and multi-threaded logic synthesizers can take different amounts of wall-clock time when the host operating system (OS) migrates worker threads across non-uniform memory access (NUMA) nodes, contends for memory bandwidth, or changes central processing unit (CPU) frequency under thermal load. These effects alter elapsed time and tool throughput; what they do and do not alter in the returned result is separated in @sec-incremental-churn-dispersion. Pinning execution threads to dedicated physical cores (`taskset -c`), fixing CPU performance governors, and isolating filesystem I/O on local RAM-backed scratchdisks (`/dev/shm` or tmpfs) can reduce host runtime jitter, but they cannot make a nondeterministic tool deterministic.
+4. **Sandboxed execution and Tcl shell-escape defenses:** EDA toolchains (such as Vivado, OpenROAD, and Synopsys Design Compiler) provide interactive Tcl script environments with unrestricted host shell execution (`exec`, `open |...`). When an automated generator or large language model (LLM) produces synthetic synthesis scripts or floorplan constraints, untrusted Tcl commands can inadvertently overwrite project root directories, leak proprietary environment variables, or execute unauthorized network requests. Harnesses execute EDA tools inside unprivileged Open Container Initiative (OCI) containers with user namespaces (`uid_map`), read-only PDK and LEF/Liberty root mounts, isolated loopback-only network namespaces (blocking outbound socket creation), and seccomp profiles blocking arbitrary subprocess execution and host filesystem traversal.
+5. **High-throughput filesystem I/O and checkpoint isolation:** Physical design and signoff tools generate multi-gigabyte intermediate database checkpoints (such as Synopsys NDM, Cadence DEF, Standard Parasitic Exchange Format [SPEF], and GDSII streams). Launching parallel exploration agents against shared network-attached storage (NFS or Lustre) saturates metadata servers and storage fabrics, stalling compute clusters. Harnesses isolate active tool runs to local NVMe scratch storage, storing only lightweight parasitic diffs and final signoff reports in shared persistent volumes while automatically pruning unpromoted layout checkpoints.
 
-While these five containment rules secure physical host and network perimeters, automated search loops also require strict operational contracts governing data exchange across the container boundary. Autonomous optimizers and generative agents lack physical intuition; if a backend tool silently falls back to a nominal clock period or defaults to an uncharacterized standard-cell library, the search loop will optimize against false telemetry.
+### Tool Wrappers
+
+These five rules secure the host and network perimeter; the data crossing the container boundary needs contracts of its own. Optimizers and generators have no physical intuition. If a backend tool silently falls back to a nominal clock period or defaults to an uncharacterized standard-cell library, the search loop optimizes against false telemetry.
 
 Tool wrappers establish this operational boundary by separating raw execution mechanics from semantic interpretation. Wrappers enforce typed input validation and structured output parsing so incoming requests are structurally sound and outgoing artifacts are machine-readable (@fig-environment-tool-interface).
 
 ![**Tool wrappers separate raw execution state from semantic result interpretation.** The wrapper validates and translates incoming typed requests before invoking backend tools; the isolated tool executes declared operations; the parser extracts structured attributes while retaining unclassified residual output; and the harness binds runtime outcomes, parse statuses, compute costs, and lineage into immutable execution records.](images/fig-environment-tool-interface){#fig-environment-tool-interface width="100%" fig-alt="An architecture question and workload, action schema, constraints, and metric definitions enter the tool-connected environment as a typed request. The wrapper validates and translates the request before calling the tool. An invalid request goes directly to the harness record. The tool separately produces raw returned material and a runtime outcome that can be failed, partial, or complete. The parser turns retained raw material into structured attributes, unclassified residual output, and a parse status. The harness records request and attempt identity, conditions, runtime outcome, artifacts, parse status, cost, and lineage."}
 
-Before invoking a backend simulator or synthesis engine, the wrapper validates action schemas, Synopsys Design Constraints (SDC) clock definitions, and parameter bounds against frozen contracts (verifying that candidate identifiers, cache associativities, macro dimensions, and trace digests lie strictly within declared ranges). This pre-execution validation intercepts malformed requests before they consume floating EDA license tokens or trigger CAD segmentation faults.
+Before invoking a backend simulator or synthesis engine, the wrapper validates action schemas, Synopsys Design Constraints (SDC) clock definitions, and parameter bounds against frozen contracts (verifying that candidate identifiers, cache associativities, macro dimensions, and trace digests lie within declared ranges). This pre-execution validation intercepts malformed requests before they consume floating EDA license tokens or trigger CAD segmentation faults.
 
-When execution completes, the wrapper parses raw tool transcripts and database reports into structured attributes (such as OpenROAD worst negative slack, gem5 miss rates, or gate-level dynamic power from toggle activity), records runtime telemetry and consumed license-hours, and preserves unclassified residual log lines. Retaining unclassified warnings (such as unconstrained timing endpoints, unmapped latch inferences, or thermal throttling alerts) ensures that downstream auditing detects simulation anomalies before optimization loops exploit them.
+When execution completes, the wrapper parses raw tool transcripts and database reports into structured attributes (such as OpenROAD worst negative slack, gem5 miss rates, or gate-level dynamic power from toggle activity), records runtime telemetry and consumed license-hours, and preserves unclassified residual log lines. Retaining unclassified warnings (such as unconstrained timing endpoints, unmapped latch inferences, or thermal throttling alerts) lets downstream auditing detect simulation anomalies before optimization loops exploit them.
 
-Enforcing these typed boundaries guarantees that every executed tool run maps strictly to an intended architectural state, eliminating the silent tool drift that corrupts high-throughput search campaigns.
+Typed boundaries tie every executed tool run to an intended architectural state and remove the silent drift that corrupts high-throughput search campaigns.
 
-## Stateful Tools and Partial Execution Returns
+### Stateful Tools and Exact Translation
 
-Defensive wrapping is essential because EDA and architecture tools operate statefully. They write scratch files, hold floating license tokens, mutate in-memory design databases (such as OpenDB objects, Cadence Innovus `.enc` sessions, or Synopsys NDM libraries), and inherit host environment variables. Tools such as OpenROAD, Vivado, Synopsys VCS, and formal assertion provers maintain persistent compilation state and intermediate database checkpoints [@OpenROADDocs; @Clarke2018ModelChecking]. Reusing an interactive tool session across multiple exploration steps allows dirty routing grids, un-flushed parasitic caches, or modified netlists to contaminate subsequent runs. To guarantee auditability across repeated invocations, wrappers must enforce hermetic process lifetimes, validate declared preconditions prior to launch, serialize recognized parameters, capture exact exit codes, and preserve raw execution transcripts alongside structured returns.
+Defensive wrapping is necessary because EDA and architecture tools are stateful. They write scratch files, hold floating license tokens, mutate in-memory design databases (such as OpenDB objects, Cadence Innovus `.enc` sessions, or Synopsys NDM libraries), and inherit host environment variables. Tools such as OpenROAD, Vivado, Synopsys VCS, and formal assertion provers maintain persistent compilation state and intermediate database checkpoints [@OpenROADDocs; @Clarke2018ModelChecking]. Reusing an interactive tool session across multiple exploration steps allows dirty routing grids, un-flushed parasitic caches, or modified netlists to contaminate subsequent runs. That is why a wrapper gives every invocation a hermetic process lifetime and clears intermediate netlists, lockfiles, and cached waveform dumps (value change dump (VCD) and Fast Signal Database files) between runs, so stale EDA state from one run cannot reach the next. To guarantee auditability across repeated invocations, wrappers must also validate declared preconditions prior to launch, serialize recognized parameters, capture exact exit codes, and preserve raw execution transcripts alongside structured returns.
 
 Physical design flows illustrate view-consistency hazards. OpenROAD ingests Liberty (`.lib`) timing/power views and LEF physical layout data [@OpenROADDocs], Yosys maps logic gates, and Institute of Electrical and Electronics Engineers (IEEE) 1801 Unified Power Format (UPF) defines power domains. In an XR SoC design, an NPU or memory controller appears as a behavioral C++ model in Verilator, a Liberty timing view in synthesis, a UPF specification during power gating, and a LEF macro in physical layout. If an automated generator updates behavioral register-transfer level (RTL) code while cached Liberty models characterized at nominal voltage (0.75\ V) or stale UPF power rules remain in place, downstream tools evaluate conflicting views, producing deceptively clean timing reports for physically nonfunctional or deadlocked silicon. Environments must bind compatible views to a single candidate identity or refuse execution.
 
@@ -84,11 +88,15 @@ Parameter translations must be exact. Wrappers must not round cache sizes, alter
 In our Lighthouse study, a candidate configured with a 3\ MiB cache, an NPU array ($16 \times 16$), and dual LPDDR5X channels serializes into an analytical model input under declared process, voltage, and temperature (PVT) conditions. It simultaneously maps to gem5 and Verilator configurations linked to an NPU model, memory traffic generators, XR workload traces, and baseline software images. Wrappers may format syntax and file paths, but they cannot alter cache policies, systolic topologies, or memory arbitration. Mismatched translations are refused and logged.
 :::
 
-## Environment Lineage and Reproducibility
+## Environment Setup
 
-Because hardware evaluation binds multiple lowered representations (behavioral C++, Liberty timing views, UPF power intent, and LEF layout macros) to a single architectural candidate, any modification to an upstream input ripples through downstream transformations. Tracking these dependencies requires an explicit, immutable lineage model. *Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate. Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints), ensuring that resets regenerate working state deterministically from pinned inputs.
+Setup is everything the environment fixes before a request arrives: which inputs are immutable and how their identity is tracked, what each tool interface admits and returns, and which tools sit in the path between a candidate and a signoff-grade answer. Nothing that happens at runtime can be recorded faithfully unless these were pinned first.
 
-Tools ingest lowered representations; high-level specifications lower into ASTs, control-data flow graphs (CDFGs), and gate netlists. Complete transformation records preserve the following metadata across each lowering stage:
+### Lineage and Reproducibility
+
+Because hardware evaluation binds multiple lowered representations (behavioral C++, Liberty timing views, UPF power intent, and LEF layout macros) to a single architectural candidate, any modification to an upstream input ripples through downstream transformations. Tracking these dependencies requires an explicit, immutable lineage model. *Lineage* is the parent–child history linking requests, transformations, and artifacts, verifying which inputs produced a result and whether retries belong to the same candidate. Immutable inputs (source code, workload snapshots, constraints, PDK views, container images) are isolated from mutable work states (run directories, temporary databases, checkpoints), so that resets regenerate working state deterministically from pinned inputs.
+
+Tools ingest lowered representations; high-level specifications lower into ASTs, control-data flow graphs (CDFGs), and gate netlists. Each lowering stage is itself a tool run, and its execution record preserves the following metadata:
 
 - Parent candidate and request identifiers.
 - Transformation tool and compiler versions.
@@ -105,175 +113,25 @@ Evaluation instances bind compiled binaries and elaborated RTL netlists under im
 
 Operating conditions (process, voltage, temperature, link order, environment variables) must also be recorded alongside numeric returns [@Mytkowicz2009WrongData]. A timing slack of -12\ ps at a slow corner is not comparable to the same value at a typical corner; numbers are meaningful only within their recorded conditions. When lineage tracking pairs tightly with condition recording, automated tools can safely resume failed runs without risk of state corruption.
 
-## Typed Contracts for Hardware Tool Interfaces
+### Typed Tool Interfaces
 
-Recording immutable evaluation keys and operating conditions supports reproducibility only if the underlying tools are invoked and parsed under strict, typed semantics. Tool interfaces operationalize these lineage requirements by enforcing typed schemas across heterogeneous execution engines:
+Recording evaluation keys and operating conditions supports reproducibility only if the underlying tools are invoked and parsed under typed semantics. The same contract shape applies across every tool class in @tbl-multi-fidelity-spectrum, from an architectural simulator wrapped for instructions per cycle (IPC) and memory contention to a physical design flow wrapped for synthesis and signoff timing slack. Open-source flows such as Yosys and OpenROAD [@Yosys; @AjayiEtAl2019OpenROAD] provide accessible calibration environments, while commercial tools slot into the same schemas under enterprise NDAs for foundry node signoff. Interfaces expose permitted parameter mutations while locking fixed attributes, standardizing request identities, job statuses, error types, and cancellation semantics across tool paths. Structured hardware intermediate representations (such as Circuit IR Compilers and Tools (CIRCT) Multi-Level Intermediate Representation (MLIR) dialects including `hw`, `comb`, and `seq` [@CIRCT]) enable direct programmatic manipulation of ASTs and CDFGs rather than fragile regex text edits on raw HDL. Tool wrappers are validated using unit fixtures (pairing typed requests with expected command lines and parsed outputs) and failure injection (verifying timeouts, process kills, and corrupted outputs) [@GunawiEtAl2011FATEDestini].
 
-- **Architectural simulators:** gem5 wrapped for instructions per cycle (IPC) and memory contention metrics [@BinkertEtAl2011Gem5].
-- **RTL simulators / testbenches:** Verilator and cocotb wrapped for cycle execution and waveform traces [@Veripool2026Verilator].
-- **Formal provers:** SymbiYosys and JasperGold wrapped for SVA assertions, BMC bounds ($k$-induction), and counterexample value change dump (VCD) traces [@Clarke2018ModelChecking].
-- **Physical design flows:** Yosys, OpenROAD, Synopsys Design Compiler, and Cadence Innovus wrapped for synthesis and signoff timing slack [@Yosys; @AjayiEtAl2019OpenROAD; @OpenROADDocs].
-- **FPGA-accelerated platforms:** FireSim wrapped for mapped target execution on field-programmable gate arrays (FPGAs) [@KarandikarEtAl2018FireSim].
+### Multi-Tool Toolchains and Fidelity
 
-These interfaces maintain identical contracts across open-source and commercial EDA engines. Open-source flows provide accessible calibration environments, while commercial tools slot into identical schemas under enterprise NDAs for foundry node signoff. Interfaces expose permitted parameter mutations while locking fixed attributes, standardizing request identities, job statuses, error types, and cancellation semantics across tool paths. Structured hardware intermediate representations (such as Circuit IR Compilers and Tools (CIRCT) Multi-Level Intermediate Representation (MLIR) dialects including `hw`, `comb`, and `seq` [@CIRCT]) enable direct programmatic manipulation of ASTs and CDFGs rather than fragile regex text edits on raw HDL. Tool wrappers are validated using unit fixtures (pairing typed requests with expected command lines and parsed outputs) and failure injection (verifying timeouts, process kills, and corrupted outputs) [@GunawiEtAl2011FATEDestini].
-
-## Managing Asynchronous Tool Execution
-
-Even with typed contracts and validated wrappers, hardware evaluation environments depart fundamentally from synchronous reinforcement learning sandboxes. In semiconductor design, a single tool invocation (whether a full-system cycle-accurate gem5 simulation, a bounded formal model checker unrolling deep pipeline transitions, or an OpenROAD physical layout run) operates over timescales ranging from minutes to days. Managing these heterogeneous execution latencies requires an asynchronous runtime orchestrator that decouples candidate proposal from evaluation resolution. The runtime must handle distributed cluster scheduling, concurrent EDA license queueing, and intermediate log streaming without stalling the overarching search process or losing design state during infrastructure restarts.
-
-### Asynchronous Scheduling and Idempotency
-
-To implement this orchestrator role, the harness must natively support distributed cluster management. Architecture toolchains operate asynchronously. Cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers).
-
-While standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium], architecture workflows cannot be reduced to synchronous exchanges. Execution runtimes must manage queues, dependency graphs, and persistent state across multi-step campaigns. To prevent state loss during these long-running campaigns, authorized requests instantiate single attempt records that track backend tool executions across all job scheduling phases (@fig-runtime-object-state).
-
-![**Single attempt records track zero, one, or multiple backend tool executions.** An attempt record anchors all backend tool executions to the authorized request, whether the request is refused prior to execution, creates a single tool job, or spawns multiple parallel execution segments. The record preserves returned raw artifacts, realized compute and license costs, and independent status attributes including scheduling state, terminal cause, parser health, and retry parent links. Conceptual runtime state schema.](images/fig-runtime-object-state){#fig-runtime-object-state width="100%" fig-alt="An authorized request creates one attempt. The attempt may be refused before a backend job exists, may create one job, or may create several jobs or execution segments. All paths feed one attempt record. The attempt record points separately to returned artifacts and realized cost. Scheduling state, terminal cause, artifact completeness, parser status, cancellation confirmation, and retry parent remain independent attributes."}
-
-Decoupling attempt identity from process completion ensures that interrupted or preempted cluster jobs remain fully auditable. When a Slurm or LSF scheduler evicts a running simulation, the harness records the partial wall-clock time and license-hours consumed, captures intermediate logs, and links subsequent retries to the original attempt without corrupting the candidate's core identity.
-
-Harnesses attach jobs to attempts upon submission, using idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs]. This strict idempotency guarantees that even if the orchestrator container crashes and restarts, it will reconnect to running jobs rather than spawning expensive duplicates. However, managing asynchronous job submission requires more than idempotency; it requires bounding queue depth. Because generative candidate proposers operate at software speed while backend simulators and EDA tools execute at physical clock rates, unconstrained dispatch quickly floods job queues and triggers congestion collapse.
-
-::: {.callout-law title="Queueing Congestion Collapse in Tool Loops"}
-**The Classical Principle:** As job arrival rate $\lambda$ approaches tool service capacity $\mu$, mean queue waiting time explodes asymptotically ($W = \frac{1}{\mu - \lambda}$) [@Kleinrock1975QueueingSystems; @Little1961LittlesLaw].
-
-**The Hardware Trap:** In autonomous tool loops, generative agents propose candidate microarchitectures faster than expensive simulators and EDA license servers can evaluate them ($g \to \mu$). Because chip specifications, compiler branches, and interface definitions drift at rate $\gamma_{\text{drift}}$, long queue wait times cause simulation results to return after baseline assumptions have expired ($W_{\text{queue}} > 1/\gamma_{\text{drift}}$). The effective throughput of valid, fresh designs collapses to zero ($V_{\text{eff}} \to 0$), leaving compute clusters saturated with spoiled work.
-
-**The Architectural Antidote:** Implement feed-forward queue stability enforcement and telemetry-driven backpressure to throttle generation whenever downstream tool utilization approaches saturation (see @sec-appendix-c-laws-paradoxes, @sec-law-congestion-collapse, for the mathematical effective throughput derivation and stability bounds).
-:::
-
-
-### Fault Containment and Execution Quarantines
-
-Beyond queue congestion and backpressure throttling, asynchronous execution across distributed compute clusters introduces host-level failure modes. When long-running jobs execute over hours or days, background preemptions, worker crashes, and unconfirmed terminations inevitably occur. The orchestrator must combine idempotent scheduling with strict process lifecycle control and quarantine mechanisms to isolate failures. Commercial EDA tools and simulators frequently fork multi-threaded worker sub-processes and licensing helper daemons. If a job exceeds its lease timeout or is canceled, sending a simple signal to the top-level process ID often leaves detached child processes running on compute nodes, silently consuming physical host memory and holding expensive floating license tokens. Harnesses enforce process group containment via Linux PID namespaces or control groups (`cgroups` v2 `cgroup.kill`), ensuring atomic termination of the entire execution tree before releasing cluster slots.
-
-::: {.callout-design-principle title="Automate Within Recoverable Boundaries"}
-**The principle:** Autonomous tools and agentic scripts must execute generation, simulation, and parsing actions strictly within sandboxed, resource-bounded environments.
-
-**The application:** Execution wrappers and harnesses must enforce hermetic tool boundaries, explicit time and memory budgets, and complete lineage tracking, ensuring that infrastructure failures never pollute hardware evaluation records.
-:::
-
-Resource limits are enforced independently across model invocations, tool submissions, CPU/accelerator time, memory, storage, and license allocations. When shared compute clusters saturate, harnesses apply backpressure and queue limits. Quarantining unconfirmed or timed-out executions prevents delayed filesystem writes from corrupting live project state, while floating license exhaustion is prevented by managing EDA checkouts through harness-level token-bucket semaphores and server-side inactivity heartbeat timeouts.
-
-Candidate identity (`candidate_id`) identifies the architectural design across tool paths, while configuration records (`configuration_id`) identify tool-specific parameters whose translation produces distinct artifact hashes. Realized costs track compute, memory, storage, license-hours, and human engineering effort, recording failed and retried attempts alongside successful runs to establish true experimental budgets.
-
-::: {.callout-design-principle title="Unrecorded Runs Cannot Justify Claims"}
-**The principle:** Every tool attempt must produce an immutable execution record detailing what ran, what configuration was passed, how the environment behaved, and what compute was spent.
-
-**The application:** A returned value with no attempt record cannot enter a comparison, and a retry without lineage cannot be distinguished from a new candidate.
-:::
-
-## Categorizing Tool and Environment Failures
-
-Even with robust containment and quarantines in place, autonomous exploration loops fail for reasons spanning cluster infrastructure drops to true physical design violations. If a harness conflates a FlexLM license checkout denial or a host out-of-memory crash with hardware unroutability, it permanently corrupts the study's dataset with false negatives.
-
-To protect dataset integrity, execution harnesses classify runtime failures into four non-overlapping domains: malformed input requests (repaired or rejected at admission), infrastructure and license faults (triggering policy-bounded retries), backend tool crashes (triggering checkpoint resumes), and verified physical limit violations (recorded as valid negative design evidence). Execution status (what ran) remains strictly separate from architectural evaluation (what the outcome means). The harness maintains this separation to correctly route recovery actions based on exact failure modes (@tbl-failure-taxonomy).
-
-| **Execution outcome** | **How it appears** | **Preserved evidence** | **Runtime response** |
-| --- | --- | --- | --- |
-| **Invalid request** | Illegal parameter or meaning-altering translation detected prior to invocation. | Request, validation rule, refusal reason. | Repair syntax only if meaning is preserved; otherwise refuse and return to caller. |
-| **Setup / dependency failure** | Missing top-level, clock, library, constraint, or checkpoint. | Setup check, diagnostics, partial artifacts, cost. | Restore or regenerate declared state; leave candidate unevaluated. |
-| **Infrastructure failure** | License server unreachable, host out-of-memory (OOM), scheduler preemption. | Attempt record, failure source, cost, retry eligibility. | Retry under declared policy; leave candidate unevaluated. |
-| **Tool failure** | Tool crashes (Vivado routing error, gem5 crash, VCS elaboration error). | Tool diagnostics, exit code, partial artifacts, cost. | Retry, reset, resume checkpoint, or stop. Does not prove physical infeasibility. |
-| **Incomplete return** | Missing or truncated report files. | Stage records, produced files, raw logs, parse status. | Preserve partial artifacts; rerun before treating as complete. |
-| **Parser failure** | Artifact violates return schema or contains unclassified text. | Parser version, raw log, recognized tokens, residual output. | Repair parser; reparse retained raw log. |
-| **Formal-tool return** | SVA/BMC prover reports exact status (proven, counterexample trace, bounded, unknown). | Method, property, model, assumptions, bound, solver proof/VCD, cost. | Pass formal result forward without asserting general correctness. |
-| **Reported limit violation** | Completed run reports physical violation (OpenROAD worst negative slack (WNS) $< 0$, DRC error). | Typed violation, units, conditions, raw report, cost. | Record complete return without marking run as tool failure. |
-| **Complete tool return** | Expected artifacts exist and parse cleanly (including limit violations). | Typed metrics, units, conditions, warnings, raw logs, cost, lineage. | Retain return for measurement qualification. |
-: **Execution status determines what ran, not what the architecture means.** Operational failures, partial returns, parser errors, and physical violations remain separate so recovery targets exact causes. {#tbl-failure-taxonomy}
-
-These failure classifications shape how the environment handles edge cases. Formal verification tools, for instance, report specialized outcomes (such as bounded proofs, counterexample traces, and solver timeouts) [@Clarke2018ModelChecking]. This requires harnesses to preserve exact formal statuses rather than reducing complex proofs to binary success or failure flags.
-
-Similarly, signoff returns remain permanently bound to tool versions, libraries, operating corners, and constraint waivers; a clean zero-error return indicates only that the tool found no violations under its current configuration, not that the design is universally sound. If an autonomous optimizer introduces false-path waivers to artificially eliminate timing violations, or if a physical layout suffers from undetected dynamic IR drop hot spots under toggle activity, treating a clean return as an unqualified pass creates catastrophic design escapes. To ensure critical context is never lost, wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, preventing novel tool warnings from being silently discarded during parsing [@Liu2024LostInTheMiddle].
-
-## State Recovery, Caching, and Artifact Reuse
-
-When a tool execution terminates and logs are preserved, recovery mechanisms depend on failure classification: invalid requests are corrected before execution, transient infrastructure faults trigger policy-bounded retries, and tool crashes initiate checkpoint resumes or clean resets. Retries preserve parent attempt links to prevent duplicate cost accounting. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
-
-::: {.callout-war-story title="The stale library view"}
-**The claim.** A design update reruns static timing analysis and receives a clean signoff report asserting that all bus timing constraints are met at the target accelerated clock frequency.
-
-**The gap.** The timing analyzer loaded a cached Liberty view from a previous lower-frequency run that omitted accelerated setup and hold characterizations; because the missing checks were never executed, no timing violations were reported.
-
-**The lesson.** Reusing stale library views produces deceptively clean signoff reports for failing designs. Harnesses must validate PDK, LEF, and Liberty checksums before admitting timing signoff returns.
-:::
-
-## Execution Records {#sec-operational-attempt-record}
-
-To prevent stale cache hits and untracked environment mutations from corrupting architectural studies, environments rely on structured execution records. An execution record is not a passive logfile; it is the definitive, immutable receipt that bridges low-level CAD execution to high-level architectural decision-making. When automated methods drive exploration loops, every tool invocation produces an immutable record pairing candidate identity with environment state, tool versions, container digests, and consumed compute resources.
-
-Historically, scaling computational runtimes has always depended on raising the reliability threshold of intermediate state. In 1951, Jay Forrester's group developed magnetic core storage to replace electrostatic storage tubes in the MIT Whirlwind computer [@Forrester1951DigitalInformationStorage]. Electrostatic storage leaked charge continuously, causing frequent runtime drift; core memory dramatically increased mean time between failures (MTBF), establishing the hardware reliability foundation required for sustained real-time computation. In AI-native design systems where synthesis and emulation runs span hours or days across distributed cluster nodes, uncheckpointed runtimes risk outstripping infrastructure MTBF. Execution harnesses must establish dependable checkpoint intervals balanced against recovery overhead, while producing immutable execution records that distinguish host infrastructure crashes from candidate hardware defects.
-
-
-To guarantee post-execution auditability across distributed clusters, execution records capture six core dimensions:
-
-- **Request and attempt identity:** Study, request, run specification, candidate, configuration, workload, attempt universally unique identifier (UUID).
-- **Starting state:** Pinned inputs, source revisions, artifact hashes, tool versions, container digest.
-- **Execution outcome:** Admission status, terminal cause, artifact checks, parser status, retry eligibility.
-- **Returned material:** Raw logs, hashes, structured metrics with units, warnings, residual output.
-- **Lineage and retries:** Parent inputs, transformations, retry/reset parent links.
-- **Realized cost:** Consumed wall-clock time, CPU/accelerator hours, peak memory, storage, license-hours, and billable amounts.
-
-These dimensions form the backbone of automated architecture search. Standardizing the format of this evidence allows the system to reliably query past outcomes to train surrogate models or resume interrupted exploration campaigns without losing context.
-
-A structured attempt receipt binds these dimensions into an immutable machine-readable artifact (@lst-execution-record-schema).
-
-```{.yaml #lst-execution-record-schema lst-cap="**Structured execution attempt record schema.** Captures immutable starting state, tool versions, parsed metrics, and realized compute and license costs."}
-study_id: "lighthouse-xr-soc-v1"
-attempt_id: "att-8f3a91c2-7b1e"
-candidate_id: "cand-l2-3mib-npu16x16"
-starting_state:
-  git_commit: "9a2f1b4c"
-  container_digest: "sha256:d4e7b1a8c9e..."
-  tool_version: "OpenROAD-v2.0-1124"
-  pdk_variant: "TSMC_N3E_1.0a"
-outcome:
-  status: "COMPLETED"
-  terminal_cause: "NORMAL_EXIT"
-  exit_code: 0
-metrics:
-  worst_negative_slack_ps: -12.4
-  macro_area_mm2: 1.42
-  subsystem_power_w: 2.84
-costs:
-  wall_clock_seconds: 4128
-  cpu_hours: 18.2
-  peak_rss_gb: 14.8
-  license_token_hours: 1.15
-```
-
-The strictness of these records is directly tied to the scientific validity of the results. ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay relies on submitting identical retained requests and recorded states.
-
-However, submitting the same retained request can still consume different amounts of host wall-clock time when scheduling or unpinned host dependencies drift [@JimenezEtAl2017PopperConvention]. For a deterministic simulator with fixed inputs and versioned state, this host jitter ordinarily changes elapsed time and simulation throughput, not simulated guest cycles. Randomized algorithms and nondeterministic parallel execution are separate cases that may change returned artifacts or metrics, so attempt records must also preserve seeds, thread counts, tool settings, and relevant host conditions. Transformation records separately bridge content hashes to architectural semantics, indicating whether lowered representations preserve original design intent.
-
-## Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
-
-Capturing a verified execution record freezes a single design point, but industrial architecture teams operate on continuously evolving codebases. In high-velocity commercial SoC and datacenter accelerator development, the active codebase undergoes continuous daily churn. While an automated search loop or learned surrogate executes a multi-day optimization pass against a frozen repository revision, software runtimes evolve, instruction set architecture (ISA) extensions receive minor patches, compiler passes shift, and upstream RTL interfaces move. An optimization discovered against snapshot $t_0$ risks becoming invalid or unmergeable at snapshot $t_0 + \Delta t$ because underlying pipeline invariants or interface structures shifted during the search run.
-
-This operational reality creates an essential tension between *whole-chip regeneration* and *local delta evaluation*. If modifying a single memory-mapped register, bus arbiter, or cache replacement policy requires an automated design system to regenerate the entire accelerator hierarchy and rerun days of physical synthesis, the tool is discarded in daily engineering practice. Practical execution harnesses maintain fine-grained structural dependency graphs (using CIRCT MLIR dialect dependency analysis, Chisel module hierarchy content hashes, or dependency-graph build systems such as Bazel) that isolate the localized cone of logic affected by an incremental commit, selectively invalidating and re-evaluating only those simulation traces, formal assertions, and timing paths that cross the affected dependency boundary. The harness must also continuously track the distance between the reference design snapshot used by an active search loop and the moving mainline branch, triggering an early abort or automated resynchronization when upstream drift invalidates foundational interface assumptions.
-
-A different operational problem arises when an algorithm or tool can return different results from repeated work. The environment must keep three mechanisms separate:
-
-- **Host runtime jitter.** CPU frequency changes, NUMA migration, memory contention, and storage contention can change elapsed time and tool throughput without changing the simulated guest cycle count of a deterministic run. Records preserve the host placement, governor, storage path, and other declared runtime conditions.
-- **Explicit algorithmic randomness.** Generative methods, stochastic search passes, and randomized EDA stages accept seeds that can alter proposed candidates, layouts, or returned metrics. Records preserve the seed and all algorithm settings that define the run.
-- **Parallel execution nondeterminism.** Some tools can return different artifacts or metrics when thread counts or execution schedules change. Records preserve thread and concurrency settings rather than assuming that pinning removes this source of variation.
-
-These records do not establish a universal distribution or decision threshold. A randomized placement stage can return different layouts and power, performance, and area metrics across seeds even when the RTL and architecture remain fixed. An optimizer that retains only the best return can therefore select a favorable tool trajectory rather than a better architecture while hiding the other outcomes and their cost. Randomized EDA stages require an explicit repeated-run budget, with every seed, thread setting, declared condition, return, and failed attempt retained. @sec-feedback-verification-trust determines whether those observations support a confidence interval, a matched comparison, or candidate advancement.
-
-## Orchestrating Multi-Tool Toolchains
-
-Because full-system physical signoff is too computationally expensive to apply throughout large repeated-run campaigns or rapid daily mainline churn, practical design systems compose tools into hierarchical pipelines. A single tool cannot answer every architectural question. Cycle-accurate simulators capture instruction-level bottlenecks but ignore physical wiring congestion, while physical synthesis engines report precise routing delays but cannot run software workloads.
+A single tool cannot answer every architectural question. Cycle-accurate simulators capture instruction-level bottlenecks but ignore physical wiring congestion, while physical synthesis engines report precise routing delays but cannot run software workloads. Full-system physical signoff is also too expensive to apply to every candidate, so practical design systems compose tools into hierarchical pipelines.
 
 Exploring large candidate spaces economically requires balancing evaluation throughput against physical fidelity across a multi-fidelity spectrum. A tiered pipeline filters out unviable candidates early using fast, low-fidelity models, reserving expensive, high-fidelity signoff tools only for the most promising designs. The environment must preserve distinct models, tool versions, and inputs at each fidelity level (@tbl-multi-fidelity-spectrum).
 
 | **Tool class** | **Representative use** | **What it models or checks** | **Preserved environment state** |
 | --- | --- | --- | --- |
 | Analytical / circuit model | CACTI, SCALE-Sim, spreadsheet models [@MuralimanoharEtAl2009CACTI]. | Analytical equations and technology assumptions without workload execution. | Model version, macro geometry, PVT conditions, technology limits. |
-| Compiler and build stack | TVM, IREE, LLVM pass pipelines, linkers. | Generation of executable binaries; no hardware timing. | Source intermediate representations (IRs), target ISA flags, compiler versions, binary hashes. |
+| Compiler and build stack | TVM, IREE, LLVM pass pipelines, linkers. | Generation of executable binaries; no hardware timing. | Source intermediate representations (IRs), target instruction set architecture (ISA) flags, compiler versions, binary hashes. |
 | Functional ISA emulator | Spike, QEMU ISA execution. | Instruction semantics without microarchitectural timing. | Target binary, ISA extensions, input state, functional output. |
 | Timing simulation | gem5, SST, Ramulator 2 [@BinkertEtAl2011Gem5]. | Pipeline, cache, network-on-chip (NoC), and memory controller timing. | Workload traces, warmup length, seeds, event traces. |
 | RTL simulation / testbench | Verilator [@Veripool2026Verilator], cocotb, Synopsys VCS. | Cycle behavior under RTL semantics; no routed delay unless annotated. | RTL hash, testbench, compile flags, waveform traces. |
 | Formal verification | SVA/BMC via SymbiYosys or JasperGold [@Clarke2018ModelChecking]. | Stated invariants/relations within declared bounds ($k$-induction). | Property definitions, bounds, solver engine, proof certificates. |
-| Emulation and FPGA | ZeBu, Palladium, FireSim on cloud FPGAs [@KarandikarEtAl2018FireSim]. | Accelerated target execution. FPGA mapping is not application-specific integrated circuit (ASIC) signoff. | Target bitstream, host allocation, workload snapshot, traces. |
+| Emulation and field-programmable gate array (FPGA) | ZeBu, Palladium, FireSim on cloud FPGAs [@KarandikarEtAl2018FireSim]. | Accelerated target execution. FPGA mapping is not application-specific integrated circuit (ASIC) signoff. | Target bitstream, host allocation, workload snapshot, traces. |
 : **Fidelity is relative to the property under evaluation.** Harnesses preserve model assumptions, inputs, stages, and artifacts rather than collapsing returns into scalar scores. {#tbl-multi-fidelity-spectrum}
 
 Transitioning between these fidelity tiers requires careful structural mapping. Throughput varies with configuration rather than tool class alone. For instance, ZSim executes out-of-order models at 20\ MIPS (million instructions per second) ($200\times$ slowdown) [@ZSim], while FireSim executes FPGA targets at tens of megahertz ($<1{,}000\times$ slowdown) [@KarandikarEtAl2018FireSim].
@@ -284,9 +142,9 @@ To ensure consistency across these disjoint representations, modern design syste
 
 ![**Unified design configurations anchor multi-tool evaluation flows.** In this architectural flow based on the Chipyard SoC framework [@chipyard], a single root configuration lowers through Chisel generation and FIRRTL transformations before fanning out into specialized evaluation toolchains: software RTL simulation (Verilator/Synopsys VCS), very-large-scale integration (VLSI) physical design (OpenROAD), and FPGA-accelerated simulation (FireSim). Shared configuration lineage preserves parameter traceability across fidelity tiers without conflating distinct physical returns.](images/fig-chipyard-framework){#fig-chipyard-framework width="100%" fig-alt="A simplified flow diagram of the Chipyard paths described by the cited framework. A common configuration feeds Chisel generation and compiler transformations. Branch-specific tools then produce artifacts for RTL simulation, a VLSI implementation flow, and FPGA-accelerated simulation."}
 
-While a unified configuration ensures that RTL generators, physical synthesis scripts, and FPGA emulators evaluate identical architectural parameters, the resulting metrics operate in fundamentally different semantic regimes. Cycle counts from an unannotated Verilator testbench cannot substitute for post-route signoff timing slack from OpenROAD, nor can FPGA wall-clock rates be treated as ASIC clock frequencies.
+While a unified configuration ensures that RTL generators, physical synthesis scripts, and FPGA emulators evaluate identical architectural parameters, the resulting metrics operate in different semantic regimes. Cycle counts from an unannotated Verilator testbench cannot substitute for post-route signoff timing slack from OpenROAD, nor can FPGA wall-clock rates be treated as ASIC clock frequencies.
 
-Understanding these domain mismatches is essential for automated systems that query tool outputs. An AI agent might attempt to use FPGA resource utilization as a proxy for physical area, inadvertently rewarding designs that map well to lookup tables but route poorly in standard cells. The execution harness must strictly segregate metrics by the tool class that produced them.
+Automated systems that query tool outputs have to respect these regime boundaries. An AI agent might attempt to use FPGA resource utilization as a proxy for physical area, inadvertently rewarding designs that map well to lookup tables but route poorly in standard cells. The execution harness must segregate metrics by the tool class that produced them.
 
 Evaluation environments establish operational trade-offs across throughput, setup cost, and timing abstraction, forcing architects and automated workflows to select the right tool for the question at hand (@fig-ch06-simulation-spectrum).
 
@@ -401,6 +259,165 @@ for spine in ["top", "right"]:
 
 No single platform simultaneously optimizes throughput, setup latency, and property coverage (@fig-ch06-simulation-spectrum); requests must route to the tool capable of observing the specific property within budget. Frameworks such as ArchGym and CHIA demonstrate uniform interfaces for architecture exploration across simulators and synthesis tools [@KrishnanEtAl2023ArchGym; @CuiEtAl2026CHIA]. Workflow engines (Nextflow, Snakemake) separate dependency scheduling from study methodology [@DiTommasoEtAl2017Nextflow; @KosterEtAl2012Snakemake], while inexpensive prerequisite checks (syntax linting, interface verification, formal equivalence) prune invalid candidates before dispatching heavy synthesis or simulation stages.
 
+## Environment Runtime
+
+Even with typed contracts and validated wrappers, hardware evaluation environments depart from synchronous reinforcement learning sandboxes. In semiconductor design, a single tool invocation (whether a full-system cycle-accurate gem5 simulation, a bounded formal model checker unrolling deep pipeline transitions, or an OpenROAD physical layout run) operates over timescales ranging from minutes to days. Managing these heterogeneous execution latencies requires an asynchronous runtime orchestrator that decouples candidate proposal from evaluation resolution. The runtime must handle distributed cluster scheduling, concurrent EDA license queueing, and intermediate log streaming without stalling the overarching search process or losing design state during infrastructure restarts.
+
+### Asynchronous Scheduling and Idempotency
+
+To fill this orchestrator role, the harness must natively support distributed cluster management. Architecture toolchains operate asynchronously. Cycle simulations run for hours, and physical layout queues behind license servers. Tasks emit intermediate logs and checkpoints across distributed filesystems. Scheduler adapters bridge harnesses to cluster management backends (Slurm, IBM LSF, cloud containers).
+
+While standard reinforcement learning (RL) environments expose synchronous `step()` interfaces [@TowersEtAl2023Gymnasium], architecture workflows cannot be reduced to synchronous exchanges. Execution runtimes must manage queues, dependency graphs, and persistent state across multi-step campaigns. To prevent state loss during these long-running campaigns, each authorized request instantiates a single execution record that tracks backend tool executions across all job scheduling phases (@fig-runtime-object-state).
+
+![**A single execution record tracks zero, one, or multiple backend tool executions.** The execution record anchors all backend tool executions to the authorized request, whether the request is refused prior to execution, creates a single tool job, or spawns multiple parallel execution segments. The record preserves returned raw artifacts, realized compute and license costs, and independent status attributes including scheduling state, terminal cause, parser health, and retry parent links. Conceptual runtime state schema.](images/fig-runtime-object-state){#fig-runtime-object-state width="100%" fig-alt="An authorized request creates one attempt. The attempt may be refused before a backend job exists, may create one job, or may create several jobs or execution segments. All paths feed one execution record. The execution record points separately to returned artifacts and realized cost. Scheduling state, terminal cause, artifact completeness, parser status, cancellation confirmation, and retry parent remain independent attributes."}
+
+Decoupling attempt identity from process completion ensures that interrupted or preempted cluster jobs remain fully auditable. When a Slurm or LSF scheduler evicts a running simulation, the harness records the partial wall-clock time and license-hours consumed, captures intermediate logs, and links subsequent retries to the original attempt without corrupting the candidate's core identity.
+
+Harnesses attach jobs to attempts upon submission, using idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs]. This idempotency guarantees that even if the orchestrator container crashes and restarts, it will reconnect to running jobs rather than spawning expensive duplicates.
+
+<!-- AUTHOR-THESIS DRAFT 2026-08-31: the chapter says architecture workflows cannot be reduced to step() but never shows what replaces it; this is the interface shape an ML reader expects, filled only from mechanisms the section already names -->
+What replaces `step()` is a three-call shape (@lst-harness-interface). The caller submits a typed request and receives an identifier, not a result. It polls that identifier while the job waits behind a license or runs for hours, reading a scheduling state the harness owns. It collects the execution record only when the harness reports a terminal state, and a cancellation returns only after the whole process tree has exited. Every state a job can occupy between submission and collection is a value the caller can read, which is what lets a search loop keep proposing while its earlier requests are still queued.
+
+```{.yaml #lst-harness-interface lst-cap="**Harness interface shape.** The caller submits a typed request and receives an identifier, polls it while the job queues or runs, and collects the execution record at a terminal state. The harness owns the wait."}
+submit:
+  takes: typed request, submission_token
+  returns: attempt_id | REFUSED (validation rule)
+poll:
+  takes: attempt_id
+  returns: QUEUED | RUNNING | EVICTED | COMPLETED | FAILED
+collect:
+  takes: attempt_id
+  returns: execution record (artifacts, parse status, cost, lineage)
+cancel:
+  takes: attempt_id
+  returns: CONFIRMED after the whole process tree has exited
+```
+<!-- END DRAFT -->
+
+Idempotency alone does not bound queue depth. Because generative candidate proposers operate at software speed while backend simulators and EDA tools execute at physical clock rates, unconstrained dispatch floods job queues and triggers congestion collapse.
+
+::: {.callout-law title="Queueing Congestion Collapse in Tool Loops"}
+A generator that proposes candidates faster than simulators and license servers can evaluate them grows an unbounded queue whose results return after the specifications they were computed against have moved, so the harness must throttle admission on downstream utilization under the feed-forward stability bound derived in @sec-sample-efficiency-under-expensive-feedback (@sec-law-congestion-collapse in @sec-appendix-c-laws-paradoxes).
+:::
+
+### Fault Containment and Execution Quarantines
+
+Beyond queue congestion and backpressure throttling, asynchronous execution across distributed compute clusters introduces host-level failure modes. When long-running jobs execute over hours or days, background preemptions, worker crashes, and unconfirmed terminations occur. The orchestrator must combine idempotent scheduling with process lifecycle control and quarantine mechanisms to isolate failures. Commercial EDA tools and simulators frequently fork multi-threaded worker sub-processes and licensing helper daemons. If a job exceeds its lease timeout or is canceled, sending a simple signal to the top-level process ID often leaves detached child processes running on compute nodes, silently consuming physical host memory and holding expensive floating license tokens. Harnesses enforce process group containment via Linux PID namespaces or control groups (`cgroups` v2 `cgroup.kill`), ensuring atomic termination of the entire execution tree before releasing cluster slots.
+
+::: {.callout-design-principle title="Automate Within Recoverable Boundaries"}
+**The principle:** Automated methods and the scripts they emit must execute generation, simulation, and parsing actions within sandboxed, resource-bounded environments.
+
+**The application:** Execution wrappers and harnesses enforce hermetic tool boundaries, explicit time and memory budgets, and complete lineage tracking, so that any run can be stopped, reset, and repeated from pinned inputs.
+:::
+
+Resource limits are enforced independently across model invocations, tool submissions, CPU/accelerator time, memory, storage, and license allocations. When shared compute clusters saturate, harnesses apply backpressure and queue limits. Quarantining unconfirmed or timed-out executions prevents delayed filesystem writes from corrupting live project state, while floating license exhaustion is prevented by managing EDA checkouts through harness-level token-bucket semaphores and server-side inactivity heartbeat timeouts.
+
+Candidate identity (`candidate_id`) identifies the architectural design across tool paths, while configuration records (`configuration_id`) identify tool-specific parameters whose translation produces distinct artifact hashes. Realized costs track compute, memory, storage, license-hours, and human engineering effort, recording failed and retried attempts alongside successful runs to establish true experimental budgets.
+
+::: {.callout-design-principle title="Unrecorded Runs Cannot Justify Claims"}
+**The principle:** Every tool attempt must produce an immutable execution record detailing what ran, what configuration was passed, how the environment behaved, and what compute was spent.
+
+**The application:** A returned value with no execution record cannot enter a comparison, and a retry without lineage cannot be distinguished from a new candidate.
+:::
+
+### Categorizing Tool and Environment Failures
+
+Even with robust containment and quarantines in place, automated exploration loops fail for reasons spanning cluster infrastructure drops to true physical design violations. If a harness conflates a FlexLM license checkout denial or a host out-of-memory crash with hardware unroutability, it permanently corrupts the study's dataset with false negatives.
+
+To protect dataset integrity, execution harnesses classify each run into one of the nine execution outcomes in @tbl-failure-taxonomy, each with its own preserved evidence and its own recovery route. Execution status (what ran) remains separate from architectural evaluation (what the outcome means), and the harness maintains that separation so that recovery is routed by the exact failure mode rather than by a collapsed pass or fail flag.
+
+| **Execution outcome** | **How it appears** | **Preserved evidence** | **Runtime response** |
+| --- | --- | --- | --- |
+| **Invalid request** | Illegal parameter or meaning-altering translation detected prior to invocation. | Request, validation rule, refusal reason. | Repair syntax only if meaning is preserved; otherwise refuse and return to caller. |
+| **Setup / dependency failure** | Missing top-level, clock, library, constraint, or checkpoint. | Setup check, diagnostics, partial artifacts, cost. | Restore or regenerate declared state; leave candidate unevaluated. |
+| **Infrastructure failure** | License server unreachable, host out-of-memory (OOM), scheduler preemption. | Execution record, failure source, cost, retry eligibility. | Retry under declared policy; leave candidate unevaluated. |
+| **Tool failure** | Tool crashes (Vivado routing error, gem5 crash, VCS elaboration error). | Tool diagnostics, exit code, partial artifacts, cost. | Retry, reset, resume checkpoint, or stop. Does not prove physical infeasibility. |
+| **Incomplete return** | Missing or truncated report files. | Stage records, produced files, raw logs, parse status. | Preserve partial artifacts; rerun before treating as complete. |
+| **Parser failure** | Artifact violates return schema or contains unclassified text. | Parser version, raw log, recognized tokens, residual output. | Repair parser; reparse retained raw log. |
+| **Formal-tool return** | SVA/BMC prover reports exact status (proven, counterexample trace, bounded, unknown). | Method, property, model, assumptions, bound, solver proof/VCD, cost. | Pass formal result forward without asserting general correctness. |
+| **Reported limit violation** | Completed run reports physical violation (OpenROAD worst negative slack (WNS) $< 0$, DRC error). | Typed violation, units, conditions, raw report, cost. | Record complete return without marking run as tool failure. |
+| **Complete tool return** | Expected artifacts exist and parse cleanly (including limit violations). | Typed metrics, units, conditions, warnings, raw logs, cost, lineage. | Retain return for measurement qualification. |
+: **Execution status determines what ran, not what the architecture means.** Operational failures, partial returns, parser errors, and physical violations remain separate so recovery targets exact causes. {#tbl-failure-taxonomy}
+
+These failure classifications shape how the environment handles edge cases. Formal verification tools, for instance, report specialized outcomes (such as bounded proofs, counterexample traces, and solver timeouts) [@Clarke2018ModelChecking]. This requires harnesses to preserve exact formal statuses rather than reducing complex proofs to binary success or failure flags.
+
+Similarly, signoff returns remain permanently bound to tool versions, libraries, operating corners, and constraint waivers; a clean zero-error return indicates only that the tool found no violations under its current configuration, not that the design is universally sound. If an optimizer introduces false-path waivers to eliminate timing violations, or if a physical layout suffers from undetected dynamic IR drop hot spots under toggle activity, treating a clean return as an unqualified pass creates design escapes that no later check is positioned to catch. To keep that context available, wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, so that a novel tool warning survives parsing even when no parser rule yet recognizes it.
+
+### State Recovery, Caching, and Artifact Reuse
+
+Each row of @tbl-failure-taxonomy names a recovery route, and every route except refusal ends in one of three operations: a retry that keeps the same work state, a resume from a checkpoint, or a reset. Retries preserve parent attempt links so that cost is not counted twice. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
+
+<!-- AUTHOR-THESIS DRAFT 2026-08-31: the contract lists resets explicitly and the chapter names them eleven times without defining one; this defines reset once from the lineage section's own immutable/mutable split -->
+Of the three, reset is the one most often claimed and least often performed. A *reset* regenerates a run's mutable work state (run directories, tool databases, checkpoints, license leases, emulator memory) from its pinned immutable inputs, so that the next attempt inherits nothing from the last except what the lineage record says it may. That definition sets the bar for three cheaper operations a reset is routinely confused with. Killing a process is not a reset while its scratch directory and license token survive. Restoring a checkpoint is not a reset unless the checkpoint's own parent hashes match the pinned inputs. A soft reset of an emulator that leaves DRAM buffers and PCIe registers as the previous run left them is a partial reset, and the execution record has to label it as one.
+<!-- END DRAFT -->
+
+::: {.callout-war-story title="The stale library view"}
+**The claim.** A design update reruns static timing analysis and receives a clean signoff report asserting that all bus timing constraints are met at the target accelerated clock frequency.
+
+**The gap.** The timing analyzer loaded a cached Liberty view from a previous lower-frequency run that omitted accelerated setup and hold characterizations; because the missing checks were never executed, no timing violations were reported.
+
+**The lesson.** Reusing stale library views produces deceptively clean signoff reports for failing designs. Harnesses must validate PDK, LEF, and Liberty checksums before admitting timing signoff returns.
+:::
+
+### Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
+
+Everything above pins a run to a single design point, but industrial architecture teams operate on continuously evolving codebases. In high-velocity commercial SoC and datacenter accelerator development, the active codebase undergoes continuous daily churn. While an automated search loop or learned surrogate executes a multi-day optimization pass against a frozen repository revision, software runtimes evolve, instruction set architecture (ISA) extensions receive minor patches, compiler passes shift, and upstream RTL interfaces move. An optimization discovered against snapshot $t_0$ risks becoming invalid or unmergeable at snapshot $t_0 + \Delta t$ because underlying pipeline invariants or interface structures shifted during the search run.
+
+This operational reality creates a tension between *whole-chip regeneration* and *local delta evaluation*. If modifying a single memory-mapped register, bus arbiter, or cache replacement policy requires an automated design system to regenerate the entire accelerator hierarchy and rerun days of physical synthesis, the tool is discarded in daily engineering practice. Practical execution harnesses maintain fine-grained structural dependency graphs (using CIRCT MLIR dialect dependency analysis, Chisel module hierarchy content hashes, or dependency-graph build systems such as Bazel) that isolate the localized cone of logic affected by an incremental commit, selectively invalidating and re-evaluating only those simulation traces, formal assertions, and timing paths that cross the affected dependency boundary. The harness must also continuously track the distance between the reference design snapshot used by an active search loop and the moving mainline branch, triggering an early abort or automated resynchronization when upstream drift invalidates foundational interface assumptions.
+
+A different operational problem arises when an algorithm or tool can return different results from repeated work. The environment must keep three mechanisms separate:
+
+- **Host runtime jitter.** CPU frequency changes, NUMA migration, memory contention, and storage contention can change elapsed time and tool throughput without changing the simulated guest cycle count of a deterministic run. Records preserve the host placement, governor, storage path, and other declared runtime conditions.
+- **Explicit algorithmic randomness.** Generative methods, stochastic search passes, and randomized EDA stages accept seeds that can alter proposed candidates, layouts, or returned metrics. Records preserve the seed and all algorithm settings that define the run.
+- **Parallel execution nondeterminism.** Some tools can return different artifacts or metrics when thread counts or execution schedules change. Records preserve thread and concurrency settings rather than assuming that pinning removes this source of variation.
+
+These records do not establish a universal distribution or decision threshold. A randomized placement stage can return different layouts and power, performance, and area metrics across seeds even when the RTL and architecture remain fixed. An optimizer that retains only the best return can therefore select a favorable tool trajectory rather than a better architecture while hiding the other outcomes and their cost. Randomized EDA stages require an explicit repeated-run budget, with every seed, thread setting, declared condition, return, and failed attempt retained. @sec-feedback-verification-trust determines whether those observations support a confidence interval, a matched comparison, or candidate advancement.
+
+## Execution Records {#sec-operational-attempt-record}
+
+Every tool invocation leaves an execution record. @sec-architecture-20-ontology introduced it as the statement of whether the requested work ran on the intended state, and left its schema to the environment, because only the harness that dispatched the run holds what that statement rests on. Everything the runtime section described, refused requests, evicted jobs, quarantined terminations, retries, seeds, and thread counts, exists for later review only if it lands here. An execution record is not a passive logfile. It is the immutable structured log that joins what was requested to what ran, what returned, and what it cost, and it is what carries candidate identity, environment state, tool versions, and container digests from low-level CAD execution to an architectural decision.
+
+To guarantee post-execution auditability across distributed clusters, execution records capture six core dimensions:
+
+- **Request and attempt identity:** Study, request, run specification, candidate, configuration, workload, attempt universally unique identifier (UUID), submission token, and the identifier of every scheduler job attached to the attempt.
+- **Starting state:** Pinned inputs, source revisions, artifact hashes, tool versions, container digest.
+- **Execution outcome:** Admission status, terminal cause, artifact checks, parser status, retry eligibility.
+- **Returned material:** Raw logs, hashes, structured metrics with units, warnings, residual output.
+- **Lineage and retries:** Parent inputs, transformations, retry/reset parent links.
+- **Realized cost:** Consumed wall-clock time, CPU/accelerator hours, peak memory, storage, license-hours, and billable amounts.
+
+Standardizing the format of this evidence lets the system query past outcomes to train surrogate models or resume interrupted exploration campaigns without losing context. The schema binds the six dimensions into a machine-readable artifact (@lst-execution-record-schema).
+
+```{.yaml #lst-execution-record-schema lst-cap="**Execution record schema.** Captures immutable starting state, tool versions, parsed metrics, and realized compute and license costs."}
+study_id: "lighthouse-xr-soc-v1"
+attempt_id: "att-8f3a91c2-7b1e"
+submission_token: "tok-lighthouse-0417"
+scheduler_jobs: ["slurm-4471902"]
+candidate_id: "cand-l2-3mib-npu16x16"
+starting_state:
+  git_commit: "9a2f1b4c"
+  container_digest: "sha256:d4e7b1a8c9e..."
+  tool_version: "OpenROAD-v2.0-1124"
+  pdk_variant: "TSMC_N3E_1.0a"
+outcome:
+  status: "COMPLETED"
+  terminal_cause: "NORMAL_EXIT"
+  exit_code: 0
+metrics:
+  worst_negative_slack_ps: -12.4
+  macro_area_mm2: 1.42
+  subsystem_power_w: 2.84
+costs:
+  wall_clock_seconds: 4128
+  cpu_hours: 18.2
+  peak_rss_gb: 14.8
+  license_token_hours: 1.15
+```
+
+The strictness of these records is directly tied to the scientific validity of the results. ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay relies on submitting identical retained requests and recorded states.
+
+Submitting the same retained request can still consume different amounts of host wall-clock time when scheduling or unpinned host dependencies drift [@JimenezEtAl2017PopperConvention]. The three sources of run-to-run variation separated in @sec-incremental-churn-dispersion are why the record preserves seeds, thread counts, tool settings, and host conditions alongside the returned metrics. Its lineage entries separately bridge content hashes to architectural semantics, indicating whether lowered representations preserve the original design intent.
+
 ## Mobile XR Subsystem Evaluation Environment {#sec-mobile-xr-evaluation}
 
 Applying these tool boundaries and execution contracts to the prospective mobile XR SoC co-design study grounds runtime governance in physical silicon constraints. In this study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\text{ MiB}$) under a 3\ W thermal design power (TDP) envelope on a TSMC 3\ nm process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
@@ -417,25 +434,22 @@ Applying these tool boundaries and execution contracts to the prospective mobile
 | **Decisions left outside** | Environment does not decide measurement validity, comparative superiority, or candidate advancement. |
 : **Prospective run specifications define runtime governance before execution.** Request schemas, translations, state pinning, failure recovery, and budgets are fixed prior to invocation. {#tbl-environment-contract}
 
-Consider an illustrative execution trace under this specification (@sec-running-the-loop records the study's actual project status). The evaluation begins with three analytical screening runs: a 2\ MiB baseline ($1.2\text{ mm}^2$, 2.1\ ns), 3\ MiB ($1.4\text{ mm}^2$, 2.4\ ns), and 4\ MiB ($1.7\text{ mm}^2$, 2.8\ ns). The 4\ MiB candidate violates the area and latency thresholds, suppressing dependent cycle-level dispatch. The surviving candidates (2\ MiB and 3\ MiB) enter cycle-level simulation within the four-attempt budget. A transient setup failure on the 3\ MiB run triggers a clean reset and retry, followed by the planned repeat, consuming the remaining budget. Downstream verification in @sec-feedback-verification-trust qualifies whether such returns support advancing the candidate.
+Read as a whole, the specification fixes a design path before any return arrives: screening, then conditional cycle-level dispatch, then a planned repeat. What a return may change about that plan is decided outside the environment, which is why the last row exists. Consider an illustrative execution trace under this specification (@sec-running-the-loop records the study's actual project status). The evaluation would begin with three analytical screening runs: a 2\ MiB baseline ($1.2\text{ mm}^2$, 2.1\ ns), 3\ MiB ($1.4\text{ mm}^2$, 2.4\ ns), and 4\ MiB ($1.7\text{ mm}^2$, 2.8\ ns). The 4\ MiB candidate violates the area and latency thresholds, suppressing dependent cycle-level dispatch. The surviving candidates (2\ MiB and 3\ MiB) enter cycle-level simulation within the four-attempt budget. Were a setup failure to interrupt the 3\ MiB run, the specification charges a clean reset and retry against that same budget, followed by the planned repeat, consuming the remaining attempts. Downstream verification in @sec-feedback-verification-trust qualifies whether such returns support advancing the candidate.
 
 ## Common Pitfalls
 
-Even with a clear run specification, operating multi-tool execution harnesses without strict environmental controls introduces subtle operational failure modes. In each case below, the tools run, the output transcripts look complete, but the underlying execution state has quietly drifted:
+Even with a clear run specification, operating multi-tool execution harnesses without environmental controls introduces operational failure modes that look like success. In each case below, the tools run, the output transcripts look complete, but the underlying execution state has quietly drifted:
 
 - **Silent drift in simulator configurations:** Default parameter changes across minor version bumps or unpinned memory hierarchy flags corrupt execution lineage without raising runtime errors [@Dolstra2006Purely].
-- **Unmanaged license preemption in EDA simulation flows:** Treating license checkout denials or cluster preemptions as hard design failures corrupts dataset provenance by conflating cluster infrastructure limits with hardware infeasibility.
 - **Failing to reset persistent state in hardware emulation runs:** Reusing host DRAM buffers, dirty PCIe registers, or FPGA bitstreams without hard resets allows residual kernel state to corrupt subsequent workload timing measurements.
-- **Optimizing against disconnected frozen snapshots during active mainline churn:** Launching multi-day autonomous exploration passes on isolated branches without continuous differential validation produces candidates that are unmergeable against moving upstream interfaces.
+- **Optimizing against disconnected frozen snapshots during active mainline churn:** Launching multi-day automated exploration passes on isolated branches without continuous differential validation produces candidates that are unmergeable against moving upstream interfaces.
 - **Reporting only peak candidate metrics from randomized runs:** Selecting only the best seed from a generator or randomized EDA stage hides the other returns and their cost, leaving an incomplete execution record.
 
 ## Open Questions
 
-Bridging automated exploration algorithms to industrial EDA toolchains and emulation testbeds demands hermetic containment, nondeterminism tracking, and incremental dependency propagation. Maintaining this boundary exposes five unresolved engineering challenges:
+Bridging automated exploration algorithms to industrial EDA toolchains and emulation testbeds demands hermetic containment, nondeterminism tracking, and incremental dependency propagation. Maintaining this boundary exposes four unresolved engineering challenges:
 
-- **How do you detect when a tool succeeds by ignoring what you asked it to check?** Complex EDA engines can exit with clean zero status codes while silently skipping uncharacterized process corners, license-starved optimization passes, or unmodeled voltage droop conditions. Automated parsers that look only for error flags mistake silent omission for successful signoff. Whether execution harnesses can formally verify log-coverage completeness against physical environment contracts, or autonomous loops will continually exploit tool-parser blind spots to report illusory timing closure, defines the verification boundary for tool wrappers.
-
-- **How do you prevent an autonomous design agent from solving a routing bottleneck by relaxing the design rules?** When closed-loop agents run place-and-route tools, they discover that modifying Synopsys Design Constraints (SDC), inserting false-path waivers, or overriding transition limits closes timing instantly. The tool succeeds and the physical design fails. Whether constraint sets must be cryptographically sealed outside the agent's action space, or environments can learn to distinguish legitimate architectural intent from constraint cheating during closed-loop exploration, remains an unsolved governance challenge.
+- **How do you detect when a tool succeeds by ignoring what you asked it to check?** Complex EDA engines can exit with clean zero status codes while silently skipping uncharacterized process corners, license-starved optimization passes, or unmodeled voltage droop conditions. Automated parsers that look only for error flags mistake silent omission for successful signoff. Whether execution harnesses can formally verify log-coverage completeness against physical environment contracts, or search loops will continually exploit tool-parser blind spots to report illusory timing closure, defines the verification boundary for tool wrappers.
 
 - **How do you ensure hardware emulation testbeds do not carry state from prior runs?** Accelerated FPGA and hardware emulation platforms maintain residual DRAM buffer state, dirty PCIe registers, and unreset memory arrays across asynchronous invocations. Full FPGA re-bitstreaming eliminates cross-run contamination at the cost of destroying simulation throughput, while lightweight soft resets leave uninitialized state that makes benchmark measurements nonreproducible. Whether lightweight runtime assertions can certify complete zero-state sanitization between candidate evaluations, or architects must pay the full reinitialization latency tax, remains an open trade-off.
 
@@ -445,18 +459,14 @@ Bridging automated exploration algorithms to industrial EDA toolchains and emula
 
 ## Summary
 
-Tool-connected execution environments provide the structural boundary between automated exploration algorithms and raw semiconductor CAD toolchains. Tools perform discrete physical and functional transformations; defensive wrappers validate inputs, enforce typed parameter translations, and parse unstructured tool logs; harnesses coordinate distributed multi-tool execution pipelines while managing licenses and compute budgets; and environments formally bind the observable state, permitted actions, and return schemas.
-
-Host pinning and local scratch storage can reduce wall-clock/runtime jitter, but they do not establish simulated guest-cycle determinism. That property depends on the simulator, its fixed inputs and state, and any randomized or parallel algorithms it uses. Isolating EDA workflows within declared container boundaries, managing subprocess lifecycles with PID namespaces, and recording host conditions, seeds, thread counts, returns, and costs allow execution harnesses to convert volatile tool invocations into durable, content-addressed attempt records. Five key takeaways define execution environments and tool isolation:
+An environment earns its name when an architect can answer, for every run, which candidate ran, which state the tool inherited, what its warnings meant, and whether a retry repeated the same work. Those answers live in specific mechanisms rather than in diligence: a wrapper that validates and translates before a license token is consumed, lineage that ties every lowered view to one candidate identity, an asynchronous harness that writes an execution record whether a job is refused, evicted, or completed, a failure taxonomy that routes recovery by cause, and a repeated-run budget for tools that legitimately return different answers. Five key takeaways define execution environments and tool isolation:
 
 ::: {.callout-takeaways}
-- **Hermetic tool wrappers and contracts.** Encapsulate simulation and EDA tools within typed wrappers that validate action schemas, enforce exact parameter translations, and preserve unclassified residual logs.
-- **Air-gapped containment and license pooling.** Enforce sandboxed OCI container boundaries, process-group termination (`cgroups` v2), and FlexLM token pooling while isolating confidential PDK collateral in air-gapped compute enclaves.
-- **Execution records as immutable receipts.** Bind every tool invocation into a content-addressed attempt record capturing container digests, seeds, raw stdout logs, parsed metrics, and realized compute/license costs.
-- **Repeated-run budgeting over lucky seeds.** Budget repeated executions for randomized EDA stages and retain every seed, thread count, declared condition, return, and cost, while isolating mainline repository churn via fine-grained dependency cone invalidation.
-- **Separation of execution from qualification.** Execution harnesses strictly certify what ran and what returned, delegating scientific qualification, error analysis, and candidate advancement to downstream verification rules.
+- **Typed wrappers before every launch.** Validate the request against frozen contracts, translate parameters exactly, parse returns into typed metrics, and keep the unclassified log lines the parser did not recognize.
+- **Containment and license pooling.** Run each tool in a least-privilege container, terminate the whole process tree when a lease expires, pool floating licenses, and keep NDA-bound PDK collateral inside enclaves that external models never reach.
+- **One execution record per tool invocation.** Bind identity, pinned starting state, outcome, returned material, lineage, and realized cost into a content-addressed record, including the refused, evicted, and failed attempts.
+- **Repeated-run budgeting over lucky seeds.** Fund repeated executions for randomized stages, retain every seed, thread count, condition, return, and cost, and invalidate only the dependency cone an upstream commit actually touches.
+- **Execution is not qualification.** The harness certifies what ran and what returned; whether a return supports a measurement, a comparison, or a candidate's advancement is decided downstream.
 :::
 
-These environment practices make host conditions and tool-return variability inspectable; they do not establish that returned differences reflect authentic hardware trade-offs. Execution records preserve the basis for auditing, replaying, or invalidating each candidate observation when upstream interfaces shift. Recording what a tool outputted does not prove that the output represents valid architectural evidence.
-
-With execution environments isolating tools and recording immutable attempt records, @sec-feedback-verification-trust addresses how to qualify raw simulation and timing returns into sound architectural evidence through formal properties, mutation testing, and decision-margin calibration.
+@sec-feedback-verification-trust takes the execution records these environments return and asks what claims their measurements can support.

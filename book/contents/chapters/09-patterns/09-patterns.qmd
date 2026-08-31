@@ -4,7 +4,7 @@ format:
     output-file: index.html
 ---
 
-# Cross-Stack Patterns and Transfer Learning {#sec-loop-patterns-across-stack}
+# Pattern Transferability and Generalization {#sec-loop-patterns-across-stack}
 
 ![](images/ch09-cover-map.svg){fig-alt="A source record meets a changed condition, after which units are carried, updated, replaced, or retired and target claims are checked anew."}
 
@@ -20,52 +20,43 @@ format:
 
 Architectural design rarely begins with an empty repository; new design programs routinely inherit codebases, simulation harnesses, learned models, and historical records from prior projects (@sec-running-the-loop). When architectural requirements evolve across workloads, instruction set architectures (ISAs), or semiconductor process nodes, an AI-native design system must determine what assets transfer safely, what must adapt, and what historical evidence must be quarantined.
 
-Reusing prior design collateral saves engineering time, but risks carrying forward obsolete assumptions that invalidate new decisions. Prior work operates across three distinct levels of the design stack, each carrying a different verification burden.
+Reusing prior design collateral saves engineering time, but risks carrying forward obsolete assumptions that invalidate new decisions. Prior work divides into three kinds, each carrying a different verification burden.
 1. *Core principles and methodology* transfer broadly because they govern how new architectural questions are framed and investigated.
 2. *Hardware modules, compiler passes, and tool wrappers* transfer conditionally, remaining viable only while their underlying invariants and interface contracts hold.
 3. *Empirical performance conclusions* stand entirely apart. They expire the moment workloads, semiconductor nodes, or system constraints shift, requiring fresh target evidence.
 
-A durable architectural pattern provides a disciplined framework for reopening a claim; it is never a promise that past conclusions remain correct under new constraints. This chapter operationalizes cross-stack transfer through a structured five-stage transfer test, LogCA offload break-even bounds, and end-to-end compiler lowering pipelines (from high-level Triton tensor kernels to dynamic RISC-V Vector (RVV 1.0) assembly), ensuring that local accelerator gains translate into validated system-level features.
+A durable architectural pattern provides a disciplined framework for reopening a claim; it is never a promise that past conclusions remain correct under new constraints. The chapter turns that framework into a transfer test, an admission check on the decision itself followed by four stages that partition the source, isolate the affected slice, assign each unit an action, and hold the result to target checks, and then applies the test to the array study retained in @sec-running-the-loop.
 
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
 
-- **Identify** when target workload, compiler, ISA, or process shifts reopen prior architecture claims or instantiate new design problems across the three operational layers.
-- **Partition** source systems into discrete transfer units, map invariant dependencies, and assign targeted actions (carry, update, retrain, recalibrate, replace, or retire) across structural boundaries.
-- **Quantify** host–accelerator offload viability using LogCA analytical bounds ($g^*$ and $\text{OI}^*$) across physical interconnect regimes from die-to-die Universal Chiplet Interconnect Express (UCIe) to board-level PCIe.
-- **Trace** the executable software path through the compiler narrow waist (Triton Multi-Level Intermediate Representation (MLIR) to dynamic RVV 1.0 VLA strip-mining), balancing vector register pressure ($LMUL$) against instruction throughput.
-- **Evaluate** multi-tier screening cascades using selective classification coverage ceilings ($1/(1-f)$) and isolate software dividends from true microarchitectural gains under version-paired baselines.
+- **Identify** when a target workload, compiler, ISA, or process shift reopens a prior architecture claim or instantiates a new design problem.
+- **Partition** a source study into transfer units and assign each one an action (carry, update, retrain, recalibrate, replace, or retire) paired with a target check.
+- **Test** a claimed transfer benefit against a matched target-only arm and recognize negative transfer in total-cost terms.
+- **Separate** compiler maturity from microarchitectural change by pinning hardware and software versions before comparing transferred results.
+- **State** the claim boundary a target study forfeits when a required target check has not been run.
 :::
 
 ## Pattern Transferability and Scope
 
-Evaluating whether an architectural design pattern can be safely transferred to a new target begins with a strict dependency audit. Microarchitectural blocks fail to transfer across software stacks and semiconductor nodes because hardware does not exist in isolation; it is deeply entangled with implicit compiler scheduling assumptions, memory-ordering semantics, wire parasitics, and power delivery dynamics. Porting an accelerator register-transfer level (RTL) block or a learned layout surrogate without verifying those underlying physical invariants silently breaks correctness and performance in target silicon.
+Evaluating whether an architectural design pattern can be safely transferred to a new target rests on a strict dependency audit. Microarchitectural blocks fail to transfer across software stacks and semiconductor nodes because hardware does not exist in isolation; it is deeply entangled with implicit compiler scheduling assumptions, memory-ordering semantics, wire parasitics, and power delivery dynamics. Porting an accelerator register-transfer level (RTL) block or a learned layout surrogate without verifying those underlying physical invariants silently breaks correctness and performance in target silicon.
 
-To prevent unverified assumptions from corrupting new design programs, the transfer framework decouples reusable structural units from target-specific validation checks across five progressive stages (@fig-transfer-test-flow).
+The transfer test begins with an admission check and then runs four stages (@fig-transfer-test-flow). The admission check compares the source and target decisions. If candidate boundaries, optimization objectives, comparator rules, or error costs have shifted, no numerical recalibration rescues the prior conclusion; the decision itself is reopened, and the stages that follow operate on a new design problem rather than a requalified old one. When the decision survives the check, the four stages take over.
 
-1. **Compare source and target decisions:** Verify whether decision semantics, candidate boundaries, and comparator rules remain identical.
-2. **Partition the source into transfer units:** Deconstruct the source record into modular data, representations, methods, tool interfaces, and checks.
-3. **Isolate the affected slice:** Trace which dependencies and invariants are broken by target workload, ISA, or process shifts.
-4. **Assign target actions:** Designate each unit to be carried forward, updated, retrained, recalibrated, replaced, or retired.
-5. **Enforce target checks and test transfer benefits:** Requalify affected units against target references and validate net benefits against matched target-only baselines.
+1. **Partition the source into transfer units:** Deconstruct the source record into data, representations, methods, tool interfaces, checks, and configurations.
+2. **Isolate the affected slice:** Trace which dependencies and invariants the target workload, ISA, or process shift has broken.
+3. **Assign target actions:** Designate each unit to be carried forward, updated, retrained, recalibrated, replaced, or retired.
+4. **Enforce target checks and test the transfer benefit:** Requalify affected units against target references and validate the net benefit against a matched target-only baseline.
 
-![**Transfer testing reuses architectural components without porting unverified source conclusions.** Reusable components from a source study record are partitioned into discrete transfer units (data, representations, methods, tool interfaces, checks, and configurations), traced through changed dependencies, and assigned target actions (carry, update, replace, or retire) before target checks validate a new design decision. Affected claims are selectively reopened, and every interface with a changed neighbor receives an integration check while the source conclusion remains isolated.](images/fig-transfer-test-flow){#fig-transfer-test-flow width="100%" fig-alt="Transfer flow beginning at the source record, whose artifacts, methods, checks, and supported conclusion feed four stage boxes: transfer units separating data, methods, checks, and dependencies; changed dependencies tracing each material change to dependent claims and interfaces; target actions to carry, update, replace, or retire each unit; and target checks on affected units and every interface with a changed neighbor. The flow ends in a target decision box where a new comparison over target measurements supports a new conclusion, which is where the source and target decisions are compared. A supporting band states that components may move while the source conclusion stays attached to its source conditions and limits."}
+![**Transfer testing reuses architectural components without porting unverified source conclusions.** Reusable components from a source study record are partitioned into discrete transfer units (data, representations, methods, tool interfaces, checks, and configurations), traced through changed dependencies, and assigned target actions (carry, update, replace, or retire) before target checks validate a new design decision. Affected claims are selectively reopened, and every interface with a changed neighbor receives an integration check while the source conclusion remains isolated.](images/fig-transfer-test-flow){#fig-transfer-test-flow width="100%" fig-alt="Transfer flow beginning at the source record, whose artifacts, methods, checks, and supported conclusion feed four stage boxes: transfer units separating data, methods, checks, and dependencies; changed dependencies tracing each material change to dependent claims and interfaces; target actions to carry, update, replace, or retire each unit; and target checks on affected units and every interface with a changed neighbor. The flow ends in a target decision box where a new comparison over target measurements supports a new conclusion. A supporting band states that components may move while the source conclusion stays attached to its source conditions and limits."}
 
-Decoupling components from past verdicts ensures that reusable simulators, performance predictors, and hardware blocks never silently carry forward unverified assumptions. An engineering artifact remains defensibly reusable only when its explicit dependencies are mapped and target checks validate both affected claims and changed interfaces. Migrating useful engineering collateral while strictly isolating historical conclusions forms the core discipline of cross-stack transfer.
-
-The three operational layers of AI in architecture (@fig-ch01-three-layers-ai-integration) face distinct transfer challenges.
-
-- **Layer 1 (AI-Assisted Engineering):** Transfer is manual and ad hoc. Engineers copy code generation prompts or testbench templates across projects. Because prompt context omits unstated application binary interface (ABI) conventions, clock domain crossings (CDCs), and physical constraints, transferred prompts silently generate invalid RTL code.
-- **Layer 2 (AI-Driven Subsystem Optimization):** Transferred optimizers (such as a reinforcement learning (RL) policy trained on FinFET floorplans or a Bayesian design-space exploration (DSE) model fitted to a specific dynamic random-access memory (DRAM) controller) suffer out-of-distribution failure when technology nodes or workloads shift (such as moving from FinFET to gate-all-around field-effect transistor (GAAFET) nodes or from dense general matrix multiply (GEMM) kernels to mixture-of-experts (MoE) models), requiring systematic requalification.
-- **Layer 3 (AI-Native System Design):** Formalizes cross-boundary pattern transfer via explicit dependency tracking, five-stage transfer testing, LogCA offload bounds, and synchronized hardware–software versioning under in-order human commitment authority.
+An engineering artifact remains defensibly reusable only when its explicit dependencies are mapped and target checks validate both the affected claims and the changed interfaces. The stakes are easiest to see in a Layer 2 optimizer. A reinforcement learning placement policy trained on FinFET floorplans, or a Bayesian design-space exploration model fitted to one dynamic random-access memory (DRAM) controller, fails out of distribution when the node moves to gate-all-around (GAAFET) transistors or the workload moves from dense general matrix multiply (GEMM) kernels to mixture-of-experts (MoE) models, and no copied configuration substitutes for requalifying it on the target.
 
 ::: {.callout-design-principle title="Transfer Components, Not Conclusions"}
 **The principle:** When adapting prior design solutions to new workloads, process nodes, or constraints, valid artifacts, tool paths, and intermediate data may carry forward.
 
 **The application:** Prior architectural conclusions must never be transferred without executing fresh target checks.
 :::
-
-Stage 1 of the transfer test serves as an admission check, determining whether the target design problem retains the original decision semantics. If candidate boundaries, optimization objectives, or error costs shift, prior conclusions cannot be resolved through numerical recalibration; the decision itself must be reopened.
 
 ## Target System Shifts and Decision Reopening
 
@@ -83,9 +74,11 @@ Materiality is claim-specific. Updating a compiler toolchain reopens executable 
 
 Every qualified component carries a *support region* (the joint set of workload, design-family, tool, library, process, interface, and version conditions under which it was originally verified). A source-to-target shift emerges whenever work qualified in one region is applied to another. As introduced in @sec-feedback-verification-trust, distribution shift captures changed data-generating conditions [@QuinoneroCandelaEtAl2009DatasetShift] and drift tracks observed temporal variations. In architectural systems, material changes also occur across software stacks, tools, libraries, process calibrations, and hardware interfaces; these executable and measurement shifts occur even if a learned model's input distribution remains stable.
 
+Transfer, as this chapter uses the word, is narrower than generalization and distinct from robustness. Generalization is reliable performance on unseen cases inside the declared target support; transfer is continued utility after a material shift has moved that support; robustness is stability under named perturbations, faults, or attacks, which @sec-evaluating-agentic-architect measures for the complete system.
+
 Standard dataset-shift tests compare reference samples against incoming data to report divergence [@RabanserEtAl2019FailingLoudly]. In architectural evaluation, detecting a shift reopens the affected support claim immediately. The shift signal itself does not identify root causes or authorize automated adaptation; addressing it requires explicit dependency analysis and target checks.
 
-The preliminary spatial array experiment from @sec-running-the-loop illustrates these boundaries. Evaluating five systolic array shapes in SCALE-Sim [@RajEtAl2025ScaleSimV3] on a synthetic three-layer matrix multiplication slice, the source study recommended a 32 by 32 array based on simulated cycles and average utilization. That ranking remains strictly confined to its synthetic source context.
+The preliminary spatial array experiment from @sec-running-the-loop shows where those lines fall in practice. Evaluating five systolic array shapes in SCALE-Sim [@RajEtAl2025ScaleSimV3] on a synthetic three-layer matrix multiplication slice, the source study recommended a 32 by 32 array based on simulated cycles and average utilization. That ranking remains strictly confined to its synthetic source context.
 
 When the target changes to an implementation commitment, the question expands fundamentally.
 
@@ -97,15 +90,15 @@ This shift alters the artifact boundary, acceptance criteria, and consequences o
 
 ## Decoupling Transfer Units Across System Boundaries
 
-Because target implementation checks reveal that hardware, software, and tools evolve at different rates, we must partition the source system rather than transferring it monolithically. To navigate these differing component lifetimes, architectural engineering makes source-to-target comparisons actionable by precisely naming and decoupling transferred units. Data, state, methods, tools, checks, and conclusions rarely share a single lifetime in any architecture project. Treating them as an indivisible package forces an unhelpful choice between copying everything blindly or rebuilding the infrastructure entirely. Decoupling these elements establishes a foundation for identifying dependencies and validating transfer conditions.
+Hardware, software, and tools evolve at different rates, so a source system is partitioned before it is moved rather than transferred as a whole. Data, state, methods, tools, checks, and conclusions rarely share a single lifetime in an architecture project, and treating them as an indivisible package forces a choice between copying everything blindly and rebuilding the infrastructure entirely. Naming the units separately is what makes a source-to-target comparison actionable, because each unit can then carry its own dependency and its own check.
 
 ### Mapping Dependencies
 
 Every transfer unit carries an *invariant* (a core relation that must remain true across both source and target for the unit to retain its meaning). An invariant is more than an unchanged file; it represents the functional behavior preserved by a module interface, the precise units and meaning of a performance measurement, the correspondence between a formal model and an RTL artifact, or the comparator used to interpret an evaluation score. A unit's dependencies name whatever might break that critical relation.
 
-Transfer units should be scoped to the smallest versioned boundary possessing a declared interface or invariant, provided an independently meaningful target check applies. If a dependency cannot be isolated with such a check, it must remain in the same unit. For example, when compiling a Triton kernel or an LLVM IR representation targeting CPU ISA extensions (RVV or x86 AVX-512), the compiler toolchain version and the generated binary can only be treated as separate units if identities and inputs are fixed and the binary is qualified independently using a semantic-equivalence or ABI check. Otherwise, the entire compiler-to-binary lowering path must be transferred and checked together.
+Transfer units should be scoped to the smallest versioned boundary possessing a declared interface or invariant, provided an independently meaningful target check applies. If a dependency cannot be isolated with such a check, it must remain in the same unit. For example, when compiling a Triton kernel or an LLVM IR representation targeting CPU ISA extensions (RISC-V Vector (RVV) or x86 AVX-512), the compiler toolchain version and the generated binary can only be treated as separate units if identities and inputs are fixed and the binary is qualified independently using a semantic-equivalence or ABI check. Otherwise, the entire compiler-to-binary lowering path must be transferred and checked together.
 
-The transfer map puts Steps 2 through 5 of the test into practice, naming the action a broken dependency permits and the target check that action requires (@tbl-ch9-transfer-map). Down every row, a single target shift demands tailored, unit-specific actions rather than a uniform reuse policy. Each action pairs with a domain-specific check on held-out tasks or hardware references, ensuring a reused artifact never carries a stale conclusion into a new context. For learned components, *held-out* means target tasks kept apart from fitting or calibration.
+The transfer map puts the four stages into practice, naming the action a broken dependency permits and the target check that action requires (@tbl-ch9-transfer-map). Down every row, a single target shift demands tailored, unit-specific actions rather than a uniform reuse policy. Each action pairs with a domain-specific check on held-out tasks or hardware references, ensuring a reused artifact never carries a stale conclusion into a new context. For learned components, *held-out* means target tasks kept apart from fitting or calibration.
 
 | **Transfer unit** | **Changed dependency** | **Valid action** | **Required target check** |
 | --- | --- | --- | --- |
@@ -121,9 +114,13 @@ The transfer map puts Steps 2 through 5 of the test into practice, naming the ac
 | **Architecture and contribution conclusions** | The target decision, comparator, budget, or measured path differs from the source. | Narrow the conclusion to its supported source scope or reject its transfer. | Repeat the architecture comparison and the matched contribution comparison under target conditions. |
 : **Transfer decisions are component-specific.** A unit moves only by assigning an action suited to the broken dependency, paired with a target check observing the resulting architectural risk. {#tbl-ch9-transfer-map tbl-colwidths="[20,28,24,28]"}
 
-A single target shift demands tailored actions across data, methods, environments, and checks. Conclusions must be treated differently from raw components; a conclusion is never updated mechanically, but must be narrowed to verified conditions or rejected outright. Rejecting a component's target use preserves the historical record while preventing stale evidence from corrupting the new decision.
+A conclusion is never updated mechanically; it is narrowed to the conditions the target still satisfies or rejected outright, and rejection preserves the historical record while keeping stale evidence out of the new decision.
 
 *Negative transfer* occurs when a transferred or adapted method performs worse on the target than a clean target-only alternative [@WangEtAl2019NegativeTransfer]. In computer architecture, evaluating negative transfer requires comparing overall decision quality and total methodology cost. Claiming a transfer benefit demands a matched target-only comparison where both arms receive identical tasks, budgets, and stopping rules, with the target-only arm starting without source priors. Total cost accounting must include adaptation, requalification, and integration overhead alongside execution time.
+
+<!-- AUTHOR-THESIS DRAFT 2026-08-31: when the transfer test costs more than a fresh target study; the negative-transfer paragraph above sets it up -->
+The matched target-only arm also answers a question the transfer test itself cannot, which is whether to run the test at all. Every stage has a price. Partitioning a source record, tracing its dependencies, requalifying each carried unit, and integrating it with changed neighbors is work a fresh target study never performs, and the transfer earns that cost only when the units that survive are worth more than the work of carrying them. Two conditions predict that they will not be. When the admission check reopens the decision itself, most conclusion-bearing units are rejected outright and what remains is tool wrappers and historical data, which a target study rebuilds cheaply. When the target-only arm can reach the same decision inside the budget the transfer test would consume, carrying source priors buys nothing and risks the negative transfer just described. The defensible outcome in either case is to record that the source did not transfer and start the target study clean, keeping the source record as provenance rather than as a prior. A result that does not transfer is a result, and the transfer test is the instrument that establishes it.
+<!-- END DRAFT -->
 
 ### Isolating Design Slices
 
@@ -131,25 +128,17 @@ Dependency tracking isolates the affected slice of a configured system. Updating
 
 Terminology must remain precise. Only learned components can be retrained. Data is refreshed, representations adapted, tool interfaces replaced, and checks recalibrated. For example, in a congestion predictor trained on prior routed designs, learned weights and feature schemas form the transferable artifact, while placed netlists and process libraries constitute target inputs. Reusing the predictor requires verifying schema compatibility, target design-family membership, recalibrated thresholds, and class-specific error bounds on held-out routed target designs.
 
-Diagnosing broken invariants spans five failure modes: workload-support mismatches, candidate-family shifts, proxy-reference correlation loss, executable-path disruptions, and decision-semantics changes. Machine-learning studies on distribution shift and hidden dependencies highlight three key lessons for architecture: empirical support can expire while interfaces remain unchanged; isolated subsystem optimizations can mask whole-system degradation (exemplified by Simpson's Paradox during full-die integration); and naive adaptation can perform worse than clean target-only alternatives [@WangEtAl2019NegativeTransfer; @QuinoneroCandelaEtAl2009DatasetShift; @SculleyEtAl2015Hidden].
+Machine-learning work on distribution shift and hidden dependencies [@WangEtAl2019NegativeTransfer; @QuinoneroCandelaEtAl2009DatasetShift; @SculleyEtAl2015Hidden] adds one lesson the transfer map does not encode. A subsystem optimized in isolation can degrade the whole it is integrated into, and the confounder is one that no block-level check observes.
 
 ::: {.callout-law title="Simpson's Paradox in Multi-Block SoC Integration"}
 **The Classical Principle:** A statistical trend observed across individual subgroups disappears or reverses when the subgroups are combined into an aggregated whole due to an omitted confounding variable [@Simpson1951ContingencyTables].
 
-**The Hardware Trap:** An AI optimization engine optimizes twenty individual accelerator sub-blocks in isolation, reporting a $15\%$ area reduction and $10\%$ power saving on every single block ($\Delta P_{\text{block}, i} < 0\ \forall i$). However, when integrated onto the full system-on-chip (SoC) die, the optimized sub-blocks require fragmented routing channels and non-contiguous aspect ratios, inflating global network-on-chip (NoC) wirelength and top-level clock distribution power ($\Delta P_{\text{total}} = \sum \Delta P_{\text{block}, i} + \Delta P_{\text{NoC}} + \Delta P_{\text{clock}} > 0$). The omitted confounding variable (global interconnect and clock topology) reverses the aggregate system result, causing the full SoC to consume more power than the unoptimized baseline.
+**The Hardware Trap:** An optimizer improves every accelerator sub-block on a die in isolation, and each block's area and power report improves. Integrated onto the full system-on-chip (SoC), the optimized blocks demand fragmented routing channels and non-contiguous aspect ratios that inflate global network-on-chip (NoC) wirelength and top-level clock distribution power, and the die consumes more than the unoptimized baseline. The omitted confounder is the global interconnect and clock topology.
 
-**The Architectural Antidote:** Bound optimization and transfer scopes to the smallest enclosing architectural boundary that captures full-system interconnect and thermal coupling (see @sec-law-simpsons-paradox in @sec-appendix-c-laws-paradoxes for the mathematical composition model and full-die floorplanning invariants).
+**The Architectural Antidote:** Bound optimization and transfer scopes to the smallest enclosing architectural boundary that captures full-system interconnect and thermal coupling (@sec-law-simpsons-paradox in @sec-appendix-c-laws-paradoxes).
 :::
 
-
-To avoid such integration traps and ensure that transferred components remain dependable across system boundaries, architects must distinguish four related evaluation concepts:
-
-- **Generalization:** reliable performance on unseen cases within declared target support.
-- **Transfer:** continued utility after material shifts in the target environment.
-- **Robustness:** behavioral stability under named perturbations, faults, or attacks.
-- **Drift:** observed temporal variation in monitored conditions.
-
-Unchanged components carry forward once they pass target checks; adapted components require fresh evaluation under target conditions. While shifted decision semantics invalidate source conclusions, they do not automatically invalidate underlying components. Introducing a change reopens only dependent claims, which expire immediately until assigned actions and target checks complete.
+When the confounder lives between blocks, the smallest unit that has an independently meaningful check is the enclosing boundary rather than the block, and the scoping rule for transfer units applies at that boundary.
 
 ### Validating Transfer Conditions
 
@@ -159,7 +148,7 @@ Decomposing proposal, checking, and integration into separate components makes r
 
 ## Transfer Under Distribution Shift
 
-Instantiating target checks across evolving contexts exposes properties left unsettled by original studies (@tbl-ch9-source-target). Across seven dimensions (result cost, reversibility, interface coupling, observability, decision consequence, workload distribution, and software turnover), transitioning from cycle-accurate simulation to physical silicon converts informal assumptions into mandatory integration checks, provisional fallbacks, and trace-backed coverage requirements.
+Run against the array study, the checks the map requires expose properties the source study left unsettled (@tbl-ch9-source-target). Moving from cycle-accurate simulation toward physical silicon converts informal assumptions into mandatory integration checks, provisional fallbacks, and trace-backed coverage requirements, and each row names the obligation the change creates.
 
 | **Condition** | **Executed array study** | **Implementation-facing target** | **Obligation created by the change** |
 | --- | --- | --- | --- |
@@ -174,8 +163,6 @@ Instantiating target checks across evolving contexts exposes properties left uns
 
 A transfer-risk decomposition models *false acceptance* (accepting a transferred candidate for an RTL freeze when full target evidence would reject it). Expected loss equals the probability of false acceptance multiplied by the conditional loss of reversal, rework, and permanent errors. Workload mismatches, limited observability, and uncalibrated proxies increase the probability of false acceptance; tighter interface coupling, downstream commitments, and system consequences amplify conditional loss. Complete decisions must balance false acceptance against false rejection, missed performance, and requalification costs.
 
-Candidate rankings can shift without artifact modifications; altering design objectives, normalization strategies, feasibility constraints, or dominance rules reopens the architectural decision over identical underlying files. Security and reliability requirements enter decisions when target assets, threat models, and failure modes demand attention.
-
 Workload evaluation requires decoupling inherent workload properties from single-machine artifacts [@HosteEeckhout2007MICA], specifying trace-backed distributions, common and tail execution shapes, and versioned compiler stacks. Mapping semantics must be bound explicitly across compiler paths (Triton grid parameters, LLVM vector bounds) and simulator configurations (SCALE-Sim, gem5). Measured compiler searches like AutoTVM and Ansor demonstrate that architectural decisions inherently evaluate software schedules and hardware substrates together [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor].
 
 Transitioning to RTL and physical implementation shifts observable properties and reversal costs. Compiler-generated tests and simulation yield behavioral evidence; formal property verification establishes properties within declared model bounds; equivalence checking verifies representation mappings without proving architectural intent; and synthesis and place-and-route establish timing closure, area, congestion, and electrothermal behavior. At scaled semiconductor nodes, increasing global-wire delay relative to logic gates makes extracted post-layout verification essential [@HoMaiHorowitz2001FutureOfWires].
@@ -187,11 +174,9 @@ In physical chip design, distribution shift is rarely an abstract statistical dr
 3. **Physical Transistor Node Shifts (FinFET $\rightarrow$ Gate-All-Around GAAFET and BSPDN):** Floorplan heuristics, standard-cell placement rules, and wire-parasitic surrogates calibrated on FinFET nodes (7\ nm and 5\ nm) fail when applied to 2\ nm / A16 nanosheet Gate-All-Around (GAAFET) nodes with backside power delivery networks (BSPDNs). In traditional FinFET frontside power delivery, thick upper-metal power grids ($V_{\mathrm{DD}}/V_{\mathrm{SS}}$) route downward through tall, resistive via stacks to standard cell rails, consuming 20% to 30% of routing tracks in intermediate metal layers (M3\text{--}M6) and inducing significant dynamic $IR$-drop. BSPDN relocates the entire power delivery network beneath the active silicon substrate using buried power rails and through-silicon power vias (TSPVs), freeing 100\% of the frontside metal layers (M1\text{--}M12) for signal routing and drastically reducing resistive $IR$-drop. However, thinning the silicon substrate to a few hundred nanometers sandwiches heat-generating nanosheet channels between low-thermal-conductivity dielectrics and backside metal, increasing substrate thermal resistance ($R_{\mathrm{th}}$) and creating localized thermal hotspots ($> 100^\circ\text{C}$) that static timing tools and traditional floorplanners fail to predict.
 4. **Workload Paradigm Shifts (Dense GEMMs $\rightarrow$ Mixture-of-Experts and KV-Cache):** Systolic arrays and weight-stationary line buffers designed for dense matrix multiplication (GEMMs) in convolutional networks and standard Transformers achieve $>90\%$ Multiply-Accumulate (MAC) utilization by exploiting regular, compile-time-predictable spatial data reuse. When transferred to modern Mixture-of-Experts (MoE) architectures and autoregressive key-value (KV) cache decoding, processing element (PE) utilization collapses below $15\text{--}20\%$. MoE replaces contiguous spatial matrix products with dynamic, token-dependent routing where router gates dispatch individual tokens to sparse subsets of expert feed-forward networks (such as 2 of 8, or 8 of 256 experts), fragmenting tensor tiles into irregular, uncoalesced memory transfers. Simultaneously, the autoregressive KV-cache generation phase is strictly memory-bandwidth bound ($\mathrm{OI} \ll 1\ \text{FLOP/byte}$), where loading multi-megabyte KV-cache vectors from memory for each single generated token starves computational execution units. Transferring dense systolic hardware without dynamic crossbars, scatter-gather direct memory access (DMA) engines, and specialized activation caches leaves the accelerator severely underutilized.
 
-::: {.callout-lighthouse title="Timing closure does not settle the thermal question"}
-Achieving static timing closure in OpenSTA or Cadence Tempus confirms that path propagation delays satisfy target clock frequencies under specified process, voltage, and temperature (PVT) corners. However, it provides no evidence regarding dynamic $IR$-drop, spatial thermal hotspots, or total power dissipation under real-time workloads.
-:::
+Each of the four breaks a different transfer unit, and the transfer map assigns each a different action. The memory-model shift breaks the invariant behind a carried synchronization module, which is fenced or replaced and re-verified with litmus tests on the target rather than carried. The vector shift retires a fixed-width kernel together with its unroll factors and cleanup epilogues; there is nothing to adapt. The node shift moves every layout and parasitic surrogate outside its support region, so each is retrained on target data or retired. The workload shift reopens the utilization claim of a carried systolic array, and a utilization claim is a conclusion, which the map narrows or rejects but never carries.
 
-Lower reversibility mandates explicit containment mechanisms (bypasses, disables, guardbands, spare cells) tested against credible failure classes before irreversible physical commitments are made.
+Timing closure in OpenSTA or Cadence Tempus confirms that path delays meet the target clock under the specified process, voltage, and temperature (PVT) corners. It says nothing about dynamic $IR$-drop, spatial thermal hotspots, or total power under a real workload, so the thermal question the node shift raises stays open after the timing report closes. Lower reversibility then demands explicit containment (bypasses, disables, guardbands, spare cells) tested against credible failure classes before an irreversible physical commitment is made.
 
 ::: {.callout-war-story title="A correction must reach the physical failure"}
 **The claim.** In January 2011, Intel disclosed a design error in the Cougar Point chipset shipping with Sandy Bridge platforms, stating consumers could safely continue using affected systems while manufacturers arranged a permanent solution [@Intel2011CougarPoint].
@@ -201,249 +186,9 @@ Lower reversibility mandates explicit containment mechanisms (bypasses, disables
 **The lesson.** A permanent correction demanded revised silicon alongside costly repair or replacement programs. Containment and correction mechanisms succeed only if they reach the physical component and intercept the exact failure mode threatening the target system.
 :::
 
-While learned optimization frameworks such as PrefixRL [@RoyEtAl2021PrefixRL] and DSO.ai [@Synopsys2023DSOai] demonstrate promising learned proposals for logic synthesis and macro placement, neither eliminates the empirical implementation evidence and containment strategies required to validate proposed designs against physical failure.
-
-## Product-Path Specialization and Break-Even Analysis
-
-The four structural shifts analyzed above (memory consistency, vector adaptation, nanosheet physical design, and dynamic workload routing) demonstrate that architectural specialization cannot be evaluated solely on isolated computational throughput. Specializing hardware to accelerate a specific kernel family introduces communication boundaries, runtime driver overhead, and data conversion penalties that can easily erase raw execution gains.
-
-Whether accelerating vector operations on-chip or partitioning compute across multi-die packaging, physical specialization succeeds only when the latency and data-movement overhead of the communication interface does not overwhelm local compute gains. Product-path cost dictates whether a local performance win translates into a viable system feature; realizing accelerator or ISA benefits requires charging startup latency, transport overhead, compiler lowering friction, and software maintenance against raw computational speedups.
-
-### Specialization Conditions
-
-Hardware accelerators achieve superior efficiency by tailoring silicon data paths and memory buffers to the specific computational patterns of a target workload. However, domain specialization succeeds only when the target application environment exhibits long-term stability across its algorithmic and operational properties. Six core stability conditions govern whether specialized hardware remains viable across product lifecycles (@fig-domain-specificity-shapes): kernel-family stability, data types and precision, memory-hierarchy behavior, programming-interface durability, deployment quality-of-service targets, and operational drift. Shifting any of these underlying conditions alters computational requirements and risks rendering specialized silicon obsolete.
-
-![**Domain specialization efficacy depends on stable target application workloads.** Six source-to-target stability conditions (kernel family, data precision, memory hierarchy behavior, programming interface durability, deployment quality-of-service targets, and operational drift) dictate whether specialized accelerator hardware remains viable. Instability across computation shapes or deployment constraints inflates the verification burden and mandates fresh target checks.](images/fig-domain-specificity-shapes){#fig-domain-specificity-shapes width="100%" fig-alt="Six source-to-target conditions surround the specialization scope: kernel family, data and precision, memory behavior, program interface, deployment and quality of service, and operating change. A separate bar states that changes in any condition can increase the verification burden."}
-
-Kernel family, data precision, and memory behavior determine computation shape, whereas the programming interface, deployment quality-of-service targets, and operational drift govern long-term system viability. Instability across any of these six dimensions inflates the verification burden and undermines specialized efficiency, requiring executable compiler and interface checks to evaluate offload granularity, invocation latency, memory traffic, and interface bandwidth against trace-backed workloads before committing to specialized hardware blocks.
-
-### Offloading Bounds
-
-Accelerator speedups diminish when data movement and software invocation overhead dominate execution. The LogCA model formalizes host–accelerator offloading across latency, overhead, granularity, computational index, and acceleration [@AltafWood2017LogCA]. For a payload of $g$ work units, host cost $C_h$ cycles per work unit, fixed invocation overhead $o$ in cycles, local compute acceleration $A$, transferred data $d$ in bytes per work unit, link bandwidth $B$ in bytes per cycle, and overlapped transfer interval $T_{\mathrm{overlap}}(g)$ in cycles:
-
-$$
-T_{\mathrm{host}}(g) = C_h g,
-\qquad
-T_{\mathrm{acc}}(g) = o + \frac{C_h g}{A} + \max\left(0,\frac{d g}{B} - T_{\mathrm{overlap}}(g)\right).
-$$
-
-The resulting speedup bound (@eq-logca-speedup-bound) formalizes net system acceleration:
-
-$$
-S(g) = \frac{C_h g}{o + C_h g/A + \max\left(0,\, d g/B - T_{\mathrm{overlap}}(g)\right)}.
-$${#eq-logca-speedup-bound}
-
-In the nonoverlapped regime ($T_{\mathrm{overlap}} = 0$), offloading achieves net acceleration ($S(g) > 1$) only when the offloaded payload exceeds the break-even granularity $g^*$:
-
-$$
-g^* = \frac{o}{C_h\left(1 - \frac{1}{A}\right) - \frac{d}{B}}.
-$${#eq-logca-breakeven-g}
-
-Connecting this bound directly to Williams' Roofline model [@Williams2009Roofline], the per-work-unit data transfer $d$ is the reciprocal of kernel operational intensity ($d = 1/\mathrm{OI}$, expressed in bytes per operation). Substituting operational intensity into @eq-logca-breakeven-g defines the break-even payload as:
-
-$$
-g^* = \frac{o}{C_h\left(1 - \frac{1}{A}\right) - \frac{1}{\mathrm{OI} \cdot B}}.
-$$
-
-This relation defines an absolute physical feasibility ceiling. If the kernel's operational intensity falls at or below the critical balance threshold:
-
-$$
-\mathrm{OI} \le \mathrm{OI}^* = \frac{1}{B \cdot C_h\left(1 - \frac{1}{A}\right)}
-$$
-
-the denominator becomes nonpositive and $g^*$ is undefined. Under this condition, per-unit link transport overhead alone consumes more time than the baseline host computation. The workload is strictly link-bandwidth bound, and scaling payload batch size $g$ can never achieve speedup ($S(g) \le 1$ for all $g$). Compute acceleration $A$ is completely erased by interface communication.
-
-The physical parameters in @eq-logca-speedup-bound depend heavily on the target interconnect technology regime.
-
-- **Die-to-Die Interconnect (UCIe 2.0 / 2.5D Packaging):** Delivers ultralow invocation latency ($o \sim 5\text{--}10\ \text{ns}$), high shore bandwidth density ($B > 1\ \text{TB/s/mm}$), and minimal energy per bit ($\sim 0.5\ \text{pJ/bit}$), allowing fine-grained submicrosecond offloading between heterogeneous compute chiplets.
-- **Coherent Socket Interconnect (CXL 3.1 over PCIe PHY):** Operates at moderate latency ($o \sim 80\text{--}150\ \text{ns}$) and energy ($\sim 5\text{--}10\ \text{pJ/bit}$), suitable for memory pooling and coarse-grained accelerator kernel offloads.
-- **Board-Level Peripheral Interconnect (PCIe Gen 5/6):** Imposes significant round-trip invocation latency ($o > 500\text{--}1{,}000\ \text{ns}$) and transport energy ($\sim 20\ \text{pJ/bit}$), requiring large workload batch sizes ($g \gg 10^5\ \text{operations}$) to amortize host–device driver serialization, direct memory access (DMA) descriptor setup, and bus transport overheads.
-
-Fixed startup cost and transfer time share units with compute time, combining Amdahl's serial-fraction principle [@Amdahl1967ValiditySingleProcessor] with explicit communication costs. Excessive invocations ($N \cdot o$) or transfer overhead ($d g / B$) can erase local compute gains, shifting the operational break-even point where offloading achieves net acceleration (@fig-ch09-logca-phase-diagram). An offload provides a genuine system benefit only after the offloaded payload $g$ is sufficiently large to amortize both driver invocation latency and physical link transport overheads.
-
-::: {.callout-war-story title="The unamortized offload wall"}
-**The trap.** In an illustrative scenario consistent with the model above, a mobile NPU adds a 1,024-MAC systolic tensor engine capable of $100\times$ local matrix-multiply acceleration ($A=100$) over scalar RISC-V execution, and the team treats that local factor as the expected system speedup.
-
-**The mechanism.** Because the runtime invokes the NPU through kernel-mode driver calls for each small layer (payload $g=500\ \text{operations}$), launch latency ($o=1{,}500\ \text{cycles}$) dominates execution before any DMA descriptor setup is even counted. Instead of $100\times$, the modeled system runs at $S(g) = 0.33\times$, slower than baseline scalar execution.
-
-**The lesson.** Local compute acceleration ($A$) cannot overcome unamortized startup ($o$) and transfer ($d g/B$) costs. Offload mechanisms must be co-designed with compiler layer fusion so that payload size $g$ stays well above the break-even threshold.
-:::
-
-
-![**LogCA break-even offload frontiers across physical interconnect regimes.** Break-even granularity ($g^*$, minimum FLOPs for net speedup $S(g) \ge 1.0$) plotted against operational intensity ($\text{FLOP/byte}$) across seven interconnect standards [@AltafWood2017LogCA; @Williams2009Roofline]. Die-to-die UCIe 2.0 (1,600\ GB/s, 2.5\ ns) breaks even at fine-grained payloads ($g^* \approx 320\ \text{FLOPs}$), whereas board-level PCIe Gen 5 and Ultra Ethernet enforce steep bandwidth walls ($\text{OI}^* = 3.9\ \text{FLOP/byte}$), requiring coarse payloads ($g^* > 10^5\ \text{FLOPs}$) to amortize driver and link overheads.](images/fig-ch09-logca-phase-diagram){#fig-ch09-logca-phase-diagram width="100%" fig-alt="Log-log plot of minimum break-even operation granularity in FLOPs versus operational intensity in FLOPs per byte across seven interconnect regimes from UCIe 2.0 to Ultra Ethernet, showing that die-to-die packaging enables fine-grained offloading while board-level PCIe enforces a steep operational intensity wall."}
-
-Evaluating physical interconnect regimes in @fig-ch09-logca-phase-diagram illustrates how invocation and transfer costs penalize local compute acceleration. Advanced packaging with ultralow startup and high shore bandwidth breaks even after minimal work per offload. Board-level peripheral links require substantially larger payloads before offloading helps, and nonzero transfer terms reduce asymptotic speedup. Under high-cost parameters, system speedup collapses toward baseline host execution. As product paths incur actual invocation and data-movement costs, local speedup advantages rapidly vanish.
-
-Interconnect physical parameters establish the fixed hardware bounds, but software determines where a workload sits on the LogCA curve. The host runtime and compiler dictate whether operations are fused into payloads large enough ($g > g^*$) to amortize driver invocation latency $o$, and whether intermediate tensor allocations in off-chip memory are eliminated to keep operational intensity $\mathrm{OI}$ above the critical balance threshold $\mathrm{OI}^*$. When compilers fail to optimize data movement, kernels operating below the hardware balance point remain bandwidth-bound regardless of raw compute capability. This dependency shifts the architectural bottleneck directly onto the executable software path.
-
-### Executable Software Path
-
-The physical reality of hardware specialization is that microarchitectural innovations remain inaccessible without software enablement. When architects introduce specialized hardware primitives (such as warp-level `wmma`, warp-group `wgmma`, tensor memory accelerators, and fifth-generation tensor cores `tcgen05`), the software burden cascades across the entire stack.
-
-In low-level template libraries such as NVIDIA CUTLASS [@NVIDIACUTLASS], architecture-specific C++ and PTX template code exploded by $48.7\times$ (from $4.3\text{K}$ to $207.7\text{K}$ lines of code) between 2019 and 2026, while inline PTX assembly statements surged $60.4\times$ (from $51$ to $3,082$ statements) to manage microarchitectural nuances. Managing modern GPU features requires specialized CuTe layout algebra, warp-specialized collective mainloops, asynchronous tensor memory accelerator copy pipelines, and inline PTX instructions (`cp.async.bulk`, `wgmma.mma_async`). When application-level serving systems like vLLM [@KwonEtAl2023PagedAttention] bypass standard compilers to squeeze peak performance from heterogeneous hardware, custom kernel code fragments into a similar maintenance explosion across PagedAttention, chunked prefill, FP8/FP4 quantized GEMM, dynamic MoE dispatchers, and vendor-specific backends. This exponential maintenance tax creates a *software porting wall* (@fig-ch09-money-plot-software-porting-wall).
-
-![**The software porting wall and compiler narrow waist across hardware generations (2019–2026).** (a) In hardware template libraries (NVIDIA CUTLASS), architecture-specific code expands $48.7\times$ alongside a $60.4\times$ surge in inline PTX assembly [@NVIDIACUTLASS]. (b) In the Triton MLIR compiler, the shared middle end acts as a narrow waist that absorbs hardware shifts ($33.2\times$ growth) while isolating target backends [@TilletEtAl2019Triton]. (c) In application serving (vLLM), bypassing compiler narrow waists drives a $48.7\times$ explosion in hand-tuned C++/CUDA kernels across attention, quantization, and MoE dispatch [@KwonEtAl2023PagedAttention].](images/fig-ch09-software-porting-wall){#fig-ch09-money-plot-software-porting-wall width="100%" fig-alt="Three-panel visualization showing the software porting wall from 2019 to 2026. (a) CUTLASS architecture-specific template code expanding 48.7-fold from 4.3K to 207.7K lines alongside a 60-fold surge in inline PTX assembly. (b) Triton's shared MLIR middle-end scaling 33-fold from 3.0K to 100.1K lines while decoupling target backends. (c) vLLM's custom C++/CUDA/HIP kernels exploding 48.7-fold from 2.5K to 120.5K lines across attention, quantization, and MoE dispatch."}
-
-This compounding software maintenance tax demonstrates why architectural evaluation must measure executable code paths rather than isolated hardware blocks. An architecture that requires fifty thousand lines of bespoke inline assembly to reach peak performance effectively transfers its non-recurring engineering (NRE) costs onto the software ecosystem. Without a mechanism to absorb hardware diversity, the resulting performance fragility traps specialized accelerators in niche deployments.
-
-The architectural solution to this porting wall is the *compiler narrow waist*, specifically realized through frameworks like Triton MLIR. Introducing a shared intermediate representation enables Triton to decouple high-level algorithmic intent from low-level target code generation. It absorbs hardware iterations within its middle end, preventing the combinatorial explosion of manual kernel templates.
-
-The analytical LogCA bounds establish that hardware acceleration succeeds only when operation granularity $g$ exceeds the break-even threshold $g^*$ and operational intensity is sustained. In a complete system, these mathematical boundaries are dictated by the compiler lowering and software runtime pipeline. The compiler controls whether operations are fused into sufficiently large offload payloads $g$, whether intermediate tensor allocations in off-chip memory are eliminated to reduce transfer cost $d$, and whether loop schedules exploit target vector registers without pipeline stalls.
-
-High-level domain-specific abstract syntax trees (ASTs, such as Python or Triton DSLs) descend through mid-level control-data flow graphs (CDFGs) (MLIR dialects) and LLVM IR down to where workload intent meets architectural mechanisms (CPU ISA extensions or NPU systolic dataflows) and silicon constraints. Lowering is the primary interface where hardware constraints and workload requirements must be jointly qualified for performance, correctness, portability, and maintainability (@fig-codegen-narrow-waist).
-
-![**Executable target software paths connect developer intent to verification checks.** High-level domain-specific ASTs (Python, Triton DSLs) lower through mid-level CDFGs (MLIR dialects) and LLVM IR at the compiler narrow waist, where workload intent, architectural mechanisms (CPU ISA extensions, NPU dataflows), and silicon constraints converge. Lowered machine code and runtimes are subsequently evaluated against verification checks for correctness, performance, portability, and maintainability.](images/fig-codegen-narrow-waist){#fig-codegen-narrow-waist width="80%" fig-alt="Executable target software path showing programming models, compiler representations, libraries, runtimes, and generated code connecting hardware constraints to correctness, performance, portability, and maintainability checks."}
-
-The compiler narrow waist allows multiple programming models and hardware targets to converge on shared intermediate representations where correctness, performance, portability, and maintainability can be qualified once. Triton's MLIR pipeline compiles high-level tensor operations through structured dialect lowerings: Python ASTs lower to the `triton` dialect (`tt.load`, `tt.add`, `tt.store`), progress through target-agnostic optimization passes (automatic memory coalescing, block-level layout distribution, shared-memory bank conflict avoidance, and multi-stage software pipelining), and lower to the `llvm` dialect before LLVM backend code generation. Lowering a high-level Triton block operation (@lst-triton-rvv-lowering) into RISC-V Vector (RVV 1.0) assembly primitives (@lst-rvv-lowering-asm) illustrates this end-to-end path in practice.
-
-```{.python #lst-triton-rvv-lowering lst-cap="**A Triton kernel before lowering.** Just-in-time (JIT) block vector-addition kernel targeting the intermediate compiler representation."}
-import triton
-import triton.language as tl
-
-@triton.jit
-def add_kernel(x_ptr, y_ptr, z_ptr, N, BLOCK_SIZE: tl.constexpr):
-    pid = tl.program_id(axis=0)
-    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-    mask = offsets < N
-    x = tl.load(x_ptr + offsets, mask=mask)
-    y = tl.load(y_ptr + offsets, mask=mask)
-    tl.store(z_ptr + offsets, x + y, mask=mask)
-```
-
-During compilation, Triton's MLIR pipeline lowers the single-program, multiple-data (SPMD) 1D block iterations (`pid * BLOCK_SIZE + tl.arange(...)`) into dynamically strip-mined vector loops targeting the LLVM RISC-V backend (@lst-rvv-lowering-asm). Rather than hardcoding fixed 128-bit or 512-bit register widths, the generated loop queries the runtime hardware vector length (`VLEN`) dynamically, issuing vector loads (`vle32.v`), vector arithmetic (`vfadd.vv`), and stores (`vse32.v`) across chunks of elements until array exhaustion:
-
-```{.gnuassembler #lst-rvv-lowering-asm lst-cap="**The same kernel after lowering.** RISC-V Vector (RVV 1.0) dynamically strip-mined vector-addition assembly sequence."}
-# RISC-V Vector (RVV 1.0) 32-bit floating-point vector addition kernel
-# a0 = x_ptr, a1 = y_ptr, a2 = z_ptr, a3 = element count N
-.Lloop:
-    vsetvli t0, a3, e32, m8, ta, ma  # Set vector length for 32-bit elements, 8x register grouping
-    vle32.v v8, (a0)                  # Load vector x (x_ptr + offset)
-    vle32.v v16, (a1)                 # Load vector y (y_ptr + offset)
-    vfadd.vv v24, v8, v16             # Vector floating-point addition (z = x + y)
-    vse32.v v24, (a2)                 # Store vector z (z_ptr + offset)
-    sub     a3, a3, t0                # Decrement remaining element count N
-    slli    t1, t0, 2                 # Byte offset = elements processed x 4 (e32)
-    add     a0, a0, t1                # Advance x_ptr by processed bytes
-    add     a1, a1, t1                # Advance y_ptr by processed bytes
-    add     a2, a2, t1                # Advance z_ptr by processed bytes
-    bnez    a3, .Lloop                # Loop while N > 0
-```
-
-This lowered sequence directly operationalizes the LogCA parameters through dynamic vector-length-agnostic (VLA) strip-mining. The instruction `vsetvli t0, a3, e32, m8, ta, ma` configures the selected element width ($SEW = 32\ \text{bits}$, `e32`), sets vector register grouping ($LMUL = 8$, `m8`), and declares tail-agnostic (`ta`) and mask-agnostic (`ma`) policies. The LLVM backend's `RISCVInsertVSETVLI` pass analyzes vector instruction chains across basic blocks to hoist and eliminate redundant `vsetvli` configuration calls. Under $LMUL=8$, the 32 architectural vector registers ($v_0\text{--}v_{31}$) are dynamically aggregated into four eight-register groups ($v_0, v_8, v_{16}, v_{24}$), each providing $8 \times \text{VLEN}$ bits of vector storage. The instruction `vfadd.vv v24, v8, v16` executes floating-point addition across register groups $v_8\text{--}v_{15}$ and $v_{16}\text{--}v_{23}$, writing results into $v_{24}\text{--}v_{31}$. The maximum hardware vector length per instruction is:
-
-$$
-\text{VLMAX} = \frac{LMUL \cdot \text{VLEN}}{SEW} = \frac{8 \cdot \text{VLEN}}{32} = \frac{\text{VLEN}}{4}
-$$
-
-The processor writes the active vector length $\text{VL} = \min(\text{AVL}, \text{VLMAX})$ to register `t0`. This dynamically adapts each iteration from 32 elements on a 128-bit mobile pipeline ($\text{VLEN}=128\ \text{bits}$) up to 512 elements on a 2,048-bit server array ($\text{VLEN}=2048\ \text{bits}$) using the identical compiled machine binary.
-
-However, vector register grouping introduces a sharp microarchitectural trade-off between instruction throughput and register pressure. Setting $LMUL=8$ combines the 32 individual architectural vector registers into four wide register groups ($v_0, v_8, v_{16}, v_{24}$). While this maximizes compute and memory bandwidth per issued vector instruction and amortizes loop control overhead, it slashes the compiler's available live register count in `RegAllocGreedy` from 32 down to 4. In complex kernels with multiple intermediate operands (such as fused multi-head attention or multi-layer activation fusions), 4 register groups are insufficient to hold live values, forcing catastrophic register spills to stack memory that flood the cache and stall the execution pipeline. Compilers must therefore dynamically balance register multiplier selection. Dense, high-throughput streaming kernels exploit $LMUL=8$ for peak throughput, while complex expressions with high live-variable pressure downscale to $LMUL=1$ or $LMUL=2$ (retaining 32 or 16 live registers) to prevent stack spilling.
-
-End-to-end performance claims remain incomplete until workload semantics pass through lowering and execute on target hardware. Microarchitectural candidates that post large isolated kernel speedups often degrade when compilers cannot sustain data throughput or when memory traffic dominates execution. Evaluating candidates requires compiler-generated end-to-end measurements that preserve intended numerics, memory-ordering semantics, ABIs, and device contracts across pinned toolchains.
-
-## Fast Screening and Early Rejection
-
-While end-to-end compiler lowering and full-system simulation are essential to establish final architectural validity, running complete compiler-to-silicon signoff for every exploratory candidate creates an unmanageable evaluation bottleneck. High-fidelity signoff tools ($c_{\mathrm{hi}}$) impose hours or days of execution latency per design. To accelerate design-space exploration without sacrificing rigor, AI-native design systems deploy multi-tier evaluation cascades that screen candidate populations using fast analytical models, cycle-approximate simulators ($c_{\mathrm{cheap}}$), and learned surrogates before escalating surviving candidates to high-fidelity signoff checkers. However, realizing genuine speedup requires rigorous error calibration. Screening proxies must have bounded false-negative rates to prevent improperly discarding viable microarchitectures, and must possess clear escalation paths to route ambiguous candidates to high-fidelity signoff checkers.
-
-### Coverage vs. Overhead
-
-Screening proxies reduce evaluation latency by filtering unpromising candidates early, balancing pre-filter accuracy against high-fidelity signoff costs. *Service work* denotes expected evaluation effort per target comparison, excluding queueing delay [@Amdahl1967ValiditySingleProcessor]. Let $c_{\mathrm{hi}}$ denote mean service cost for cycle-accurate RTL simulation or gem5 full-system runs, and $c_{\mathrm{cheap}} < c_{\mathrm{hi}}$ denote mean cost for a SCALE-Sim screen. *Validated coverage* $f$ represents the fraction of target comparison mass where the screen's ordering settles advance decisions within declared error bounds without escalation.
-
-Let $a$ be the fraction of target comparison mass submitted to the cheap check ($f \le a$). The multi-tier screen service-work speedup $S_{\mathrm{screen}}$ is modeled via selective classification:
-
-$$
-S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
-$${#eq-screening-efficiency-bound}
-
-In @eq-screening-efficiency-bound, $\epsilon \ge 0$ captures normalized routing, auditing, and rework overhead. Peak speedup occurs when every executed cheap check settles the case ($a = f$).
-
-As $c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ and $\epsilon \to 0$, the free-check ceiling approaches $1/(1-f)$. This bound shows that validated coverage $f$, rather than screening speed alone, sets the maximum achievable speedup. Selective classification theory demonstrates that abstaining from uncertain predictions avoids false acceptance while routing unresolved candidates to full $c_{\mathrm{hi}}$ reference evaluation [@ElYanivWiener2010SelectiveClassification]. To avoid sample-selection bias [@Heckman1979SampleSelectionBias], $f$ must be evaluated across representative samples of the entire target stream.
-
-### Efficiency Bounds
-
-Validated coverage sets the upper bound on review service-work speedup across cost ratios between cheap screens and high-fidelity signoff tools (@fig-rejection-bound-ceiling). Sweeping cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}}$ of 0.01, 0.1, and 0.3) for ideal routing ($a=f$) and full screening ($a=1$) shows that lowering cheap-check cost only pushes performance toward the free-check ceiling $1/(1-f)$. At $f=0.6$, coverage caps speedup at $2.5\times$; expanding validated coverage $f$ is required to raise the ceiling.
-
-```{python}
-#| label: fig-rejection-bound-ceiling
-#| fig-cap: |
-#|   **Validated coverage sets the upper bound on screening speedup.** In this illustrative zero-overhead service-work model [@ElYanivWiener2010SelectiveClassification; @Heckman1979SampleSelectionBias], review service-work speedup (y-axis) is plotted against validated coverage $f$ (x-axis) across three cheap-to-high-fidelity cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \in \{0.01, 0.1, 0.3\}$). Solid curves show ideal routing ($a=f$) and dashed curves show universal screening ($a=1$). Lowering check cost pushes performance toward the free-check ceiling $1/(1-f)$ (dashed black line); at $f=0.6$, speedup is capped at $2.5\times$ regardless of screening cost. Curves are constructed for illustration.
-#| out-width: "100%"
-#| fig-alt: "Line plot of review service-cost speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Constructed illustrative parameters: the cost ratios and coverage fractions below are
-# author-chosen to show how a screening bound behaves, not measured. Former label: S_review(f, r, a) = 1 / ((1 - f) + a * r) derived from selective classification risk-coverage trade-offs (El-Yaniv & Wiener, 2010) and sample selection bias corrections (Heckman, 1979).
-f_grid = [0.95 * i / 399 for i in range(400)]
-ratios = [
-    {"label": "cost ratio 0.01", "r": 0.01, "color": COLORS["orange"]},
-    {"label": "cost ratio 0.1", "r": 0.1, "color": COLORS["green"]},
-    {"label": "cost ratio 0.3", "r": 0.3, "color": COLORS["red"]},
-]
-
-def s_review(cov, r, a):
-    return 1.0 / ((1.0 - cov) + a * r)
-
-fig, ax = plt.subplots(figsize=(5.25, 3.0))
-fig.subplots_adjust(left=0.12, right=0.86, top=0.82, bottom=0.16)
-
-ceiling = [1.0 / (1.0 - x) for x in f_grid]
-ax.fill_between(f_grid, ceiling, 30, color=COLORS["grid"], alpha=0.35, zorder=0)
-ax.text(0.04, 9.0, "unreachable without more validated coverage", ha="left", va="center", fontsize=6.0, color=COLORS["muted"], fontstyle="italic")
-ax.plot(f_grid, ceiling, color=COLORS["ink"], linewidth=0.8, linestyle=(0, (4, 3)), zorder=2)
-
-ax.axhline(1.0, color=COLORS["muted"], linewidth=0.7, zorder=1)
-ax.text(0.93, 1.04, "no speedup", ha="right", va="bottom", fontsize=6.0, color=COLORS["muted"])
-
-for c in ratios:
-    ax.plot(f_grid, [s_review(x, c["r"], x) for x in f_grid], color=c["color"], linewidth=1.9, zorder=3, label=c["label"])
-    ax.plot(f_grid, [s_review(x, c["r"], 1.0) for x in f_grid], color=c["color"], linewidth=1.2, linestyle=(0, (2, 2)), zorder=3)
-
-ax.scatter([0.6], [2.5], marker="o", s=22, facecolor=COLORS["note_fill"], edgecolor=COLORS["ink"], linewidth=1.3, zorder=4)
-ax.text(0.58, 2.95, "f = 0.6 caps the speedup at 2.5x", ha="right", va="bottom", fontsize=6.0, color=COLORS["ink"])
-
-ax.set_yscale("log")
-ax.set_xlim(0, 0.95)
-ax.set_ylim(0.7, 30)
-ax.set_xlabel("validated coverage f  (share of cases settled without escalation)", fontsize=7)
-ax.set_ylabel("review service-work speedup", fontsize=7)
-ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
-ax.set_yticks([1, 2, 5, 10, 20])
-ax.set_yticklabels(["1x", "2x", "5x", "10x", "20x"], fontsize=6.4)
-ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.4)
-ax.grid(axis="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-legend = ax.legend(
-    loc="lower left",
-    bbox_to_anchor=(0.0, 1.02),
-    fontsize=6.0,
-    frameon=True,
-    facecolor="white",
-    edgecolor="white",
-    framealpha=0.92,
-    handlelength=1.6,
-    borderpad=0.15,
-    labelspacing=0.3,
-    ncol=1,
-)
-for text in legend.get_texts():
-    text.set_color(COLORS["ink"])
-
-plt.show()
-plt.close(fig)
-```
-
-Surrogate screening speedup is fundamentally bounded by validated coverage; unsettled comparisons incur full compiler-connected RTL reference costs. Screening-speedup claims must provide explicit cost ratios, class-specific error bounds, and confidence calculations backing coverage estimates, reporting conservative lower confidence bounds under predeclared sampling procedures. This service-work model does not predict wall-clock iteration time or full workflow throughput, as queueing delays, simulation cluster capacity, licensing limits, failed runs, and human review cycles sit outside the model. Consequently, each transferred result remains strictly attached to the exact hardware and software versions evaluated.
-
 ## Version Dependencies and Interface Contracts
+
+The last row of @tbl-ch9-source-target, software turnover, is the shift with the shortest lifetime and the one a transfer most often leaves out. The offload economics that @sec-design-loop-no-longer-scales works out with the LogCA model locate an accelerator's break-even point in its hardware parameters. The host runtime and compiler decide where a workload sits relative to that point, by fusing operations into payloads large enough to amortize invocation overhead and by eliminating the off-chip intermediate allocations that pull operational intensity below the link's balance point. A transferred offload result therefore carries a compiler version inside it. Move the kernel to a target whose compiler fuses less, and the same accelerator lands on the wrong side of break-even with no hardware change at all. An isolated kernel speedup becomes a transferred result only when compiler-generated code executes on the target under a pinned toolchain, with numerics, memory-ordering semantics, application binary interfaces (ABIs), and device contracts preserved, which is why the software path is a transfer unit in its own right (@tbl-ch9-transfer-map).
 
 Because architectural claims depend on tightly coupled compiler and microarchitectural pairings, transferred hardware–software results remain valid only for the exact version pair that produced them. Modifying hardware snapshots (NPU array geometries, CPU ISA configs) or software stacks (Triton passes, LLVM lowering targets) breaks underlying invariants. Requalifying one side requires recording the other to preserve the causal chain. Cross-layer optimizations, such as memory-aware algorithmic tiling (FlashAttention [@DaoEtAl2022FlashAttention]) and narrow numerical formats (Microscaling / MX formats [@RouhaniEtAl2023Microscaling]), derive performance from tightly coupled algorithms, numerical formats, spatial mappings, compiler stacks, and hardware configurations. Modifying any layer reopens dependent latency, bandwidth, accuracy, and efficiency claims.
 
@@ -457,15 +202,20 @@ Deployment observations motivate calibration studies for subsequent hardware gen
 
 ## Cross-Stack Pattern Transfer
 
-The preceding analyses establish the technical machinery for cross-stack transfer: dependency isolation, LogCA offload bounds, compiler lowering paths, multi-tier screening cascades, and version-paired evaluation. Bringing these methods together on the Lighthouse spatial-tracking target operationalizes the five-stage transfer test, structuring unit actions and verification requirements into an executable study.
+Applied to the Lighthouse spatial-tracking target, the transfer test turns the array study's record into an executable target study. The admission check comes first. The source study compared five simulated array shapes on a local ratio of cycles to utilization and retained a 32 by 32 array as a local reference; the target evaluates freezing an RTL-facing array, compiler-visible tiling, and memory interfaces under a 3\ W TDP envelope. The workload shift is distributional, the introduction of Triton/LLVM lowering, RTL synthesis, and physical design is a component shift, and the change in artifact boundary and error cost makes the target a new design problem. The four stages then run on that footing.
 
-1. **Compare source and target decisions:** The source study compared five simulated array shapes against a local score ratio of cycles to utilization, retaining a 32 by 32 array as a local reference. The target evaluates freezing an RTL-facing array, compiler-visible tiling, and memory interfaces under a 3\ W TDP envelope. Workload shifts are distributional, while introducing Triton/LLVM lowering, RTL synthesis, and physical design creates component shifts. These differences instantiate a new architectural design problem.
-2. **Partition the source into transfer units:** The source architecture is partitioned into modular transfer units: historical records, workload definitions, project state representations, proposing methods, the SCALE-Sim screen, tool interfaces, candidate artifacts, and conclusions.
-3. **Isolate the affected slice:** Divergence is traced across workload distributions, compiler mappings, executable paths, process libraries, physical checks, and power targets. Source simulator outputs serve as historical data but do not provide implementation evidence.
-4. **Assign target actions:** Historical artifacts are reused, workload and project states refreshed, target alternatives re-evaluated, screening tools requalified, interfaces adapted, learned components retrained where support degrades, and direct transfer of source recommendations rejected.
-5. **Enforce target checks and test transfer benefits:** Every changed dependency is paired with a target check observing its specific risk, with integration checks enforced at component boundaries. Claimed transfer benefits are validated against matched target-only baselines.
+1. **Partition the source into transfer units:** The source architecture is partitioned into modular transfer units: historical records, workload definitions, project state representations, proposing methods, the SCALE-Sim screen, tool interfaces, candidate artifacts, and conclusions.
+2. **Isolate the affected slice:** Divergence is traced across workload distributions, compiler mappings, executable paths, process libraries, physical checks, and power targets. Source simulator outputs serve as historical data but do not provide implementation evidence.
+3. **Assign target actions:** Historical artifacts are reused, workload and project states refreshed, target alternatives re-evaluated, screening tools requalified, interfaces adapted, learned components retrained where support degrades, and direct transfer of source recommendations rejected.
+4. **Enforce target checks and test transfer benefits:** Every changed dependency is paired with a target check observing its specific risk, with integration checks enforced at component boundaries. Claimed transfer benefits are validated against matched target-only baselines.
 
-These five steps structure the study but do not authorize an array or interface freeze; until legal target candidate sets and credible comparators are declared, the target decision remains open. Target obligations pair minimum tests with explicit claim boundaries (@tbl-ch9-target-tests), ensuring unverified assumptions are excluded from generalized claims.
+The test structures the study but does not authorize an array or interface freeze; until legal target candidate sets and credible comparators are declared, the target decision remains open.
+
+<!-- AUTHOR-THESIS DRAFT 2026-08-31: a worked transfer in which a carried unit and a retired unit make the target verdict differ from the source verdict; built only from the ch8 array study and the Lighthouse target already in this chapter -->
+Two units from the array study show the test changing a verdict rather than decorating one. The SCALE-Sim wrapper and the five candidate identities are carried. Their invariant, that a given shape and mapping return the same cycle and utilization counts on rerun, survives the move to the Lighthouse target, so the target check is a rerun under the pinned tool version, and the wrapper passes it as a source-study tool. The source decision rule does not survive. The source ranked the five shapes on a ratio of cycles to utilization, and that comparator has no term for the quantity the 3\ W target actually spends on an array, the word traffic across the memory interface, which the source record modeled and left out of its score (@sec-running-the-loop). The rule is a conclusion-bearing unit, so the last row of the transfer map applies to it, and that row offers only narrowing or rejection. Rejected, it takes the source verdict with it. The source study ended with the 32 by 32 array retained as its reference. The target study, scoring the same five shapes under a rule that charges their modeled traffic against the interface, returns no admitted shape and holds the 32 by 32 as a provisional fallback until the memory-system check runs. Nothing in the source record was wrong. The same five candidates, carried intact, returned a different answer because the unit that carried the verdict was the one that could not move.
+<!-- END DRAFT -->
+
+Target obligations pair minimum tests with explicit claim boundaries (@tbl-ch9-target-tests), and an obligation left untested stays out of every generalized claim.
 
 | **Target obligation** | **Minimum test** | **Boundary if absent** |
 | --- | --- | --- |
@@ -481,9 +231,9 @@ These five steps structure the study but do not authorize an array or interface 
 | **Operational readiness** | Confirm tool access, operator challenge capacity, and recorded decision authority. | Cannot claim transferred workflow is operable, challengeable, or capable of supporting commitment. |
 : **Target obligations define required measurements.** Untested boundaries remain explicit in the architectural record. {#tbl-ch9-target-tests tbl-colwidths="[25,45,30]"}
 
-These minimum tests are essential to avoid false confidence when crossing abstraction boundaries. Without explicit claim boundaries, the risk of negative transfer increases, allowing an unverified heuristic to overwrite a carefully tuned baseline. Operational readiness ensures that the organizational capacity exists to maintain these newly transferred components throughout the product lifecycle.
+One row deserves a word because its unit is the cheapest to carry and the easiest to over-trust. A cheap screen such as SCALE-Sim transfers as an empirical check, never as a verdict. Its validated coverage on the target, the share of comparisons it settles within declared error against a reference that can observe the property at risk, is measured anew, and the screening economics that @sec-methods-generation-prediction-optimization works out apply only to that target-measured coverage.
 
-Three representative scenarios illustrate how the five-stage transfer test scales across physical design, software optimization, and silicon failure (@tbl-ch9-transfer-stress-tests): a physical-design case (learned congestion prediction across shifting PDKs using CircuitNet [@ChaiEtAl2022CircuitNet] and ChiPBench [@WangEtAl2025ChiPBench]), vendor-reported software optimization (NVIDIA H100 MLPerf results [@EassaEryilmaz2023H100MLPerfSoftware]), and physical silicon defects (Intel Cougar Point SATA degradation [@Intel2011CougarPoint]).
+Three representative scenarios illustrate how the transfer test scales across physical design, software optimization, and silicon failure (@tbl-ch9-transfer-stress-tests): a physical-design case (learned congestion prediction across shifting PDKs using CircuitNet [@ChaiEtAl2022CircuitNet] and ChiPBench [@WangEtAl2025ChiPBench]), vendor-reported software optimization (NVIDIA H100 MLPerf results [@EassaEryilmaz2023H100MLPerfSoftware]), and physical silicon defects (Intel Cougar Point SATA degradation [@Intel2011CougarPoint]).
 
 | **Transfer unit** | **Changed dependency** | **Valid action** | **Required target check** |
 | --- | --- | --- | --- |
@@ -491,8 +241,6 @@ Three representative scenarios illustrate how the five-stage transfer test scale
 | **H100 software optimization results across MLPerf Training v2.1/v3.0** [@EassaEryilmaz2023H100MLPerfSoftware] | Subsequent compiler (Triton, LLVM), library, workload, or hardware generation alters configuration. | Constrain published improvement to reported versions/workloads; rerun comparison for new pair. | Repeat end-to-end workload measurement, pinning hardware and software versions under identical result definitions. |
 | **Cougar Point containment and correction results** [@Intel2011CougarPoint] | Target defect and remediation mechanisms differ. Intel required revised silicon and replacement programs. | Reject firmware-only remedies for physical silicon defects; deploy structurally matched remediation. | Exercise corrected silicon and containment strategies against the target failure class before claiming correction. |
 : **Transfer tests apply across learned, software, and physical components.** Actions follow changed dependencies, and target checks observe specific claimed failures or improvements. {#tbl-ch9-transfer-stress-tests tbl-colwidths="[22,26,24,28]"}
-
-These diverse scenarios reinforce a universal architectural truth: transferring artifacts never grants immunity from evaluating target-specific consequences. Whether the component is a sophisticated graph neural network for layout prediction or a microcode patch for silicon errata, the transferred logic must confront the exact constraints of the new system.
 
 Transferring components does not alter decision rights. Automated systems propose or screen candidates within declared studies, while final freezes, waivers, signoffs, and tapeout commitments remain strictly owned by named architectural roles (@sec-what-architect-owns). The source study structure and reference candidate move forward to accelerate target exploration, while the original source conclusion remains isolated until qualified target evidence is established.
 
@@ -502,23 +250,21 @@ Transferring architectural patterns, learned surrogates, or acceleration schemes
 
 - **Transferring source conclusions without requalifying target artifacts:** Assuming that a performance win, optimization ratio, or trade-off conclusion validated on a source process node or workload automatically holds in a new target context. While source candidate identities and execution scripts can be transferred, microarchitectural conclusions do not transfer across boundary shifts in standard-cell libraries, ISA lowerings such as Triton to RVV 1.0, or memory controllers.
 
-- **Violating LogCA offload bounds in accelerator design:** Evaluating host-to-accelerator offload patterns using simplified execution speedup estimates while ignoring the communication terms that LogCA-style models make explicit [@AltafWood2017LogCA]. Architectural models that omit latency, overhead, and transfer granularity across PCIe or CXL interconnects yield unrealistic offload efficiency metrics, concealing DMA setup costs and host-side synchronization stalls.
+- **Carrying an offload result without its compiler version:** Treating a host-to-accelerator speedup measured under one toolchain as a property of the accelerator. The break-even payload and the operational intensity a kernel reaches are set by the compiler's fusion and allocation decisions as much as by the interconnect, so the same block can lose its speedup on a target whose compiler fuses less, with no hardware change involved.
 
 - **Conflating limited requalification with decision reformulation:** Failing to distinguish between updating dependent checks under localized drift versus reformulating a fundamentally altered design decision. Treating shifted objective semantics or new packaging constraints as minor parameter drift leads to improper model recalibration, while treating minor workload adjustments as ground-up redesigns wastes compute on redundant verification.
 
-- **Misapplying selective classification math to cheap-screen surrogates:** Deploying fast learned surrogates for candidate screening without establishing selective classification coverage and error bounds [@ElYanivWiener2010SelectiveClassification]. Evaluating cheap proxy models without defining explicit abstain thresholds or computing coverage-dependent error rates causes surrogates to issue high-confidence predictions in out-of-distribution design regions, steering candidate selection toward flawed microarchitectures.
+- **Reading a shift signal as a diagnosis:** Treating a dataset-shift detector's divergence report as a root cause or as authorization to adapt. The signal reopens the affected support claim and nothing more; which dependency broke, and whether the unit is recalibrated, retrained, or retired, is settled by dependency analysis and a target check, not by the detector.
 
 - **Evaluating transfer benefit against unmatched baselines:** Claiming architectural improvement from an AI-native or transferred workflow by comparing it against an unoptimized or mismatched target baseline. An authentic transfer evaluation requires comparing the ported design against an equally tuned target-only baseline while fully accounting for adaptation overhead, verification contracts, and physical signoff costs.
 
 ## Open Questions
 
-Transferring architectural patterns across workloads, compiler toolchains, and semiconductor process nodes depends on identifying durable invariants and bounding offload overheads. These boundary conditions give rise to five open research questions in cross-stack transferability.
+Transferring architectural patterns across workloads, compiler toolchains, and semiconductor process nodes depends on identifying which invariants survive the move. Four open questions follow from that dependence.
 
 - **How do you detect when a transferred surrogate silently discards the best design?** Lightweight surrogates trained on a source design or process node accelerate candidate screening on a new target. Under workload or technology distribution shift, the surrogate's false-rejection rate spikes unpredictably, pruning viable architectures without triggering error flags. Whether active-sampling calibration can bound false-rejection risk under transfer, or transferred proxies must periodically escalate a random sample of rejected candidates to full cycle-accurate simulation to detect filter decay, defines the screening dilemma.
 
-- **Why does multi-tier screening speedup collapse when models share structural blind spots?** Multi-tier exploration assumes that fast analytical proxies and high-fidelity simulators fail independently, routing only ambiguous edge cases to expensive simulation. When both tiers share underlying cache models, basic-block traces, or instruction-level assumptions, their errors correlate and obscure failure modes. Whether formal risk-coverage metrics can quantify error correlation between evaluation tiers dynamically, or shared abstraction debt imposes a fundamental mathematical ceiling on multi-tier speedup, defines an open evaluation limit.
-
-- **When does compiler fusion turn an accelerator win into a net system slowdown?** Offloading compute kernels to specialized accelerators yields high theoretical speedup on isolated operations. When the host compiler fuses neighboring operators and tiles loops in host memory, the offload granularity shrinks, causing driver invocation latency and transport energy across PCIe, CXL, or UCIe interfaces to dominate total runtime. Whether closed-form analytical bounds can predict the exact compiler fusion depth where offload overhead overtakes hardware acceleration, or offload profitability can only be evaluated through full-stack software co-compilation, remains an open systems question.
+- **How do you prove a hardware candidate won on microarchitecture rather than compiler luck?** Pinning the hardware revision and the compiler snapshot together removes software maturity from a comparison, and the version-paired record then attributes whatever difference remains to the hardware. It cannot. A specialized accelerator candidate often beats its baseline on total cycle count because its tensor dimensions happened to divide evenly into the pinned compiler's loop-tiling and unrolling heuristics, so the gain belongs to an alignment between one array shape and one scheduler rather than to a superior spatial organization, and the pinned toolchain preserves that alignment as faithfully as it preserves everything else. Whether automated sensitivity probes that perturb tile sizes and problem dimensions can separate the spatial hardware contribution from the scheduling artifact, or whether a fair hardware comparison must co-optimize the tiling schedule for every candidate before any verdict is read, is a question the version-paired record cannot answer on its own.
 
 - **Which graph invariants survive when transferring a physical model across process nodes?** Graph neural networks predict routing congestion and wire delays effectively within a single fabrication node. Migrating from a FinFET node to an advanced gate-all-around nanosheet node alters metal-layer stack resistance ratios, design-rule density, and pin-access constraints completely. Whether graph representations can isolate scale-invariant netlist topologies that transfer across PDKs, or cross-node physical prediction is an illusion that forces every model to be retrained from scratch on target foundry data, marks the boundary of physical model transfer.
 
@@ -526,19 +272,16 @@ Transferring architectural patterns across workloads, compiler toolchains, and s
 
 ## Summary
 
-The five-stage transfer test converts source-to-target differences into a new architectural study by assigning a target action to each unit (whether carrying forward unchanged components, updating representations, or retiring stale priors) and pairing every changed dependency with a target check capable of observing the resulting risk. Applying this framework to the Lighthouse study across all eight requirement domains (@sec-intent-vs-spec) requires treating retained simulator telemetry and candidate identities strictly as historical baselines. Systematically refreshing the workload, ISA contracts, compiler toolchains, timing models, process parameters, power envelopes, and formal verification checks prevents local source recommendations from substituting for physical implementation evidence.
+The transfer test converts source-to-target differences into a new architectural study. An admission check asks whether the decision itself survived the move; four stages then assign every unit an action, from carrying an unchanged tool wrapper to retiring a stale prior, and pair every changed dependency with a target check able to observe the resulting risk. Applied to the Lighthouse study across its requirement domains (@sec-intent-vs-spec), the test treats retained simulator outputs and candidate identities as historical baselines and rebuilds workload coverage, ISA contracts, compiler toolchains, timing models, process parameters, power envelopes, and formal checks on the target rather than inheriting the source recommendation.
 
-Transfer must also survive the product path. A local speedup counts only once charged for invocation overhead, offload granularity, and the compiler and software path required to reach the accelerated block, because an unamortized offload leaves a faster component sitting inside a slower product. Establishing compiler narrow waists (such as Triton MLIR) prevents software porting walls from stalling accelerator adoption. Six key takeaways define pattern transferability across Architecture 2.0:
+Transfer must also survive the software path. A transferred offload or kernel result carries a compiler version inside it, and a comparison that pins the hardware but not the toolchain reads compiler maturity as a hardware gain.
 
 ::: {.callout-takeaways}
-- **Invariant preservation.** Data sources, models, tool paths, and verification checks remain reusable strictly while core invariants and underlying dependencies hold across target workloads, ISAs, and process nodes.
-- **Structured five-stage transfer testing.** Transfer maps partition system dependencies and assign targeted actions (carry, update, retrain, recalibrate, replace, retire), forcing fresh target checks whenever structural boundaries shift.
-- **LogCA offload break-even bounds.** Hardware acceleration delivers net system speedup only when payload granularity exceeds break-even thresholds ($g^*$) and operational intensity exceeds the link balance point ($\text{OI}^*$), avoiding the unamortized offload wall.
-- **Compiler narrow waists absorb the porting wall.** Intermediate representations (such as Triton MLIR lowering to dynamic RVV 1.0 VLA strip-mining) decouple algorithmic intent from target code generation, balancing register pressure ($LMUL$) against instruction throughput.
-- **Screening ceilings and version-paired evaluation.** Multi-tier screening speedup is mathematically capped by validated coverage ($1/(1-f)$), and evaluation must pair immutable hardware and compiler snapshots to prevent mistaking in-place software dividends for microarchitectural superiority.
-- **Conclusion isolation.** Historical source records carry forward as valuable provenance, while prior architectural conclusions remain isolated and withheld until newly established target evidence confirms them in the target context.
+- **Components move, conclusions do not.** Data sources, models, tool paths, and checks remain reusable while their invariants and dependencies hold; a source conclusion stays attached to its source conditions until target evidence re-establishes it.
+- **The transfer test.** An admission check on the decision, then four stages that partition the source, isolate the affected slice, assign carry, update, retrain, recalibrate, replace, or retire, and enforce target checks.
+- **Materiality is claim-specific.** A change reopens a claim when it alters the candidate identity, executable path, measured quantity, objective, decision rule, ranking, constraint verdict, or physical mechanism; magnitude alone decides nothing.
+- **Transfer benefit needs a matched arm.** A carried prior earns its place only against a target-only arm with the same tasks, budgets, and stopping rules, with adaptation and requalification charged to the transfer.
+- **Version-paired evaluation.** Hardware and software snapshots are pinned together, because an in-place software dividend can rival a generational silicon step and an unpinned comparison cannot attribute the difference to the hardware.
 :::
-
-These transfer takeaways ensure that learned optimizations and microarchitectural patterns generalize across process nodes, ISA extensions, and workload shifts without compromising empirical validity. Isolating prior conclusions and re-evaluating LogCA offload boundaries prevents historical assumptions from corrupting new silicon programs.
 
 Carrying forward this source-to-target map and versioned hardware–software state sets up the broader program question explored in @sec-evaluating-agentic-architect: across repeated and varied architectural studies, does a configured AI-native design system actually improve the final hardware result, reduce the total engineering cost of achieving it, or deliver on both fronts?

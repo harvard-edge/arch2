@@ -43,6 +43,7 @@ local acronyms = {
   ["FIRRTL"] = "Flexible Intermediate Representation for RTL: An intermediate representation designed for hardware digital design and compiler passes in the Chisel and CIRCT ecosystems.",
   ["FP8"] = "8-bit floating-point: A low-precision floating-point arithmetic format standardized for high-throughput deep learning training and inference.",
   ["FPGA"] = "field-programmable gate array: A reconfigurable integrated circuit containing programmable logic blocks and routing channels configured post-fabrication.",
+  ["FPS"] = "frames per second: A frame-rate unit for real-time rendering and perception pipelines, used to state a display or sensor deadline.",
   ["FSDB"] = "Fast Signal Database: A high-performance proprietary binary waveform database format widely used for storing simulation and emulation signal traces.",
   ["GAAFET"] = "gate-all-around field-effect transistor: An advanced transistor architecture where the gate material surrounds all sides of vertically stacked nanosheet or nanowire conduction channels.",
   ["GDDR5"] = "Graphics Double Data Rate 5: A high-bandwidth synchronous graphics random-access memory interface standard tailored for parallel data-intensive computing.",

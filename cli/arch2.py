@@ -5109,6 +5109,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"first-in,?\s+first-out",
         False,
     ),
+    "FPS": (
+        "frames per second",
+        False,
+        "an",
+        "hardware",
+        "A frame-rate unit for real-time rendering and perception pipelines, used to state a display or sensor deadline.",
+        r"frames per second",
+        False,
+    ),
     "FPGA": (
         "field-programmable gate array",
         False,

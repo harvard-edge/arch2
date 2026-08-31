@@ -10,7 +10,6 @@ Active hand-authored figures:
 
 Executable Quarto figures in the chapter:
 
-- `fig-eval-fidelity-latency`: matrix associating evaluation tool classes with their representative property focus and fidelity trade-offs.
 
 Deferred and unused in the current chapter:
 
