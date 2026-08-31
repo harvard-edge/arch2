@@ -5533,6 +5533,24 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"single[- ]event upset",
         True,
     ),
+    "SIMD": (
+        "single instruction, multiple data",
+        False,
+        "a",
+        "hardware",
+        "An execution model in which one instruction applies the same operation to many data elements in parallel across a wide vector register.",
+        r"single instruction, multiple data",
+        False,
+    ),
+    "SPMD": (
+        "single-program, multiple-data",
+        False,
+        "a",
+        "hardware",
+        "A parallel programming model in which every thread runs the same program over a distinct slice of the data, indexed by its own thread identifier.",
+        r"single\-program, multiple\-data",
+        False,
+    ),
     "SNM": (
         "static noise margin",
         False,
@@ -6470,6 +6488,72 @@ def run_glossary_generation() -> None:
     console.print(f"[green]generated[/green] {_relative(LUA_GLOSSARY_FILTER_PATH)}")
 
 
+# Function words that an acronym skips over, so they never begin an expansion
+# and never contribute a letter ("dynamic voltage and frequency scaling" -> DVFS).
+_EXPANSION_STOPWORDS: frozenset[str] = frozenset(
+    {"a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"}
+)
+
+# Longest run of words an expansion is allowed to span before the parenthetical.
+_EXPANSION_MAX_WORDS = 12
+
+
+def _expansion_spells_abbr(words: list[str], abbr: str) -> bool:
+    """Report whether the initials of ``words`` spell ``abbr``.
+
+    Each word contributes its initial. A hyphenated word contributes one
+    initial per part, so "domain-specific architecture" spells DSA. An
+    all-caps part contributes every one of its letters, so "Flexible
+    Intermediate Representation for RTL" spells FIRRTL. An internal capital
+    may stand in for the initial, so "Advanced eXtensible Interface 5"
+    spells AXI5.
+    """
+    target = abbr.upper()
+    pos = 0
+    for word in words:
+        for part in re.split(r"[-‐-―/]", word):
+            part = part.strip("'’\".,;:()[]")
+            if not part or not part[0].isalnum():
+                continue
+            if pos >= len(target):
+                return False
+            if len(part) > 1 and part.isupper() and target.startswith(part, pos):
+                pos += len(part)
+                continue
+            if part[0].upper() == target[pos]:
+                pos += 1
+                continue
+            inner = next((c for c in part[1:] if c.isupper()), None)
+            if inner is not None and inner == target[pos]:
+                pos += 1
+                continue
+            return False
+    return pos == len(target)
+
+
+def _match_prose_expansion(preceding: str, abbr: str) -> str | None:
+    """Return the words immediately before ``(abbr)`` that ``abbr`` abbreviates.
+
+    Scans right to left and returns the *shortest* window that spells the
+    acronym, so "chips and Google Tensor Processing Unit (TPU)" yields
+    "Tensor Processing Unit" rather than everything back to the last comma.
+    Returns None when no window spells it, which is the signal that the
+    parenthetical is not an expansion at all.
+    """
+    tokens = preceding.split()
+    if not tokens:
+        return None
+    window = tokens[-_EXPANSION_MAX_WORDS:]
+    for start in range(len(window) - 1, -1, -1):
+        if window[start].lower() in _EXPANSION_STOPWORDS:
+            continue
+        candidate = window[start:]
+        significant = [w for w in candidate if w.lower() not in _EXPANSION_STOPWORDS]
+        if significant and _expansion_spells_abbr(significant, abbr):
+            return " ".join(candidate)
+    return None
+
+
 def abbreviations_findings(paths: list[Path] | None = None) -> list[Finding]:
     """Validate abbreviations against CMOS Chapter 10 standards and first-mention rules.
 
@@ -6644,12 +6728,8 @@ def abbreviations_findings(paths: list[Path] | None = None) -> list[Finding]:
             if in_fence or stripped.startswith("<!--") or stripped.startswith(":::"):
                 continue
 
-            for match in re.finditer(
-                r"\b([A-Za-z0-9][A-Za-z0-9\s\-]{2,60}?)\s*\(([A-Z0-9]{2,8})\)",
-                line,
-            ):
-                expansion = match.group(1).strip()
-                abbr = match.group(2).strip()
+            for match in re.finditer(r"\(([A-Z0-9]{2,8})\)", line):
+                abbr = match.group(1).strip()
 
                 # Skip registered entries or recognized plurals of registered entries
                 base_abbr = (
@@ -6664,11 +6744,13 @@ def abbreviations_findings(paths: list[Path] | None = None) -> list[Finding]:
                 ):
                     continue
 
-                # Verify initial correspondence between acronym and expansion words
-                words = [w for w in re.split(r"[\s\-]+", expansion) if w]
-                initials = "".join(w[0].upper() for w in words if w[0].isalpha())
-                if not (abbr[0] in initials or initials.startswith(abbr[:2])):
+                # Recover the words the acronym actually abbreviates. A None
+                # result means this parenthetical is not an expansion (a bare
+                # citation, a unit, an aside), so there is nothing to register.
+                expansion = _match_prose_expansion(line[: match.start()], abbr)
+                if expansion is None:
                     continue
+                words = [w for w in re.split(r"[\s\-]+", expansion) if w]
 
                 # Recommend proper article and formatting snippet
                 first_letter = abbr[0].upper()

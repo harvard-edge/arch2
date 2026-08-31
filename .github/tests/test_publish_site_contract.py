@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -87,10 +89,15 @@ class PublishSiteContractTests(unittest.TestCase):
         self.assertIn(f"test -f _site/{REGISTRY_SNAPSHOT}", publish_script)
 
     def run_guard(
-        self, cwd: Path, ref: str, revision: str
+        self, cwd: Path, ref: str, revision: str, **overrides: str
     ) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment.update({"GITHUB_REF": ref, "GITHUB_SHA": revision})
+        # Refusals are settled in one pass here; the real workflow waits out
+        # the gap between the tag push and the main push.
+        environment.setdefault("PUBLISH_GUARD_MAIN_WAIT_ATTEMPTS", "1")
+        environment.setdefault("PUBLISH_GUARD_MAIN_WAIT_SECONDS", "0")
+        environment.update(overrides)
         return subprocess.run(
             ["bash", "-c", self.guard_script],
             cwd=cwd,
@@ -188,6 +195,37 @@ class PublishSiteContractTests(unittest.TestCase):
                 with self.subTest(ref=ref):
                     result = self.run_guard(runner, ref, main_revision)
                     self.assertNotEqual(result.returncode, 0)
+
+    def test_guard_waits_for_the_main_push_that_follows_a_release_tag(self) -> None:
+        """A release tag that lands moments before its main push still publishes."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runner, main_revision, unmerged_revision = self.make_repository(root)
+
+            # Reproduce the race: origin/main still points at the previous
+            # release when the tag event arrives, and catches up mid-wait.
+            origin = root / "origin.git"
+            run_git(origin, "update-ref", "refs/heads/main", unmerged_revision)
+
+            def advance_main_after_first_attempt() -> None:
+                time.sleep(1)
+                run_git(origin, "update-ref", "refs/heads/main", main_revision)
+
+            catch_up = threading.Thread(target=advance_main_after_first_attempt)
+            catch_up.start()
+            try:
+                result = self.run_guard(
+                    runner,
+                    "refs/tags/v1.2.3",
+                    main_revision,
+                    PUBLISH_GUARD_MAIN_WAIT_ATTEMPTS="6",
+                    PUBLISH_GUARD_MAIN_WAIT_SECONDS="1",
+                )
+            finally:
+                catch_up.join()
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Authorized stable release tag", result.stdout)
 
     def test_stable_tag_outside_main_history_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
