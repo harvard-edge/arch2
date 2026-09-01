@@ -2837,13 +2837,14 @@ def html_findings(html_path: Path = HTML_PATH) -> list[Finding]:
                     "HTML contains a PDF image reference; use SVG/PNG for browser figures",
                 )
             )
+        cleaned_text = re.sub(r"<!--.*?-->", "", page_text, flags=re.DOTALL)
         for pattern in (
             r"class=[\"'][^\"']*quarto-unresolved-ref",
             r"\?(?:sec|fig|tbl|eq)-[A-Za-z0-9_-]+",
             r"@(?:sec|chap|fig|tbl|eq)-[A-Za-z0-9_-]+",
             r"\?\?\?",
         ):
-            if re.search(pattern, page_text):
+            if re.search(pattern, cleaned_text):
                 findings.append(
                     Finding(
                         "error",
