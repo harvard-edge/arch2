@@ -6491,7 +6491,22 @@ def run_glossary_generation() -> None:
 # Function words that an acronym skips over, so they never begin an expansion
 # and never contribute a letter ("dynamic voltage and frequency scaling" -> DVFS).
 _EXPANSION_STOPWORDS: frozenset[str] = frozenset(
-    {"a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"}
+    {
+        "a",
+        "an",
+        "and",
+        "at",
+        "by",
+        "for",
+        "from",
+        "in",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
 )
 
 # Longest run of words an expansion is allowed to span before the parenthetical.
