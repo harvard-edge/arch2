@@ -110,6 +110,38 @@ if [[ -d _site/tools ]]; then
   fi
 fi
 
+echo "==> Setting up /pdf route and PDF aliases"
+mkdir -p _site/pdf
+cat > _site/pdf/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=/book/Architecture-2.0.pdf">
+<link rel="canonical" href="https://arch2.mlsysbook.ai/book/Architecture-2.0.pdf">
+<meta name="robots" content="noindex,nofollow">
+<title>Redirecting to Architecture 2.0 PDF…</title>
+<script>window.location.replace("/book/Architecture-2.0.pdf");</script>
+</head>
+<body>
+<p>Redirecting to <a href="/book/Architecture-2.0.pdf">Architecture 2.0 PDF</a>...</p>
+</body>
+</html>
+EOF
+cp _site/pdf/index.html _site/pdf.html
+
+if [[ -f _site/book/Architecture-2.0.pdf ]]; then
+  ln -sf book/Architecture-2.0.pdf _site/Architecture-2.0.pdf
+fi
+if [[ -f _site/book/Architecture-2.0.epub ]]; then
+  ln -sf book/Architecture-2.0.epub _site/Architecture-2.0.epub
+fi
+
+cat >> _site/_redirects <<'EOF'
+/pdf /book/Architecture-2.0.pdf 302
+/pdf/ /book/Architecture-2.0.pdf 302
+EOF
+
 python3 .github/scripts/check_site_accessibility.py \
   _site/*.html _site/tools/*.html
 python3 .github/scripts/check_site_links.py _site
