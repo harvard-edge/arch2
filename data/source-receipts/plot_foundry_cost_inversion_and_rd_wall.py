@@ -75,7 +75,7 @@ def main():
     # 1. Load Node Economics Data
     nodes = []
     with open(node_csv, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             nodes.append(
                 {
@@ -92,7 +92,7 @@ def main():
     # 2. Load SEC EDGAR R&D Data
     sec_records = []
     with open(sec_csv, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             sec_records.append(
                 {

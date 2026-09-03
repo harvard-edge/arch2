@@ -81,7 +81,7 @@ def main():
     tt_pdk_group = []
 
     with open(tt_csv, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             tt_runs.append(row["RunName"])
             close_d = row["CloseDate"]

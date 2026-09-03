@@ -23,7 +23,7 @@ from book._python.plots import COLORS, apply_style
 
 def load_csv(filepath: Path) -> list[dict]:
     with open(filepath, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         return list(reader)
 
 

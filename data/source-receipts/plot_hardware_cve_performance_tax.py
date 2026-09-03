@@ -63,7 +63,7 @@ def load_cve_receipt(csv_path: Path) -> List[Dict[str, Any]]:
     records = []
     with open(csv_path, "r", encoding="utf-8") as f:
         lines = [line for line in f if not line.strip().startswith("#")]
-        reader = csv.DictReader(lines)
+        reader = csv.DictReader(l for l in lines if not l.startswith("#"))
         for r in reader:
             records.append(
                 {

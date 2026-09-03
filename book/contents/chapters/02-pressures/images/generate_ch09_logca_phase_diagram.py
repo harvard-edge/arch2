@@ -34,7 +34,7 @@ def generate_figure(output_dir: Path) -> Path:
     specs_path = receipts_dir / "chapter9-interconnect-logca-specs.csv"
 
     with open(specs_path, "r", encoding="utf-8") as f:
-        specs = list(csv.DictReader(f))
+        specs = list(csv.DictReader(l for l in f if not l.startswith("#")))
 
     fig, ax = plt.subplots(figsize=(6.8, 4.0))
     fig.subplots_adjust(left=0.11, right=0.96, top=0.88, bottom=0.15)

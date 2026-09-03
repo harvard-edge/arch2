@@ -57,7 +57,7 @@ def main():
     families = []
 
     with open(csv_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             systems.append(row["ChipSystem"])
             ttft.append(float(row["TTFT_Latency_ms"]))

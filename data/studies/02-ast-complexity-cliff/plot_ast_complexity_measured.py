@@ -51,7 +51,7 @@ def resolve_output_base() -> Path:
 def read_records() -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     with INPUT_CSV.open(encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
+        for row in csv.DictReader(l for l in handle if not l.startswith("#")):
             records.append(
                 {
                     "category": row["corpus_category"],

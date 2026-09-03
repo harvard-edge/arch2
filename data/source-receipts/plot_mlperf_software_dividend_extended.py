@@ -34,7 +34,7 @@ def load_receipt(filename: str) -> list[dict]:
     with open(path, "r", encoding="utf-8") as f:
         # Skip comment lines starting with '#'
         lines = [line for line in f if not line.startswith("#")]
-        reader = csv.DictReader(lines)
+        reader = csv.DictReader(l for l in lines if not l.startswith("#"))
         for r in reader:
             rows.append(r)
     return rows

@@ -58,7 +58,7 @@ def main():
     receipt_rows = []
 
     with open(raw_csv, "r", encoding="utf-8-sig", errors="ignore", newline="") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             try:
                 company = row["Company"].strip()

@@ -471,7 +471,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     if args.resume and CSV_PATH.exists():
         with CSV_PATH.open(encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle))
+            rows = list(csv.DictReader(l for l in handle if not l.startswith("#")))
         if SUMMARY_PATH.exists():
             previous_summary = read_json(SUMMARY_PATH)
             start_timestamp = previous_summary.get("execution", {}).get(

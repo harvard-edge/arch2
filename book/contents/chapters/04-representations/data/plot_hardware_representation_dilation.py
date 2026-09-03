@@ -69,7 +69,7 @@ def main():
     # Load data
     rows = []
     with open(csv_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for r in reader:
             rows.append(
                 {

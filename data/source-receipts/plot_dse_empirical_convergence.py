@@ -29,7 +29,7 @@ from _python.plots import COLORS, apply_style, add_note_box
 def load_data(csv_path):
     records = defaultdict(lambda: defaultdict(list))
     with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         for row in reader:
             alg = row["algorithm"]
             step = int(row["evaluation_step"])

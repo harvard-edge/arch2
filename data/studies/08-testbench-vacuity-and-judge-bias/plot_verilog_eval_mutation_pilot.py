@@ -80,7 +80,7 @@ def declare_font_stack(svg_path: Path) -> None:
 
 def read_records() -> list[dict[str, str]]:
     with INPUT_CSV.open(encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+        return list(csv.DictReader(l for l in handle if not l.startswith("#")))
 
 
 def main() -> int:

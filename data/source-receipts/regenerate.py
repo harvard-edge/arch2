@@ -69,7 +69,7 @@ def training_compute():  # ch2
 def accelerator_landscape():  # ch1
     out = []
     with open(SRC / "reuther-laics-2025.csv", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(l for l in f if not l.startswith("#"))
         reader.fieldnames = [fn.strip().lstrip("﻿") for fn in reader.fieldnames]
         for d in reader:
             d = {

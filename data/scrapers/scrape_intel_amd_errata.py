@@ -922,7 +922,7 @@ def main():
         sys.exit(1)
 
     with open(summary_file, mode="r", encoding="utf-8") as f:
-        summary_rows = list(csv.DictReader(f))
+        summary_rows = list(csv.DictReader(l for l in f if not l.startswith("#")))
 
     print(f"Loaded {len(summary_rows)} processor families from longitudinal summary.")
 
