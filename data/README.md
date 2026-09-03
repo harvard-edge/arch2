@@ -22,7 +22,7 @@ data/
 │   ├── README.md                             # Detailed methodology, citation index, and mathematical derivations
 │   ├── regenerate.py                         # Batch driver for derived datasets
 │   ├── granular_processor_errata_taxonomy.csv# N=1,771 itemized processor errata dataset (Track 1)
-│   ├── hardware_ast_complexity_gap.csv       # N=550 hardware module AST complexity gap dataset (Track 2)
+│   ├── hardware_ast_complexity_measured.csv  # N=1,513 parsed RTL module declarations, pyslang 11.0.0 (Track 2)
 │   ├── mlperf_longitudinal_software_dividend.csv # MLCommons fixed-silicon software dividend 2018–2026 (Track 3)
 │   ├── inference_kernel_fragmentation.csv    # Custom kernel proliferation across vLLM, SGLang, TRT-LLM (Track 3)
 │   ├── tinytapeout_democratization_census.csv# 27 shuttle rounds, 4,780+ custom taped-out designs (Track 6)
@@ -59,7 +59,7 @@ python3 data/source-receipts/plot_ai_accelerator_scaling.py
 python3 data/source-receipts/plot_wilson_scissors.py
 python3 data/source-receipts/plot_mlperf_dividend.py
 python3 data/source-receipts/plot_mlperf_software_dividend_extended.py
-python3 data/source-receipts/plot_ast_complexity_cliff.py
+python3 data/studies/02-ast-complexity-cliff/plot_ast_complexity_measured.py
 python3 data/source-receipts/plot_tinytapeout_democratization.py
 python3 data/source-receipts/plot_errata_subsystem_sunburst_and_decay.py
 python3 data/source-receipts/plot_hardware_cve_performance_tax.py

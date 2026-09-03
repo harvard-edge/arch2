@@ -94,25 +94,62 @@ The keynote already uses this file, not the generated one.
 
 ---
 
-## Source 3 · `hardware_ast_complexity_gap.csv`
+## Source 3 · `hardware_ast_complexity_gap.csv`  ·  REPAIRED 2026-09-03
 
-Per-module values are typed into literal tables in
+Per-module values were typed into literal tables in
 `data/scrapers/mine_hardware_ast_complexity.py` rather than parsed from source.
-Published claim: a **175x** AST complexity gap.
+Published claim: a **175.3x** AST complexity gap.
 
-**Published** at `www/data/observatory/hardware_ast_complexity_gap.csv`.
+This file carried a second fabrication signature the other two did not. Its
+header listed "pinned" upstream commits, and they are hand-typed placeholders:
+`a1b2c3d4e5f67890abcdef1234567890abcdef12` at line 73,
+`7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c` at line 100. They resolve to nothing.
+The website shipped a "Download CSV Dataset (N=550)" button beside it, so the
+book invited readers to verify a receipt whose provenance block was invented.
 
-### Contradicted by its own measured replacement
+### What replaced it
 
 `data/studies/02-ast-complexity-cliff/hardware_ast_complexity_measured.csv`
-parses 217 AI-benchmark modules against 1,296 production RTL modules with
-pyslang 11.0.0 from pinned commits, per-file SHA-256 retained, and reports
-**6.7x** with two disclosed sensitivity checks at 4.77x and 4.27x.
+parses 1,513 module declarations with pyslang 11.0.0 from six genuinely pinned
+commits, retaining `source_path` and `source_sha256` per row.
+
+| | Published | Measured |
+| --- | ---: | ---: |
+| Modules | 550 | 1,513 |
+| Benchmark median | 73 AST nodes | 168 syntax nodes |
+| Production median | 12,800 AST nodes | 1,125 syntax nodes |
+| Ratio | 175.3x | **6.70x** (4.77x and 4.27x under two sensitivity checks) |
 
 The direction of the claim survives. The magnitude was overstated by more than
-an order of magnitude.
+an order of magnitude, and three further claims did not survive at all: that
+100% of benchmark modules are flat (RTLLM reaches depth 5 in 16% of modules),
+that production designs span 2 to 12 clock domains with up to 86 asynchronous
+crossings (the measurement supports only a lexical clocking indicator, 5.1%
+against 0.5%), and that SoC top-levels exceed 448,000 nodes.
 
----
+### Reproduction, verified
+
+The measurement reproduces **byte-for-byte across all 1,513 rows** except
+`extraction_timestamp`, on Python 3.11.15 against a run recorded under 3.12.13,
+from a cold clone of all six corpora. Install and run instructions are in
+`data/studies/02-ast-complexity-cliff/REPRODUCE.md`, with dependencies pinned in
+that directory's `requirements.txt`. No container and no EDA license are needed.
+
+### Repairs applied
+
+- Quarantined to `data/synthetic/SYNTHETIC-hardware_ast_complexity_gap.csv` with
+  both fabrication signatures recorded on its first lines.
+- Fabricated figure and its generator removed from `data/source-receipts/`,
+  `data/studies/`, and `www/`.
+- Measured receipts promoted into `data/source-receipts/`.
+- Chapter 4 pre-brief, landing paragraph, caption, alt text, and the Streetlight
+  Effect callout rewritten against the measured values.
+- Site stat card, exhibit figure, Core Takeaway, and download buttons replaced;
+  a "Reproduce This Measurement" link added.
+- Study README, study index, `generate_study_packages.py`, `data/README.md`, and
+  `data/source-receipts/README.md` corrected.
+- `python3 data/validate_provenance.py` reports 0 violations across 47 datasets.
+- `python3 cli/arch2.py check precommit` passes all 13 checks.
 
 ## Site exposure
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import statistics
 import sys
@@ -24,10 +25,27 @@ from book._python.plots import COLORS, apply_style  # noqa: E402
 apply_style()
 
 INPUT_CSV = STUDY_DIR / "hardware_ast_complexity_measured.csv"
-OUTPUT_BASE = STUDY_DIR / "fig_ast_complexity_measured"
+DEFAULT_OUTPUT_BASE = STUDY_DIR / "fig_ast_complexity_measured"
 
 BENCHMARK = "AI benchmark reference RTL"
 PRODUCTION = "Production-oriented open RTL"
+
+
+def resolve_output_base() -> Path:
+    """Where to write the figure twins.
+
+    The chapter needs this figure under its own label, and the study package
+    needs it under the study name. One generator serves both, so the figure
+    the reader sees is always the one this script produced.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output-base",
+        type=Path,
+        default=DEFAULT_OUTPUT_BASE,
+        help="path stem for the .svg/.pdf/.png twins",
+    )
+    return parser.parse_args().output_base
 
 
 def read_records() -> list[dict[str, object]]:
@@ -201,16 +219,17 @@ def main() -> int:
         framealpha=0.96,
     )
 
+    output_base = resolve_output_base()
     for suffix, kwargs in (
         ("svg", {}),
         ("pdf", {}),
         ("png", {"dpi": 300}),
     ):
-        path = OUTPUT_BASE.with_suffix(f".{suffix}")
+        path = output_base.with_suffix(f".{suffix}")
         fig.savefig(path, bbox_inches="tight", **kwargs)
         print(f"generated: {path}")
     plt.close(fig)
-    declare_font_stack(OUTPUT_BASE.with_suffix(".svg"))
+    declare_font_stack(output_base.with_suffix(".svg"))
     return 0
 
 
