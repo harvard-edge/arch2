@@ -179,9 +179,83 @@ these.
    `data/scrapers/mine_verilog_eval_mutation_pilot.py` is a genuine
    Icarus-based harness that has never been run to completion.
 
+## Full receipt audit, completed 2026-09-03
+
+The three sources above were found by hand. Every remaining receipt has now been
+classified, which was the open item this document previously named.
+
+**64 datasets, 0 provenance violations, 0 without a recorded source.**
+
+### Traced to a retained raw upstream file, and verified against it
+
+Six receipts had no recorded provenance but did have their raw upstream download
+retained under `data/source-receipts/sources/`. Each derivation was re-verified
+rather than assumed, and the result written into the receipt header.
+
+| Receipt | Raw source | Verification |
+| --- | --- | --- |
+| `chapter11-task-horizon.csv` | `metr-time-horizon.yaml` | 26/26 p50 values and 26/26 release dates match exactly |
+| `chapter1-swebench-verified.csv` | `epoch-benchmarks.csv` | 35 SWE-Bench verified runs in raw, 35 rows, all scores match exactly |
+| `chapter2-training-compute.csv` | `epoch-notable-models.csv` | 529/529 rows trace by model name |
+| `chapter10-hardware-efficiency.csv` | `epoch-ml-hardware.csv` | 151/151 rows trace by hardware name |
+| `chapter1-accelerator-landscape.csv` | `reuther-laics-2025.csv` | 180/180 on (label, power, peak performance) |
+| `chapter1-reuther-precision-frontier.csv` | `reuther-laics-2025.csv` | 180/180 by company |
+
+### Measurement signature confirmed, harness not retained
+
+Three receipts carry the internal structure of real tool output but no
+generating script survives, so they cannot be reproduced from the repository.
+Each now says so in its own header rather than implying reproducibility.
+
+- `chapter5-dse-empirical-convergence.csv`. 4,000 rows = 4 optimizers x 10 seeds
+  x 100 steps. **498 configurations were evaluated more than once across
+  different algorithms and seeds, and all 498 agree exactly on total cycles.** A
+  generated dataset does not reproduce its own values on repeat configurations.
+  `pe_area` is an exact function of array dimensions in 4,000/4,000 rows.
+- `chapter8_closed_loop_dram_scalesim_data.csv`. `pe_count` equals rows x cols in
+  40/40, and DRAM bursts decompose exactly into hits, empty-bank misses and row
+  conflicts in 40/40.
+- `chapter6-eda-runtime-variance-qor-dispersion.csv`. Also corrected a scope
+  error: `SeedIndex` enumerates 150 distinct ABC pass sequences, not random
+  seeds, so the file measures recipe sensitivity and cannot support a claim
+  about run-to-run nondeterminism at a fixed recipe.
+
+### Constructed illustrations, moved out of the receipts directory
+
+Three files were never fabricated measurements and nothing cited them, but they
+sat in `data/source-receipts/`, where the directory name asserts something they
+could not support. Moved to `data/synthetic/` with markers, unpublished from
+`www/`, plotting scripts moved with them:
+`chapter4-physical-verification-funnel.csv`,
+`chapter4-synthesis-verification-funnel.csv`, `chapter5-dse-convergence.csv`.
+
+The physical-verification funnel is the instructive one. Its stage names invoke
+Verilator, SVA, OpenSTA and OpenROAD beside counts no tool produced. That is the
+same shape as source 3 above, caught before it reached a reader.
+
+### Unverified against any external source, flagged in place
+
+Three receipts assert a source they do not record. Each header now says so and
+says not to cite the file until the upstream identifiers are recorded:
+`chapter2-llm-inference-pareto.csv` (attributes figures to MLPerf Inference
+rounds with no submission IDs), `chapter10-mlperf-coevolution.csv` (vendor peak
+specs are checkable, the realized-throughput column that carries the argument is
+not), and `chapter7-subsystem-defect-breakdown.csv` (CV32E40P and Ibex bug counts
+with no upstream issue list).
+
+### Correctly provenanced all along
+
+34 receipts carry per-row citations or URLs. Three more were flagged by an early
+version of the audit for holding large literal tables, and all three turned out
+to be honest transcriptions carrying per-row sources: the hardware-CVE mitigation
+tax receipt (per-row NVD and vendor advisory URLs) and the two MLPerf software
+dividend receipts (per-row MLCommons result URLs and submission IDs).
+
 ## What this does not say
 
-The three files are the ones traced here. **53 of the 62 receipts have not yet
-been classified.** The pattern (two files from the same late-August scraper
-batch, both calling themselves provenance receipts) is reason to finish that
-audit before trusting the rest.
+That audit is now finished; the section above records it. What the audit does
+**not** establish is that every transcribed value matches the source it cites.
+Provenance was checked at the level of "is there a recorded, checkable source,
+and where a raw copy is retained, does the derivation reproduce". Spot-verifying
+individual transcribed numbers against their papers and advisories, for example
+the per-CVE performance penalties, remains separate work.
