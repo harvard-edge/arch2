@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+"""WITHDRAWN. This plotter drew the Chapter 7 figure from
+`testbench_vacuity_and_judge_calibration.csv`, whose values were
+synthesised by random.Random(seed) and rng.gauss() in
+`mine_testbench_vacuity_and_judge_bias.py`. The figure it produced
+attributed those numbers to real papers and reported a judge-calibration
+experiment that was never run.
+
+Chapter 7 now uses `generate_testbench_vacuity.py`, which plots the
+transcribed Herdt et al. (ASPDAC 2021) receipt instead. Do not run this
+script. Retained only so the withdrawal is traceable.
+
+See FABRICATED-CLAIM-TRACE.md at the repository root.
+"""
+
+raise SystemExit(
+    "WITHDRAWN: this plotter used synthesised data. "
+    "Use book/contents/chapters/07-feedback/images/"
+    "generate_testbench_vacuity.py instead."
+)
+
+
 """
 Publication Figure: Testbench Mutation Vacuity & LLM-as-a-Judge Calibration
 ===========================================================================

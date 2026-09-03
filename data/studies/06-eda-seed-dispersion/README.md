@@ -26,7 +26,7 @@ This study measures wirelength, area, and timing dispersion across 684 physical 
 
 ## 3. Empirical Findings
 
-- **Natural Seed Dispersion:** Varying random placement seeds on identical RTL produces a natural **$\pm 2.22\%$ ($1\sigma$) QoR dispersion** with a **$14.17\%$ peak-to-peak spread** across OpenROAD PnR runs.
+- **Measured placement-seed dispersion.** Twenty runs of GCD on Nangate45 through a digest-pinned OpenROAD container, identical RTL and floorplan, varying only `GPL_RANDOM_SEED`: instance area moves 0.84%, setup slack moves 3.83%. Placement stage only. The earlier 3.2-7.8% figure came from a synthesised file, now quarantined in `data/synthetic/`.
 - **The 3% Illusion:** Published AI optimization claims of $3\%\text{--}5\%$ PPA improvements evaluated on single seeds fall inside the $\pm 2\sigma$ ($4.43\%$) stochastic noise band of unoptimized placement heuristics.
 - **Thread Jitter:** Multi-threaded non-deterministic reduction schedules expand standard deviation by $1.26\times$ ($1.96\%$ single-threaded to $2.46\%$ at 16 threads).
 

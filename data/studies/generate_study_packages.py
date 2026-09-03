@@ -613,11 +613,11 @@ STUDIES = [
         "plot_scripts": ["plot_testbench_vacuity_and_judge_bias.py"],
         "figure_bases": ["fig_testbench_vacuity_and_judge_bias"],
         "scraper": "mine_testbench_vacuity_and_judge_bias.py",
-        "summary": "Measures the 55.8% Vacuity Gap between dynamic line coverage and functional fault detection on 1,563 AI hardware testbenches, and reveals that LLM judges suffer in-family confirmation bias, falsely approving buggy silicon 86.1% of the time.",
+        "summary": "WITHDRAWN. This study's values were synthesised by mine_testbench_vacuity_and_judge_bias.py, not measured. See data/synthetic/ and FABRICATED-CLAIM-TRACE.md. For transcribed literature values see chapter7-testbench-vacuity-mutation.csv. Formerly claimed in-family confirmation bias, falsely approving buggy silicon 86.1% of the time.",
         "core_question": "Does high testbench code coverage guarantee functional correctness in AI hardware generation, and can LLMs reliably judge hardware correctness?",
         "findings": [
-            "**The 55.8% Vacuity Gap:** AI-generated testbenches achieve >92% line coverage and >82% branch coverage, but achieve only a 37.1% mutation kill rate when non-equivalent functional bugs are injected.",
-            "**The LLM Judge Sycophancy Trap:** When evaluated against formal mathematical ground truth (JasperGold / SymbiYosys), LLM judges evaluating code from their own model family exhibit severe confirmation bias, driving the False Acceptance Rate to 86.1% (a 2.22x defect escape penalty vs. cross-family judges).",
+            "**WITHDRAWN:** the coverage and kill-rate figures for this study were synthesised, not measured. See data/synthetic/.",
+            "**WITHDRAWN:** No formal tool was run. JasperGold and SymbiYosys were named in the original header but never invoked. The judge-calibration figures were synthesised and must not be cited. Formerly claimed that judges exhibit severe confirmation bias, driving the False Acceptance Rate to 86.1% (a 2.22x defect escape penalty vs. cross-family judges).",
             "**The Formal SVA Mandate:** Dynamic simulation alone leaves >62% of silicon-fatal bugs undetected; hardware AI agents must be closed-loop verified using formal assertion proofs.",
         ],
         "schema": [
