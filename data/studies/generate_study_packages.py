@@ -118,16 +118,23 @@ STUDIES = [
     {
         "id": "02-ast-complexity-cliff",
         "title": "The AI Benchmark Mirage vs. Physical Silicon AST Complexity",
-        "csv_files": ["hardware_ast_complexity_gap.csv"],
-        "plot_scripts": ["plot_ast_complexity_cliff.py"],
-        "figure_bases": ["fig_ast_complexity_cliff"],
-        "scraper": "mine_hardware_ast_complexity.py",
-        "summary": "Measures the structural scale and hierarchy disparity between academic AI hardware generation benchmarks (VerilogEval, RTLLM, VeriGen) and production open-source silicon IP (OpenTitan, SonicBOOM, SweRV, CV32E40P, BlackParrot).",
-        "core_question": "How large is the gap between synthetic hardware benchmarks evaluated by AI models and production physical silicon designs?",
+        "csv_files": [
+            "hardware_ast_complexity_measured.csv",
+            "hardware_ast_complexity_measured_sources.csv",
+        ],
+        "plot_scripts": ["plot_ast_complexity_measured.py"],
+        "figure_bases": ["fig_ast_complexity_measured"],
+        "scraper": "mine_hardware_ast_complexity_real.py",
+        "summary": "Measures the source-complexity and internal-hierarchy difference between the reference RTL shipped with AI hardware generation benchmarks (VerilogEval, RTLLM) and production-oriented open RTL (OpenTitan, CV32E40P, VeeR EL2, BlackParrot), by parsing 1,513 module declarations with pyslang 11.0.0 from six pinned commits.",
+        "core_question": "How large is the gap between the reference RTL that AI hardware benchmarks evaluate and production-oriented open silicon RTL?",
         "findings": [
-            "**The 175x AST Node Gap:** AI benchmarks evaluate leaf modules with a median of 73 AST nodes (<100 LoC), whereas production silicon IP modules average 12,800 AST nodes (4,400 LoC) and SoC top-levels exceed 448,000 AST nodes (175.3x structural disparity).",
-            "**The CDC & Clock Void:** 99.7% of AI benchmark circuits are single-clock with 0.0 clock-domain crossings (CDCs). Real silicon IP operates across 2–12 asynchronous clock domains and features up to 86 CDC synchronizers.",
-            "**Hierarchy Flattening:** AI benchmarks feature 100% flat (depth=1) leaf expressions, whereas production processors have 5–10 levels of nested structural submodule hierarchy.",
+            "**A 6.7x source-complexity gap:** benchmark reference modules carry a module-weighted median of 168 concrete syntax nodes (16 clean LoC) against 1,125 nodes (99 clean LoC) for production-oriented RTL, across 217 and 1,296 parsed modules respectively.",
+            "**The ratio is sensitive to weighting, and both checks are reported:** restricting to files parsed without diagnostics gives 4.77x, and weighting each repository equally rather than each module gives 4.27x. The pooled 6.7x is not offered as a universal ratio.",
+            "**Hierarchy separates the corpora more sharply than size:** no VerilogEval module instantiates another module in the corpus, RTLLM reaches a uniquely defined local child in 16% of modules (max internal depth 5), and production repositories reach one in 45% to 63% of modules (max internal depth 13). Depth is a lower bound, since only unambiguously resolved child names are followed.",
+        ],
+        "boundaries": [
+            "Source syntax is measured, not elaborated design. Files are parsed standalone with error recovery.",
+            "Clock-event and CDC-primitive counts are lexical indicators, not verified clock domains or crossings. No asynchronous-crossing claim follows from this data.",
         ],
         "schema": [
             (
@@ -613,11 +620,11 @@ STUDIES = [
         "plot_scripts": ["plot_testbench_vacuity_and_judge_bias.py"],
         "figure_bases": ["fig_testbench_vacuity_and_judge_bias"],
         "scraper": "mine_testbench_vacuity_and_judge_bias.py",
-        "summary": "Measures the 55.8% Vacuity Gap between dynamic line coverage and functional fault detection on 1,563 AI hardware testbenches, and reveals that LLM judges suffer in-family confirmation bias, falsely approving buggy silicon 86.1% of the time.",
+        "summary": "WITHDRAWN. This study's values were synthesised by mine_testbench_vacuity_and_judge_bias.py, not measured. See data/synthetic/ and FABRICATED-CLAIM-TRACE.md. For transcribed literature values see chapter7-testbench-vacuity-mutation.csv. Formerly claimed in-family confirmation bias, falsely approving buggy silicon 86.1% of the time.",
         "core_question": "Does high testbench code coverage guarantee functional correctness in AI hardware generation, and can LLMs reliably judge hardware correctness?",
         "findings": [
-            "**The 55.8% Vacuity Gap:** AI-generated testbenches achieve >92% line coverage and >82% branch coverage, but achieve only a 37.1% mutation kill rate when non-equivalent functional bugs are injected.",
-            "**The LLM Judge Sycophancy Trap:** When evaluated against formal mathematical ground truth (JasperGold / SymbiYosys), LLM judges evaluating code from their own model family exhibit severe confirmation bias, driving the False Acceptance Rate to 86.1% (a 2.22x defect escape penalty vs. cross-family judges).",
+            "**WITHDRAWN:** the coverage and kill-rate figures for this study were synthesised, not measured. See data/synthetic/.",
+            "**WITHDRAWN:** No formal tool was run. JasperGold and SymbiYosys were named in the original header but never invoked. The judge-calibration figures were synthesised and must not be cited. Formerly claimed that judges exhibit severe confirmation bias, driving the False Acceptance Rate to 86.1% (a 2.22x defect escape penalty vs. cross-family judges).",
             "**The Formal SVA Mandate:** Dynamic simulation alone leaves >62% of silicon-fatal bugs undetected; hardware AI agents must be closed-loop verified using formal assertion proofs.",
         ],
         "schema": [
