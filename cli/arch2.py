@@ -484,6 +484,8 @@ FONT_SIZE_RE = re.compile(r"font-size\s*:\s*(?P<size>[0-9.]+)px")
 SVG_FONT_FAMILY_RE = re.compile(
     r"font-family\s*(?::|=)\s*['\"]?(?P<family>[^;\"'}]+)", re.I
 )
+SVG_EVENT_HANDLER_ATTR_RE = re.compile(r"^on[a-z]+$", re.I)
+SVG_SCRIPT_SCHEME_RE = re.compile(r"^\s*(javascript|vbscript|data:text/html)\s*:", re.I)
 TRANSLATE_RE = re.compile(
     r"translate\(\s*(?P<x>-?[0-9.]+)(?:[,\s]+(?P<y>-?[0-9.]+))?\s*\)"
 )
@@ -3522,6 +3524,57 @@ def is_content_svg(path: Path) -> bool:
     return any(resolved.is_relative_to(root.resolve()) for root in CONTENT_ROOTS)
 
 
+def _svg_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def svg_script_injection_findings(path: Path, root: Any) -> list[Finding]:
+    """Reject SVGs that could execute script when embedded in the rendered site.
+
+    defusedxml only guards against XML entity expansion (XXE); a well-formed
+    SVG can still carry a <script> element, an on*= event handler, or a
+    javascript:/vbscript: URI, none of which trip the XXE-focused parser.
+    """
+    location = _relative(path)
+    findings: list[Finding] = []
+    for element in root.iter():
+        local_tag = _svg_local_name(str(element.tag)).lower()
+        if local_tag == "script":
+            findings.append(
+                Finding(
+                    "error",
+                    "svg-script",
+                    location,
+                    "SVG must not contain a <script> element",
+                )
+            )
+        for attr_name, attr_value in element.attrib.items():
+            local_attr = _svg_local_name(str(attr_name)).lower()
+            if SVG_EVENT_HANDLER_ATTR_RE.match(local_attr):
+                findings.append(
+                    Finding(
+                        "error",
+                        "svg-script",
+                        location,
+                        f"SVG must not use the '{local_attr}' event-handler "
+                        f"attribute on <{local_tag}>",
+                    )
+                )
+            elif local_attr in {"href", "src"} and SVG_SCRIPT_SCHEME_RE.match(
+                str(attr_value)
+            ):
+                findings.append(
+                    Finding(
+                        "error",
+                        "svg-script",
+                        location,
+                        f"SVG must not reference a script-scheme URI in "
+                        f"'{local_attr}' on <{local_tag}>",
+                    )
+                )
+    return findings
+
+
 def svg_text_findings_for_file(path: Path) -> list[Finding]:
     from defusedxml import ElementTree as safe_et
     from defusedxml.common import DefusedXmlException
@@ -3540,6 +3593,7 @@ def svg_text_findings_for_file(path: Path) -> list[Finding]:
     labels = collect_svg_labels(root, class_sizes)
 
     findings: list[Finding] = []
+    findings.extend(svg_script_injection_findings(path, root))
     if is_content_svg(path):
         findings.extend(svg_font_family_findings(path))
     findings.extend(svg_viewbox_findings(path, root, class_sizes))
