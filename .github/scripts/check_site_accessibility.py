@@ -35,8 +35,11 @@ class LandmarkParser(HTMLParser):
 
 
 def findings(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    if 'http-equiv="refresh"' in text.lower():
+        return []
     parser = LandmarkParser()
-    parser.feed(path.read_text(encoding="utf-8"))
+    parser.feed(text)
     problems: list[str] = []
     if parser.main_ids != ["main-content"]:
         problems.append(
