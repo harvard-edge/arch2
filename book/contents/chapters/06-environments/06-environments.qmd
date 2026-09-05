@@ -119,7 +119,7 @@ Recording evaluation keys and operating conditions supports reproducibility only
 
 ### Multi-Tool Toolchains and Fidelity
 
-A single tool cannot answer every architectural question. Cycle-accurate simulators capture instruction-level bottlenecks but ignore physical wiring congestion, while physical synthesis engines report precise routing delays but cannot run software workloads. Full-system physical signoff is also too expensive to apply to every candidate, so practical design systems compose tools into hierarchical pipelines.
+A single tool cannot answer every architectural question, and @sec-data-representations-world-models sets out which source observes which property. The environment consequence is narrower. Because a cycle-accurate simulator and a physical synthesis engine model different things, each tier's model version, inputs, and assumptions have to be preserved separately or a later comparison cannot say which tier produced a number. Full-system physical signoff is also too expensive to apply to every candidate, so practical design systems compose tools into hierarchical pipelines.
 
 Exploring large candidate spaces economically requires balancing evaluation throughput against physical fidelity across a multi-fidelity spectrum. A tiered pipeline filters out unviable candidates early using fast, low-fidelity models, reserving expensive, high-fidelity signoff tools only for the most promising designs. The environment must preserve distinct models, tool versions, and inputs at each fidelity level (@tbl-multi-fidelity-spectrum).
 
@@ -275,7 +275,6 @@ Decoupling attempt identity from process completion ensures that interrupted or 
 
 Harnesses attach jobs to attempts upon submission, using idempotency tokens (`submission_token`) to prevent duplicate submissions from launching redundant work [@Featonby2021IdempotentAPIs]. This idempotency guarantees that even if the orchestrator container crashes and restarts, it will reconnect to running jobs rather than spawning expensive duplicates.
 
-<!-- AUTHOR-THESIS DRAFT 2026-08-31: the chapter says architecture workflows cannot be reduced to step() but never shows what replaces it; this is the interface shape an ML reader expects, filled only from mechanisms the section already names -->
 What replaces `step()` is a three-call shape (@lst-harness-interface). The caller submits a typed request and receives an identifier, not a result. It polls that identifier while the job waits behind a license or runs for hours, reading a scheduling state the harness owns. It collects the execution record only when the harness reports a terminal state, and a cancellation returns only after the whole process tree has exited. Every state a job can occupy between submission and collection is a value the caller can read, which is what lets a search loop keep proposing while its earlier requests are still queued.
 
 ```{.yaml #lst-harness-interface lst-cap="**Harness interface shape.** The caller submits a typed request and receives an identifier, polls it while the job queues or runs, and collects the execution record at a terminal state. The harness owns the wait."}
@@ -292,7 +291,6 @@ cancel:
   takes: attempt_id
   returns: CONFIRMED after the whole process tree has exited
 ```
-<!-- END DRAFT -->
 
 Idempotency alone does not bound queue depth. Because generative candidate proposers operate at software speed while backend simulators and EDA tools execute at physical clock rates, unconstrained dispatch floods job queues and triggers congestion collapse.
 
@@ -347,9 +345,7 @@ Similarly, signoff returns remain permanently bound to tool versions, libraries,
 
 Each row of @tbl-failure-taxonomy names a recovery route, and every route except refusal ends in one of three operations: a retry that keeps the same work state, a resume from a checkpoint, or a reset. Retries preserve parent attempt links so that cost is not counted twice. Artifact caching requires identical cache keys across inputs, tool versions, PDK views, flags, and operating conditions, while context windows in generative pipelines must be sanitized between open-source baselines and proprietary IP evaluations.
 
-<!-- AUTHOR-THESIS DRAFT 2026-08-31: the contract lists resets explicitly and the chapter names them eleven times without defining one; this defines reset once from the lineage section's own immutable/mutable split -->
 Of the three, reset is the one most often claimed and least often performed. A *reset* regenerates a run's mutable work state (run directories, tool databases, checkpoints, license leases, emulator memory) from its pinned immutable inputs, so that the next attempt inherits nothing from the last except what the lineage record says it may. That definition sets the bar for three cheaper operations a reset is routinely confused with. Killing a process is not a reset while its scratch directory and license token survive. Restoring a checkpoint is not a reset unless the checkpoint's own parent hashes match the pinned inputs. A soft reset of an emulator that leaves DRAM buffers and PCIe registers as the previous run left them is a partial reset, and the execution record has to label it as one.
-<!-- END DRAFT -->
 
 ::: {.callout-war-story title="The stale library view"}
 **The claim.** A design update reruns static timing analysis and receives a clean signoff report asserting that all bus timing constraints are met at the target accelerated clock frequency.
@@ -420,11 +416,11 @@ Submitting the same retained request can still consume different amounts of host
 
 ## Mobile XR Subsystem Evaluation Environment {#sec-mobile-xr-evaluation}
 
-Applying these tool boundaries and execution contracts to the prospective mobile XR SoC co-design study grounds runtime governance in physical silicon constraints. In this study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\text{ MiB}$) under a 3\ W thermal design power (TDP) envelope on a TSMC 3\ nm process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
+Applying these tool boundaries and execution contracts to the prospective mobile XR SoC co-design study grounds runtime governance in physical silicon constraints. In this study, we evaluate trade-offs across an NPU array ($16 \times 16$), dual LPDDR5X channels, Universal Chiplet Interconnect Express (UCIe) interconnects, UPF power domains, and L2 cache capacities ($2\text{--}4\text{ MiB}$) under a 3\ W thermal design power (TDP) envelope on a TSMC N3E process. A prospective run specification formalizes runtime governance prior to tool invocation (@tbl-environment-contract).
 
 | **Run category** | **Prospective XR SoC co-design study run specification** |
 | --- | --- |
-| **Candidates and fixed state** | Candidate XR configurations (`l2.capacity` $2\text{--}4\text{ MiB}$, $16 \times 16$ NPU array, memory arbitration). RISC-V CPU cores, NoC, software binary, and XR workload trace remain fixed. Candidates retain static random-access memory (SRAM), NPU tile, LPDDR5X, UPF domain, and TSMC 3\ nm identity. |
+| **Candidates and fixed state** | Candidate XR configurations (`l2.capacity` $2\text{--}4\text{ MiB}$, $16 \times 16$ NPU array, memory arbitration). RISC-V CPU cores, NoC, software binary, and XR workload trace remain fixed. Candidates retain static random-access memory (SRAM), NPU tile, LPDDR5X, UPF domain, and TSMC N3E identity. |
 | **Translation and identity** | Parameters serialize into analytical models (SRAM, SCALE-Sim) under declared PVT conditions, and into gem5/Ramulator 2/Verilator simulator requests with UPF power models. Schema, wrapper, parser, tool versions, container digest, and seeds retain explicit identity. |
 | **Order and dispatch** | Analytical screening executes first. Cycle-level gem5/Ramulator 2 simulations dispatch only when screening reports valid area $\le 1.5\text{ mm}^2$ and access latency $\le 2.5\text{ ns}$. |
 | **Matched work and limits** | Baseline and alternatives run under matched conditions. Budget: three screening runs, maximum four cycle-level attempts. Deadlines enforced; execution stops when work completes or budget expires. |
