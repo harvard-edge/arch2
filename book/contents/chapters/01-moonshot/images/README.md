@@ -12,7 +12,7 @@ Active hand-authored figures:
 - `fig-foundation-system`: the optional learned component, current project
   state, conventional methods, tools, checks, architecture role, and separate
   commitment authority that make up the larger design system.
-- `fig-architecture-20-loop`: the Architecture 2.0 execution loop showing autonomous multi-agent inner loop and the human bookends of intent formulation and commitment authority.
+- `fig-architecture-20-loop`: the Architecture 2.0 execution loop showing the autonomous multi-agent inner cycle and human oversight at the input and output boundaries.
 - `fig-design-loop-breaks`: the design state needed for human-orchestrated and
   AI-assisted architecture studies.
 

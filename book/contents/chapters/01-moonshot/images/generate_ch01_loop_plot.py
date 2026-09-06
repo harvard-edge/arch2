@@ -1,302 +1,178 @@
-"""Generate fig-architecture-20-loop SVG, PDF, and PNG with pristine layout."""
+"""Generate fig-architecture-20-loop SVG, PDF, and PNG conforming to book styling."""
 
 from pathlib import Path
 import subprocess
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 620" width="100%" height="100%" role="img">
-  <title>The Architecture 2.0 Execution Loop and Human Bookends</title>
-  <desc>Diagram showing the Architecture 2.0 execution loop with AI agents across architecture, RTL, software, verification, and optimization feeding design and tools to produce measurements across performance, energy, area, thermal, and carbon, highlighting how human architects migrate to the two bookends of intent formulation and commitment authority.</desc>
+SVG_CONTENT = """<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 425" role="img" aria-labelledby="loop-title loop-desc">
+  <title id="loop-title">The Architecture 2.0 execution loop and system boundaries</title>
+  <desc id="loop-desc">An input boundary carries system intent, physical bounds, and objective criteria from the architect into an autonomous multi-tool execution loop. Inside the loop, AI agents across architecture, RTL, software, verification, and optimization produce candidate designs evaluated by tools and measured across performance, energy, area, thermal, and carbon. Measurements feed back into candidate search and exit to the output boundary, where commitment authority audits evidence and decides on physical fabrication.</desc>
   <defs>
-    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M 0 1 L 9 5 L 0 9 Z" fill="#0284C7"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333333"/>
     </marker>
-    <marker id="arrow-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M 0 1 L 9 5 L 0 9 Z" fill="#475569"/>
-    </marker>
-    <marker id="arrow-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M 0 1 L 9 5 L 0 9 Z" fill="#0D5C75"/>
-    </marker>
-    <marker id="arrow-commit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M 0 1 L 9 5 L 0 9 Z" fill="#D97706"/>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1E9E48"/>
     </marker>
     <style>
-      .font-sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-      .font-mono { font-family: "JetBrains Mono", "SF Mono", Menlo, Monaco, Consolas, monospace; }
+      .font { font-family: Arial, Helvetica, sans-serif; fill: #20252B; }
+      .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
+      .group { font-size: 11px; font-weight: 700; fill: #59636D; letter-spacing: 0.55px; }
+      .label { font-size: 13.5px; font-weight: 700; fill: #20252B; }
+      .sub { font-size: 11.2px; fill: #444444; }
+      .bullet { font-size: 11px; fill: #333333; }
+      .tree-text { font-size: 11px; font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; fill: #20252B; }
+      .loop-text { font-size: 10.8px; font-weight: 700; fill: #1E9E48; }
 
-      .main-title { font-size: 17px; font-weight: 700; fill: #0F172A; }
-      .main-subtitle { font-size: 12px; font-weight: 400; fill: #475569; }
+      .panel { fill: #F8FAFC; stroke: #9AA8B5; stroke-width: 1.2; }
+      .input { fill: #E4F1F6; stroke: #1683A6; stroke-width: 1.5; }
+      .agents { fill: #F0ECFA; stroke: #6A4FC7; stroke-width: 1.5; }
+      .design { fill: #FBF0DE; stroke: #E68A17; stroke-width: 1.5; }
+      .tools { fill: #F5F8FA; stroke: #9AA8B5; stroke-width: 1.5; }
+      .measure { fill: #E7F5EC; stroke: #1E9E48; stroke-width: 1.5; }
+      .decision { fill: #FBEDF4; stroke: #D24D96; stroke-width: 1.5; }
 
-      .badge-text { font-size: 9.5px; font-weight: 700; fill: #FFFFFF; letter-spacing: 0.6px; text-transform: uppercase; }
-      .card-title { font-size: 13px; font-weight: 700; fill: #0F172A; }
-      .card-sub { font-size: 10.5px; font-weight: 400; fill: #475569; }
-
-      .mono-title { font-size: 13.5px; font-weight: 700; fill: #0F172A; }
-      .tree-text { font-size: 11.5px; font-weight: 500; fill: #334155; }
-
-      .contrast-hdr { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; fill: #475569; }
-      .contrast-body { font-size: 10.5px; font-weight: 400; fill: #334155; }
-
-      .loop-label { font-size: 9.5px; font-weight: 700; fill: #FFFFFF; letter-spacing: 0.4px; text-transform: uppercase; }
+      .edge { fill: none; stroke: #333333; stroke-width: 1.8; stroke-linecap: square; stroke-linejoin: miter; marker-end: url(#arrow); }
+      .loop { fill: none; stroke: #1E9E48; stroke-width: 1.8; stroke-dasharray: 6 4; stroke-linecap: square; stroke-linejoin: miter; marker-end: url(#arrow-green); }
+      .tree-line { stroke: #59636D; stroke-width: 1.2; fill: none; stroke-linecap: square; stroke-linejoin: miter; }
+      .divider-blue { stroke: #1683A6; stroke-width: 0.8; }
+      .divider-pink { stroke: #D24D96; stroke-width: 0.8; }
     </style>
   </defs>
 
-  <!-- Background -->
-  <rect width="1080" height="620" fill="#FFFFFF"/>
+  <rect width="960" height="425" fill="#FFFFFF"/>
 
-  <!-- Main Title & Subtitle -->
-  <text class="font-sans main-title" x="40" y="34">The Architecture 2.0 Loop and the Migration of Human Judgment</text>
-  <text class="font-sans main-subtitle" x="40" y="52">Automating the inner multi-tool execution cycle relocates human engineering judgment to the input and output bookends</text>
+  <g class="font">
+    <!-- =================================================================== -->
+    <!-- Group Labels                                                        -->
+    <!-- =================================================================== -->
+    <text class="group" x="115" y="32" text-anchor="middle">INPUT BOUNDARY</text>
+    <text class="group" x="495" y="32" text-anchor="middle">AUTONOMOUS MULTI-TOOL EXECUTION LOOP</text>
+    <text class="group" x="865" y="32" text-anchor="middle">OUTPUT BOUNDARY</text>
 
-  <!-- ===================================================================== -->
-  <!-- BOOKEND 1 (INPUT): Human Architect - Goal Formulation                 -->
-  <!-- ===================================================================== -->
-  <g transform="translate(40, 75)">
-    <!-- Container -->
-    <rect width="200" height="395" rx="6" fill="#F0F9FF" stroke="#0284C7" stroke-width="1.6"/>
-    <!-- Header -->
-    <path d="M 0 6 Q 0 0 6 0 L 194 0 Q 200 0 200 6 L 200 32 L 0 32 Z" fill="#BAE6FD"/>
-    <line x1="0" y1="32" x2="200" y2="32" stroke="#0284C7" stroke-width="1.2"/>
+    <!-- =================================================================== -->
+    <!-- INPUT BOUNDARY: goal                                                -->
+    <!-- =================================================================== -->
+    <rect class="input" x="25" y="44" width="180" height="258"/>
+    <text class="label mono" x="115" y="70" text-anchor="middle">goal</text>
+    <text class="sub" x="115" y="88" text-anchor="middle" font-weight="700">Problem formulation</text>
+    <line class="divider-blue" x1="37" y1="98" x2="193" y2="98"/>
 
-    <!-- Badge -->
-    <rect x="12" y="6" width="94" height="19" rx="3" fill="#0284C7"/>
-    <text class="font-sans badge-text" x="59" y="19.5" text-anchor="middle">INPUT BOOKEND</text>
+    <text class="bullet" x="37" y="120">&#x2022; system intent + workload</text>
+    <text class="bullet" x="37" y="140">&#x2022; physical limits (power, area)</text>
+    <text class="bullet" x="37" y="160">&#x2022; thermal dissipation budget</text>
+    <text class="bullet" x="37" y="180">&#x2022; objective / loss criteria</text>
+    <text class="bullet" x="37" y="200">&#x2022; anti-gaming constraints</text>
 
-    <text class="font-sans card-title" x="14" y="52">Problem Formulation</text>
-    <text class="font-sans card-sub" x="14" y="68">Owned by the Human Architect</text>
+    <line class="divider-blue" x1="37" y1="240" x2="193" y2="240"/>
+    <text class="sub" x="115" y="260" text-anchor="middle" font-weight="700">Human architect</text>
+    <text class="sub" x="115" y="278" text-anchor="middle">frames question + bounds</text>
 
-    <line x1="14" y1="78" x2="186" y2="78" stroke="#CBD5E1" stroke-width="1"/>
+    <!-- Edge: goal -> AI agents -->
+    <path class="edge" d="M 205 119 H 245"/>
 
-    <!-- Core node 'goal' aligned horizontally with execution chain -->
-    <rect x="14" y="92" width="172" height="42" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.6"/>
-    <text class="font-mono mono-title" x="100" y="118" text-anchor="middle" fill="#0369A1">goal</text>
+    <!-- =================================================================== -->
+    <!-- AUTONOMOUS EXECUTION LOOP PANEL                                     -->
+    <!-- =================================================================== -->
+    <rect class="panel" x="225" y="44" width="540" height="258"/>
 
-    <!-- Bullet points -->
-    <g transform="translate(14, 154)">
-      <circle cx="5" cy="6" r="2.5" fill="#0284C7"/>
-      <text class="font-sans card-sub" x="15" y="10" font-weight="600" fill="#0F172A">System intent &amp; workload</text>
-      <text class="font-sans card-sub" x="15" y="24">Target algorithms &amp; use cases</text>
+    <!-- Return feedback loop line across top -->
+    <path class="loop" d="M 687 100 V 62 H 305 V 98"/>
+    <text class="loop-text" x="496" y="56" text-anchor="middle">feedback: measurements steer candidate refinement</text>
 
-      <circle cx="5" cy="46" r="2.5" fill="#0284C7"/>
-      <text class="font-sans card-sub" x="15" y="50" font-weight="600" fill="#0F172A">Physical boundaries</text>
-      <text class="font-sans card-sub" x="15" y="64">Thermal, power &amp; area envelopes</text>
+    <!-- Node 1: AI agents -->
+    <rect class="agents" x="245" y="100" width="120" height="38"/>
+    <text class="label mono" x="305" y="124" text-anchor="middle">AI agents</text>
 
-      <circle cx="5" cy="86" r="2.5" fill="#0284C7"/>
-      <text class="font-sans card-sub" x="15" y="90" font-weight="600" fill="#0F172A">Loss &amp; reward definition</text>
-      <text class="font-sans card-sub" x="15" y="104">Multi-objective Pareto criteria</text>
+    <!-- Tree under AI agents -->
+    <line class="tree-line" x1="262" y1="138" x2="262" y2="246"/>
+    <path class="tree-line" d="M 262 158 H 276"/>
+    <text class="tree-text" x="282" y="162">architecture</text>
+    <path class="tree-line" d="M 262 180 H 276"/>
+    <text class="tree-text" x="282" y="184">RTL</text>
+    <path class="tree-line" d="M 262 202 H 276"/>
+    <text class="tree-text" x="282" y="206">software</text>
+    <path class="tree-line" d="M 262 224 H 276"/>
+    <text class="tree-text" x="282" y="228">verification</text>
+    <path class="tree-line" d="M 262 246 H 276"/>
+    <text class="tree-text" x="282" y="250">optimization</text>
 
-      <circle cx="5" cy="126" r="2.5" fill="#0284C7"/>
-      <text class="font-sans card-sub" x="15" y="130" font-weight="600" fill="#0F172A">Anti-gaming constraints</text>
-      <text class="font-sans card-sub" x="15" y="144">Preventing proxy exploitation</text>
-    </g>
+    <!-- Edge: AI agents -> design -->
+    <path class="edge" d="M 365 119 H 395"/>
 
-    <rect x="14" y="325" width="172" height="54" rx="4" fill="#E0F2FE"/>
-    <text class="font-sans card-sub" x="22" y="342" font-weight="600" fill="#0369A1">Role of the Architect:</text>
-    <text class="font-sans card-sub" x="22" y="357" fill="#0369A1">Framing what problem to solve</text>
-    <text class="font-sans card-sub" x="22" y="370" fill="#0369A1">and setting hard invariants.</text>
-  </g>
+    <!-- Node 2: design -->
+    <rect class="design" x="395" y="100" width="85" height="38"/>
+    <text class="label mono" x="437.5" y="124" text-anchor="middle">design</text>
+    <text class="sub" x="437.5" y="156" text-anchor="middle">IRs, netlists,</text>
+    <text class="sub" x="437.5" y="172" text-anchor="middle">parameters</text>
 
-  <!-- Straight Horizontal Pipeline Arrow: goal -> AI agents (y = 75 + 113 = 188) -->
-  <path d="M 240 188 L 278 188" stroke="#0284C7" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <!-- Edge: design -> tools -->
+    <path class="edge" d="M 480 119 H 510"/>
 
-  <!-- ===================================================================== -->
-  <!-- CENTER: Autonomous Multi-Tool Execution Loop                          -->
-  <!-- ===================================================================== -->
-  <g transform="translate(280, 75)">
-    <!-- Container -->
-    <rect width="520" height="395" rx="6" fill="#F8FAFC" stroke="#0D5C75" stroke-width="1.6"/>
-    <!-- Header -->
-    <path d="M 0 6 Q 0 0 6 0 L 514 0 Q 520 0 520 6 L 520 32 L 0 32 Z" fill="#E2E8F0"/>
-    <line x1="0" y1="32" x2="520" y2="32" stroke="#0D5C75" stroke-width="1.2"/>
+    <!-- Node 3: tools -->
+    <rect class="tools" x="510" y="100" width="85" height="38"/>
+    <text class="label mono" x="552.5" y="124" text-anchor="middle">tools</text>
+    <text class="sub" x="552.5" y="156" text-anchor="middle">simulators, EDA,</text>
+    <text class="sub" x="552.5" y="172" text-anchor="middle">signoff checks</text>
 
-    <!-- Badge -->
-    <rect x="14" y="6" width="195" height="19" rx="3" fill="#0D5C75"/>
-    <text class="font-sans badge-text" x="111.5" y="19.5" text-anchor="middle">AUTONOMOUS EXECUTION LOOP</text>
-    <text class="font-sans card-sub" x="220" y="20" font-weight="600" fill="#334155">Iterative Search &amp; Verification (No Human in the Inner Loop)</text>
+    <!-- Edge: tools -> measurements -->
+    <path class="edge" d="M 595 119 H 625"/>
 
-    <!-- Return feedback loop arrow over top -->
-    <!-- Starts from top of measurements (x=432), goes up to y=46, curves left to x=72, curves down into AI agents (x=72, y=90) -->
-    <path d="M 432 92 L 432 50 Q 432 40 422 40 L 82 40 Q 72 40 72 50 L 72 88" fill="none" stroke="#0D5C75" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow-loop)"/>
+    <!-- Node 4: measurements -->
+    <rect class="measure" x="625" y="100" width="125" height="38"/>
+    <text class="label mono" x="687.5" y="124" text-anchor="middle">measurements</text>
 
-    <!-- Loop pill badge cleanly centered over horizontal return path -->
-    <rect x="155" y="29" width="194" height="22" rx="11" fill="#0D5C75"/>
-    <text class="font-sans loop-label" x="252" y="44" text-anchor="middle">Feedback &amp; Candidate Mutation</text>
+    <!-- Tree under measurements -->
+    <line class="tree-line" x1="642" y1="138" x2="642" y2="246"/>
+    <path class="tree-line" d="M 642 158 H 656"/>
+    <text class="tree-text" x="662" y="162">performance</text>
+    <path class="tree-line" d="M 642 180 H 656"/>
+    <text class="tree-text" x="662" y="184">energy</text>
+    <path class="tree-line" d="M 642 202 H 656"/>
+    <text class="tree-text" x="662" y="206">area</text>
+    <path class="tree-line" d="M 642 224 H 656"/>
+    <text class="tree-text" x="662" y="228">thermal</text>
+    <path class="tree-line" d="M 642 246 H 656"/>
+    <text class="tree-text" x="662" y="250">carbon</text>
 
-    <!-- Main execution sequence nodes (y=92 to match goal) -->
-    <!-- 1. AI agents -->
-    <g transform="translate(18, 92)">
-      <rect width="110" height="42" rx="4" fill="#E4F1F6" stroke="#1683A6" stroke-width="1.5"/>
-      <text class="font-mono mono-title" x="55" y="26" text-anchor="middle" fill="#0F172A">AI agents</text>
+    <!-- Edge: measurements -> commitment -->
+    <path class="edge" d="M 750 119 H 785"/>
 
-      <!-- Tree under AI agents -->
-      <g transform="translate(20, 50)">
-        <!-- Vertical stem -->
-        <line x1="0" y1="0" x2="0" y2="128" stroke="#475569" stroke-width="1.4"/>
+    <!-- =================================================================== -->
+    <!-- OUTPUT BOUNDARY: commitment                                         -->
+    <!-- =================================================================== -->
+    <rect class="decision" x="785" y="44" width="160" height="258"/>
+    <text class="label mono" x="865" y="70" text-anchor="middle">commitment</text>
+    <text class="sub" x="865" y="88" text-anchor="middle" font-weight="700">Commitment authority</text>
+    <line class="divider-pink" x1="797" y1="98" x2="933" y2="98"/>
 
-        <!-- Branch 1: architecture -->
-        <path d="M 0 16 L 16 16" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="20">architecture</text>
+    <text class="bullet" x="797" y="120">&#x2022; cross-tool evidence audit</text>
+    <text class="bullet" x="797" y="140">&#x2022; artifact vs reality check</text>
+    <text class="bullet" x="797" y="160">&#x2022; residual risk evaluation</text>
+    <text class="bullet" x="797" y="180">&#x2022; corner margin signoff</text>
+    <text class="bullet" x="797" y="200">&#x2022; mask capital allocation</text>
 
-        <!-- Branch 2: RTL -->
-        <path d="M 0 44 L 16 44" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="48">RTL</text>
+    <line class="divider-pink" x1="797" y1="240" x2="933" y2="240"/>
+    <text class="sub" x="865" y="260" text-anchor="middle" font-weight="700">Named authority</text>
+    <text class="sub" x="865" y="278" text-anchor="middle">retires decisions in-order</text>
 
-        <!-- Branch 3: software -->
-        <path d="M 0 72 L 16 72" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="76">software</text>
+    <!-- =================================================================== -->
+    <!-- BOTTOM COMPARISON PANEL                                             -->
+    <!-- =================================================================== -->
+    <rect class="panel" x="25" y="320" width="920" height="85"/>
+    <text class="group" x="40" y="340">HUMAN ROLE ACROSS DESIGN EPOCHS</text>
 
-        <!-- Branch 4: verification -->
-        <path d="M 0 100 L 16 100" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="104">verification</text>
+    <!-- Arch 1.0 -->
+    <rect class="tools" x="40" y="348" width="420" height="46"/>
+    <text class="label" x="52" y="367" font-size="12px">Architecture 1.0 (Manual execution):</text>
+    <text class="sub" x="52" y="383">Engineer operates inside the loop drafting RTL, writing scripts, and tuning parameters.</text>
 
-        <!-- Branch 5: optimization -->
-        <path d="M 0 128 L 16 128" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="132">optimization</text>
-      </g>
-    </g>
-
-    <!-- Arrow 1: agents -> design -->
-    <path d="M 130 113 L 152 113" stroke="#475569" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow-dark)"/>
-
-    <!-- 2. design -->
-    <g transform="translate(155, 92)">
-      <rect width="84" height="42" rx="4" fill="#FFFFFF" stroke="#64748B" stroke-width="1.4"/>
-      <text class="font-mono mono-title" x="42" y="26" text-anchor="middle" fill="#0F172A">design</text>
-      <text class="font-sans card-sub" x="42" y="55" text-anchor="middle" font-size="9px">IRs &amp; netlists</text>
-    </g>
-
-    <!-- Arrow 2: design -> tools -->
-    <path d="M 241 113 L 263 113" stroke="#475569" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow-dark)"/>
-
-    <!-- 3. tools -->
-    <g transform="translate(266, 92)">
-      <rect width="80" height="42" rx="4" fill="#FFFFFF" stroke="#64748B" stroke-width="1.4"/>
-      <text class="font-mono mono-title" x="40" y="26" text-anchor="middle" fill="#0F172A">tools</text>
-      <text class="font-sans card-sub" x="40" y="55" text-anchor="middle" font-size="9px">Sim &amp; EDA</text>
-    </g>
-
-    <!-- Arrow 3: tools -> measurements -->
-    <path d="M 348 113 L 370 113" stroke="#475569" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow-dark)"/>
-
-    <!-- 4. measurements -->
-    <g transform="translate(373, 92)">
-      <rect width="130" height="42" rx="4" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
-      <text class="font-mono mono-title" x="65" y="26" text-anchor="middle" fill="#92400E">measurements</text>
-
-      <!-- Tree under measurements -->
-      <g transform="translate(20, 50)">
-        <!-- Vertical stem -->
-        <line x1="0" y1="0" x2="0" y2="128" stroke="#475569" stroke-width="1.4"/>
-
-        <!-- Branch 1: performance -->
-        <path d="M 0 16 L 16 16" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="20">performance</text>
-
-        <!-- Branch 2: energy -->
-        <path d="M 0 44 L 16 44" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="48">energy</text>
-
-        <!-- Branch 3: area -->
-        <path d="M 0 72 L 16 72" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="76">area</text>
-
-        <!-- Branch 4: thermal -->
-        <path d="M 0 100 L 16 100" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="104">thermal</text>
-
-        <!-- Branch 5: carbon -->
-        <path d="M 0 128 L 16 128" stroke="#475569" stroke-width="1.4"/>
-        <text class="font-mono tree-text" x="22" y="132">carbon</text>
-      </g>
-    </g>
-
-    <!-- Explanatory note in center bottom -->
-    <rect x="18" y="325" width="484" height="54" rx="4" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
-    <text class="font-sans card-sub" x="30" y="342" font-weight="600" fill="#1E293B">The Autonomous Cycle:</text>
-    <text class="font-sans card-sub" x="30" y="357" fill="#475569">Generators synthesize candidates across five stack layers; authoritative tools</text>
-    <text class="font-sans card-sub" x="30" y="370" fill="#475569">measure multidimensional physical costs and steer continuous refinement.</text>
-  </g>
-
-  <!-- Straight Horizontal Pipeline Arrow: measurements -> commitment (y = 75 + 113 = 188) -->
-  <path d="M 800 188 L 838 188" stroke="#D97706" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrow-commit)"/>
-
-  <!-- ===================================================================== -->
-  <!-- BOOKEND 2 (OUTPUT): Commitment Authority                              -->
-  <!-- ===================================================================== -->
-  <g transform="translate(840, 75)">
-    <!-- Container -->
-    <rect width="200" height="395" rx="6" fill="#FFFBEB" stroke="#D97706" stroke-width="1.6"/>
-    <!-- Header -->
-    <path d="M 0 6 Q 0 0 6 0 L 194 0 Q 200 0 200 6 L 200 32 L 0 32 Z" fill="#FDE68A"/>
-    <line x1="0" y1="32" x2="200" y2="32" stroke="#D97706" stroke-width="1.2"/>
-
-    <!-- Badge -->
-    <rect x="12" y="6" width="102" height="19" rx="3" fill="#D97706"/>
-    <text class="font-sans badge-text" x="63" y="19.5" text-anchor="middle">OUTPUT BOOKEND</text>
-
-    <text class="font-sans card-title" x="14" y="52">Commitment Authority</text>
-    <text class="font-sans card-sub" x="14" y="68">Owned by Accountable Leadership</text>
-
-    <line x1="14" y1="78" x2="186" y2="78" stroke="#CBD5E1" stroke-width="1"/>
-
-    <!-- Core node 'commitment' aligned horizontally with execution chain -->
-    <rect x="14" y="92" width="172" height="42" rx="4" fill="#FFFFFF" stroke="#D97706" stroke-width="1.6"/>
-    <text class="font-mono mono-title" x="100" y="118" text-anchor="middle" fill="#B45309">commitment</text>
-
-    <!-- Bullet points -->
-    <g transform="translate(14, 154)">
-      <circle cx="5" cy="6" r="2.5" fill="#D97706"/>
-      <text class="font-sans card-sub" x="15" y="10" font-weight="600" fill="#0F172A">Evidence qualification</text>
-      <text class="font-sans card-sub" x="15" y="24">Auditing multi-tool signoff logs</text>
-
-      <circle cx="5" cy="46" r="2.5" fill="#D97706"/>
-      <text class="font-sans card-sub" x="15" y="50" font-weight="600" fill="#0F172A">Cross-layer diagnosis</text>
-      <text class="font-sans card-sub" x="15" y="64">Detecting simulator artifacts</text>
-
-      <circle cx="5" cy="86" r="2.5" fill="#D97706"/>
-      <text class="font-sans card-sub" x="15" y="90" font-weight="600" fill="#0F172A">Residual risk assessment</text>
-      <text class="font-sans card-sub" x="15" y="104">Evaluating yield &amp; corner margins</text>
-
-      <circle cx="5" cy="126" r="2.5" fill="#D97706"/>
-      <text class="font-sans card-sub" x="15" y="130" font-weight="600" fill="#0F172A">Mask capital signoff</text>
-      <text class="font-sans card-sub" x="15" y="144">Staking $10M–$100M+ NRE budget</text>
-    </g>
-
-    <rect x="14" y="325" width="172" height="54" rx="4" fill="#FEF3C7"/>
-    <text class="font-sans card-sub" x="22" y="342" font-weight="600" fill="#92400E">Role of Authority:</text>
-    <text class="font-sans card-sub" x="22" y="357" fill="#92400E">In-order retirement of architectural</text>
-    <text class="font-sans card-sub" x="22" y="370" fill="#92400E">decisions into physical silicon.</text>
-  </g>
-
-  <!-- ===================================================================== -->
-  <!-- BOTTOM CONTRAST BAR: Architecture 1.0 vs Architecture 2.0             -->
-  <!-- ===================================================================== -->
-  <g transform="translate(40, 485)">
-    <rect width="1000" height="115" rx="6" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.2"/>
-
-    <!-- Title -->
-    <text class="font-sans contrast-hdr" x="20" y="24">The Structural Inversion of Engineering Labor Across Epochs</text>
-
-    <!-- Arch 1.0 box -->
-    <g transform="translate(20, 35)">
-      <rect width="470" height="68" rx="4" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
-      <rect x="10" y="8" width="112" height="18" rx="3" fill="#64748B"/>
-      <text class="font-sans badge-text" x="66" y="20.5" text-anchor="middle">ARCHITECTURE 1.0</text>
-      <text class="font-sans contrast-body" x="132" y="21" font-weight="700" fill="#0F172A">Human operates INSIDE the execution loop</text>
-      <text class="font-sans contrast-body" x="12" y="42" fill="#475569">Architects manually draft RTL, write simulation scripts, parse timing logs,</text>
-      <text class="font-sans contrast-body" x="12" y="58" fill="#475569">and tune microarchitectural knobs by hand. Cognitive effort is trapped in execution mechanics.</text>
-    </g>
-
-    <!-- Arch 2.0 box -->
-    <g transform="translate(510, 35)">
-      <rect width="470" height="68" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.2"/>
-      <rect x="10" y="8" width="112" height="18" rx="3" fill="#0284C7"/>
-      <text class="font-sans badge-text" x="66" y="20.5" text-anchor="middle">ARCHITECTURE 2.0</text>
-      <text class="font-sans contrast-body" x="132" y="21" font-weight="700" fill="#0369A1">Human governs the TWO LOAD-BEARING BOOKENDS</text>
-      <text class="font-sans contrast-body" x="12" y="42" fill="#334155">Execution loop is automated across multi-tool chains. Human judgment is elevated to</text>
-      <text class="font-sans contrast-body" x="12" y="58" fill="#334155"><tspan font-weight="700">intent formulation</tspan> at the input and <tspan font-weight="700">commitment authority</tspan> at the signoff boundary.</text>
-    </g>
+    <!-- Arch 2.0 -->
+    <rect class="input" x="480" y="348" width="450" height="46"/>
+    <text class="label" x="492" y="367" font-size="12px">Architecture 2.0 (Closed-loop system):</text>
+    <text class="sub" x="492" y="383">Execution loop is automated; architect operates at the input and output boundaries.</text>
   </g>
 </svg>
 """
