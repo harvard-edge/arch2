@@ -14,7 +14,7 @@ from matplotlib.patches import Patch
 import numpy as np
 
 # Connect repo root for Arch2 plotting style
-REPO_ROOT = Path("/Users/VJ/GitHub/Arch2")
+REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -26,22 +26,15 @@ apply_style()
 def _declare_font_stack(svg_path: Path) -> None:
     """Ensure font stack is explicitly declared in SVG for headless text rendering."""
     text = svg_path.read_text(encoding="utf-8")
-    if '<style type="text/css">' not in text:
-        text = text.replace(
-            "<defs>",
-            '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
-            1,
-        )
-        svg_path.write_text(text, encoding="utf-8")
+    font_style = '  <style type="text/css">text, tspan { font-family: Arial, Helvetica, sans-serif; }</style>\n'
+    if "</defs>" in text:
+        text = text.replace("</defs>", font_style + "</defs>", 1)
+    else:
+        text = text.replace("<svg", "<svg><defs>\n" + font_style + "</defs>", 1)
+    svg_path.write_text(text, encoding="utf-8")
 
 
 def main():
-    scratch_dir = Path(
-        "/Users/VJ/.gemini/antigravity-cli/brain/1eede783-2881-4556-9742-43bf7b56ec23/scratch"
-    )
-    econ_csv = scratch_dir / "historical_silicon_fabrication_economics.csv"
-    tt_csv = scratch_dir / "tinytapeout_shuttle_submissions_2022_2026.csv"
-
     chapter_img_dir = (
         REPO_ROOT / "book" / "contents" / "chapters" / "12-ecosystem" / "images"
     )
@@ -50,6 +43,9 @@ def main():
         REPO_ROOT / "book" / "contents" / "chapters" / "12-ecosystem" / "data"
     )
     chapter_data_dir.mkdir(parents=True, exist_ok=True)
+
+    econ_csv = chapter_data_dir / "fig-shuttle-cost-democratization-economics.csv"
+    tt_csv = chapter_data_dir / "fig-shuttle-cost-democratization-submissions.csv"
 
     out_svg = chapter_img_dir / "fig-shuttle-cost-democratization.svg"
     out_pdf = chapter_img_dir / "fig-shuttle-cost-democratization.pdf"
@@ -222,7 +218,7 @@ def main():
         "Fabrication Cost (USD, Log Scale)", fontsize=6.2, color=COLORS["ink"]
     )
     ax1.set_title(
-        "A. Physical Silicon Fabrication Cost Barrier",
+        "(a) Physical Silicon Fabrication Cost Barrier",
         fontsize=6.8,
         fontweight="bold",
         pad=8,
@@ -261,7 +257,10 @@ def main():
     ax2.set_ylim(0, 680)
     ax2.set_ylabel("Submissions per Shuttle", fontsize=6.2, color=COLORS["ink"])
     ax2.set_title(
-        "B. Open Silicon Submission Renaissance", fontsize=6.8, fontweight="bold", pad=8
+        "(b) Open Silicon Submission Renaissance",
+        fontsize=6.8,
+        fontweight="bold",
+        pad=8,
     )
     ax2.grid(True, axis="y", color=COLORS["grid"], linewidth=0.45, alpha=0.7, zorder=0)
 
@@ -375,16 +374,6 @@ def main():
     plt.savefig(out_pdf, dpi=300, bbox_inches="tight")
     plt.savefig(out_png, dpi=300, bbox_inches="tight")
     _declare_font_stack(out_svg)
-
-    # Copy files to chapter data directory
-    import shutil
-
-    shutil.copy(
-        econ_csv, chapter_data_dir / "fig-shuttle-cost-democratization-economics.csv"
-    )
-    shutil.copy(
-        tt_csv, chapter_data_dir / "fig-shuttle-cost-democratization-submissions.csv"
-    )
 
     print(f"Figure successfully updated:")
     print(f"  SVG: {out_svg}")

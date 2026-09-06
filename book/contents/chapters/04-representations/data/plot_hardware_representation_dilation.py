@@ -29,7 +29,7 @@ from matplotlib.patches import Patch
 import matplotlib.ticker as ticker
 
 # Connect repo root for imports
-REPO_ROOT = Path("/Users/VJ/GitHub/Arch2")
+REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -343,7 +343,7 @@ def main():
         color=COLORS["row"],
         edgecolor=COLORS["muted"],
         linewidth=0.6,
-        label="Syntactic Scaffolding",
+        label="Syntactic Boilerplate",
         zorder=3,
     )
     b2 = ax2.barh(
@@ -428,7 +428,7 @@ def main():
             facecolor=COLORS["row"],
             edgecolor=COLORS["muted"],
             lw=0.6,
-            label="Scaffolding (Keywords/Delimiters)",
+            label="Syntactic Boilerplate (Keywords/Delimiters)",
         ),
         Patch(
             facecolor=COLORS["workload"],
@@ -445,23 +445,26 @@ def main():
     ]
     ax2.legend(
         handles=ax2_handles,
-        loc="lower center",
-        bbox_to_anchor=(0.5, 1.04),
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.02),
         ncol=3,
-        fontsize=4.6,
+        fontsize=4.8,
         frameon=False,
+        handlelength=1.1,
+        handletextpad=0.4,
+        columnspacing=0.8,
     )
 
     # Titles for subplots
     ax1.set_title(
-        "A. Spatial-Semantic Dilation Across 344 Real Modules",
+        "A. Spatial-Semantic Dilation (Def-Use Distance)",
         fontsize=6.8,
         fontweight="bold",
         color=COLORS["ink"],
         pad=8,
     )
     ax2.set_title(
-        "B. Syntactic Scaffolding vs. Semantic Density",
+        "B. Syntactic Boilerplate vs. Semantic Density",
         fontsize=6.8,
         fontweight="bold",
         color=COLORS["ink"],
