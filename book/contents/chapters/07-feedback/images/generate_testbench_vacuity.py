@@ -99,7 +99,10 @@ def main():
                 va="bottom",
                 fontsize=5.4,
                 color=COLORS["muted"],
-                zorder=5,
+                zorder=7,
+                bbox=dict(
+                    boxstyle="square,pad=0.15", facecolor="#ffffff", edgecolor="none"
+                ),
             )
 
     ax.set_xticks(list(x))
@@ -125,7 +128,7 @@ def main():
     ax.annotate(
         "",
         xy=(xg, line[0]),
-        xytext=(xg, kill[0]),
+        xytext=(xg, kill[0] + 6.0),
         arrowprops=dict(arrowstyle="<->", color=COLORS["constraints_ink"], lw=0.9),
         zorder=6,
     )

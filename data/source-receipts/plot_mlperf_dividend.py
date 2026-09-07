@@ -221,11 +221,11 @@ def main():
     ax2.set_xticks(x_gen)
     ax2.set_xticklabels(generations, fontsize=5.4, color=COLORS["ink"])
     ax2.set_ylabel(
-        "BERT-Large Throughput (rel. to V100 Debut, Log Scale)", fontsize=6.6
+        "Relative Performance Index (V100 Debut = 1.0, Log Scale)", fontsize=6.6
     )
     ax2.tick_params(axis="both", labelsize=5.8)
     ax2.set_title(
-        "B. Hardware Steps vs. Software Expansion",
+        "B. Hardware Generational Steps vs. Software Expansion",
         fontsize=7.6,
         fontweight="bold",
         pad=8,
