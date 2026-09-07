@@ -182,6 +182,49 @@ Downstream tool capacity, not proposal rate, governs pipeline stability (@fig-ca
 
 ![**Candidate generation rate governs downstream tool stage utilization and queue stability.** Stage utilization $\rho_i = \lambda_i / \mu_i$ across three verification filters as proposal rate $g$ increases. Physical signoff ($\mu_3 = 1\ \text{candidate/day}$, $p_3 = 0.50$) forms the bottleneck, hitting $100\%$ queue saturation at $g_{\text{max}} = 40\ \text{proposals/day}$. Exceeding this rate triggers an unstable queue backlog where unverified proposals accumulate unbounded. Values from @tbl-candidate-check-capacity.](images/fig-candidate-check-capacity){#fig-candidate-check-capacity width="100%" fig-alt="Plot of candidate proposal rate g on the x-axis versus stage utilization rho_i on the y-axis across three verification stages. Structural screen (blue line) remains near zero, simulation (dashed orange line) climbs moderately, and physical implementation (solid red line) climbs rapidly, crossing the 100% queue stability threshold at g_max = 40 proposals per day. A callout box marks the selected operating point at g = 32 proposals per day and 80% utilization, while a red shaded region above g = 40 highlights the unstable queue backlog area."}
 
+This operational limit applies strictly to multi-agent generative systems. When autonomous agents independently propose microarchitectural candidates or author testbenches, they act as uncoordinated stochastic arrival processes. Without centralized rate limiting, a multi-agent debate loop rapidly saturates the most restrictive downstream queue, producing high token-generation costs but zero additional validated throughput. Agents must observe the queueing model directly, pausing generation or stiffening local rejection thresholds when downstream utilization $\rho_i$ approaches unity. The system regulates generation dynamically through a backpressure control loop (see the backpressure control loop below).
+
+```pseudocode
+#| label: alg-dynamic-backpressure
+#| html-indent-size: "1.2em"
+#| html-comment-delimiter: "//"
+#| html-line-number: true
+#| html-line-number-punc: ":"
+#| html-no-end: false
+#| pdf-placement: "htb!"
+#| pdf-line-number: true
+
+\begin{algorithm}
+\caption{Dynamic Backpressure for Multi-Agent Generation}
+\begin{algorithmic}
+\Require Nominal generation rate $g_{\text{nom}}$, utilization limit $\rho_{\text{limit}} \in (0, 1)$
+\Require Ordered evaluation stages $S_1 \dots S_M$ with queues $Q_1 \dots Q_M$
+\Require Multi-agent proposal system $\mathcal{A}$
+\State $g \gets g_{\text{nom}}$
+\Loop
+  \State $\rho_{\text{max}} \gets 0$
+  \For{$i = 1 \dots M$}
+    \State $\mu_i \gets \text{MeasureServiceCapacity}(S_i)$
+    \State $\lambda_i \gets \text{MeasureArrivalRate}(Q_i)$
+    \State $\rho_i \gets \lambda_i / \mu_i$
+    \State $\rho_{\text{max}} \gets \max(\rho_{\text{max}}, \rho_i)$
+  \EndFor
+  \If{$\rho_{\text{max}} > \rho_{\text{limit}}$}
+    \State $s \gets \rho_{\text{limit}} / \rho_{\text{max}}$ \Comment{Compute necessary throttling factor}
+    \State $g \gets g \times s$
+    \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
+    \State $\text{RaiseAgentCriticThresholds}(\mathcal{A}, s)$ \Comment{Stiffen local rejections}
+  \ElsIf{$\rho_{\text{max}} < \rho_{\text{limit}} - \epsilon$}
+    \State $g \gets \min(g_{\text{nom}}, g \times (1 + \delta))$ \Comment{Relax backpressure}
+    \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
+    \State $\text{RestoreAgentCriticThresholds}(\mathcal{A})$
+  \EndIf
+  \State $\text{Wait}(\Delta t)$ \Comment{Re-evaluate across fixed control interval}
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
+```
+
 Candidate generation increases arrival rate $g$, deterministic screens reduce downstream load, predictors save expensive evaluations at the cost of qualification overhead, and optimizers direct evaluation allocation. When tool or review stages saturate, adding generation cannot remove the bottleneck. When candidate evaluation is the active stall mode, the remedy the table itself suggests is a cheaper stage in front of the expensive one, and the next question is how much such a stage can buy.
 
 ### Validated Coverage Bounds Screening Speedup
