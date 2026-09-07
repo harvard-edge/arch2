@@ -62,16 +62,7 @@ Because no role binds uniquely to a single family, selecting an architectural me
 
 ### Pre-Flight Evaluation Criteria
 
-Before authorizing expensive model training or configuring complex exploration loops, an architect must systematically evaluate whether an added method is warranted. Prospective studies pass through six pre-flight criteria to determine whether direct tool execution or conventional heuristics settle the question within budget.
-
-1. State the architecture decision, comparator, objectives, constraints, and required output.
-2. Determine whether direct evaluation, conventional algorithms, solvers, compiler passes, heuristics, or parameterized generators settle the question within budget.
-3. Identify the limiting work: candidate construction indicates generation, expensive outcome measurement indicates prediction, and expansive search spaces indicate optimization.
-4. If actions alter subsequent system states, evaluate whether transition-aware predictors or sequential optimizers are required; evaluate candidates independently when states do not couple.
-5. If measurement, checking, or review is the bottleneck, throttle candidate arrivals or upgrade checking efficiency rather than generating additional candidates.
-6. Reject proposed methods when data, representations, legal actions, evaluators, support, total costs, fallbacks, or stopping rules are inadequate.
-
-@fig-method-selection-guide composes those criteria into a conditional flow, branching on which kind of work is limiting rather than on which method is available.
+Before authorizing expensive model training or configuring complex exploration loops, an architect must systematically evaluate whether an added method is warranted. To determine whether direct tool execution or conventional heuristics settle the question within budget, @fig-method-selection-guide composes these constraints into a conditional flow, branching on which kind of work is limiting rather than on which method is available.
 
 ![**Method selection begins by identifying the primary bottleneck work.** Direct evaluation and conventional algorithms provide the first check whenever they settle decisions within budget. Bottlenecks in candidate construction, evaluation cost, or search-space scale route to generation, prediction, optimization, or composed pipelines, while saturated verification paths require throttling candidate arrivals or expanding checking capacity. Every decision branch terminates at declared support bounds, total cost accounting, property-specific checks, fallbacks, and stopping rules.](images/fig-method-selection-guide){#fig-method-selection-guide width="100%" fig-alt="Conditional method-selection flow. An architecture decision and output lead to a test of whether direct evaluation or a conventional method is sufficient. If not, one or more limiting forms of work point toward generation, prediction, optimization, transition-aware methods, or improving a saturated checking path. Every branch ends at declared support, total cost, a named check matched to the consequence, a fallback, and a stopping condition."}
 
@@ -174,46 +165,7 @@ Downstream tool capacity, not proposal rate, governs pipeline stability (@fig-ca
 
 This operational limit applies strictly to uncoordinated LLM generation. When multiple prompts or agents independently propose RTL candidates or author testbenches, they act as uncoordinated stochastic arrival processes. Without centralized rate limiting, an LLM generation loop rapidly saturates the most restrictive downstream EDA queue, producing high token-generation costs but zero additional validated throughput. Agents must observe the queueing model directly, pausing generation or stiffening local rejection thresholds when downstream utilization $\rho_i$ approaches unity. The system must regulate LLM generation dynamically through a throttling loop (see the algorithm below).
 
-```pseudocode
-#| label: alg-dynamic-rate-limiting
-#| html-indent-size: "1.2em"
-#| html-comment-delimiter: "//"
-#| html-line-number: true
-#| html-line-number-punc: ":"
-#| html-no-end: false
-#| pdf-placement: "htb!"
-#| pdf-line-number: true
-
-\begin{algorithm}
-\caption{LLM Generation Throttling for Multi-Agent Generation}
-\begin{algorithmic}
-\Require Nominal generation rate $g_{\text{nom}}$, utilization limit $\rho_{\text{limit}} \in (0, 1)$
-\Require Ordered evaluation stages $S_1 \dots S_M$ with queues $Q_1 \dots Q_M$
-\Require Multi-agent proposal system $\mathcal{A}$
-\State $g \gets g_{\text{nom}}$
-\Loop
-  \State $\rho_{\text{max}} \gets 0$
-  \For{$i = 1 \dots M$}
-    \State $\mu_i \gets \text{MeasureServiceCapacity}(S_i)$
-    \State $\lambda_i \gets \text{MeasureArrivalRate}(Q_i)$
-    \State $\rho_i \gets \lambda_i / \mu_i$
-    \State $\rho_{\text{max}} \gets \max(\rho_{\text{max}}, \rho_i)$
-  \EndFor
-  \If{$\rho_{\text{max}} > \rho_{\text{limit}}$}
-    \State $s \gets \rho_{\text{limit}} / \rho_{\text{max}}$ \Comment{Compute necessary throttling factor}
-    \State $g \gets g \times s$
-    \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
-    \State $\text{RaiseAgentCriticThresholds}(\mathcal{A}, s)$ \Comment{Stiffen local rejections}
-  \ElsIf{$\rho_{\text{max}} < \rho_{\text{limit}} - \epsilon$}
-    \State $g \gets \min(g_{\text{nom}}, g \times (1 + \delta))$ \Comment{Relax rate-limiting}
-    \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
-    \State $\text{RestoreAgentCriticThresholds}(\mathcal{A})$
-  \EndIf
-  \State $\text{Wait}(\Delta t)$ \Comment{Re-evaluate across fixed control interval}
-\EndLoop
-\end{algorithmic}
-\end{algorithm}
-```
+Standard token-bucket and leaky-bucket admission control formulas based on downstream queue utilization ($\rho_i = \lambda_i / \mu_i$) readily adapt to generative loops. When $\rho_i$ exceeds a declared threshold $\rho_{\text{limit}}$, the orchestration harness enforces explicit rate limits on agent token generation, transforming LLM prompt filtering from a heuristic chat persona into a quantifiable admission control mechanism.
 
 Candidate generation increases arrival rate $g$, deterministic screens reduce downstream load, predictors save expensive evaluations at the cost of qualification overhead, and optimizers direct evaluation allocation. When tool or review stages saturate, adding generation cannot remove the bottleneck. When candidate evaluation is the active stall mode, the remedy the table itself suggests is a cheaper stage in front of the expensive one, and the next question is how much such a stage can buy.
 
@@ -959,10 +911,10 @@ Standalone optimization algorithms operate over fixed, pre-constructed parameter
 | **Proposal** | Named candidate or experiment request with identified changes. | Verify legality and scope before invoking expensive tools. |
 | **Screening** | Scoped estimate or ranking with predicted properties and uncertainty. | Route selected candidates to measurement path; retain predictions for qualification. |
 | **Search** | Next candidate or experiment, selection basis, remaining budget. | Hand request to execution environment without mutating design space. |
-| **Critique** | Testable defect, missing assumption, or conflict tied to named artifact. | Route to revision owner; critique neither alters candidates nor replaces checks. |
+| **Static Analysis** | Testable defect, missing assumption, or conflict tied to named artifact. | Route to revision owner; analysis neither alters candidates nor replaces checks. |
 | **Repair** | Revised artifact linked to parent and modification record. | Treat as fresh candidate; rerun affected checks. |
 | **Checking** | Result from named check under declared conditions (including timeouts/failures). | Hand return to verification testbench (@sec-feedback-verification-trust) to determine supported claims. |
-| **Explanation** | Proposed mechanism and distinguishing contrast conditions. | Request targeted measurement; explanation does not substitute for verification. |
+| **Diagnostic Localization** | Proposed mechanism and distinguishing contrast conditions. | Request targeted measurement; analysis does not substitute for verification. |
 | **Coordination** | Ordered request graph with dependencies, budgets, and artifact IDs. | Hand requests to environment for tool orchestration. |
 : **Engineering roles require explicit outputs and handoff contracts.** Role definitions decouple workflow logic from specific human or automated executors. {#tbl-method-role-handoffs tbl-colwidths="[20,38,42]"}
 
