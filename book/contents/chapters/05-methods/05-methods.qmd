@@ -8,16 +8,6 @@ format:
 
 ![](images/ch05-cover-map.svg){fig-alt="Four architecture conditions map to direct comparison, prediction, generation, or optimization, with a named check, fallback, and stopping condition."}
 
-::: {.epigraph}
-> "Data can tell you that the people who took a medicine recovered faster than those who did not take it, but they can't tell you why."
->
-> — Judea Pearl and Dana Mackenzie, *The Book of Why* (2018) [@PearlMackenzie2018BookOfWhy]
-:::
-
-::: {.column-margin}
-**Author's Note.** Judea Pearl, the Turing Award winner behind modern causal inference, drew the line between what observational data can show (correlation) and what it cannot (cause). A statistical surrogate can surface a high-scoring candidate quickly; it cannot say which microarchitectural mechanism produced the score. That gap is why every method this chapter admits is paired with a physical check.
-:::
-
 Method selection begins with the physical bottleneck rather than the algorithm. After structuring hardware configurations and dynamic workload states into coupled state tuples $s = \langle s_{\text{design}}, s_{\text{env}} \rangle$ (@sec-data-representations-world-models), an architect must answer three governing questions before authorizing machine learning. First, which engineering job acts as the active constraint? Second, does an added learned model genuinely remove that constraint? Third, what is the smallest sufficient method that preserves an inspectable verification check and a deterministic fallback?
 
 Engineering teams frequently reach for complex generative foundation models or reinforcement-learning loops under the assumption that end-to-end automation accelerates discovery. In physical silicon engineering, that unexamined default wastes engineering budgets. Setting up an autoregressive code generator or a multi-agent debate ring to size an execution unit or tune a five-parameter crossbar arbiter consumes weeks of prompt engineering and substantial compute, only to leave the team managing uncalibrated surrogate drift. Meanwhile, an analytical roofline model, a direct simulation sweep, or a Bayesian optimizer with a Matérn kernel settles the question in minutes, with an uncertainty estimate the architect can inspect.
@@ -176,16 +166,16 @@ $${#eq-finalist-throughput}
 
 Under these parameters, @eq-finalist-throughput yields 0.40 finalists per day. Finalist flow is not decision throughput; architecture decisions require matched baselines, physical signoff, and design-team review.
 
-Saturating downstream evaluation queues does not accelerate architecture decisions; it shifts latency from candidate drafting to simulation scheduler backlogs. The control action is backpressure. A closed-loop design system couples its proposal engine to downstream utilization and, as signoff queues approach capacity ($\rho_i \to 1$), raises surrogate screening thresholds, shrinks generation batches, or halts rollout expansion.
+Saturating downstream evaluation queues does not accelerate architecture decisions; it shifts latency from candidate drafting to simulation scheduler backlogs. The control action is rate-limiting. A closed-loop design system couples its proposal engine to downstream utilization and, as signoff queues approach capacity ($\rho_i \to 1$), raises surrogate screening thresholds, shrinks generation batches, or halts rollout expansion.
 
 Downstream tool capacity, not proposal rate, governs pipeline stability (@fig-candidate-check-capacity). Pushing generation beyond $g_{\text{max}} = 40\ \text{proposals/day}$ forces $\rho_3 \ge 1.0$, creating an unstable backlog where unverified proposals accumulate faster than signoff tools can resolve them.
 
 ![**Candidate generation rate governs downstream tool stage utilization and queue stability.** Stage utilization $\rho_i = \lambda_i / \mu_i$ across three verification filters as proposal rate $g$ increases. Physical signoff ($\mu_3 = 1\ \text{candidate/day}$, $p_3 = 0.50$) forms the bottleneck, hitting $100\%$ queue saturation at $g_{\text{max}} = 40\ \text{proposals/day}$. Exceeding this rate triggers an unstable queue backlog where unverified proposals accumulate unbounded. Values from @tbl-candidate-check-capacity.](images/fig-candidate-check-capacity){#fig-candidate-check-capacity width="100%" fig-alt="Plot of candidate proposal rate g on the x-axis versus stage utilization rho_i on the y-axis across three verification stages. Structural screen (blue line) remains near zero, simulation (dashed orange line) climbs moderately, and physical implementation (solid red line) climbs rapidly, crossing the 100% queue stability threshold at g_max = 40 proposals per day. A callout box marks the selected operating point at g = 32 proposals per day and 80% utilization, while a red shaded region above g = 40 highlights the unstable queue backlog area."}
 
-This operational limit applies strictly to multi-agent generative systems. When autonomous agents independently propose microarchitectural candidates or author testbenches, they act as uncoordinated stochastic arrival processes. Without centralized rate limiting, a multi-agent debate loop rapidly saturates the most restrictive downstream queue, producing high token-generation costs but zero additional validated throughput. Agents must observe the queueing model directly, pausing generation or stiffening local rejection thresholds when downstream utilization $\rho_i$ approaches unity. The system regulates generation dynamically through a backpressure control loop (see the backpressure control loop below).
+This operational limit applies strictly to uncoordinated LLM generation. When multiple prompts or agents independently propose RTL candidates or author testbenches, they act as uncoordinated stochastic arrival processes. Without centralized rate limiting, an LLM generation loop rapidly saturates the most restrictive downstream EDA queue, producing high token-generation costs but zero additional validated throughput. Agents must observe the queueing model directly, pausing generation or stiffening local rejection thresholds when downstream utilization $\rho_i$ approaches unity. The system must regulate LLM generation dynamically through a throttling loop (see the algorithm below).
 
 ```pseudocode
-#| label: alg-dynamic-backpressure
+#| label: alg-dynamic-rate-limiting
 #| html-indent-size: "1.2em"
 #| html-comment-delimiter: "//"
 #| html-line-number: true
@@ -195,7 +185,7 @@ This operational limit applies strictly to multi-agent generative systems. When 
 #| pdf-line-number: true
 
 \begin{algorithm}
-\caption{Dynamic Backpressure for Multi-Agent Generation}
+\caption{LLM Generation Throttling for Multi-Agent Generation}
 \begin{algorithmic}
 \Require Nominal generation rate $g_{\text{nom}}$, utilization limit $\rho_{\text{limit}} \in (0, 1)$
 \Require Ordered evaluation stages $S_1 \dots S_M$ with queues $Q_1 \dots Q_M$
@@ -215,7 +205,7 @@ This operational limit applies strictly to multi-agent generative systems. When 
     \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
     \State $\text{RaiseAgentCriticThresholds}(\mathcal{A}, s)$ \Comment{Stiffen local rejections}
   \ElsIf{$\rho_{\text{max}} < \rho_{\text{limit}} - \epsilon$}
-    \State $g \gets \min(g_{\text{nom}}, g \times (1 + \delta))$ \Comment{Relax backpressure}
+    \State $g \gets \min(g_{\text{nom}}, g \times (1 + \delta))$ \Comment{Relax rate-limiting}
     \State $\text{EnforceTokenRateLimit}(\mathcal{A}, g)$
     \State $\text{RestoreAgentCriticThresholds}(\mathcal{A})$
   \EndIf
@@ -1056,7 +1046,7 @@ Method choice is formalized across this chapter as a deliberate architectural de
 
 - **What does grammar-constrained decoding cost in candidate diversity?** Constrained decoding prunes invalid token sequences early because syntactically invalid designs offer zero utility. However, masking logits to enforce an HDL grammar also reshapes the underlying probability distribution the generative model was trained to sample from, suppressing valid but unconventional microarchitectural idioms. Whether grammar-constrained decoding prunes high-performing non-standard topologies, or the distribution shift from token masking is strictly cheaper than post-generation syntactic repair, defines where syntax filters belong in the generative pipeline.
 
-- **How do closed-loop design systems prevent queueing collapse when generative optimizers succeed?** The stability bound (@eq-queue-stability-bound) treats each pass rate $p_j$ as a constant, and the blowup paradox of @sec-sample-efficiency-under-expensive-feedback is what happens when an improving generator raises it. Whether evaluation pipelines can dynamically reprovision compute tiers and apply admission backpressure as candidate acceptance rates rise, or improving optimizers inevitably trigger downstream verification thrash, defines the queueing stability challenge in closed-loop search.
+- **How do closed-loop design systems prevent queueing collapse when generative optimizers succeed?** The stability bound (@eq-queue-stability-bound) treats each pass rate $p_j$ as a constant, and the blowup paradox of @sec-sample-efficiency-under-expensive-feedback is what happens when an improving generator raises it. Whether evaluation pipelines can dynamically reprovision compute tiers and apply generation throttling as candidate acceptance rates rise, or improving optimizers inevitably trigger downstream verification thrash, defines the queueing stability challenge in closed-loop search.
 
 - **When does heterogeneous method composition outperform tuned single-method baselines under matched compute budgets?** Composing multi-method pipelines is justified only when each added component performs a computational job that simpler alternatives cannot (@tbl-method-organization). Yet multi-tier compositions introduce surrogate qualification overhead, chained tool translation errors, and pipeline integration latency. A fair comparison must charge each workflow in identical compute budgets, accounting for qualification runs, failed invocations, surrogate recalibrations, and human repair hours. Whether multi-method compositions consistently beat fine-tuned single methods under matched compute budgets, or the integration overhead of chained models cancels their theoretical advantage, defines the core value proposition of an AI-native design system.
 
@@ -1069,7 +1059,7 @@ An algorithm cannot be judged apart from what it costs to run. A multi-tier pipe
 ::: {.callout-takeaways}
 - **Role first, then family, then technique.** Define the engineering role (propose, screen, search, check) before selecting prediction, generation, or optimization, choosing concrete mechanisms and composing pipelines only when distinct computational jobs exist.
 - **Smallest sufficient method.** Deploy the simplest method addressing the active bottleneck, defaulting to direct simulation sweeps or analytical rooflines whenever budget permits before authorizing learned surrogates.
-- **Feed-forward queue stability.** Multi-stage evaluation pipelines must hold candidate arrivals under the stability bound with active backpressure, so that downstream physical signoff queues do not collapse as upstream generator yield improves. A cheap screen widens that path only as far as its validated coverage reaches, never as far as its speed suggests.
+- **Feed-forward queue stability.** Multi-stage evaluation pipelines must hold candidate arrivals under the stability bound with active generation throttling, so that downstream physical signoff queues do not collapse as upstream generator yield improves. A cheap screen widens that path only as far as its validated coverage reaches, never as far as its speed suggests.
 - **Optimizer's curse and calibrated bounds.** Predictive surrogates systematically suffer positive selection bias; screening must pair them with calibrated prediction intervals, monitored coverage, and empirical shrinkage so that predicted wins survive physical signoff.
 - **Composition with independent oracles.** Generated candidates and CUDA/RTL drafts must pass symbolic parsers, formal assertion checks, and noncorrelated verification critics rather than self-verifying testbenches.
 :::
