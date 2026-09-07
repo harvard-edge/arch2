@@ -277,19 +277,70 @@ Harnesses attach jobs to attempts upon submission, using idempotency tokens (`su
 
 What replaces `step()` is a three-call shape (@lst-harness-interface). The caller submits a typed request and receives an identifier, not a result. It polls that identifier while the job waits behind a license or runs for hours, reading a scheduling state the harness owns (@fig-job-lifecycle). It collects the execution record only when the harness reports a terminal state, and a cancellation returns only after the whole process tree has exited. Every state a job can occupy between submission and collection is a value the caller can read, which is what lets a search loop keep proposing while its earlier requests are still queued.
 
-```{mermaid}
+```{python}
 #| label: fig-job-lifecycle
-#| fig-cap: "**Asynchronous job lifecycle.** A job progresses through explicit scheduling states. Preempted runs can queue again if policy permits, while terminal states trigger execution record generation."
+#| fig-cap: "**Asynchronous job lifecycle.** A job progresses through explicit scheduling states. Preempted runs can queue again if policy permits, while terminal states trigger execution record generation. Author-constructed illustrative diagram."
 #| fig-alt: "State machine diagram showing a job moving from Queued to Running, and then to terminal states Completed or Failed, or to Evicted which can cycle back to Queued."
-stateDiagram-v2
-    [*] --> Queued : Submit request
-    Queued --> Running : Allocate resources
-    Running --> Completed : Tool exits cleanly
-    Running --> Failed : Tool crashes or times out
-    Running --> Evicted : Scheduler preemption
-    Evicted --> Queued : Retry policy allows
-    Failed --> [*]
-    Completed --> [*]
+#| out-width: "100%"
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+fig, ax = plt.subplots(figsize=(6, 2.5))
+ax.axis("off")
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 4)
+
+states = {
+    "Queued": (2, 2.5),
+    "Running": (5, 2.5),
+    "Completed": (8, 3.5),
+    "Failed": (8, 2.5),
+    "Evicted": (8, 1.5),
+}
+
+# Draw nodes
+for name, (x, y) in states.items():
+    ax.text(x, y, name, ha="center", va="center", fontsize=8, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.6", facecolor=COLORS["note_fill"],
+                      edgecolor=COLORS["ink"], linewidth=1.2), zorder=3)
+
+# Draw edges
+def draw_edge(start, end, label, offset_y=0, rad=0.0):
+    x1, y1 = states[start]
+    x2, y2 = states[end]
+    ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
+                arrowprops=dict(arrowstyle="->", color=COLORS["ink"], linewidth=1.2,
+                                connectionstyle=f"arc3,rad={rad}", shrinkA=15, shrinkB=15), zorder=2)
+
+    # Place label
+    if start == "Queued" and end == "Running":
+        ax.text((x1+x2)/2, (y1+y2)/2 + 0.15, label, ha="center", va="bottom", fontsize=6, color=COLORS["ink"])
+    elif start == "Running" and end == "Completed":
+        ax.text((x1+x2)/2 - 0.2, (y1+y2)/2 + 0.15, label, ha="right", va="bottom", fontsize=6, color=COLORS["ink"], rotation=15)
+    elif start == "Running" and end == "Failed":
+        ax.text((x1+x2)/2, (y1+y2)/2 + 0.15, label, ha="center", va="bottom", fontsize=6, color=COLORS["ink"])
+    elif start == "Running" and end == "Evicted":
+        ax.text((x1+x2)/2 - 0.2, (y1+y2)/2 - 0.15, label, ha="right", va="top", fontsize=6, color=COLORS["ink"], rotation=-15)
+    elif start == "Evicted" and end == "Queued":
+        # Evicted to Queued curve
+        ax.text((x1+x2)/2, (y1+y2)/2 - 0.8, label, ha="center", va="top", fontsize=6, color=COLORS["ink"])
+
+draw_edge("Queued", "Running", "Allocate resources")
+draw_edge("Running", "Completed", "Tool exits cleanly")
+draw_edge("Running", "Failed", "Tool crashes or times out")
+draw_edge("Running", "Evicted", "Scheduler preemption")
+draw_edge("Evicted", "Queued", "Retry policy allows", rad=-0.3)
+
+# Submit edge
+ax.annotate("", xy=states["Queued"], xytext=(0, 2.5),
+            arrowprops=dict(arrowstyle="->", color=COLORS["ink"], linewidth=1.2, shrinkB=15), zorder=2)
+ax.text(1, 2.65, "Submit request", ha="center", va="bottom", fontsize=6, color=COLORS["ink"])
+
+plt.show()
 ```
 
 ```{.yaml #lst-harness-interface lst-cap="**Harness interface shape.** The caller submits a typed request and receives an identifier, polls it while the job queues or runs, and collects the execution record at a terminal state. The harness owns the wait."}
