@@ -12,7 +12,7 @@ Translating the architecture moonshot into engineering practice under the compou
 
 Without an explicit life cycle, automated exploration fails in several distinct ways. Optimizers drift from the original architectural question, generate microarchitectural configurations that cannot be placed or routed, or mistake simulation infrastructure crashes for physical breakthroughs. They game proxy reward metrics, mistaking benchmark shortcuts or unmodeled interconnect bottlenecks for silicon performance [@AmodeiEtAl2016Concrete; @Goodhart1975MonetaryManagement]. When an optimizer is rewarded solely on cycle counts without modeled wire $RC$ delays, it widens crossbars and inflates buffer arrays until the floorplan becomes an unroutable thicket of timing violations and dynamic power spikes.
 
-Because each failure mode requires a different engineering repair, and defect remediation costs escalate by orders of magnitude when errors escape downstream into physical synthesis or mask fabrication, the AI-native design system must partition exploration into isolated failure domains. Six life-cycle responsibilities carry that partition: *Formulate*, *Explore*, *Implement*, *Evaluate*, *Interpret*, and *Commit*. Rather than marching through an inflexible pipeline, the life cycle supports feedback-driven returns to the responsibility that owns an inadequate result. Every study records its path and any resulting iterations in a structured study record, indexed by a standardized Design-Loop Card (@sec-design-loop-card), binding each candidate attempt to its target question, allowed mutations, compute budget, physical rejection criteria, and named commitment authority.
+Because each failure mode requires a different engineering repair, and defect remediation costs escalate by orders of magnitude when errors escape downstream into physical synthesis or mask fabrication, the AI-native design system must partition exploration into isolated failure domains [@NASA2017SystemsEngineeringHandbook]. Six life-cycle responsibilities carry that partition: *Formulate*, *Explore*, *Implement*, *Evaluate*, *Interpret*, and *Commit*. Rather than marching through an inflexible waterfall pipeline, the life cycle supports error-isolated paths, including feedback-driven returns to the responsibility that owns an inadequate result. Every study records its path and any resulting iterations in a structured study record, indexed by a standardized Design-Loop Card (@sec-design-loop-card), binding each candidate attempt to its target question, allowed mutations, compute budget, physical rejection criteria, and named commitment authority.
 
 ::: {.callout-learning-objectives}
 This chapter establishes the following learning objectives:
@@ -26,30 +26,109 @@ This chapter establishes the following learning objectives:
 
 ## The Six Stages of the AI-Native Life Cycle {#sec-arch2-ontology}
 
-When automated workflows propose candidate configurations in volume, diagnosing root-cause failures becomes the primary architectural bottleneck. If an invalid memory interface handshake, a malformed simulation build script, an unroutable macro placement, and an under-constrained power model all return a generic non-zero exit code, indiscriminate retries squander scarce compute.
+When automated workflows propose candidate configurations in volume, diagnosing root-cause failures becomes the primary architectural bottleneck. If an invalid memory interface handshake, a malformed simulation build script, an unroutable macro placement, and an under-constrained power model all return a generic non-zero exit code, indiscriminate retries squander scarce compute. Reformulating an unachievable clock frequency target is a different repair from correcting an illegal microarchitectural parameter or patching a broken simulator wrapper, and explicit stage boundaries exist so that each defect routes to the responsibility equipped to fix it.
 
-To see why the six stages (Formulate, Explore, Implement, Evaluate, Interpret, Commit) matter mechanically, consider a concrete failure in the Lighthouse XR subsystem targeted at a 3\ nm node.
+A production flow already carries fixed decision points, register-transfer level (RTL) freeze, synthesis handoff, floorplan freeze, and timing signoff among them, and the six stages do not replace those. A milestone check judges an artifact at a point in the schedule, whereas a stage boundary judges the reasoning that produced it, so a violation surfaced at timing signoff can be routed to the question, the candidate, the tool run, or the measurement that owns it rather than to the milestone that happened to expose it.
 
-In the *Formulate* stage, the architect defines a strict 3\ W thermal limit and allows the AI agent to search for an L2 cache capacity between 2\ MiB and 4\ MiB. In the *Explore* stage, the agent's generative model proposes a dense 4\ MiB static random-access memory (SRAM) configuration, predicting a 15% reduction in dynamic memory misses.
+::: {.callout-design-principle title="Isolate Failure Domains for Repair"}
+**The principle:** Structure the AI-native design life cycle so that independently failing outputs belong to distinct responsibilities.
 
-The system then moves to the *Implement* and *Evaluate* stages. It emits the register-transfer level (RTL), synthesizes the netlist, and triggers a physical design tool (such as OpenROAD). The tool fails. It reports a 150\ ps hold-timing violation. At 3\ nm, the high parasitic wire resistance ($R$) and capacitance ($C$) on the lowest metal layers ($M_0$--$M_2$) mean the 4\ MiB macro physically spreads too far from the memory controller.
+**The application:** Route any inadequate result directly back to the responsibility that owns its repair, preserving original design questions, selected candidates, tool configurations, and valid prior results to prevent redundant computation and global state corruption.
+:::
 
-If this workflow lacked stage boundaries, the system would merely register a "failed run" and blindly sample another configuration. Instead, the *Interpret* stage leverages heuristic analysis to triage the multi-domain failure. Standardized AI schemas log the exact OpenROAD error code, mapping the timing violation specifically to wire delay rather than logic depth. The agent determines the failure is not due to a bad SRAM compiler, but because the physical bounding box was violated.
+The life cycle arranges these responsibilities as six sequential stages. A stage is a position in that sequence; a responsibility is the ownership a repair routes back to, which is why a review at Stage 6 that finds the question was never answerable re-enters Formulate's responsibility without restarting the study.
 
-Finally, in the *Commit* stage, the architect (or an overseeing evaluator agent) reviews this precise failure artifact. The 4\ MiB candidate is rejected, and the failure is routed back to the *Formulate* stage with a tighter spatial constraint, preventing the generative model from proposing physically unroutable macros in the future.
+1. **Formulate (Stage 1).** Translates product intent into an explicit architectural question, legal microarchitectural bounds, baseline comparators, and verifiable acceptance checks.
+2. **Explore (Stage 2).** Covers the declared legal design space, generating legal candidate configurations and pruning physically unviable subspaces early.
+3. **Implement (Stage 3).** Translates candidate parameters into testable representations (transaction-level models (TLMs), synthesizable register-transfer level (RTL), and target software binaries) inside sandboxed execution environments.
+4. **Evaluate (Stage 4).** Runs multi-fidelity evaluation flows (analytical models, cycle-accurate simulators, and physical electronic design automation (EDA) engines) and measures the evidence against declared constraints.
+5. **Interpret (Stage 5).** Separates top-line metric changes from simulation artifacts, establishing physical causality for observed power, performance, and area (PPA) differences.
+6. **Commit (Stage 6).** Assembles the complete study record, states the supported technical recommendation, and authorizes in-order architectural retirement under named human commitment authority.
 
-This is how AI agents interface across stages: via standardized schemas that pass constraints down and physical failure telemetry back up. The stages are not a bureaucratic checklist; they are the required mechanisms to route a 3\ nm timing violation to the specific algorithm that can fix it.
+These six stages are the activities behind the evidence chain of @sec-moonshot, which ran from compact intent through an executable specification, a candidate artifact, a physical measurement, and an architecture result to a human commitment. Formulate produces the specification, Explore and Implement together produce the candidate artifact, Evaluate produces the measurement, Interpret produces the result, and Commit produces the decision. The earlier chain names what a study leaves behind; the stages name the work that leaves it there and the responsibility a defect routes back to.
+
+To ground these responsibilities, the chapter carries forward the prospective Lighthouse cache study, the mobile extended reality (XR) system-on-chip (SoC) subsystem introduced in @sec-moonshot, targeting real-time tracking and neural rendering under a composite 3\ W thermal design power (TDP) signoff envelope across declared process, voltage, and temperature (PVT) corners and eight requirement domains (@sec-intent-vs-spec). The six life-cycle responsibilities show how this architectural intent would reach a reviewed decision while isolating failure domains (@fig-ontology-loop). The three layers defined in @sec-moonshot (@fig-ch01-three-layers-ai-integration) sit at different places in this sequence: a Layer 1 assistant drafts an RTL module or a simulation script inside one stage, a Layer 2 optimizer closes an inner loop across Explore, Implement, and Evaluate inside a frozen container but cannot renegotiate an interface contract, and only a Layer 3 system runs all six stages with the interfaces open to change.
+
+![**The six-stage design life cycle carries system intent to a reviewed decision.** The life cycle organizes architectural exploration into six sequential stages: Formulate, Explore, Implement, Evaluate, Interpret (Interpret and Explain), and Commit (Review and Decide). Direct return paths allow inadequate outputs or review feedback to cycle back to the owning stage (such as revising the scoped plan in Stage 1), preventing indiscriminate full-system restarts.](images/fig-ontology-loop){#fig-ontology-loop width="100%" fig-alt="Six numbered responsibilities arranged in two rows showing the design life cycle. A return path shows that review can revise the question, while targeted repair paths return inadequate outputs directly to the specific stage responsible for the defect."}
+
+Operating across these six stages also clarifies how the overall engineering process is structured. Four precise terms distinguish the complete discipline from the parts that repeat across iterations.
+
+- **Life cycle.** Names the complete set of responsibilities required to move from intent to a defensible decision.
+- **Scoped study.** Applies those exact responsibilities to one specific architecture question and one intended decision.
+- **Design loop.** Applies the operational condition established in @sec-design-loop-no-longer-scales: returned evidence changes represented design state and triggers another allowed action through the relevant responsibilities. Merely advancing through a fixed, predeclared sweep remains a design path rather than a design loop.
+- **Study record.** Preserves the core question, attempts, observations, conclusions, and unresolved issues so another architect can inspect the work.
+
+The line between the life cycle and one scoped study is the one that determines what can be reused and what must be rerun. Formally separating the life cycle from a scoped study allows architecture teams to prevent localized exploration failures from derailing overall project momentum. A failed candidate in one loop simply generates evidence for the study record without invalidating the broader system architecture.
+
+The life cycle is meant to nest. A subsystem sizing study hands a decision to a microarchitecture study, which hands one to RTL implementation and then to physical closure, each organized by the same six responsibilities and indexed by its own Design-Loop Card. How nested studies share a contract, and what a parent's permitted changes say about a child's, is an open question this chapter returns to at its close; the contract developed here is for one study running alone. If a check reveals that a baseline simulation used an obsolete memory model, the scoped study routes the comparison back to the stage that must repeat it, while the study record preserves why the prior result was superseded. Formal stage boundaries define explicit verification contracts and targeted repair paths across the life cycle (@tbl-stage-seams).
+
+| **Stage** | **Receives** | **Produces and checks** | **Inadequacy and repair routing** |
+| :--- | :--- | :--- | :--- |
+| **Formulate** | Product intent, a design question, and known requirements. | A scoped plan declaring question, comparator, scope, constraints, and exclusions. | Route an inadequate plan back to intent or scope refinement ($\rightarrow$ Stage 1). |
+| **Explore** | Scoped plan and declared legal design space. | One or more legal candidates and search trajectory record. | Route an illegal candidate or uninformative search back to legal design space boundaries ($\rightarrow$ Stage 2). |
+| **Implement** | Candidate configuration, requested tool work, and input schemas. | An execution record showing requested work ran on intended state. | Route an unexecuted or malformed tool run back to request or tool infrastructure setup ($\rightarrow$ Stage 3). |
+| **Evaluate** | Verified execution record, planned metrics, and validity conditions. | A comparison stating which checks passed, failed, or remain unresolved. | Route a measurement failure back to the measurement plan ($\rightarrow$ Stage 4); reject candidate if checks fail. |
+| **Interpret** | Checked result and proposed physical mechanism. | An account supported, revised, or contradicted by direct physical reasoning. | Route an unverified mechanism back to hypothesis testing ($\rightarrow$ Stage 5) or request additional observations ($\rightarrow$ Stage 4). |
+| **Commit (Review and Decide)** | Scoped plan and complete study record. | Actionable decision (advance, reject, revise, or stop) within declared scope. | Reopen the stage owning missing evidence ($\rightarrow$ Stages 1–5) or close the study cleanly. |
+: **Each responsibility maintains distinct input, output, and repair contracts.** Stage boundaries separate work that can fail independently and define target repair paths. {#tbl-stage-seams tbl-colwidths="[16,26,28,30]"}
+
+Read down the first two columns and the sequence turns out to be a chain rather than a list: what each stage receives is what the stage above it produces. That is what makes the boundaries contracts instead of labels, because a stage can refuse work that arrives without the output it was promised. The Commit row is the exception worth noticing, since it is the only one whose repair route can reopen any earlier stage rather than the one directly above it. A review that finds the question unanswerable is not a failure of the measurement that exposed it.
+
+### Stage 1: Formulating Core Architecture Questions
+
+Formulation translates an open-ended product goal into a bounded, testable hypothesis. Instead of asking a generative agent to "design a better neural processing unit (NPU)," formulation specifies the exact constraints. For instance, the architect bounds the problem to closing setup timing on a 3nm NPU accumulator block within a 3\ W thermal design power (TDP) envelope, under a specific matrix multiplication workload.
+
+Permitted changes and exclusions declare what the study may touch, ensuring downstream observations trace directly to the decision. The run budget bounds computational effort, preventing unconstrained hill-climbing on simulation noise. Formulation culminates in an architectural claim, making the expected result falsifiable.
+
+### Stage 2: Exploring Alternatives
+
+Once the architecture question is bound, exploration must remain inside the declared legal space. Exploration covers the legal design space while pruning invalid configurations early. In our 3nm NPU example, increasing the accumulator bandwidth is never a scalar parameter change. Widening the data path means the synthesis tool must place more standard cells, and the longer global interconnect adds wire $RC$ delay and static leakage that the floorplan must absorb.
+
+Exploration evaluates these coupled alternatives across pipeline depths and buffer partitions, recording why regions were sampled or pruned. If an alternative alters a declared interface or constraint, the study returns to formulation.
+
+### Stage 3: Implementing Testable Representations
+
+A promising candidate in a parameter dictionary cannot yield empirical evidence until translated into an executable representation. Implementation bridges abstract parameter selections and concrete tool execution by instantiating transaction-level models (TLMs), generating synthesizable RTL, and compiling target software binaries.
+
+For the NPU block, implementation means pushing the RTL through a physical synthesis pipeline (like OpenROAD or Synopsys Fusion Compiler) to generate an actual placed gate-level netlist. Implementation checks confirm that each tool actually executed the requested parameters. A syntactically valid configuration can fail silently by selecting the wrong top-level module, tying off an active-low reset, or skipping the target workload phase. Tool crashes, license timeouts, and script errors are infrastructure failures, not architectural rejections.
+
+### Stage 4: Evaluating Candidates
+
+Once implementation confirms clean execution, evaluation compares candidate evidence against the declared design constraints. A study evaluates through several tools rather than one, because no single tool observes every property a candidate must satisfy.
+
+In our 3nm NPU scenario, the candidate RTL might compile cleanly and simulate with high instructions per cycle (IPC) in a C++ simulator, but evaluation at the physical layer reveals the truth. Static timing analysis (STA) exposes a 150\ ps setup timing violation on the accumulator paths, and power analysis reveals dynamic voltage drop ($IR$-drop) starving critical buffers. The evaluation stage explicitly captures these metrics without trying to fix them.
+
+### Stage 5: Interpreting Empirical Results
+
+A passing evaluation score demonstrates that a candidate satisfied quantitative bounds, but a failing score requires diagnosis. Stage 5 separates top-line metric changes from tool measurement anomalies and isolates the microarchitectural mechanism that drives an observed gain or failure.
+
+The architect must interpret the NPU timing violation: is the 150\ ps negative slack caused by the generative agent proposing an unroutable 128-port crossbar (a structural defect), or is the power grid simply under-constrained in the physical design kit (PDK) (a tool defect)? Establishing physical causality keeps a reported improvement or failure tied to synthesizable hardware behavior rather than to a simulator blind spot.
+
+### Stage 6: Reviewing and Committing Handoffs
+
+Commitment translates a supported technical recommendation into irreversible physical or organizational action. It is the boundary between an automated simulation sweep and an authorized architectural decision.
+
+If the NPU block passes all physical constraints and resolves the timing violations, the commitment authority (a human architect or strict policy engine) signs off on the mask freeze. If it fails, the study closes with a rejected slate. Commitment ensures that a loop that cannot close timing on a 3nm floorplan signals a formulation defect or an exploration failure, rather than spinning in an infinite loop of wasted compute.
 
 ## Design-Loop Cards and Documentation {#sec-design-loop-card}
 
-The Design-Loop Card is the standardized schema that agents use to interface across the stages just described. Rather than distributing assumptions across Python scripts, TCL constraints, and simulation logs, the card bundles the necessary context into a single, machine-readable artifact (e.g., in YAML or JSON).
+Whether a design loop halts entirely or routes revisions back to a prior stage, maintaining transparent design provenance across automated sweeps requires a structured record. Without explicit logging, automated exploration degenerates into uninspectable shadow state. In silicon engineering, shadow state is a persistent hazard where automated scripts overwrite scratch directories, leaving zero record of which compiler flags, standard-cell libraries, or floorplan constraints produced a passing timing run. To establish clear architectural accountability, the AI-native design system introduces the Design-Loop Card [@MitchellEtAl2019ModelCards; @GebruEtAl2021Datasheets].
 
-The card explicitly declares:
-1. **The Question & Comparator:** What is being tested (e.g., 4\ MiB vs 2\ MiB) and what is the baseline.
-2. **The Scope & Constraints:** The allowed mutations (e.g., L2 capacity) and the hard physical limits (e.g., 3\ W thermal design power (TDP), $1.50\text{ mm}^2$ max area, 2.5\ ns access latency).
-3. **Execution Budgets:** The compute allocation for the search (e.g., maximum 50 simulation runs).
+> **Design-Loop Card.** A standardized index that binds automated tool execution directly to human design intent, qualified evidence, and explicit approval rights.
 
-When the 4\ MiB candidate fails timing, the physical tool appends the error trace directly to the card. The next agent reads the updated card, recognizes the $M_0$ layer congestion limit has been hit, and updates its generative search space accordingly.
+> **Study record.** The cumulative account of one scoped architecture study. It retains the plan, stage outputs, failed or unevaluated work, unresolved questions, stopping reason, and supported decision, with links to the detailed artifacts needed for review or replay.
+
+A three-tier structural hierarchy connects high-level project intent to multi-tool execution flows through a scoped study container (@fig-structured-layer-above-rtl).
+
+![**Scoped architecture studies connect system intent to implementation evidence.** The hierarchy organizes architectural reasoning across three structural tiers: high-level architecture intent and human judgment (top), a scoped study container binding the question, claim, constraints, linked artifacts, and named owner (middle), and multi-tool implementation engines spanning simulators, compilers, and EDA signoff flows (bottom). The study container aggregates heterogeneous tool returns into an inspectable unit of evidence before decisions reach review. Conceptual structural hierarchy.](images/fig-structured-layer-above-rtl){#fig-structured-layer-above-rtl width="100%" fig-alt="Three-tier diagram showing architecture intent and judgment above a scoped architecture study container. Returns from heterogeneous implementation tools join a common path back to the study."}
+
+The study container decouples overarching intent from multi-tool execution, aggregating heterogeneous simulator, compiler, and physical signoff returns into an inspectable unit of evidence. Placing this container between high-level intent and low-level execution tools prevents raw simulation telemetry from masquerading as finished architectural choices. Every reported metric is contextualized by its generating constraints, ensuring that cycle-count reductions or power estimates remain bound to their declared PVT corners, standard-cell libraries, and Synopsys Design Constraints (SDC) timing rules.
+
+The prospective Lighthouse cache study illustrates how a Design-Loop Card would index the study record as evidence accumulates (@fig-filled-design-loop-card). This standardized format would let an architect reviewing a later decision trace the selected architecture back to its physical evidence without treating planned fields as completed results.
+
+![**An illustrative study card separates planned work, evidence, and decision authority.** The card indexes the prospective Lighthouse cache comparison. Its four-execution entry is a budget, and the evidence and decision fields remain open until valid returns qualify them.](images/fig-filled-design-loop-card){#fig-filled-design-loop-card width="100%" fig-alt="Illustrative Design-Loop Card template for the prospective XR capacity comparison. A claim under review appears above planned entries for the baseline, candidates, failed-run replacement, rejection checks, evidence support, and accountable commitment decision. The four-execution entry is a budget, and the entries do not report executed results."}
+
+The card establishes a provenance index around three concerns: the architectural claim, the execution provenance that distinguishes tool failures from rejected candidates, and the evidence authority that separates empirical findings from the lead architect's commitment rights. It can record an area-based rejection or support a recommendation only after the declared checks return qualifying evidence.
 
 ## Common Pitfalls
 
