@@ -72,9 +72,9 @@ def test_marimo_notebooks_import() -> None:
         assert module.app is not None
 
 
-@pytest.mark.parametrize(("chapter", "notebook"), list(enumerate(NOTEBOOKS, start=1)))
+@pytest.mark.parametrize(("lab_index", "notebook"), list(enumerate(NOTEBOOKS, start=1)))
 def test_activity_map_and_heading_name_one_chapter(
-    chapter: int, notebook: Path
+    lab_index: int, notebook: Path
 ) -> None:
     source = _source(notebook)
     heading = next(
@@ -85,15 +85,22 @@ def test_activity_map_and_heading_name_one_chapter(
     activity_map = (
         Path(__file__).resolve().parents[1] / "notebooks/README.md"
     ).read_text()
+
+    import re
+
+    match = re.search(r"Chapter (\d+)", heading)
+    assert match is not None
+    chapter_num = match.group(1)
+
     map_line = next(
         line
         for line in activity_map.splitlines()
-        if line.startswith(f"| [{chapter:02d}]")
+        if line.startswith(f"| [{lab_index:02d}]")
+        or line.startswith(f"| [**{lab_index:02d}**]")
     )
 
-    assert heading.startswith(f"# Lab {chapter:02d} ")
-    assert f"Chapter {chapter}" in heading
-    assert f"| Ch{chapter}," in map_line
+    assert heading.startswith(f"# Lab {lab_index:02d} ")
+    assert f"| Ch{chapter_num}," in map_line
 
 
 @pytest.mark.parametrize("notebook", NOTEBOOKS)
