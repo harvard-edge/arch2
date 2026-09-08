@@ -5028,6 +5028,33 @@ GLOSSARY_DOMAINS: list[tuple[str, str, str, str]] = [
 # Canonical technical abbreviations registry (CMOS Chapter 10 style contract)
 # Format: (canonical_expansion, is_proper_noun, phonetic_article, domain_key, engineering_definition, regex_pattern, exempt_first_mention)
 CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
+    "API": (
+        "application programming interface",
+        False,
+        "an",
+        "software",
+        "A set of defined rules and protocols that allows different software applications to communicate with each other.",
+        r"application\ programming\ interface",
+        False,
+    ),
+    "CPO": (
+        "co-packaged optics",
+        False,
+        "a",
+        "hardware",
+        "An advanced packaging technology that integrates optical components directly alongside silicon computing elements to reduce power and increase bandwidth.",
+        r"co\-packaged\ optics",
+        False,
+    ),
+    "MFU": (
+        "Model FLOPs Utilization",
+        True,
+        "an",
+        "evaluation",
+        "The ratio of observed floating-point operations per second to the theoretical peak capability of a hardware accelerator during machine learning execution.",
+        r"Model\ FLOPs\ Utilization",
+        False,
+    ),
     # Hardware Architecture & Microarchitecture
     "ABI": (
         "application binary interface",
