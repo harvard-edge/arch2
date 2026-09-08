@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import networkx as nx
 
-plt.style.use("seaborn-v0_8-whitegrid")
+plt.style.use("data/source-receipts/book.mplstyle")
 out_dir = Path(
     "/Users/VJ/.gemini/antigravity-cli/brain/e9d45d93-bc24-4e34-bc92-58598a39e67b"
 )

@@ -2,7 +2,7 @@ import os
 import csv
 import matplotlib.pyplot as plt
 
-plt.style.use("seaborn-v0_8-whitegrid")
+plt.style.use("data/source-receipts/book.mplstyle")
 plt.rcParams.update(
     {
         "font.size": 12,
