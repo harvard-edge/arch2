@@ -12,9 +12,10 @@ src_dir = Path("data/datasets")
 
 
 def get_rows(fname):
+    """Read a dataset, skipping any leading '#' provenance header block."""
     rows = []
     with open(src_dir / fname, "r") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(line for line in f if not line.startswith("#"))
         for r in reader:
             rows.append(r)
     return rows
@@ -29,14 +30,14 @@ plt.plot(
     [float(r["Tokens_B"]) for r in sw],
     [float(r["Pass_at_1"]) for r in sw],
     "o-",
-    label="Software GenAI (HumanEval)",
+    label="Software GenAI",
     color="blue",
 )
 plt.plot(
     [float(r["Tokens_B"]) for r in hw],
     [float(r["Pass_at_1"]) for r in hw],
     "s-",
-    label="Silicon GenAI (VerilogEval)",
+    label="Silicon GenAI",
     color="red",
 )
 plt.xscale("log")
