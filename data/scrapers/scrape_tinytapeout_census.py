@@ -30,7 +30,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path("/Users/VJ/GitHub/Arch2")
+REPO_ROOT = Path(__file__).resolve().parents[2]
 RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 SCRAPERS_DIR = REPO_ROOT / "data" / "scrapers"
 

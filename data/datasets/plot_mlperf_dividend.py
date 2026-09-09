@@ -7,6 +7,7 @@ Panel B: Hardware Generational Steps vs. Cumulative In-Place Software Gains.
 """
 
 import csv
+import re
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -52,6 +53,34 @@ def main():
     )
     out_svg.parent.mkdir(parents=True, exist_ok=True)
 
+    # Read the dataset. This script previously named csv_file and never opened
+    # it: `import csv` was unused and every plotted value was an in-script
+    # literal. It passed the provenance validator because the filename appeared
+    # as a string.
+    with open(csv_file, "r", encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(l for l in f if not l.startswith("#"))]
+
+    def months_since(dates):
+        base = dates[0]
+        return [
+            (int(d[:4]) - int(base[:4])) * 12 + (int(d[5:7]) - int(base[5:7]))
+            for d in dates
+        ]
+
+    def series(platform_key, workload_key):
+        """In-place dividend over time for one platform on one workload."""
+        sel = [
+            r
+            for r in rows
+            if platform_key in r["platform"]
+            and workload_key in r["benchmark_workload"]
+            and r["software_dividend_multiplier"]
+        ]
+        sel.sort(key=lambda r: r["release_date"])
+        return months_since([r["release_date"] for r in sel]), [
+            float(r["software_dividend_multiplier"]) for r in sel
+        ]
+
     fig, (ax1, ax2) = plt.subplots(
         1, 2, figsize=(7.5, 3.6), gridspec_kw={"width_ratios": [1.1, 1.05]}
     )
@@ -60,17 +89,10 @@ def main():
     # -------------------------------------------------------------
     # Panel A: The Fixed-Silicon Software Dividend (Normalized Throughput over Months)
     # -------------------------------------------------------------
-    v100_m = [0, 7, 19]
-    v100_t = [1.0, 2.32, 3.82]
-
-    a100_m = [0, 11, 16, 23]
-    a100_t = [1.0, 2.32, 2.45, 2.69]
-
-    tpu4_m = [0, 12]
-    tpu4_t = [1.0, 1.50]
-
-    h100_m = [0, 12, 17]
-    h100_t = [1.0, 1.27, 1.30]
+    v100_m, v100_t = series("V100", "ResNet-50")
+    a100_m, a100_t = series("A100 (DGX A100)", "BERT-Large")
+    tpu4_m, tpu4_t = series("TPU v4", "ResNet-50")
+    h100_m, h100_t = series("H100 (Fixed 512", "GPT-3 175B")
 
     ax1.plot(
         v100_m,
@@ -79,7 +101,7 @@ def main():
         color=COLORS["purple"],
         linewidth=1.6,
         markersize=4.2,
-        label="V100 (12nm, ResNet-50: 3.82x in 19 mo)",
+        label=f"V100 (12nm, ResNet-50: {v100_t[-1]:.2f}x in {v100_m[-1]} mo)",
         zorder=4,
     )
     ax1.plot(
@@ -89,7 +111,7 @@ def main():
         color=COLORS["blue"],
         linewidth=1.6,
         markersize=4.2,
-        label="A100 (7nm, BERT-Large: 2.69x in 23 mo)",
+        label=f"A100 (7nm, BERT-Large: {a100_t[-1]:.2f}x in {a100_m[-1]} mo)",
         zorder=3,
     )
     ax1.plot(
@@ -100,7 +122,7 @@ def main():
         linewidth=1.4,
         linestyle="--",
         markersize=4.2,
-        label="TPU v4 (7nm, Suite Avg: 1.50x in 12 mo)",
+        label=f"TPU v4 (7nm, ResNet-50: {tpu4_t[-1]:.2f}x in {tpu4_m[-1]} mo)",
         zorder=2,
     )
     ax1.plot(
@@ -111,7 +133,7 @@ def main():
         linewidth=1.4,
         linestyle="-.",
         markersize=4.2,
-        label="H100 (4N, GPT-3 175B: 1.30x in 17 mo)",
+        label=f"H100 (4N, GPT-3 175B: {h100_t[-1]:.2f}x in {h100_m[-1]} mo)",
         zorder=2,
     )
 
@@ -175,62 +197,81 @@ def main():
     )
 
     # -------------------------------------------------------------
-    # Panel B: Hardware Generational Steps vs. In-Place Software Gains
+    # Panel B: Hardware Generational Step vs. In-Place Software Dividend
+    #
+    # Both series are read from the dataset. This panel previously plotted
+    # hw_base = [1.0, 8.0, 60.0, 156.0] and sw_peak = [3.82, 21.5, 78.0, 156.0]
+    # as in-script literals. 8.0, 60.0 and 156.0 appear nowhere in the dataset
+    # and are not derivable from it: the largest single generational step in the
+    # file is 7.17 and the longest cumulative chain is 9.13. The invented bases
+    # were then multiplied by real software dividends, so the second series
+    # inherited the fabrication. The honest comparison the dataset does support
+    # is per platform, not cumulative.
     # -------------------------------------------------------------
-    generations = [
-        "Volta V100\n(12nm FFN)",
-        "Ampere A100\n(7nm N7)",
-        "Hopper H100\n(4N)",
-        "Blackwell B200\n(4NP Dual-Die)",
-    ]
-    hw_base = [1.0, 8.0, 60.0, 156.0]
-    sw_peak = [3.82, 21.5, 78.0, 156.0]
+    platform_order = ["V100", "A100", "H100", "B200"]
+    platform_labels = {
+        "V100": "Volta V100\n(12nm FFN)",
+        "A100": "Ampere A100\n(7nm N7)",
+        "H100": "Hopper H100\n(4N)",
+        "B200": "Blackwell B200\n(4NP)",
+    }
+
+    hw_step = {}
+    sw_div = {}
+    for r in rows:
+        plat = next((k for k in platform_order if k in r["platform"]), None)
+        if plat is None:
+            continue
+        try:
+            sw = float(r["software_dividend_multiplier"])
+            sw_div[plat] = max(sw_div.get(plat, 1.0), sw)
+        except ValueError:
+            pass
+        m = re.match(r"([0-9.]+)\s*vs", r["generational_step_multiplier"].strip())
+        if m:
+            hw_step[plat] = max(hw_step.get(plat, 0.0), float(m.group(1)))
+
+    generations = [platform_labels[k] for k in platform_order]
+    hw_vals = [hw_step.get(k, 1.0) for k in platform_order]
+    sw_vals = [sw_div.get(k, 1.0) for k in platform_order]
 
     x_gen = np.arange(len(generations))
-    width = 0.32
-    y_min = 0.5
-
-    h_heights = [h - y_min for h in hw_base]
-    s_heights = [s - y_min for s in sw_peak]
+    width = 0.34
 
     rects1 = ax2.bar(
         x_gen - width / 2,
-        h_heights,
+        hw_vals,
         width,
-        bottom=y_min,
-        label="Silicon Hardware Debut",
+        label="Hardware step vs. previous generation",
         color=COLORS["ink"],
         alpha=0.85,
         zorder=3,
     )
     rects2 = ax2.bar(
         x_gen + width / 2,
-        s_heights,
+        sw_vals,
         width,
-        bottom=y_min,
-        label="Mature Software Stack (+SW Dividend)",
+        label="In-place software dividend on frozen silicon",
         color=COLORS["orange"],
         alpha=0.90,
         zorder=3,
     )
 
-    ax2.set_yscale("log")
-    ax2.set_ylim(0.5, 350)
+    ax2.axhline(1.0, color=COLORS["muted"], linewidth=0.7, linestyle=":", zorder=2)
+    ax2.set_ylim(0, max(hw_vals + sw_vals) * 1.28)
     ax2.set_xticks(x_gen)
     ax2.set_xticklabels(generations, fontsize=5.4, color=COLORS["ink"])
-    ax2.set_ylabel(
-        "Relative Performance Index (V100 Debut = 1.0, Log Scale)", fontsize=6.6
-    )
+    ax2.set_ylabel("Speedup multiplier (1.0 = no gain)", fontsize=6.6)
     ax2.tick_params(axis="both", labelsize=5.8)
     ax2.set_title(
-        "B. Hardware Generational Steps vs. Software Expansion",
+        "B. Generational Hardware Step vs. Software Dividend",
         fontsize=7.6,
         fontweight="bold",
         pad=8,
     )
-    ax2.grid(True, which="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax2.grid(True, axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
     ax2.legend(
-        loc="upper left",
+        loc="upper right",
         fontsize=5.0,
         frameon=True,
         facecolor="white",
@@ -238,68 +279,17 @@ def main():
         borderpad=0.25,
     )
 
-    for i, (bar1, bar2, h_val, s_val) in enumerate(
-        zip(rects1, rects2, hw_base, sw_peak)
-    ):
-        if h_val == s_val:
-            center_x = (
-                bar1.get_x()
-                + bar1.get_width() / 2
-                + bar2.get_x()
-                + bar2.get_width() / 2
-            ) / 2
-            ax2.text(
-                center_x,
-                h_val * 1.25,
-                f"{h_val:.0f}x (Debut)",
-                ha="center",
-                va="bottom",
-                fontsize=4.8,
-                fontweight="bold",
-                color=COLORS["ink"],
-            )
-        elif i == 2:  # Hopper H100 - stagger heights to prevent any crowding
-            ax2.text(
-                bar1.get_x() + bar1.get_width() / 2,
-                h_val * 1.15,
-                f"{h_val:.0f}x",
-                ha="center",
-                va="bottom",
-                fontsize=4.8,
-                fontweight="bold",
-                color=COLORS["ink"],
-            )
-            ax2.text(
-                bar2.get_x() + bar2.get_width() / 2,
-                s_val * 1.45,
-                f"{s_val:.1f}x",
-                ha="center",
-                va="bottom",
-                fontsize=4.8,
-                fontweight="bold",
-                color=COLORS["orange"],
-            )
-        else:
-            ax2.text(
-                bar1.get_x() + bar1.get_width() / 2,
-                h_val * 1.25,
-                f"{h_val:.0f}x",
-                ha="center",
-                va="bottom",
-                fontsize=4.8,
-                fontweight="bold",
-                color=COLORS["ink"],
-            )
-            ax2.text(
-                bar2.get_x() + bar2.get_width() / 2,
-                s_val * 1.25,
-                f"{s_val:.1f}x",
-                ha="center",
-                va="bottom",
-                fontsize=4.8,
-                fontweight="bold",
-                color=COLORS["orange"],
-            )
+    for bar, val in list(zip(rects1, hw_vals)) + list(zip(rects2, sw_vals)):
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            val + max(hw_vals + sw_vals) * 0.03,
+            f"{val:.2f}x",
+            ha="center",
+            va="bottom",
+            fontsize=4.8,
+            fontweight="bold",
+            color=COLORS["ink"],
+        )
 
     plt.savefig(out_svg, format="svg", bbox_inches="tight")
     plt.savefig(out_pdf, format="pdf", bbox_inches="tight")
