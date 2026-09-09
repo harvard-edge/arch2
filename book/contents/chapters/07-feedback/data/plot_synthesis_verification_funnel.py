@@ -1,13 +1,23 @@
 """
 Physical Signoff Verification Funnel Plot Script (Chapter 7)
 
-Literature Calibration & Citation Provenance:
----------------------------------------------
-1. Stage 1 (Syntactic & AST Parsing - 72.4% pass): VerilogEval (Liu et al., 2023) [@LiuEtAl2023VerilogEval].
-2. Stage 2 (Interface & Interconnect Schema - 38.1% pass): RTLLM (Lu et al., 2024) [@LuEtAl2024RTLLM].
-3. Stage 3 (Functional Simulation & SVA Assertions - 14.6% pass): OpenRTLSet (Wang et al., 2025) [@WangEtAl2025OpenRTLSet].
-4. Stage 4 (Static Timing Closure WNS >= 0ns - 3.8% pass): AgentDSE (Wang et al., 2026) [@WangEtAl2026AgentDSE].
-5. Stage 5 (Physical Place & Route DRC Closure - 59.5% pass / 0.09% yield): AutoDSE (Zhang et al., 2022) [@ZhangEtAl2022AutoDSE] on OpenROAD 7nm ASAP7.
+CONSTRUCTED ILLUSTRATION. NOT A MEASUREMENT.
+
+The per-stage pass rates in this figure are constructed to make compounding
+attrition inspectable. They are not measured, and they are not calibrated to
+any paper. The published caption says so to the reader, and this header must
+agree with it.
+
+This docstring previously attributed each of the five rates to a specific named
+paper, including a Gate 5 rate said to come from an OpenROAD 7nm ASAP7 run.
+Nothing in the dataset records which paper any rate came from, no derivation
+from any of those papers is retained, and the caption tells the reader the
+rates are invented. The two statements could not both be true, so the
+attribution is removed rather than the caption.
+
+Published benchmarks do report severe early-stage attrition, and the chapter
+cites VerilogEval and RTLLM for that qualitative point. Citing them for these
+specific numbers would be a false attribution.
 
 Dataset: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
 Output Figure:   book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.svg

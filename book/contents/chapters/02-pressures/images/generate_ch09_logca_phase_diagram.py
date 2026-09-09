@@ -44,7 +44,7 @@ def generate_figure(output_dir: Path) -> Path:
     A = 50.0  # Local compute acceleration factor (50x)
 
     # Operational Intensity grid (FLOP/byte) on log scale: 0.05 to 500 FLOP/byte
-    oi_grid = np.logspace(np.log10(0.05), np.log10(500), 500)
+    oi_grid = np.logspace(np.log10(0.001), np.log10(500), 800)
 
     # Color mapping for interconnect families
     regime_colors = {
@@ -59,6 +59,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     # Compute and plot break-even curves: g*(OI) = o / [C_h*(1 - 1/A) - 1/(OI * B)]
     # where B is in bytes/sec
+    oi_stars = []
     for row in specs:
         tech = row["technology"]
         if tech not in regime_colors:
@@ -69,6 +70,7 @@ def generate_figure(output_dir: Path) -> Path:
 
         # Critical balance asymptote: OI* = 1 / (B * C_h * (1 - 1/A))
         oi_star = 1.0 / (B * C_h * (1.0 - 1.0 / A))
+        oi_stars.append((tech, oi_star))
 
         # Valid OI values above asymptote
         valid_mask = oi_grid > oi_star * 1.01
@@ -109,12 +111,18 @@ def generate_figure(output_dir: Path) -> Path:
             oi_star, color=color, linestyle=":", linewidth=0.7, alpha=0.6, zorder=1
         )
 
-    # Shaded infeasibility zone (leftmost)
-    ax.axvspan(0.05, 0.25, color=COLORS["red"], alpha=0.07, zorder=0)
+    # Shaded infeasibility zone, derived from the computed asymptotes rather
+    # than asserted. The band was previously hardcoded to axvspan(0.05, 0.25)
+    # and labelled "offload loses for all g", but every computed OI* is at or
+    # below 0.051, so six of the seven curves ran straight through it. The
+    # honest zone is the region left of the smallest asymptote, where no link
+    # in the set can break even at any granularity.
+    oi_star_min = min(v for _, v in oi_stars)
+    ax.axvspan(oi_grid[0], oi_star_min, color=COLORS["red"], alpha=0.07, zorder=0)
     ax.text(
-        0.06,
-        3e6,
-        "Physical Infeasibility Zone\n(Link Bandwidth Bound:\nOffload loses for all g)",
+        oi_star_min * 1.25,
+        2e6,
+        f"No link breaks even\nbelow OI = {oi_star_min:.4f}\nFLOP/byte",
         fontsize=5.6,
         color=COLORS["constraints_ink"],
         fontweight="bold",
@@ -157,7 +165,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlim(0.05, 400)
+    ax.set_xlim(0.001, 400)
     ax.set_ylim(10, 5e7)
 
     ax.set_xlabel(
