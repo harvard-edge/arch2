@@ -1,10 +1,29 @@
-# Data Source data & Empirical Provenance Guide
+# Datasets
 
-This directory contains the canonical data datasets, primary source transcriptions, and reproduction scripts behind all quantitative figures, tables, and empirical anchors across *Architecture 2.0*.
+Analysis-ready data backing the book's figures. Provenance for every dataset that
+feeds a figure is recorded in `provenance.yml` (schema `arch2-provenance/v1`, the
+same keys as `data/studies/*/provenance.yml`).
 
-Every quantitative assertion in the book is backed by an inspectable CSV dataset in this directory, ensuring full reproducibility, transparent provenance, and clear separation between empirical observations and constructed models.
+> **Audited 2026-09-09.** 244 published claims across 17 datasets were checked by a
+> blind-derive / diff / adversarial-refute pass. 125 were flagged, all 125 were sent
+> to a skeptic, and 98 survived: 15 blockers, 33 material, the rest minor. Every
+> surviving finding is recorded in `provenance.yml` with a file and line.
+> **14 of 17 datasets are `defective`; none is clean.**
 
----
+## Two defects that invalidate the existing checks
+
+**1. `validate_figure_provenance.py` mis-attributes datasets to figures.** It credited
+`ch1_data.csv` with supplying 12 figures. That file is opened exactly once in the repo
+(`plot_all_wishlist.py:24`) and supplies exactly one, `fig-silicon-scaling-plateau`.
+The other 11 read `ch2_data.csv` through `ch12_data.csv`. Any coverage claim derived
+from that validator's mapping is unreliable.
+
+**2. A script can pass the validator without ever opening its dataset.**
+`plot_mlperf_dividend.py` names the CSV at line 25, never calls `open()`, and plots
+in-script literals. `import csv` at line 9 is unused. The validator accepts it because
+the filename appears as a string literal. `plot_foundry_wafer_cost_and_rd_wall.py` does
+the same, though its literals happen to match the data to three decimal places, which
+makes it correct but unreproducible.
 
 ## 1. Directory Structure
 
