@@ -36,7 +36,7 @@ one placement flow. They are not a universal EDA-noise estimate.
 
 ## Full-flow boundary
 
-An independently retained smoke-test metadata receipt records the same ORFS
+An independently retained smoke-test metadata dataset records the same ORFS
 commit, container digest, input hashes, fixed configuration, exact container
 command, and complete stdout. That run completed placement, then the
 linux/amd64 container failed at clock-tree synthesis with an illegal instruction

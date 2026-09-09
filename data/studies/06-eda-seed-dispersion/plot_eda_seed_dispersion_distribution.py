@@ -20,13 +20,13 @@ Generates publication-quality multi-panel visualization:
 - Panel B: 'The 3% Illusion' — Published AI EDA Claims vs. Empirical Seed Noise on Identical RTL
 - Panel C: Multi-Thread Concurrency & Asynchronous Lock Jitter Variance Expansion
 
-Dataset Receipt:
-- data/source-receipts/eda_seed_dispersion_qor_lottery.csv
+Dataset:
+- data/datasets/eda_seed_dispersion_qor_lottery.csv
 
 Generated Assets:
-- data/source-receipts/eda_seed_dispersion_distribution.png
-- data/source-receipts/eda_seed_dispersion_distribution.pdf
-- data/source-receipts/eda_seed_dispersion_distribution.svg
+- data/datasets/eda_seed_dispersion_distribution.png
+- data/datasets/eda_seed_dispersion_distribution.pdf
+- data/datasets/eda_seed_dispersion_distribution.svg
 """
 
 
@@ -65,8 +65,8 @@ def _declare_font_stack(svg_path: Path) -> None:
         svg_path.write_text(text, encoding="utf-8")
 
 
-def load_receipt_data(csv_path: Path) -> List[Dict[str, Any]]:
-    """Load EDA seed dispersion CSV receipt, ignoring comment lines."""
+def load_dataset(csv_path: Path) -> List[Dict[str, Any]]:
+    """Load EDA seed dispersion CSV dataset, ignoring comment lines."""
     records = []
     with open(csv_path, "r", encoding="utf-8") as f:
         lines = [line for line in f if not line.strip().startswith("#")]
@@ -96,27 +96,19 @@ def load_receipt_data(csv_path: Path) -> List[Dict[str, Any]]:
 
 
 def main():
-    csv_file = (
-        REPO_ROOT / "data" / "source-receipts" / "eda_seed_dispersion_qor_lottery.csv"
-    )
+    csv_file = REPO_ROOT / "data" / "datasets" / "eda_seed_dispersion_qor_lottery.csv"
     if not csv_file.exists():
         csv_file = (
             Path(__file__).resolve().parent / "eda_seed_dispersion_qor_lottery.csv"
         )
 
-    records = load_receipt_data(csv_file)
+    records = load_dataset(csv_file)
     print(f"Loaded {len(records)} runs from {csv_file}")
 
     # Output file paths
-    out_png = (
-        REPO_ROOT / "data" / "source-receipts" / "eda_seed_dispersion_distribution.png"
-    )
-    out_pdf = (
-        REPO_ROOT / "data" / "source-receipts" / "eda_seed_dispersion_distribution.pdf"
-    )
-    out_svg = (
-        REPO_ROOT / "data" / "source-receipts" / "eda_seed_dispersion_distribution.svg"
-    )
+    out_png = REPO_ROOT / "data" / "datasets" / "eda_seed_dispersion_distribution.png"
+    out_pdf = REPO_ROOT / "data" / "datasets" / "eda_seed_dispersion_distribution.pdf"
+    out_svg = REPO_ROOT / "data" / "datasets" / "eda_seed_dispersion_distribution.svg"
 
     # Create figure with 3 panels
     fig = plt.figure(figsize=(12.0, 4.5), dpi=150)

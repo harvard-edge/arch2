@@ -16,7 +16,7 @@ def _():
 
     # This notebook runs two ways, and both must give the same answer.
     #
-    #   Locally, it reads the receipts in this repository.
+    #   Locally, it reads the datasets in this repository.
     #   In the browser (marimo WASM), there is no filesystem, so it fetches the
     #   same files from the published site.
     #
@@ -37,7 +37,7 @@ def _():
         except (NameError, OSError):
             return None
         for parent in [here, *here.parents]:
-            if (parent / "data" / "source-receipts").is_dir():
+            if (parent / "data" / "datasets").is_dir():
                 return parent
         return None
 
@@ -60,11 +60,11 @@ def _():
                 return r.read().decode("utf-8")
 
     RECEIPT_TEXT = load(
-        "data/source-receipts/hardware_ast_complexity_measured.csv",
+        "data/datasets/hardware_ast_complexity_measured.csv",
         "data/observatory/hardware_ast_complexity_measured.csv",
     )
     SOURCES_TEXT = load(
-        "data/source-receipts/hardware_ast_complexity_measured_sources.csv",
+        "data/datasets/hardware_ast_complexity_measured_sources.csv",
         "data/observatory/hardware_ast_complexity_measured_sources.csv",
     )
     SUMMARY_TEXT = load(
@@ -93,7 +93,7 @@ def _(mo):
         than production-oriented open RTL, measured as concrete syntax nodes per
         module declaration.
 
-        This notebook is the claim's audit trail. It reads the receipt the book
+        This notebook is the claim's audit trail. It reads the dataset the book
         cites, recomputes the headline number from the raw rows, and fails if the
         two disagree. Nothing here restates a number from the manuscript; every
         figure below is derived in front of you.
@@ -110,7 +110,7 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"""## 1. What the receipt says about itself""")
+    mo.md(r"""## 1. What the dataset says about itself""")
     return
 
 
@@ -124,7 +124,7 @@ def _(RECEIPT_TEXT, csv, io, mo):
             )
         )
     )
-    # A receipt states its source either in a header block or per row. This one
+    # A dataset states its source either in a header block or per row. This one
     # does it per row, which is the stronger form: provenance travels with the
     # measurement instead of describing the file as a whole.
     _per_row = [
@@ -145,7 +145,7 @@ def _(RECEIPT_TEXT, csv, io, mo):
         provenance = mo.md("```\n" + "\n".join(_header) + "\n```")
     elif _per_row:
         provenance = mo.md(
-            "This receipt carries **per-row provenance** rather than a header "
+            "This dataset carries **per-row provenance** rather than a header "
             "block, which is the stronger form: the source travels with each "
             "measurement instead of describing the file as a whole.\n\n"
             + "\n".join(f"- `{c}`" for c in _per_row)
@@ -165,7 +165,7 @@ def _(mo):
         r"""
         ## 2. Every row names the file it came from
 
-        A receipt is only as good as its weakest row. Each measurement below
+        A dataset is only as good as its weakest row. Each measurement below
         carries the repository, the pinned commit, the path inside that
         repository, and the SHA-256 of the exact file bytes that were parsed.
         """
@@ -260,7 +260,7 @@ def _(mo):
         ## 4. Does the recomputation match what was recorded?
 
         This is the cell that makes the notebook an audit rather than a
-        presentation. If the receipt is edited, or the summary drifts from the
+        presentation. If the dataset is edited, or the summary drifts from the
         rows it claims to summarize, this cell turns red.
         """
     )
@@ -290,7 +290,7 @@ def _(SUMMARY_TEXT, json, loc_ratio, mo, node_ratio):
         "| Quantity | Recomputed here | Recorded in summary | |\n| --- | ---: | ---: | --- |\n"
         + "\n".join(_lines)
         + (
-            "\n\n**The receipt agrees with itself.**"
+            "\n\n**The dataset agrees with itself.**"
             if _ok
             else "\n\n**MISMATCH. Do not cite this study until it is resolved.**"
         )
@@ -386,7 +386,7 @@ def _(mo):
           production RTL, which would bias the comparison toward simple files.
         - Hierarchy depth follows an instantiation only when the child module name
           has exactly one definition in the corpus, so it is a **lower bound**.
-        - Clock-event and CDC counts elsewhere in the receipt are **lexical
+        - Clock-event and CDC counts elsewhere in the dataset are **lexical
           indicators**, not verified clock domains or crossings.
         - Six repositories were chosen for being public and pinnable. Nothing here
           generalizes to closed commercial IP.

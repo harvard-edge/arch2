@@ -16,18 +16,18 @@ Active hand-authored figures:
 - `fig-codegen-narrow-waist`: the executable software path from domain intent
   through the compiler narrow waist to verification checks (moved from chapter 9).
 
-Generated figures with scripts (moved from chapters 7 and 9; receipts in
-`data/source-receipts/`):
+Generated figures with scripts (moved from chapters 7 and 9; datasets in
+`data/datasets/`):
 
 - `fig-ch09-logca-phase-diagram`: LogCA break-even frontiers across interconnect
   regimes; `generate_ch09_logca_phase_diagram.py` reads
   `chapter9-interconnect-logca-specs.csv`.
 - `fig-ch09-software-porting-wall`: CUTLASS, Triton, and vLLM code growth;
   `generate_ch09_software_porting_wall.py` reads the `chapter9-{cutlass,triton,vllm}-*.csv`
-  receipts.
+  datasets.
 - `fig-ch07-wilson-verification-scissors`: Wilson Research / Siemens EDA
   schedule share, first-silicon success, and respin causes;
-  `data/source-receipts/plot_wilson_scissors.py` reads
+  `data/datasets/plot_wilson_scissors.py` reads
   `chapter7-wilson-verification-scissors-gap.csv`.
 
 Executable Quarto figures in the chapter:

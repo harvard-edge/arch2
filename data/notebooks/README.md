@@ -1,6 +1,6 @@
 # Provenance notebooks
 
-One notebook per study. Each one reads the receipt the book cites, **recomputes
+One notebook per study. Each one reads the dataset the book cites, **recomputes
 the published number from the raw rows**, and says so plainly when the two
 disagree. They are audits, not presentations: nothing in them restates a figure
 from the manuscript.
@@ -48,7 +48,7 @@ Each notebook produces two artifacts under `www/notebooks/`:
 
 - `<name>.html` — static, already executed. Opens instantly.
 - `<name>/` — the live notebook running under Pyodide. The reader's own browser
-  fetches the published receipt and recomputes the number.
+  fetches the published dataset and recomputes the number.
 
 **Always export through that script, never by calling `marimo export` directly.**
 `marimo export` walks up to the project root and copies sibling files into the
@@ -66,7 +66,7 @@ The pattern that makes these audits rather than demos:
    walking up for a marker; the browser runtime defines `__file__` as a shallow
    virtual path, so a fixed `parents[n]` raises `IndexError` there.
 3. **Show the rows**, in a table the reader can search, sort, and export. A
-   receipt nobody can inspect is not evidence.
+   dataset nobody can inspect is not evidence.
 4. **Recompute the headline from those rows**, never from a stored summary.
 5. **Compare recomputed against recorded, and fail loudly.** This is the cell
    that makes it an audit. Test it by tampering with the recorded value and

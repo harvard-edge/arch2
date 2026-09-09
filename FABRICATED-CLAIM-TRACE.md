@@ -1,12 +1,12 @@
 # Fabricated claim trace
 
 Compiled 3 September 2026 in worktree `Arch2-provenance`, branch
-`fix/fabricated-receipts`. Nothing in the manuscript or the website has been
+`fix/fabricated-datasets`. Nothing in the manuscript or the website has been
 changed. This is the trace only; the repairs are the author's to approve.
 
 ## The finding in one line
 
-Three files in `data/source-receipts/` contain values that no tool produced.
+Three files in `data/datasets/` contain values that no tool produced.
 All three are published on the live website. One of them is cited in the book
 to three real papers that did not produce its numbers.
 
@@ -22,7 +22,7 @@ anywhere in the script.
 **What the file claims about itself**, in its own header:
 
 ```
-# Testbench Mutation Vacuity & LLM-as-a-Judge Calibration Provenance Receipt
+# Testbench Mutation Vacuity & LLM-as-a-Judge Calibration Provenance record
 # Formal Tool Oracle: Cadence JasperGold 2024.09-SP1 (SEC/FPV/FVA) &
 #   SymbiYosys 0.44+git (Yosys 0.67+post, SMT Solvers: Boolector 3.2.3,
 #   Z3 4.12.5, Bitwuzla 0.6.0)
@@ -33,7 +33,7 @@ anywhere in the script.
 ```
 
 Every tool and version named there is a string literal in the generating
-script. The words "Provenance Receipt" and "Empirical Findings" are doing the
+script. The words "Provenance record" and "Empirical Findings" are doing the
 opposite of their job.
 
 ### Where those numbers reach a reader
@@ -52,7 +52,7 @@ opposite of their job.
 
 ### An extra signal worth noting
 
-The book caption gives **ECE = 0.380**. The generated receipt's own header
+The book caption gives **ECE = 0.380**. The generated dataset's own header
 gives **ECE = 0.2834**. Two different fabricated values for the same quantity,
 which means the number was not even carried consistently from the file it came
 from. A reader comparing the caption against the published CSV would find they
@@ -60,7 +60,7 @@ disagree.
 
 ### The honest replacement already exists
 
-`data/source-receipts/chapter7-testbench-vacuity-mutation.csv` has **no
+`data/datasets/chapter7-testbench-vacuity-mutation.csv` has **no
 generating script** and carries a per-row `citation` and `url` to
 Herdt, Grosse and Drechsler (ASPDAC 2021) plus OpenHW CORE-V. It reports
 88.4% line coverage against a 34.8% mutation kill rate for directed tests, a
@@ -105,7 +105,7 @@ header listed "pinned" upstream commits, and they are hand-typed placeholders:
 `a1b2c3d4e5f67890abcdef1234567890abcdef12` at line 73,
 `7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c` at line 100. They resolve to nothing.
 The website shipped a "Download CSV Dataset (N=550)" button beside it, so the
-book invited readers to verify a receipt whose provenance block was invented.
+book invited readers to verify a dataset whose provenance block was invented.
 
 ### What replaced it
 
@@ -139,25 +139,25 @@ that directory's `requirements.txt`. No container and no EDA license are needed.
 
 - Quarantined to `data/synthetic/SYNTHETIC-hardware_ast_complexity_gap.csv` with
   both fabrication signatures recorded on its first lines.
-- Fabricated figure and its generator removed from `data/source-receipts/`,
+- Fabricated figure and its generator removed from `data/datasets/`,
   `data/studies/`, and `www/`.
-- Measured receipts promoted into `data/source-receipts/`.
+- Measured datasets promoted into `data/datasets/`.
 - Chapter 4 pre-brief, landing paragraph, caption, alt text, and the Streetlight
   Effect callout rewritten against the measured values.
 - Site stat card, exhibit figure, Core Takeaway, and download buttons replaced;
   a "Reproduce This Measurement" link added.
 - Study README, study index, `generate_study_packages.py`, `data/README.md`, and
-  `data/source-receipts/README.md` corrected.
+  `data/datasets/README.md` corrected.
 - `python3 data/validate_provenance.py` reports 0 violations across 47 datasets.
 - `python3 cli/arch2.py check precommit` passes all 13 checks.
 
 ## Site exposure
 
-All 62 receipts are served publicly from `www/data/observatory/`, including all
+All 62 datasets are served publicly from `www/data/observatory/`, including all
 three files above, and the figure built from source 1 is served at
 `www/images/observatory/fig_testbench_vacuity_and_judge_bias.{png,svg}`.
 
-Anyone who follows the book's own invitation to check its receipts can download
+Anyone who follows the book's own invitation to check its datasets can download
 these.
 
 ---
@@ -170,29 +170,29 @@ these.
 2. **The live site**, items 1.3 to 1.5, plus unpublishing the three CSVs and
    the figure from `www/`.
 3. **The measurement claims** in the study packages, items 1.6 and 1.7.
-4. **Quarantine** the three files out of `source-receipts/` into a clearly
+4. **Quarantine** the three files out of `datasets/` into a clearly
    marked synthetic directory, and add a validator that fails if a generated
-   file appears in `source-receipts/` or if a receipt header names a tool
+   file appears in `datasets/` or if a dataset header names a tool
    version that its generator hardcodes.
 5. **Replace where a real measurement is cheap.** Source 2 and source 3 already
    have measured replacements in `data/studies/`. Source 1 does not, but
    `data/scrapers/mine_verilog_eval_mutation_pilot.py` is a genuine
    Icarus-based harness that has never been run to completion.
 
-## Full receipt audit, completed 2026-09-03
+## Full dataset audit, completed 2026-09-03
 
-The three sources above were found by hand. Every remaining receipt has now been
+The three sources above were found by hand. Every remaining dataset has now been
 classified, which was the open item this document previously named.
 
 **64 datasets, 0 provenance violations, 0 without a recorded source.**
 
 ### Traced to a retained raw upstream file, and verified against it
 
-Six receipts had no recorded provenance but did have their raw upstream download
-retained under `data/source-receipts/sources/`. Each derivation was re-verified
-rather than assumed, and the result written into the receipt header.
+Six datasets had no recorded provenance but did have their raw upstream download
+retained under `data/datasets/sources/`. Each derivation was re-verified
+rather than assumed, and the result written into the dataset header.
 
-| Receipt | Raw source | Verification |
+| Dataset | Raw source | Verification |
 | --- | --- | --- |
 | `chapter11-task-horizon.csv` | `metr-time-horizon.yaml` | 26/26 p50 values and 26/26 release dates match exactly |
 | `chapter1-swebench-verified.csv` | `epoch-benchmarks.csv` | 35 SWE-Bench verified runs in raw, 35 rows, all scores match exactly |
@@ -203,7 +203,7 @@ rather than assumed, and the result written into the receipt header.
 
 ### Measurement signature confirmed, harness not retained
 
-Three receipts carry the internal structure of real tool output but no
+Three datasets carry the internal structure of real tool output but no
 generating script survives, so they cannot be reproduced from the repository.
 Each now says so in its own header rather than implying reproducibility.
 
@@ -220,10 +220,10 @@ Each now says so in its own header rather than implying reproducibility.
   seeds, so the file measures recipe sensitivity and cannot support a claim
   about run-to-run nondeterminism at a fixed recipe.
 
-### Constructed illustrations, moved out of the receipts directory
+### Constructed illustrations, moved out of the datasets directory
 
 Three files were never fabricated measurements and nothing cited them, but they
-sat in `data/source-receipts/`, where the directory name asserts something they
+sat in `data/datasets/`, where the directory name asserts something they
 could not support. Moved to `data/synthetic/` with markers, unpublished from
 `www/`, plotting scripts moved with them:
 `chapter4-physical-verification-funnel.csv`,
@@ -235,7 +235,7 @@ same shape as source 3 above, caught before it reached a reader.
 
 ### Unverified against any external source, flagged in place
 
-Three receipts assert a source they do not record. Each header now says so and
+Three datasets assert a source they do not record. Each header now says so and
 says not to cite the file until the upstream identifiers are recorded:
 `chapter2-llm-inference-pareto.csv` (attributes figures to MLPerf Inference
 rounds with no submission IDs), `chapter10-mlperf-coevolution.csv` (vendor peak
@@ -245,11 +245,11 @@ with no upstream issue list).
 
 ### Correctly provenanced all along
 
-34 receipts carry per-row citations or URLs. Three more were flagged by an early
+34 datasets carry per-row citations or URLs. Three more were flagged by an early
 version of the audit for holding large literal tables, and all three turned out
 to be honest transcriptions carrying per-row sources: the hardware-CVE mitigation
-tax receipt (per-row NVD and vendor advisory URLs) and the two MLPerf software
-dividend receipts (per-row MLCommons result URLs and submission IDs).
+tax dataset (per-row NVD and vendor advisory URLs) and the two MLPerf software
+dividend datasets (per-row MLCommons result URLs and submission IDs).
 
 ## What this does not say
 

@@ -4,11 +4,11 @@ from pathlib import Path
 import os
 import networkx as nx
 
-plt.style.use("data/source-receipts/book.mplstyle")
+plt.style.use("data/datasets/book.mplstyle")
 out_dir = Path(
     "/Users/VJ/.gemini/antigravity-cli/brain/e9d45d93-bc24-4e34-bc92-58598a39e67b"
 )
-src_dir = Path("data/source-receipts")
+src_dir = Path("data/datasets")
 
 
 def get_rows(fname):

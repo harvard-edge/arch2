@@ -10,7 +10,7 @@ It measures the "fragmentation" and "specialization" of compiler IRs by
 tracking the number of MLIR dialects (.td TableGen files) over time.
 
 Outputs:
-data/source-receipts/mlir_dialect_explosion.csv
+data/datasets/mlir_dialect_explosion.csv
 """
 
 import os
@@ -75,8 +75,8 @@ def mine_mlir_dialects():
             }
         )
 
-    os.makedirs("data/source-receipts", exist_ok=True)
-    out_file = "data/source-receipts/mlir_dialect_explosion.csv"
+    os.makedirs("data/datasets", exist_ok=True)
+    out_file = "data/datasets/mlir_dialect_explosion.csv"
 
     with open(out_file, "w", newline="") as f:
         writer = csv.DictWriter(

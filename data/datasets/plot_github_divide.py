@@ -23,10 +23,7 @@ apply_style()
 
 def main():
     csv_file = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "chapter1-github-software-hardware-divide.csv"
+        REPO_ROOT / "data" / "datasets" / "chapter1-github-software-hardware-divide.csv"
     )
     out_svg = (
         REPO_ROOT

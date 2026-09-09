@@ -26,10 +26,7 @@ apply_style()
 
 def main():
     csv_file = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "chapter2-ai-accelerator-scaling-frontier.csv"
+        REPO_ROOT / "data" / "datasets" / "chapter2-ai-accelerator-scaling-frontier.csv"
     )
     out_svg = (
         REPO_ROOT

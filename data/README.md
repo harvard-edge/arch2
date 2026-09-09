@@ -1,6 +1,6 @@
 # Architecture 2.0 Data & Empirical Provenance Hub
 
-This directory houses the empirical data infrastructure, automated scrapers, primary source receipts, and reproduction engines backing all quantitative analyses, figures, and tables in *Architecture 2.0*.
+This directory houses the empirical data infrastructure, automated scrapers, primary source datasets, and reproduction engines backing all quantitative analyses, figures, and tables in *Architecture 2.0*.
 
 ---
 
@@ -18,7 +18,7 @@ data/
 │   ├── mine_eda_seed_dispersion.py           # Track 4.1: Physical EDA seed dispersion & Monte Carlo QoR simulator
 │   ├── mine_sec_edgar_semiconductor_rd.py    # Track 5.2: SEC EDGAR 10-K R&D financial filings & wafer pricing miner
 │   └── mine_testbench_vacuity_and_judge_bias.py # Track 2.3 & 2.5: Testbench mutation vacuity & LLM judge calibration
-├── source-receipts/                          # Canonical versioned CSV receipts & publication plotting scripts
+├── datasets/                          # Canonical versioned CSV datasets & publication plotting scripts
 │   ├── README.md                             # Detailed methodology, citation index, and mathematical derivations
 │   ├── regenerate.py                         # Batch driver for derived datasets
 │   ├── granular_processor_errata_taxonomy.csv# N=1,771 itemized processor errata dataset (Track 1)
@@ -54,18 +54,18 @@ python3 data/scrapers/mine_eda_seed_dispersion.py
 python3 data/scrapers/mine_testbench_vacuity_and_judge_bias.py
 
 # Step 2: Regenerate all publication figures
-python3 data/source-receipts/plot_github_divide.py
-python3 data/source-receipts/plot_ai_accelerator_scaling.py
-python3 data/source-receipts/plot_wilson_scissors.py
-python3 data/source-receipts/plot_mlperf_dividend.py
-python3 data/source-receipts/plot_mlperf_software_dividend_extended.py
+python3 data/datasets/plot_github_divide.py
+python3 data/datasets/plot_ai_accelerator_scaling.py
+python3 data/datasets/plot_wilson_scissors.py
+python3 data/datasets/plot_mlperf_dividend.py
+python3 data/datasets/plot_mlperf_software_dividend_extended.py
 python3 data/studies/02-ast-complexity-cliff/plot_ast_complexity_measured.py
-python3 data/source-receipts/plot_tinytapeout_democratization.py
-python3 data/source-receipts/plot_errata_subsystem_sunburst_and_decay.py
-python3 data/source-receipts/plot_hardware_cve_performance_tax.py
-python3 data/source-receipts/plot_foundry_wafer_cost_and_rd_wall.py
-python3 data/source-receipts/plot_eda_seed_dispersion_distribution.py
-python3 data/source-receipts/plot_testbench_vacuity_and_judge_bias.py
+python3 data/datasets/plot_tinytapeout_democratization.py
+python3 data/datasets/plot_errata_subsystem_sunburst_and_decay.py
+python3 data/datasets/plot_hardware_cve_performance_tax.py
+python3 data/datasets/plot_foundry_wafer_cost_and_rd_wall.py
+python3 data/datasets/plot_eda_seed_dispersion_distribution.py
+python3 data/datasets/plot_testbench_vacuity_and_judge_bias.py
 
 # Step 3: Run repository-wide quality & precommit audit
 python3 cli/arch2.py check precommit

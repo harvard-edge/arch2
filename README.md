@@ -95,7 +95,7 @@ The public site connects the following maintained surfaces.
 | [`design-loop-card/`](design-loop-card/) and [`schemas/`](schemas/) | Human-readable templates and machine-checkable contracts for recording a study. |
 | [`examples/`](examples/) | Completed cards and supporting evidence that show how the contracts are used. |
 | [`www/`](www/) and [`tools/`](tools/) | Source for the project site, community resources, and tool registry. |
-| [`data/source-receipts/`](data/source-receipts/) and [`compliance/`](compliance/) | Source notes, permissions records, and publication checks. |
+| [`data/datasets/`](data/datasets/) and [`compliance/`](compliance/) | Source notes, permissions records, and publication checks. |
 
 The repository is developed in public so that claims, examples, interfaces,
 and teaching material can be inspected and improved together. A tagged release

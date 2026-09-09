@@ -10,7 +10,7 @@ to agile hardware generators (Chisel, SystemVerilog) by querying repository crea
 counts over time.
 
 Outputs:
-data/source-receipts/github_hdl_language_trends.csv
+data/datasets/github_hdl_language_trends.csv
 """
 
 import os
@@ -129,8 +129,8 @@ def mine_trends():
         results.append(row)
         print(f"Processed {year}...")
 
-    os.makedirs("data/source-receipts", exist_ok=True)
-    out_file = "data/source-receipts/github_hdl_language_trends.csv"
+    os.makedirs("data/datasets", exist_ok=True)
+    out_file = "data/datasets/github_hdl_language_trends.csv"
 
     with open(out_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["Year"] + LANGUAGES)

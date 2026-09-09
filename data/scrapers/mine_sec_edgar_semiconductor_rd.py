@@ -20,7 +20,7 @@ Gartner, IC Insights, and SIA:
 - Complete SoC design cost ($28M at 65nm -> $725M+ at 2nm)
 
 Outputs:
-- data/source-receipts/sec_edgar_semiconductor_rd_economics.csv
+- data/datasets/sec_edgar_semiconductor_rd_economics.csv
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 CACHE_DIR = REPO_ROOT / "data" / "scrapers" / ".cache" / "sec_edgar"
 
 # SSL Context for secure downloads
@@ -2407,8 +2407,8 @@ def build_semiconductor_rd_dataset() -> list[CorporateRDEntry]:
     return entries
 
 
-def write_receipt_csv(entries: list[CorporateRDEntry], out_path: Path) -> None:
-    """Writes provenance receipt CSV with exhaustive header comments."""
+def write_dataset_csv(entries: list[CorporateRDEntry], out_path: Path) -> None:
+    """Writes provenance dataset CSV with exhaustive header comments."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     header_lines = [
@@ -2524,7 +2524,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=RECEIPTS_DIR / "sec_edgar_semiconductor_rd_economics.csv",
-        help="Path to output CSV receipt",
+        help="Path to output CSV dataset",
     )
     parser.add_argument(
         "--summary", action="store_true", default=True, help="Print summary table"
@@ -2533,8 +2533,8 @@ def main() -> None:
 
     print("Mining SEC EDGAR 10-K R&D financials & foundry economics (2000–2026)...")
     dataset = build_semiconductor_rd_dataset()
-    write_receipt_csv(dataset, args.output)
-    print(f"Successfully generated receipt: {args.output} ({len(dataset)} records)")
+    write_dataset_csv(dataset, args.output)
+    print(f"Successfully generated dataset: {args.output} ({len(dataset)} records)")
 
     if args.summary:
         print_summary(dataset)

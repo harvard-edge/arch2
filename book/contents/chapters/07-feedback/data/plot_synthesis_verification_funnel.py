@@ -9,7 +9,7 @@ Literature Calibration & Citation Provenance:
 4. Stage 4 (Static Timing Closure WNS >= 0ns - 3.8% pass): AgentDSE (Wang et al., 2026) [@WangEtAl2026AgentDSE].
 5. Stage 5 (Physical Place & Route DRC Closure - 59.5% pass / 0.09% yield): AutoDSE (Zhang et al., 2022) [@ZhangEtAl2022AutoDSE] on OpenROAD 7nm ASAP7.
 
-Dataset Receipt: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
+Dataset: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
 Output Figure:   book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.svg
 """
 

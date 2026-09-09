@@ -8,7 +8,7 @@ Literature Calibration & Citation Provenance (per-tier units differ):
 4. Physical Layout Samples (~1.02e4 layouts): CircuitNet [@ChaiEtAl2022CircuitNet].
 5. Curated Architecture QA (~1.5e3 validated pairs): QuArch v0.1 [@PrakashEtAl2025QuArch].
 
-Dataset Receipt: book/contents/chapters/04-representations/data/fig-architecture-data-scarcity.csv
+Dataset: book/contents/chapters/04-representations/data/fig-architecture-data-scarcity.csv
 Output Figure:   book/contents/chapters/04-representations/images/fig-architecture-data-scarcity.svg
 """
 

@@ -1,11 +1,11 @@
 # Figure Bank
 
-Receipted, generator-backed figures not currently referenced by the book.
-Kept for future use (chapters, talks, revisions). Each figure's data receipt
-and generator live under `data/source-receipts/`; regenerate from the
+Provenanced, generator-backed figures not currently referenced by the book.
+Kept for future use (chapters, talks, revisions). Each figure's data dataset
+and generator live under `data/datasets/`; regenerate from the
 generator rather than editing the SVG.
 
-| Figure | Data receipt | Generator | Candidate future use |
+| Figure | Data dataset | Generator | Candidate future use |
 | --- | --- | --- | --- |
 | `fig-mlperf-coevolution.svg` | `chapter10-mlperf-coevolution.csv` | `plot_mlperf_coevolution.py` | Panel B (2.05x software dividend on fixed silicon, MLPerf v2.1-v4.1) fits ch9's hardware-software co-evolution point. Verify against MLPerf results at wiring time. |
 | `fig-reuther-precision-frontier.svg` | `chapter1-reuther-precision-frontier.csv` | `plot_reuther_frontier.py` | Alternate cut of the Reuther survey already used in ch2 (precision modes + memory-wall ceiling). The ~100 TOPS/W ceiling annotation needs sourcing before any book use. |

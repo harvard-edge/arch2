@@ -8,7 +8,7 @@ Literature Calibration & Citation Provenance:
 3. Reinforcement Learning (PPO): Graph Placement (Mirhoseini et al., 2021) [@MirhoseiniEtAl2021GraphPlacement].
 4. Reward-Hacking Defense: PPA gains awarded strictly to candidates passing Stage 3 functional verification.
 
-Dataset Receipt: data/source-receipts/chapter5-dse-convergence.csv
+Dataset: data/datasets/chapter5-dse-convergence.csv
 Output Figure:   book/images/fig-dse-convergence-pareto.svg
 """
 
@@ -29,7 +29,7 @@ apply_style()
 
 
 def main():
-    csv_file = REPO_ROOT / "data" / "source-receipts" / "chapter5-dse-convergence.csv"
+    csv_file = REPO_ROOT / "data" / "datasets" / "chapter5-dse-convergence.csv"
     out_plot = REPO_ROOT / "book" / "images" / "fig-dse-convergence-pareto.svg"
 
     budget = []

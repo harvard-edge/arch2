@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Regenerate the committed figure receipts from the raw upstream sources.
+"""Regenerate the committed figure datasets from the raw upstream sources.
 
-The six quantitative "money plot" figures each read a trimmed receipt CSV in this
-directory. Those receipts are derived from the raw upstream files in ``sources/``.
-Run this script to rebuild every receipt after refreshing a raw source::
+The six quantitative "money plot" figures each read a trimmed dataset CSV in this
+directory. Those datasets are derived from the raw upstream files in ``sources/``.
+Run this script to rebuild every dataset after refreshing a raw source::
 
-    python3 data/source-receipts/regenerate.py
+    python3 data/datasets/regenerate.py
 
 To refresh a source first, re-fetch it (URLs below) into ``sources/`` under the
 same filename, then re-run this script and rebuild the book.
@@ -17,7 +17,7 @@ Sources:
 - reuther-laics-2025.csv     github.com/areuther/ai-accelerators (peak_accelerators_ieee_hpec_2025.csv)
 - metr-time-horizon.yaml     metr.org/assets/benchmark_results_1_1.yaml
 
-Requires: pyyaml (only for the METR receipt).
+Requires: pyyaml (only for the METR dataset).
 """
 import csv
 from pathlib import Path
@@ -243,7 +243,7 @@ def mitigation_overhead():  # ch7 (compiled from Canella et al. 2019 Table 11; n
 
 
 if __name__ == "__main__":
-    print("Regenerating figure receipts from sources/ ...")
+    print("Regenerating figure datasets from sources/ ...")
     training_compute()
     accelerator_landscape()
     swebench()

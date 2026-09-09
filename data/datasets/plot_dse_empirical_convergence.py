@@ -40,10 +40,7 @@ def load_data(csv_path):
 
 def main():
     csv_path = (
-        repo_root
-        / "data"
-        / "source-receipts"
-        / "chapter5-dse-empirical-convergence.csv"
+        repo_root / "data" / "datasets" / "chapter5-dse-empirical-convergence.csv"
     )
     if not csv_path.exists():
         print(f"Error: CSV not found at {csv_path}")

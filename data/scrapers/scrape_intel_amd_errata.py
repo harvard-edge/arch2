@@ -17,7 +17,7 @@ Extracts and classifies every individual silicon erratum across:
 - cryptographic provenance (source doc ID, URL, SHA256 hash, extraction timestamp)
 
 Outputs:
-- data/source-receipts/granular_processor_errata_taxonomy.csv
+- data/datasets/granular_processor_errata_taxonomy.csv
 """
 
 import csv
@@ -38,7 +38,7 @@ except ImportError:
     sys.exit(1)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = REPO_ROOT / "data" / "source-receipts"
+DATA_DIR = REPO_ROOT / "data" / "datasets"
 CACHE_DIR = REPO_ROOT / "data" / "scrapers" / ".cache"
 
 # SSL Context for secure downloads
@@ -905,7 +905,7 @@ def parse_amd_pdf(data: bytes, codename: str, expected_count: int) -> dict[int, 
 
 
 # =====================================================================
-# Main Scraping & Receipt Generation Pipeline
+# Main Scraping & Dataset Generation Pipeline
 # =====================================================================
 
 
@@ -998,7 +998,7 @@ def main():
             )
 
     # Write CSV with complete cryptographic metadata header
-    print(f"\nWriting output receipt to: {output_file} ...")
+    print(f"\nWriting output dataset to: {output_file} ...")
     with open(output_file, mode="w", newline="", encoding="utf-8") as f:
         f.write(
             "# Architecture 2.0: Granular Silicon Errata & Defect Archaeology Dataset\n"

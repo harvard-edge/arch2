@@ -5,12 +5,12 @@ To elevate the citations and uniqueness of *Architecture 2.0*, we have brainstor
 ## 1. The Compiler IR Explosion Dataset (DialectData)
 * **The Concept**: Modern AI hardware relies heavily on compilers rather than just microarchitecture. This dataset tracks the shift from monolithic compiler backends to multi-level intermediate representations (MLIR) by scraping the exponential growth of domain-specific dialects over time.
 * **Why it matters**: It proves that the locus of hardware complexity has shifted into the compiler stack.
-* **Execution**: We wrote and executed `data/scrapers/mine_mlir_dialect_explosion.py`. It pulls dialect count, total operations, and Lines of Code across major LLVM releases to quantify the specialization of compiler IRs. The output is in `data/source-receipts/mlir_dialect_explosion.csv`.
+* **Execution**: We wrote and executed `data/scrapers/mine_mlir_dialect_explosion.py`. It pulls dialect count, total operations, and Lines of Code across major LLVM releases to quantify the specialization of compiler IRs. The output is in `data/datasets/mlir_dialect_explosion.csv`.
 
 ## 2. The Linux Kernel System Software Growth (LinGrowth)
 * **The Concept**: While silicon has scaled according to Moore's Law, the software infrastructure required to run it has scaled even faster. By mining the historical tarball sizes (as a proxy for complexity and LoC) of the Linux kernel over 30 years, we track the software burden placed on modern architectures.
 * **Why it matters**: It empirically grounds the hardware-software divide discussed in the book.
-* **Execution**: We wrote and executed `data/scrapers/mine_linux_kernel_growth.py`. It successfully scraped 4,596 Linux kernel releases from `kernel.org`, recording their sizes and release dates. The output is in `data/source-receipts/linux_kernel_growth_historical.csv`.
+* **Execution**: We wrote and executed `data/scrapers/mine_linux_kernel_growth.py`. It successfully scraped 4,596 Linux kernel releases from `kernel.org`, recording their sizes and release dates. The output is in `data/datasets/linux_kernel_growth_historical.csv`.
 
 ## 3. The Global Open-Source RTL & HDL Topology Corpus (OpenSilicon-20M)
 * **The Concept**: The first comprehensive analysis of the evolution of hardware description languages. This dataset tracks the transition from traditional Verilog/VHDL to modern generators (Chisel, Amaranth) and the sudden influx of LLM-generated RTL.

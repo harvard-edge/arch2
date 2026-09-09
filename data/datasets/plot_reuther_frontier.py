@@ -36,14 +36,9 @@ def categorize_org(company):
 
 
 def main():
-    raw_csv = (
-        REPO_ROOT / "data" / "source-receipts" / "sources" / "reuther-laics-2025.csv"
-    )
+    raw_csv = REPO_ROOT / "data" / "datasets" / "sources" / "reuther-laics-2025.csv"
     out_csv = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "chapter1-reuther-precision-frontier.csv"
+        REPO_ROOT / "data" / "datasets" / "chapter1-reuther-precision-frontier.csv"
     )
     out_plot = REPO_ROOT / "book" / "images" / "fig-reuther-precision-frontier.svg"
 
@@ -55,7 +50,7 @@ def main():
         "Other": [],
     }
 
-    receipt_rows = []
+    dataset_rows = []
 
     with open(raw_csv, "r", encoding="utf-8-sig", errors="ignore", newline="") as f:
         reader = csv.DictReader(l for l in f if not l.startswith("#"))
@@ -75,7 +70,7 @@ def main():
                 tech = row.get("Technology", "")
                 org = categorize_org(company)
 
-                receipt_rows.append(
+                dataset_rows.append(
                     [
                         company,
                         product,
@@ -91,7 +86,7 @@ def main():
             except (ValueError, KeyError, TypeError):
                 continue
 
-    # Write CSV receipt
+    # Write CSV dataset
     with open(out_csv, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
@@ -106,9 +101,9 @@ def main():
                 "Organization Type",
             ]
         )
-        writer.writerows(receipt_rows)
+        writer.writerows(dataset_rows)
 
-    print(f"Receipt written to '{out_csv}' ({len(receipt_rows)} chips processed)")
+    print(f"Dataset written to '{out_csv}' ({len(dataset_rows)} chips processed)")
 
     # Render Plot
     fig, ax = plt.subplots(figsize=(6.4, 3.8))

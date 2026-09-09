@@ -2,8 +2,8 @@
 """Measure syntax complexity from pinned, retained Verilog repositories.
 
 This pipeline is deliberately separate from ``mine_hardware_ast_complexity.py``.
-The earlier receipt remains available as a baseline, while this script produces
-an independently named measured receipt whose rows are traceable to source
+The earlier dataset remains available as a baseline, while this script produces
+an independently named measured dataset whose rows are traceable to source
 files and commit hashes.
 
 The unit of analysis is a successfully parsed Verilog/SystemVerilog module

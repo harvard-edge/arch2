@@ -8,8 +8,8 @@ Scrapes, parses, and aggregates public manifests from Tiny Tapeout (TT01 through
 TT10, TT-SKY, TT-IHP, TT-GF shuttles) and Efabless Open MPW shuttle archives.
 
 Outputs:
-1. /Users/VJ/GitHub/Arch2/data/source-receipts/tinytapeout_democratization_census.csv
-2. /Users/VJ/GitHub/Arch2/data/source-receipts/shuttle_cost_historical_collapse.csv
+1. /Users/VJ/GitHub/Arch2/data/datasets/tinytapeout_democratization_census.csv
+2. /Users/VJ/GitHub/Arch2/data/datasets/shuttle_cost_historical_collapse.csv
 
 Author: Senior Open Silicon Ecosystem & Semiconductor Economics Researcher
 Date: August 2026
@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path("/Users/VJ/GitHub/Arch2")
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 SCRAPERS_DIR = REPO_ROOT / "data" / "scrapers"
 
 logging.basicConfig(
@@ -1019,7 +1019,7 @@ def run_scraper() -> tuple[list[dict], list[dict]]:
 
 
 def get_historical_cost_collapse_data() -> list[dict]:
-    """Compile the 45-year historical silicon fabrication cost collapse receipt (1981-2026)."""
+    """Compile the 45-year historical silicon fabrication cost collapse dataset (1981-2026)."""
     return [
         {
             "year": 1981,
@@ -1240,8 +1240,8 @@ def get_historical_cost_collapse_data() -> list[dict]:
     ]
 
 
-def write_receipts(census_rows: list[dict], cost_rows: list[dict]) -> None:
-    """Write output CSV receipts with complete metadata provenance headers."""
+def write_datasets(census_rows: list[dict], cost_rows: list[dict]) -> None:
+    """Write output CSV datasets with complete metadata provenance headers."""
     RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1281,7 +1281,7 @@ def write_receipts(census_rows: list[dict], cost_rows: list[dict]) -> None:
         for r in census_rows:
             writer.writerow(r)
 
-    logger.info(f"Wrote census receipt ({len(census_rows)} shuttles) to {census_file}")
+    logger.info(f"Wrote census dataset ({len(census_rows)} shuttles) to {census_file}")
 
     # 2. Historical Cost Collapse CSV
     cost_file = RECEIPTS_DIR / "shuttle_cost_historical_collapse.csv"
@@ -1315,14 +1315,14 @@ def write_receipts(census_rows: list[dict], cost_rows: list[dict]) -> None:
             writer.writerow(r)
 
     logger.info(
-        f"Wrote cost collapse receipt ({len(cost_rows)} milestones) to {cost_file}"
+        f"Wrote cost collapse dataset ({len(cost_rows)} milestones) to {cost_file}"
     )
 
 
 def main() -> int:
     logger.info("Starting Tiny Tapeout & Open MPW Census Scraper...")
     census_rows, cost_rows = run_scraper()
-    write_receipts(census_rows, cost_rows)
+    write_datasets(census_rows, cost_rows)
     logger.info("Scraper finished cleanly.")
     return 0
 

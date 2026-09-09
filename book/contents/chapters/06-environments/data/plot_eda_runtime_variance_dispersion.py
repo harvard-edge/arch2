@@ -15,8 +15,8 @@ Literature Calibration & Empirical Provenance:
 4. Empirical Execution: 150 total runs (25 randomized pass schedules/seeds per architecture).
 5. Metrics Captured: Chip Area (um^2), Combinational/Sequential Area breakdown, Total Cell Count, Wire Count, Peak RSS Memory (MB), Wall-Clock Time (s), CPU User/System Time (s).
 
-Dataset Receipt: book/contents/chapters/06-environments/data/fig-eda-runtime-variance-dispersion.csv
-                 data/source-receipts/chapter6-eda-runtime-variance-qor-dispersion.csv
+Dataset: book/contents/chapters/06-environments/data/fig-eda-runtime-variance-dispersion.csv
+                 data/datasets/chapter6-eda-runtime-variance-qor-dispersion.csv
 Output Figure:   book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.svg
                  book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.png
                  book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.pdf

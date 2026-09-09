@@ -13,7 +13,7 @@ Literature Calibration & Provenance:
 - PicoRV32 (YosysHQ, Clifford Wolf): 1 monolithic RISC-V CPU core
 - CIRCT MLIR Dialects (LLVM Project): Structured hardware IR (hw, comb, seq)
 
-Dataset Receipt: book/contents/chapters/04-representations/data/fig-hardware-representation-dilation.csv
+Dataset: book/contents/chapters/04-representations/data/fig-hardware-representation-dilation.csv
 Output Figures:  book/contents/chapters/04-representations/images/fig-hardware-representation-dilation.svg
                  book/contents/chapters/04-representations/images/fig-hardware-representation-dilation.pdf
                  book/contents/chapters/04-representations/images/fig-hardware-representation-dilation.png

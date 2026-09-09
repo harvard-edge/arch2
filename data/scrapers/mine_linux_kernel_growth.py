@@ -10,7 +10,7 @@ This replaces 'tarball size' with a much more accurate proxy for
 human effort and software complexity.
 
 Outputs:
-data/source-receipts/linux_kernel_commit_velocity.csv
+data/datasets/linux_kernel_commit_velocity.csv
 """
 
 import os
@@ -58,8 +58,8 @@ def mine_commit_velocity():
             }
         )
 
-    os.makedirs("data/source-receipts", exist_ok=True)
-    out_file = "data/source-receipts/linux_kernel_commit_velocity.csv"
+    os.makedirs("data/datasets", exist_ok=True)
+    out_file = "data/datasets/linux_kernel_commit_velocity.csv"
 
     with open(out_file, "w", newline="") as f:
         writer = csv.DictWriter(

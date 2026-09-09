@@ -5,7 +5,7 @@ Two artifacts per notebook:
 
   html       a static, already-executed page. Fast to open, nothing to install.
   html-wasm  the notebook running in the reader's browser under Pyodide, so the
-             numbers are recomputed on their machine from the published receipts.
+             numbers are recomputed on their machine from the published datasets.
 
 **Why the scrub exists.** `marimo export` walks up to the project root and copies
 sibling files into the export directory. On this repository that pulled `CLAUDE.md`

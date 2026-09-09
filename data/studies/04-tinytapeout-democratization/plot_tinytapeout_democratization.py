@@ -74,13 +74,13 @@ def parse_cost_csv(filepath: Path) -> list[dict]:
 
 
 def main():
-    receipts_dir = REPO_ROOT / "data" / "source-receipts"
-    census_csv = receipts_dir / "tinytapeout_democratization_census.csv"
-    cost_csv = receipts_dir / "shuttle_cost_historical_collapse.csv"
+    datasets_dir = REPO_ROOT / "data" / "datasets"
+    census_csv = datasets_dir / "tinytapeout_democratization_census.csv"
+    cost_csv = datasets_dir / "shuttle_cost_historical_collapse.csv"
 
-    out_receipt_png = receipts_dir / "fig-tinytapeout-democratization-census.png"
-    out_receipt_pdf = receipts_dir / "fig-tinytapeout-democratization-census.pdf"
-    out_receipt_svg = receipts_dir / "fig-tinytapeout-democratization-census.svg"
+    out_dataset_png = datasets_dir / "fig-tinytapeout-democratization-census.png"
+    out_dataset_pdf = datasets_dir / "fig-tinytapeout-democratization-census.pdf"
+    out_dataset_svg = datasets_dir / "fig-tinytapeout-democratization-census.svg"
 
     out_book_dir = (
         REPO_ROOT / "book" / "contents" / "chapters" / "01-moonshot" / "images"
@@ -501,15 +501,15 @@ def main():
     )
 
     # 3. Export Formats
-    for p in [out_receipt_png, out_book_png]:
+    for p in [out_dataset_png, out_book_png]:
         fig.savefig(p, dpi=300, bbox_inches="tight")
         print(f"Saved PNG: {p}")
 
-    for p in [out_receipt_pdf, out_book_pdf]:
+    for p in [out_dataset_pdf, out_book_pdf]:
         fig.savefig(p, bbox_inches="tight")
         print(f"Saved PDF: {p}")
 
-    for p in [out_receipt_svg, out_book_svg]:
+    for p in [out_dataset_svg, out_book_svg]:
         fig.savefig(p, bbox_inches="tight")
         print(f"Saved SVG: {p}")
 

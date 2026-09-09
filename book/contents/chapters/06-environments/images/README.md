@@ -11,8 +11,8 @@ Active hand-authored figures:
 - `F5-artifact-lineage`: parent-child identity across software, hardware, and
   evaluated artifacts.
 
-The frozen source receipt for a retired mixed-anchor slowdown chart remains at
-`data/source-receipts/chapter5-simulator-tax.csv`. Its historical filename is
+The frozen source dataset for a retired mixed-anchor slowdown chart remains at
+`data/datasets/chapter5-simulator-tax.csv`. Its historical filename is
 retained to avoid an unrelated rename.
 
 The `.pdf` files beside active SVG sources are generated print companions.

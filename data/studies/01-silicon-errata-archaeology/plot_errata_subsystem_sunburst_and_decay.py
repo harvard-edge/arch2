@@ -19,12 +19,12 @@ Generates publication-quality figures substantiating:
 2. Panel B: Silicon Errata Discovery Half-Life & Stepping Decay Curve
 3. Panel C: Longitudinal Mitigation Pathways & Containment Economics
 
-Primary Receipt:
-- data/source-receipts/granular_processor_errata_taxonomy.csv
-- data/source-receipts/hardware_errata_longitudinal_summary.csv
+Primary Source data:
+- data/datasets/granular_processor_errata_taxonomy.csv
+- data/datasets/hardware_errata_longitudinal_summary.csv
 
 Outputs:
-- data/source-receipts/fig-errata-subsystem-sunburst-and-decay.{svg,pdf,png}
+- data/datasets/fig-errata-subsystem-sunburst-and-decay.{svg,pdf,png}
 - book/contents/chapters/11-ownership/images/fig-hardware-errata-lifecycle.{svg,pdf,png}
 """
 
@@ -46,10 +46,7 @@ apply_style()
 
 def load_granular_data():
     csv_path = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "granular_processor_errata_taxonomy.csv"
+        REPO_ROOT / "data" / "datasets" / "granular_processor_errata_taxonomy.csv"
     )
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(row for row in f if not row.startswith("#"))
@@ -59,10 +56,7 @@ def load_granular_data():
 
 def load_longitudinal_summary():
     csv_path = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "hardware_errata_longitudinal_summary.csv"
+        REPO_ROOT / "data" / "datasets" / "hardware_errata_longitudinal_summary.csv"
     )
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(row for row in f if not row.startswith("#"))
@@ -316,7 +310,7 @@ def generate_errata_decay_and_sunburst_plots():
     )
 
     # Save Figure 1
-    out_dir1 = REPO_ROOT / "data" / "source-receipts"
+    out_dir1 = REPO_ROOT / "data" / "datasets"
     out_svg1 = out_dir1 / "fig-errata-subsystem-sunburst-and-decay.svg"
     out_pdf1 = out_dir1 / "fig-errata-subsystem-sunburst-and-decay.pdf"
     out_png1 = out_dir1 / "fig-errata-subsystem-sunburst-and-decay.png"
@@ -515,7 +509,7 @@ def generate_errata_decay_and_sunburst_plots():
         borderpad=0.2,
     )
 
-    # Save Figure 2 to Chapter 11 and Source Receipts
+    # Save Figure 2 to Chapter 11 and Source data
     ch11_dir = REPO_ROOT / "book" / "contents" / "chapters" / "11-ownership" / "images"
     ch11_dir.mkdir(parents=True, exist_ok=True)
     out_svg2 = ch11_dir / "fig-hardware-errata-lifecycle.svg"

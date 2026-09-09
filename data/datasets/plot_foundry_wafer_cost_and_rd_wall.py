@@ -27,13 +27,13 @@ apply_style()
 
 
 def main() -> None:
-    receipts_dir = REPO_ROOT / "data" / "source-receipts"
-    data_csv = receipts_dir / "sec_edgar_semiconductor_rd_economics.csv"
+    datasets_dir = REPO_ROOT / "data" / "datasets"
+    data_csv = datasets_dir / "sec_edgar_semiconductor_rd_economics.csv"
 
     # Destination output paths
-    out_receipts_png = receipts_dir / "fig-foundry-wafer-cost-and-rd-wall.png"
-    out_receipts_pdf = receipts_dir / "fig-foundry-wafer-cost-and-rd-wall.pdf"
-    out_receipts_svg = receipts_dir / "fig-foundry-wafer-cost-and-rd-wall.svg"
+    out_dataset_png = datasets_dir / "fig-foundry-wafer-cost-and-rd-wall.png"
+    out_dataset_pdf = datasets_dir / "fig-foundry-wafer-cost-and-rd-wall.pdf"
+    out_dataset_svg = datasets_dir / "fig-foundry-wafer-cost-and-rd-wall.svg"
 
     chapter2_img_dir = (
         REPO_ROOT / "book" / "contents" / "chapters" / "02-pressures" / "images"
@@ -508,9 +508,9 @@ def main() -> None:
         borderpad=0.2,
     )
 
-    # Save to all target locations (receipts and chapter 2 image directories)
+    # Save to all target locations (datasets and chapter 2 image directories)
     target_triplets = [
-        (out_receipts_svg, out_receipts_pdf, out_receipts_png),
+        (out_dataset_svg, out_dataset_pdf, out_dataset_png),
         (out_ch2_svg, out_ch2_pdf, out_ch2_png),
     ]
 
@@ -521,7 +521,7 @@ def main() -> None:
 
     plt.close()
     print("Generated publication-quality figures successfully:")
-    print(f"  - Receipts: {out_receipts_svg}, {out_receipts_pdf}, {out_receipts_png}")
+    print(f"  - Datasets: {out_dataset_svg}, {out_dataset_pdf}, {out_dataset_png}")
     print(f"  - Chapter2: {out_ch2_svg}, {out_ch2_pdf}, {out_ch2_png}")
 
 

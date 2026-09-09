@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail if a figure's data has no honest account of where it came from.
 
-Companion to ``validate_provenance.py``, which polices the receipt files. This
+Companion to ``validate_provenance.py``, which polices the dataset files. This
 one polices the figures built from them, and it exists because of a real defect:
 ``fig-testbench-vacuity-and-judge-bias`` drew its values from ``rng.gauss`` while
 its caption attributed them to three real papers.

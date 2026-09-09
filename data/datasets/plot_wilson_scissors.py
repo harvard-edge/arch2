@@ -25,7 +25,7 @@ def main():
     csv_file = (
         REPO_ROOT
         / "data"
-        / "source-receipts"
+        / "datasets"
         / "chapter7-wilson-verification-scissors-gap.csv"
     )
     out_svg = (

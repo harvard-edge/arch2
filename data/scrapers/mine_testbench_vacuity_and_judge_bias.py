@@ -13,8 +13,8 @@ AI-generated hardware descriptions (Verilog/SystemVerilog). It evaluates:
    candidate RTL and testbenches compared against ground-truth formal proofs
    (Cadence JasperGold and SymbiYosys / SMT-BMC engines).
 
-Output Receipts:
-- data/source-receipts/testbench_vacuity_and_judge_calibration.csv
+Output Datasets:
+- data/datasets/testbench_vacuity_and_judge_calibration.csv
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 
 EXTRACTION_METADATA = {
     "generated_by": "mine_testbench_vacuity_and_judge_bias.py",
@@ -563,7 +563,7 @@ class TestbenchVacuityAndJudgeAuditor:
         }
 
     def write_csv(self, output_path: Path) -> None:
-        """Write provenance receipt with rich metadata headers."""
+        """Write provenance dataset with rich metadata headers."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Calculate summary metrics for header
@@ -611,7 +611,7 @@ class TestbenchVacuityAndJudgeAuditor:
 
         with open(output_path, "w", newline="", encoding="utf-8") as f:
             f.write(
-                "# Testbench Mutation Vacuity & LLM-as-a-Judge Calibration Provenance Receipt\n"
+                "# Testbench Mutation Vacuity & LLM-as-a-Judge Calibration Provenance record\n"
             )
             f.write(
                 "# Architecture 2.0: Track 2.3 (Dynamic Vacuity) & Track 2.5 (Judge Calibration & Confirmation Bias)\n"

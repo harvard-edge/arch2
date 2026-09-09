@@ -15,9 +15,7 @@ apply_style()
 
 def generate_mlperf_coevolution_plot(csv_path=None):
     if csv_path is None:
-        csv_path = (
-            REPO_ROOT / "data" / "source-receipts" / "chapter10-mlperf-coevolution.csv"
-        )
+        csv_path = REPO_ROOT / "data" / "datasets" / "chapter10-mlperf-coevolution.csv"
 
     hw_data = []
     sw_data = []

@@ -5,7 +5,7 @@ Architecture 2.0: Empirical Studies Package Generator
 Packages each empirical research track and publication figure into a distinct,
 self-contained directory under `data/studies/` with:
 - Dedicated README.md containing 9 canonical sections (Summary, Plots, Findings, Schema, Methodology, Provenance, Reproduction, Citation, Talking Points)
-- Raw and derived CSV receipts with SHA256 hashes
+- Raw and derived CSV datasets with SHA256 hashes
 - Standalone Python plotting scripts
 - Rendered publication-quality figures (.png, .pdf, .svg)
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
-RECEIPTS_DIR = DATA_DIR / "source-receipts"
+RECEIPTS_DIR = DATA_DIR / "datasets"
 SCRAPERS_DIR = DATA_DIR / "scrapers"
 STUDIES_DIR = DATA_DIR / "studies"
 
@@ -760,7 +760,7 @@ def generate_readme(study: dict) -> str:
 
 ## 4. Packaged Datasets & Data Schema
 
-### Primary Data Receipts:
+### Primary Data Datasets:
 {csv_list_md}
 
 ### Data Dictionary:
@@ -779,7 +779,7 @@ def generate_readme(study: dict) -> str:
 
 ---
 
-## 6. Primary Source Provenance & Literature Receipts
+## 6. Primary Source Provenance & Literature Datasets
 
 {sources_list}
 
@@ -831,7 +831,7 @@ def main():
         s_dir.mkdir(parents=True, exist_ok=True)
         print(f"\n--> Packaging Study: {study['id']}")
 
-        # 1. Copy CSV receipts
+        # 1. Copy CSV datasets
         for csv_f in study["csv_files"]:
             src_csv = RECEIPTS_DIR / csv_f
             dst_csv = s_dir / csv_f

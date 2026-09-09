@@ -17,8 +17,8 @@ Tracks two co-evolving empirical phenomena in AI systems (2018–2026):
    custom communication, and architecture-specific inline PTX/assembly).
 
 Outputs:
-  - data/source-receipts/mlperf_longitudinal_software_dividend.csv
-  - data/source-receipts/inference_kernel_fragmentation.csv
+  - data/datasets/mlperf_longitudinal_software_dividend.csv
+  - data/datasets/inference_kernel_fragmentation.csv
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 
 
 # ==============================================================================
@@ -1281,11 +1281,11 @@ def get_inference_kernel_fragmentation_dataset() -> list[KernelFragmentationEntr
 
 
 # ==============================================================================
-# Receipt Writers & Validation
+# Dataset Writers & Validation
 # ==============================================================================
 
 
-def write_mlperf_receipt(entries: list[MLPerfEntry], output_path: Path) -> None:
+def write_mlperf_dataset(entries: list[MLPerfEntry], output_path: Path) -> None:
     """Writes the longitudinal MLPerf software dividend dataset with provenance header."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     header_comment = """# MLCommons MLPerf Datacenter Benchmark Longitudinal Software Dividend (2018-2026)
@@ -1323,11 +1323,11 @@ def write_mlperf_receipt(entries: list[MLPerfEntry], output_path: Path) -> None:
             writer.writerow(asdict(entry))
 
     print(
-        f"  [OK] Wrote MLPerf dividend receipt ({len(entries)} rows) -> {output_path}"
+        f"  [OK] Wrote MLPerf dividend dataset ({len(entries)} rows) -> {output_path}"
     )
 
 
-def write_kernel_fragmentation_receipt(
+def write_kernel_fragmentation_dataset(
     entries: list[KernelFragmentationEntry], output_path: Path
 ) -> None:
     """Writes the inference engine custom kernel fragmentation dataset with provenance header."""
@@ -1364,7 +1364,7 @@ def write_kernel_fragmentation_receipt(
             writer.writerow(asdict(entry))
 
     print(
-        f"  [OK] Wrote inference kernel fragmentation receipt ({len(entries)} rows) -> {output_path}"
+        f"  [OK] Wrote inference kernel fragmentation dataset ({len(entries)} rows) -> {output_path}"
     )
 
 
@@ -1415,9 +1415,9 @@ def main() -> None:
     out_mlperf = RECEIPTS_DIR / "mlperf_longitudinal_software_dividend.csv"
     out_kernel = RECEIPTS_DIR / "inference_kernel_fragmentation.csv"
 
-    write_mlperf_receipt(mlperf_entries, out_mlperf)
-    write_kernel_fragmentation_receipt(kernel_entries, out_kernel)
-    print("Done mining and generating receipts.")
+    write_mlperf_dataset(mlperf_entries, out_mlperf)
+    write_kernel_fragmentation_dataset(kernel_entries, out_kernel)
+    print("Done mining and generating datasets.")
 
 
 if __name__ == "__main__":

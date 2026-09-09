@@ -22,9 +22,7 @@ apply_style()
 
 
 def main():
-    csv_file = (
-        REPO_ROOT / "data" / "source-receipts" / "chapter9-mlperf-software-dividend.csv"
-    )
+    csv_file = REPO_ROOT / "data" / "datasets" / "chapter9-mlperf-software-dividend.csv"
     out_svg = (
         REPO_ROOT
         / "book"

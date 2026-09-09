@@ -41,23 +41,23 @@ and plotting, not measurement.
 
 ## The manuscript is not affected
 
-Verified 2026-09-09. No withdrawn or defective receipt is referenced anywhere in
+Verified 2026-09-09. No withdrawn or defective dataset is referenced anywhere in
 `book/contents/`. This is structural rather than lucky:
 
 ```
 data/studies/          -> www/data.qmd          (the website)
-data/source-receipts/  -> book/contents/*.qmd   (the manuscript)
+data/datasets/  -> book/contents/*.qmd   (the manuscript)
 ```
 
 The studies feed the public data page. The book's figures read a different set of
-`chapterNN-*.csv` receipts. **That second population has not been audited.**
+`chapterNN-*.csv` datasets. **That second population has not been audited.**
 
 ## The four ways a number gets past a reader
 
 Every defect found in this audit is one of these. They are listed in the order they
 are hard to catch.
 
-1. **Generated values with real tool metadata.** A receipt header names JasperGold,
+1. **Generated values with real tool metadata.** A dataset header names JasperGold,
    SymbiYosys and Verilator; the values came from `rng.gauss()`. Three datasets were
    withdrawn for this in September 2026.
 2. **A real dataset under a hardcoded figure.** The script opens the CSV, then plots

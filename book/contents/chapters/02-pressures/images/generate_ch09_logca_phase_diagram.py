@@ -30,8 +30,8 @@ def generate_figure(output_dir: Path) -> Path:
     apply_style()
 
     # Load physical specs CSV
-    receipts_dir = repo_root / "data" / "source-receipts"
-    specs_path = receipts_dir / "chapter9-interconnect-logca-specs.csv"
+    datasets_dir = repo_root / "data" / "datasets"
+    specs_path = datasets_dir / "chapter9-interconnect-logca-specs.csv"
 
     with open(specs_path, "r", encoding="utf-8") as f:
         specs = list(csv.DictReader(l for l in f if not l.startswith("#")))

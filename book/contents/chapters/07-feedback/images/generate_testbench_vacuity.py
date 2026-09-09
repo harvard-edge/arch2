@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Testbench vacuity, rebuilt from a transcribed receipt.
+"""Testbench vacuity, rebuilt from a transcribed dataset.
 
 Replaces `fig-testbench-vacuity-and-judge-bias`, whose values came from
 `random.Random(seed)` and `rng.gauss()` in
@@ -9,9 +9,9 @@ also carried a second panel reporting an LLM-judge calibration experiment that
 was never run; it is withdrawn rather than replaced.
 
 Every value here is transcribed from
-`data/source-receipts/chapter7-testbench-vacuity-mutation.csv`, which carries a
+`data/datasets/chapter7-testbench-vacuity-mutation.csv`, which carries a
 per-row citation and URL to Herdt, Grosse and Drechsler (ASPDAC 2021) and the
-OpenHW CORE-V verification effort. The receipt has no generating script.
+OpenHW CORE-V verification effort. The dataset has no generating script.
 
     python3 generate_testbench_vacuity.py
 """
@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 
 from _python.plots import COLORS, apply_style
 
-RECEIPT = ROOT / "data" / "source-receipts" / "chapter7-testbench-vacuity-mutation.csv"
+RECEIPT = ROOT / "data" / "datasets" / "chapter7-testbench-vacuity-mutation.csv"
 
 SHORT = {
     "Tier 1": "Directed\nunit tests",

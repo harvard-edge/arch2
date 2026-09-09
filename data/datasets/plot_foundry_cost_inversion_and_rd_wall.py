@@ -64,12 +64,9 @@ def main():
     scratch_pdf = scratch_dir / "fig-ch02-foundry-cost-inversion-and-rd-wall.pdf"
     scratch_svg = scratch_dir / "fig-ch02-foundry-cost-inversion-and-rd-wall.svg"
 
-    # Also save to data/source-receipts
+    # Also save to data/datasets
     project_script = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "plot_foundry_cost_inversion_and_rd_wall.py"
+        REPO_ROOT / "data" / "datasets" / "plot_foundry_cost_inversion_and_rd_wall.py"
     )
 
     # 1. Load Node Economics Data
@@ -443,7 +440,7 @@ def main():
         borderpad=0.2,
     )
 
-    # Save to project image assets, receipts, and scratch
+    # Save to project image assets, datasets, and scratch
     for svg_p, pdf_p, png_p in [
         (out_svg, out_pdf, out_png),
         (scratch_svg, scratch_pdf, scratch_png),

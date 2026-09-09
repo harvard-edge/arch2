@@ -50,9 +50,7 @@ def fetch_text(url):
 
 def main():
     print("Starting MLCommons Official GitHub Results Scraper...")
-    out_csv = (
-        REPO_ROOT / "data" / "source-receipts" / "full-mlcommons-datacenter-results.csv"
-    )
+    out_csv = REPO_ROOT / "data" / "datasets" / "full-mlcommons-datacenter-results.csv"
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     scraped_records = []

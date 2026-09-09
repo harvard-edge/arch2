@@ -30,11 +30,11 @@ def load_csv(filepath: Path) -> list[dict]:
 def generate_figure(output_dir: Path) -> Path:
     apply_style()
 
-    # Load CSV receipts
-    receipts_dir = repo_root / "data" / "source-receipts"
-    cutlass_rows = load_csv(receipts_dir / "chapter9-cutlass-porting-wall.csv")
-    triton_rows = load_csv(receipts_dir / "chapter9-triton-narrow-waist.csv")
-    vllm_rows = load_csv(receipts_dir / "chapter9-vllm-kernel-fragmentation.csv")
+    # Load CSV datasets
+    datasets_dir = repo_root / "data" / "datasets"
+    cutlass_rows = load_csv(datasets_dir / "chapter9-cutlass-porting-wall.csv")
+    triton_rows = load_csv(datasets_dir / "chapter9-triton-narrow-waist.csv")
+    vllm_rows = load_csv(datasets_dir / "chapter9-vllm-kernel-fragmentation.csv")
 
     # Create 3-panel horizontal figure with generous spacing
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(11.2, 3.6))

@@ -3,10 +3,10 @@
 
 Two rules, both learned from real defects in this repository:
 
-1. Nothing under ``data/source-receipts/`` may be produced by a random number
+1. Nothing under ``data/datasets/`` may be produced by a random number
    generator. Two files were, for weeks, while calling themselves provenance
-   receipts.
-2. A receipt header may not name a tool version that its own generating script
+   datasets.
+2. A dataset header may not name a tool version that its own generating script
    hardcodes. That combination -- a claimed tool version and a literal in the
    generator -- is the signature of a fabricated measurement, because a real
    run reports its own version.
@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RECEIPTS = ROOT / "data" / "source-receipts"
+RECEIPTS = ROOT / "data" / "datasets"
 SYNTHETIC = ROOT / "data" / "synthetic"
 SCRAPERS = ROOT / "data" / "scrapers"
 STUDIES = ROOT / "data" / "studies"
@@ -91,7 +91,7 @@ def header_of(csv: Path) -> str:
     return "\n".join(out)
 
 
-# --- rule 1 + 2: receipts must be measured or transcribed -------------------
+# --- rule 1 + 2: datasets must be measured or transcribed -------------------
 for csv in sorted(RECEIPTS.glob("*.csv")) if RECEIPTS.is_dir() else []:
     script = scraper_for(csv.name)
     if script:
@@ -99,7 +99,7 @@ for csv in sorted(RECEIPTS.glob("*.csv")) if RECEIPTS.is_dir() else []:
         if why:
             problems.append(
                 f"{csv.relative_to(ROOT)} is GENERATED ({why}) but sits in "
-                f"source-receipts/. Move it to data/synthetic/."
+                f"datasets/. Move it to data/synthetic/."
             )
             continue
         hdr = header_of(csv)
@@ -118,7 +118,7 @@ for csv in sorted(RECEIPTS.glob("*.csv")) if RECEIPTS.is_dir() else []:
         head = header_of(csv)
         cols = csv.read_text(errors="ignore").splitlines()
         cols = next((l for l in cols if not l.startswith("#")), "").lower()
-        # a transcribed receipt names its source per row, or in its header
+        # a transcribed dataset names its source per row, or in its header
         per_row = any(
             k in cols
             for k in (
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         print(n)
     print()
     if unprovenanced:
-        print(f"{len(unprovenanced)} receipt(s) carry NO provenance metadata.")
+        print(f"{len(unprovenanced)} dataset(s) carry NO provenance metadata.")
         print(
             "Not evidence of fabrication; evidence that the source was "
             "never recorded. Add a source column or a header note.\n"

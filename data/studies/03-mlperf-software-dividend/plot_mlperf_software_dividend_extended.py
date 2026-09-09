@@ -17,7 +17,7 @@ Visualizes:
 3. Master Composite 4-Panel Executive Visualization connecting software dividends directly to custom kernel growth.
 
 Saves publication-quality figures (PNG at 300 DPI, PDF vector, SVG) into:
-  - data/source-receipts/
+  - data/datasets/
 """
 
 import csv
@@ -33,11 +33,11 @@ from book._python.plots import COLORS, apply_style
 
 apply_style()
 
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 
 
-def load_receipt(filename: str) -> list[dict]:
-    """Loads a CSV receipt from data/source-receipts."""
+def load_dataset(filename: str) -> list[dict]:
+    """Loads a CSV dataset from data/datasets."""
     path = RECEIPTS_DIR / filename
     rows = []
     with open(path, "r", encoding="utf-8") as f:
@@ -334,7 +334,7 @@ def plot_inference_kernel_fragmentation() -> tuple[Path, Path, Path]:
     out_pdf = RECEIPTS_DIR / "inference_kernel_fragmentation.pdf"
     out_png = RECEIPTS_DIR / "inference_kernel_fragmentation.png"
 
-    kernel_data = load_receipt("inference_kernel_fragmentation.csv")
+    kernel_data = load_dataset("inference_kernel_fragmentation.csv")
 
     fig, (ax1, ax2) = plt.subplots(
         1, 2, figsize=(8.6, 3.8), gridspec_kw={"width_ratios": [1.08, 1.04]}
@@ -705,7 +705,7 @@ def plot_master_composite() -> tuple[Path, Path, Path]:
         )
 
     # 3. Panel C: Kernel Proliferation Curves
-    kernel_data = load_receipt("inference_kernel_fragmentation.csv")
+    kernel_data = load_dataset("inference_kernel_fragmentation.csv")
     engines = {
         "vLLM": ([], []),
         "TensorRT-LLM": ([], []),

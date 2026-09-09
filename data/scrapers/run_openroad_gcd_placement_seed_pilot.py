@@ -70,7 +70,7 @@ CSV_FIELDS = [
     "detailedplace_json_sha256",
     "floorplan_odb_sha256",
     "placement_odb_sha256",
-    "stdout_receipt",
+    "stdout_dataset",
     "extraction_timestamp",
 ]
 
@@ -429,7 +429,7 @@ def run_full_flow_smoke(
             "architecture": platform.machine(),
         },
         "container_command": container_script,
-        "stdout_receipt": SMOKE_STDOUT_RECEIPT.relative_to(REPO_ROOT).as_posix(),
+        "stdout_dataset": SMOKE_STDOUT_RECEIPT.relative_to(REPO_ROOT).as_posix(),
         "stdout_sha256": sha256_file(SMOKE_STDOUT_RECEIPT),
         "start_timestamp": start_timestamp,
         "end_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -592,7 +592,7 @@ def main() -> int:
             "detailedplace_json_sha256": sha256_file(dp_raw) if dp else "",
             "floorplan_odb_sha256": "",
             "placement_odb_sha256": sha256_file(odb_path) if odb_path.exists() else "",
-            "stdout_receipt": stdout_path.relative_to(REPO_ROOT).as_posix(),
+            "stdout_dataset": stdout_path.relative_to(REPO_ROOT).as_posix(),
             "extraction_timestamp": timestamp,
         }
         rows = [existing for existing in rows if int(existing["seed"]) != seed]

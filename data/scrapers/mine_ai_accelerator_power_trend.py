@@ -10,7 +10,7 @@ primary bottlenecks. This dataset correlates physical packaging data (Process No
 Transistor Count, Die Size) with Power (TDP) and Peak Compute (TOPS/TFLOPS).
 
 Outputs:
-data/source-receipts/ai_accelerator_power_thermal_trend.csv
+data/datasets/ai_accelerator_power_thermal_trend.csv
 """
 
 import os
@@ -220,8 +220,8 @@ ACCELERATORS = [
 def mine_ai_accelerator_trends():
     print("Compiling AI Accelerator Power & Thermal Trends...")
 
-    os.makedirs("data/source-receipts", exist_ok=True)
-    out_file = "data/source-receipts/ai_accelerator_power_thermal_trend.csv"
+    os.makedirs("data/datasets", exist_ok=True)
+    out_file = "data/datasets/ai_accelerator_power_thermal_trend.csv"
 
     # Calculate derived metrics (e.g., Watts per Transistor, TOPS per Watt, Power Density W/mm2)
     for chip in ACCELERATORS:

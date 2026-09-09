@@ -4,10 +4,10 @@
 > synthesised by `random.Random(seed)` and `rng.gauss()` in
 > `data/scrapers/mine_testbench_vacuity_and_judge_bias.py`. No formal
 > tool was invoked, and the Cadence JasperGold, SymbiYosys, Boolector,
-> Z3 and Bitwuzla versions named in the original receipt header are
+> Z3 and Bitwuzla versions named in the original dataset header are
 > string literals in that script. **Do not cite any figure below.**
 > For transcribed literature values see
-> `data/source-receipts/chapter7-testbench-vacuity-mutation.csv`
+> `data/datasets/chapter7-testbench-vacuity-mutation.csv`
 > (Herdt, Grosse and Drechsler, ASPDAC 2021). Trace and rationale:
 > `FABRICATED-CLAIM-TRACE.md` at the repository root.
 

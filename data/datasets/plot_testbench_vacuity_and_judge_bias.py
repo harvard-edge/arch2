@@ -7,7 +7,7 @@ attributed those numbers to real papers and reported a judge-calibration
 experiment that was never run.
 
 Chapter 7 now uses `generate_testbench_vacuity.py`, which plots the
-transcribed Herdt et al. (ASPDAC 2021) receipt instead. Do not run this
+transcribed Herdt et al. (ASPDAC 2021) dataset instead. Do not run this
 script. Retained only so the withdrawal is traceable.
 
 See FABRICATED-CLAIM-TRACE.md at the repository root.
@@ -29,13 +29,13 @@ Generates publication-quality 2-panel figure:
 - Panel A: The Vacuity Gap (High Line/Branch Coverage masking low Mutation Kill Rates).
 - Panel B: LLM Judge Calibration & In-Family Confirmation Bias (Reliability Diagram).
 
-Input Receipt:
-- data/source-receipts/testbench_vacuity_and_judge_calibration.csv
+Input Source data:
+- data/datasets/testbench_vacuity_and_judge_calibration.csv
 
 Output Assets:
-- data/source-receipts/fig_testbench_vacuity_and_judge_bias.png
-- data/source-receipts/fig_testbench_vacuity_and_judge_bias.pdf
-- data/source-receipts/fig_testbench_vacuity_and_judge_bias.svg
+- data/datasets/fig_testbench_vacuity_and_judge_bias.png
+- data/datasets/fig_testbench_vacuity_and_judge_bias.pdf
+- data/datasets/fig_testbench_vacuity_and_judge_bias.svg
 """
 
 import csv
@@ -71,8 +71,8 @@ def _declare_font_stack(svg_path: Path) -> None:
         svg_path.write_text(text, encoding="utf-8")
 
 
-def load_receipt_data(csv_path: Path) -> List[Dict[str, Any]]:
-    """Load evaluation records from CSV receipt, ignoring comments."""
+def load_dataset(csv_path: Path) -> List[Dict[str, Any]]:
+    """Load evaluation records from CSV dataset, ignoring comments."""
     records = []
     with open(csv_path, "r", encoding="utf-8") as f:
         lines = [line for line in f if not line.strip().startswith("#")]
@@ -153,10 +153,7 @@ def compute_reliability_curve(
 
 def main():
     csv_file = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "testbench_vacuity_and_judge_calibration.csv"
+        REPO_ROOT / "data" / "datasets" / "testbench_vacuity_and_judge_calibration.csv"
     )
     if not csv_file.exists():
         csv_file = (
@@ -164,19 +161,19 @@ def main():
             / "testbench_vacuity_and_judge_calibration.csv"
         )
 
-    records = load_receipt_data(csv_file)
+    records = load_dataset(csv_file)
 
     # Output paths
-    receipts_dir = REPO_ROOT / "data" / "source-receipts"
+    datasets_dir = REPO_ROOT / "data" / "datasets"
     ch07_img_dir = (
         REPO_ROOT / "book" / "contents" / "chapters" / "07-feedback" / "images"
     )
     ch07_img_dir.mkdir(parents=True, exist_ok=True)
 
     out_paths = [
-        receipts_dir / "fig_testbench_vacuity_and_judge_bias.svg",
-        receipts_dir / "fig_testbench_vacuity_and_judge_bias.pdf",
-        receipts_dir / "fig_testbench_vacuity_and_judge_bias.png",
+        datasets_dir / "fig_testbench_vacuity_and_judge_bias.svg",
+        datasets_dir / "fig_testbench_vacuity_and_judge_bias.pdf",
+        datasets_dir / "fig_testbench_vacuity_and_judge_bias.png",
         ch07_img_dir / "fig-testbench-vacuity-and-judge-bias.svg",
         ch07_img_dir / "fig-testbench-vacuity-and-judge-bias.pdf",
         ch07_img_dir / "fig-testbench-vacuity-and-judge-bias.png",

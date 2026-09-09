@@ -20,7 +20,7 @@ Active hand-authored figures:
 - `fig-synthesis-verification-funnel`: Physical signoff verification funnel across automated hardware generation.
 
 A retired mitigation-overhead chart used
-`data/source-receipts/chapter7-mitigation-overhead.csv`. Do not return that
+`data/datasets/chapter7-mitigation-overhead.csv`. Do not return that
 figure without a comparable measurement design across CPUs, kernels,
 workloads, years, and mitigation bundles.
 

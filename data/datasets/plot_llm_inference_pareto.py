@@ -23,7 +23,7 @@ and official chip datasheets:
    Cerebras WSE-3 Architecture Datasheet (2024)
    Throughput: 450,000 tokens/s, TTFT 0.8ms, 44GB SRAM, 21,000.0 TB/s on-chip fabric bandwidth.
 
-Dataset Receipt: data/source-receipts/chapter2-llm-inference-pareto.csv
+Dataset: data/datasets/chapter2-llm-inference-pareto.csv
 Output Figure:   book/images/fig-llm-inference-pareto.svg
 """
 
@@ -44,9 +44,7 @@ apply_style()
 
 
 def main():
-    csv_file = (
-        REPO_ROOT / "data" / "source-receipts" / "chapter2-llm-inference-pareto.csv"
-    )
+    csv_file = REPO_ROOT / "data" / "datasets" / "chapter2-llm-inference-pareto.csv"
     out_plot = REPO_ROOT / "book" / "images" / "fig-llm-inference-pareto.svg"
 
     systems = []

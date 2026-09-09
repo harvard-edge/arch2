@@ -9,7 +9,7 @@ Literature Calibration & Citation Provenance:
 4. Curated Architecture Data (~10^9 Tokens): Arch2 Curated Computer Architecture Corpus [@PrakashEtAl2025QuArch].
 5. Physical EDA Signoff Traces (~10^7 Records): CircuitNet (Chai et al., 2022) [@ChaiEtAl2022CircuitNet].
 
-Dataset Receipt: data/source-receipts/chapter4-data-scarcity-spectrum.csv
+Dataset: data/datasets/chapter4-data-scarcity-spectrum.csv
 Output Figure:   book/images/fig-architecture-data-scarcity.svg
 """
 

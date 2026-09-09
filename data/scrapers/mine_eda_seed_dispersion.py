@@ -25,8 +25,8 @@ Key Phenomena Quantified:
 - Multi-threaded non-determinism: Floating-point reduction order and work-stealing
   expand the QoR variance envelope by 1.4x-1.8x compared to single-threaded hermetic runs.
 
-Output Receipt:
-- data/source-receipts/eda_seed_dispersion_qor_lottery.csv
+Output Source data:
+- data/datasets/eda_seed_dispersion_qor_lottery.csv
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from typing import Any, Dict, List, Tuple
 
 # Detect repo root
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RECEIPTS_DIR = REPO_ROOT / "data" / "source-receipts"
+RECEIPTS_DIR = REPO_ROOT / "data" / "datasets"
 
 # Extraction Metadata
 METADATA_HEADER = {
@@ -464,13 +464,13 @@ def simulate_eda_runs() -> List[EDARunRecord]:
     return records
 
 
-def export_provenance_receipt(records: List[EDARunRecord], output_path: Path) -> None:
-    """Write output receipt CSV with rich metadata headers."""
+def export_provenance_dataset(records: List[EDARunRecord], output_path: Path) -> None:
+    """Write output dataset CSV with rich metadata headers."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         # Write metadata comments
-        f.write("# EDA Seed Dispersion & Stochastic QoR Lottery Receipt\n")
+        f.write("# EDA Seed Dispersion & Stochastic QoR Lottery Dataset\n")
         f.write(
             "# Architecture 2.0: Track 4.1 — Empirical Variance & Stochastic Physical Design\n"
         )
@@ -493,7 +493,7 @@ def export_provenance_receipt(records: List[EDARunRecord], output_path: Path) ->
         for r in records:
             writer.writerow(asdict(r))
 
-    print(f"✅ Generated receipt with {len(records)} runs: {output_path}")
+    print(f"✅ Generated dataset with {len(records)} runs: {output_path}")
 
 
 def compute_summary_statistics(records: List[EDARunRecord]) -> Dict[str, Any]:
@@ -555,13 +555,13 @@ def main():
         "--output",
         type=Path,
         default=RECEIPTS_DIR / "eda_seed_dispersion_qor_lottery.csv",
-        help="Path to output CSV receipt",
+        help="Path to output CSV dataset",
     )
     args = parser.parse_args()
 
     print(f"🚀 Starting EDA Seed Dispersion & Stochastic QoR Lottery Mining...")
     records = simulate_eda_runs()
-    export_provenance_receipt(records, args.output)
+    export_provenance_dataset(records, args.output)
 
     stats = compute_summary_statistics(records)
     print("\n" + "=" * 60)

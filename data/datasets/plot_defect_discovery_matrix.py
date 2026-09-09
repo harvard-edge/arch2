@@ -6,9 +6,9 @@ Substantiates Chapter 7's core thesis on:
 2. Testbench Vacuity & The Coverage Illusion (ASPDAC 2021 / OpenHW Group Telemetry)
 
 Primary Datasets:
-- data/source-receipts/chapter7-defect-discovery-modalities.csv
-- data/source-receipts/chapter7-testbench-vacuity-mutation.csv
-- data/source-receipts/chapter7-subsystem-defect-breakdown.csv
+- data/datasets/chapter7-defect-discovery-modalities.csv
+- data/datasets/chapter7-testbench-vacuity-mutation.csv
+- data/datasets/chapter7-subsystem-defect-breakdown.csv
 """
 
 import csv
@@ -29,16 +29,10 @@ apply_style()
 
 def main():
     csv_modalities = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "chapter7-defect-discovery-modalities.csv"
+        REPO_ROOT / "data" / "datasets" / "chapter7-defect-discovery-modalities.csv"
     )
     csv_vacuity = (
-        REPO_ROOT
-        / "data"
-        / "source-receipts"
-        / "chapter7-testbench-vacuity-mutation.csv"
+        REPO_ROOT / "data" / "datasets" / "chapter7-testbench-vacuity-mutation.csv"
     )
 
     out_ch_dir = REPO_ROOT / "book" / "contents" / "chapters" / "07-feedback" / "images"
