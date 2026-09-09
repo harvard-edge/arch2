@@ -1,50 +1,80 @@
-# Architecture 2.0: Empirical Studies & Publication Exhibits Catalog
+# Studies
 
-This directory contains self-contained empirical study packages backing *Architecture 2.0*. Each folder contains complete datasets, standalone plotting scripts, publication figures, data schemas, reproduction recipes, and citation metadata.
+Each study folder carries a `provenance.yml` recording where its data came from,
+what has been verified, what has not, and what is still wrong with it. That file is
+the only provenance record. Anything not listed in it has no recorded source.
 
----
+## Schema
 
-## Master Study Catalog
+`arch2-provenance/v1`. Same keys in every folder, in the same order.
 
-| ID | Study Title | Primary Artifacts | Key Finding |
-| :--- | :--- | :--- | :--- |
-| [`01-silicon-errata-archaeology`](./01-silicon-errata-archaeology/) | **Real-World Silicon Errata & Defect Archaeology (2016–2026)** | [`README`](./01-silicon-errata-archaeology/README.md) · [`Data`](./01-silicon-errata-archaeology/granular_processor_errata_taxonomy.csv) · [`Plot`](./01-silicon-errata-archaeology/fig-errata-subsystem-sunburst-and-decay.png) | **The ALU Fallacy:** Pure integer ALU bugs account for <1.8% of post-silicon escapes (all arithmetic/FP/vector = 6.8%). ... |
-| [`02-ast-complexity-cliff`](./02-ast-complexity-cliff/) | **Benchmark Reference RTL vs. Production-Oriented Open RTL** | [`README`](./02-ast-complexity-cliff/README.md) · [`Reproduce`](./02-ast-complexity-cliff/REPRODUCE.md) · [`Data`](./02-ast-complexity-cliff/hardware_ast_complexity_measured.csv) · [`Plot`](./02-ast-complexity-cliff/fig_ast_complexity_measured.png) | **A measured 6.7x source-complexity gap:** 168 vs 1,125 median concrete syntax nodes per module across 1,513 declarations parsed with pyslang 11.0.0 from six pinned commits. Sensitivity checks at 4.77x and 4.27x reported alongside. |
-| [`03-mlperf-software-dividend`](./03-mlperf-software-dividend/) | **The Software Porting Wall & Fixed-Silicon Software Dividend (2018–2026)** | [`README`](./03-mlperf-software-dividend/README.md) · [`Data`](./03-mlperf-software-dividend/mlperf_longitudinal_software_dividend.csv) · [`Plot`](./03-mlperf-software-dividend/mlperf_software_dividend_extended_master.png) | **The In-Place Software Dividend:** Maturing software stacks deliver massive speedups on identical, frozen physical sili... |
-| [`04-tinytapeout-democratization`](./04-tinytapeout-democratization/) | **Open Silicon Democratization & The 3,000× Cost Collapse (1981–2026)** | [`README`](./04-tinytapeout-democratization/README.md) · [`Data`](./04-tinytapeout-democratization/tinytapeout_democratization_census.csv) · [`Plot`](./04-tinytapeout-democratization/fig-tinytapeout-democratization-census.png) | **The 3,000x Prototyping Cost Collapse:** Custom silicon entry cost collapsed from $150,000 dedicated mask runs (1981 MO... |
-| [`05-hardware-security-cve-tax`](./05-hardware-security-cve-tax/) | **Hardware Security CVEs & Microarchitectural Performance Mitigation Tax** | [`README`](./05-hardware-security-cve-tax/README.md) · [`Data`](./05-hardware-security-cve-tax/hardware_security_cve_mitigation_tax.csv) · [`Plot`](./05-hardware-security-cve-tax/fig-hardware-cve-mitigation-tax.png) | **The 22% Performance Clawback:** Cumulative hardware security mitigations (Meltdown, Spectre v2, MDS, Retbleed, Downfal... |
-| [`06-eda-seed-dispersion`](./06-eda-seed-dispersion/) | **Physical EDA Seed Dispersion & The '3% Illusion'** | [`README`](./06-eda-seed-dispersion/README.md) · [`Data`](./06-eda-seed-dispersion/eda_seed_dispersion_qor_lottery.csv) · [`Plot`](./06-eda-seed-dispersion/eda_seed_dispersion_distribution.png) | **Natural QoR Dispersion (1sigma = +-2.22%):** Physical PnR heuristics exhibit a natural 3%–8% wirelength and timing dis... |
-| [`07-foundry-cost-and-rd-wall`](./07-foundry-cost-and-rd-wall/) | **Foundry Wafer Cost Inversion vs. Corporate R&D Spend (SEC EDGAR 10-K)** | [`README`](./07-foundry-cost-and-rd-wall/README.md) · [`Data`](./07-foundry-cost-and-rd-wall/sec_edgar_semiconductor_rd_economics.csv) · [`Plot`](./07-foundry-cost-and-rd-wall/fig-foundry-wafer-cost-and-rd-wall.png) | **The Transistor Cost Inversion:** Cost per 100M transistors fell from $2.09 (90nm) to $0.28 (28nm sweet spot), but stal... |
-| [`08-testbench-vacuity-and-judge-bias`](./08-testbench-vacuity-and-judge-bias/) | **WITHDRAWN, synthesised data.** Do not cite. See `FABRICATED-CLAIM-TRACE.md`. | [`README`](./08-testbench-vacuity-and-judge-bias/README.md) · [`Data`](./08-testbench-vacuity-and-judge-bias/testbench_vacuity_and_judge_calibration.csv) · [`Plot`](./08-testbench-vacuity-and-judge-bias/fig_testbench_vacuity_and_judge_bias.png) | **The 55.8% Vacuity Gap:** AI-generated testbenches achieve >92% line coverage and >82% branch coverage, but achieve onl... |
+| Key | Meaning |
+| --- | --- |
+| `claim` | The one sentence this study supports |
+| `evidence_class` | `mined` (we pulled it from primary documents), `measured` (we ran it), `transcribed` (somebody else's number, attributed) |
+| `status` | `verified`, `defective`, or `withdrawn` |
+| `sources` | Where the data came from, with resolvable identifiers |
+| `datasets` | Each file, its row count, and which columns carry per-row provenance |
+| `produced_by` / `reproduce` | The script, and the command that re-derives it |
+| `defects` | Open problems, with file and line |
+| `verified` / `not_verified` | What was checked, and what was not |
 
----
+An empty `row_provenance: []` means values in that file cannot be traced to a source
+one row at a time. That is a warning, not a formality.
 
-## Reproduction Across All Studies
+## Status, audited 2026-09-09
 
-To re-run all plotting scripts across every individual study package:
+| # | Study | Class | Status | Open defects |
+| --- | --- | --- | --- | ---: |
+| 01 | Silicon errata archaeology | mined | defective | 5 |
+| 02 | RTL source complexity | measured | **verified** | 0 |
+| 03 | Fixed-silicon software dividend | transcribed | defective | 3 |
+| 04 | Open silicon democratization | transcribed | defective | 3 |
+| 05 | Hardware CVE mitigation tax | transcribed | defective | 2 |
+| 06 | Placement seed dispersion | measured | defective | 2 |
+| 07 | Design cost and R&D wall | mined | defective | 4 |
+| 08 | Testbench mutation vacuity | — | **withdrawn** | RNG-generated |
 
-```bash
-for study in data/studies/*/; do
-  if [ -d "$study" ]; then
-    echo "Executing $study..."
-    (cd "$study" && python3 plot_*.py)
-  fi
-done
+Study 02 is the only clean one. Study 06's measured pilot and Study 07's SEC
+financials are sound data underneath broken figures; the defects there are packaging
+and plotting, not measurement.
+
+## The manuscript is not affected
+
+Verified 2026-09-09. No withdrawn or defective receipt is referenced anywhere in
+`book/contents/`. This is structural rather than lucky:
+
+```
+data/studies/          -> www/data.qmd          (the website)
+data/source-receipts/  -> book/contents/*.qmd   (the manuscript)
 ```
 
----
+The studies feed the public data page. The book's figures read a different set of
+`chapterNN-*.csv` receipts. **That second population has not been audited.**
 
-## Citation
+## The four ways a number gets past a reader
 
-If you use these datasets, figures, or empirical findings in your research or teaching, please cite:
+Every defect found in this audit is one of these. They are listed in the order they
+are hard to catch.
 
-```bibtex
-@book{reddi2026architecture2,
-  author    = {Vijay Janapa Reddi},
-  title     = {Architecture 2.0: Principles of AI-Native System and Chip Design},
-  year      = {2026},
-  url       = {https://arch2.mlsysbook.ai}
-}
-```
+1. **Generated values with real tool metadata.** A receipt header names JasperGold,
+   SymbiYosys and Verilator; the values came from `rng.gauss()`. Three datasets were
+   withdrawn for this in September 2026.
+2. **A real dataset under a hardcoded figure.** The script opens the CSV, then plots
+   literal arrays. Studies 01, 03, 05 and 07 all do this. The data is fine and the
+   picture is asserted.
+3. **A headline that exists only as an annotation string.** `<1.8%` and `82x` are
+   matplotlib text, not measurements. Both are contradicted by the data beneath them.
+4. **Fabricated identifiers.** 27 commit hashes in Study 04 that resolve to nothing,
+   and a forecast row in Study 07 carrying a real SEC accession number.
 
-> Vijay Janapa Reddi. *Architecture 2.0: Principles of AI-Native System and Chip Design* (2026). Available at: `https://arch2.mlsysbook.ai`
+A fifth, weaker signal worth checking for: numbers that are internally consistent but
+externally false. Study 01's containment figures sum to exactly 100% and disagree
+with the data in every term.
+
+## Why the existing validators pass all of this
+
+`validate_provenance.py` never scans `data/studies/`, and treats a script mentioning
+a CSV filename as proof the file was used. `validate_figure_provenance.py` accepts
+any script containing a `.csv` string literal, and only reads `book/contents/`, never
+`www/data.qmd`. Both report zero violations today.
