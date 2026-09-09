@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Add book directory to import house style helper
-repo_root = Path("/Users/VJ/GitHub/Arch2")
+repo_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(repo_root / "book"))
 from _python.plots import COLORS, apply_style, add_note_box
 

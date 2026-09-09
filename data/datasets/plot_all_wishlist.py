@@ -4,11 +4,33 @@ from pathlib import Path
 import os
 import networkx as nx
 
-plt.style.use("data/datasets/book.mplstyle")
-out_dir = Path(
-    "/Users/VJ/.gemini/antigravity-cli/brain/e9d45d93-bc24-4e34-bc92-58598a39e67b"
-)
-src_dir = Path("data/datasets")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+src_dir = REPO_ROOT / "data" / "datasets"
+plt.style.use(str(src_dir / "book.mplstyle"))
+
+# Each figure is written to the chapter that includes it. This script previously
+# wrote all twelve into an agent CLI scratch directory, so running it appeared to
+# succeed while the assets the book ships were never updated.
+CHAPTER_DIR = {
+    1: "01-moonshot",
+    2: "02-pressures",
+    3: "03-lifecycle",
+    4: "04-representations",
+    5: "05-methods",
+    6: "06-environments",
+    7: "07-feedback",
+    8: "08-loop",
+    9: "09-patterns",
+    10: "10-evaluation",
+    11: "11-ownership",
+    12: "12-ecosystem",
+}
+
+
+def chapter_png(n):
+    d = REPO_ROOT / "book" / "contents" / "chapters" / CHAPTER_DIR[n] / "images"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"plot_ch{n}.png"
 
 
 def get_rows(fname):
@@ -44,7 +66,7 @@ plt.xscale("log")
 plt.xlabel("Deduplicated Training Tokens (Billions, Log)")
 plt.ylabel("Pass@1 Accuracy (%)")
 plt.legend()
-plt.savefig(out_dir / "plot_ch1.png", dpi=300)
+plt.savefig(chapter_png(1), dpi=300)
 plt.close()
 
 # Ch2
@@ -62,7 +84,7 @@ ax1.set_ylabel("CapEx (Billions USD)")
 ax2.set_ylabel("Cost per Billion Transistors (USD)")
 ax1.legend(loc="upper left")
 ax2.legend(loc="upper right")
-plt.savefig(out_dir / "plot_ch2.png", dpi=300)
+plt.savefig(chapter_png(2), dpi=300)
 plt.close()
 
 # Ch3
@@ -79,7 +101,7 @@ plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("PR Complexity (LOC, Log)")
 plt.ylabel("Execution Time (Minutes, Log)")
-plt.savefig(out_dir / "plot_ch3.png", dpi=300)
+plt.savefig(chapter_png(3), dpi=300)
 plt.close()
 
 # Ch4
@@ -97,7 +119,7 @@ for r in rows:
 plt.xscale("log")
 plt.xlabel("Total Gate Count (GE, Log)")
 plt.ylabel("Rent's Exponent (Graph Entropy)")
-plt.savefig(out_dir / "plot_ch4.png", dpi=300)
+plt.savefig(chapter_png(4), dpi=300)
 plt.close()
 
 # Ch5
@@ -116,7 +138,7 @@ for r in rows:
 plt.xscale("log")
 plt.xlabel("Token Generation Throughput (TPS, Log)")
 plt.ylabel("Agentic Coding Score (SWE-bench %)")
-plt.savefig(out_dir / "plot_ch5.png", dpi=300)
+plt.savefig(chapter_png(5), dpi=300)
 plt.close()
 
 # Ch6
@@ -132,7 +154,7 @@ plt.xticks(rotation=45)
 plt.xlabel("Date")
 plt.ylabel("Cumulative API Tapeouts")
 plt.tight_layout()
-plt.savefig(out_dir / "plot_ch6.png", dpi=300)
+plt.savefig(chapter_png(6), dpi=300)
 plt.close()
 
 # Ch7
@@ -147,7 +169,7 @@ plt.plot(
 plt.xscale("log")
 plt.xlabel("Simulation Compute Hours (Log)")
 plt.ylabel("Mutation Survival Rate (%)")
-plt.savefig(out_dir / "plot_ch7.png", dpi=300)
+plt.savefig(chapter_png(7), dpi=300)
 plt.close()
 
 # Ch8
@@ -177,7 +199,7 @@ plt.plot(
 plt.xlabel("Training Hours")
 plt.ylabel("Proxy PPA Cost")
 plt.legend()
-plt.savefig(out_dir / "plot_ch8.png", dpi=300)
+plt.savefig(chapter_png(8), dpi=300)
 plt.close()
 
 # Ch9
@@ -205,7 +227,7 @@ plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("Energy Efficiency (pJ/bit, Log)")
 plt.ylabel("Bandwidth Density (Tbps/mm, Log)")
-plt.savefig(out_dir / "plot_ch9.png", dpi=300)
+plt.savefig(chapter_png(9), dpi=300)
 plt.close()
 
 # Ch10
@@ -222,7 +244,7 @@ for r in rows:
     plt.annotate(r["Model"], (float(r["Parameters_B"]), float(r["MFU_Percent"])))
 plt.xlabel("Model Parameters (Billions, Log)")
 plt.ylabel("Peak Hardware MFU (%)")
-plt.savefig(out_dir / "plot_ch10.png", dpi=300)
+plt.savefig(chapter_png(10), dpi=300)
 plt.close()
 
 # Ch11
@@ -246,7 +268,7 @@ plt.stackplot(
 plt.xlabel("Year")
 plt.ylabel("Number of Reported CVEs")
 plt.legend(loc="upper left")
-plt.savefig(out_dir / "plot_ch11.png", dpi=300)
+plt.savefig(chapter_png(11), dpi=300)
 plt.close()
 
 # Ch12
@@ -266,7 +288,7 @@ try:
         node_size=2000,
         font_size=9,
     )
-    plt.savefig(out_dir / "plot_ch12.png", dpi=300)
+    plt.savefig(chapter_png(12), dpi=300)
     plt.close()
 except:
     pass

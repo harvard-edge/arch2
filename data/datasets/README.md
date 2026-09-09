@@ -8,7 +8,10 @@ same keys as `data/studies/*/provenance.yml`).
 > blind-derive / diff / adversarial-refute pass. 125 were flagged, all 125 were sent
 > to a skeptic, and 98 survived: 15 blockers, 33 material, the rest minor. Every
 > surviving finding is recorded in `provenance.yml` with a file and line.
-> **14 of 17 datasets are `defective`; none is clean.**
+>
+> **All 15 blockers are fixed** (marked `status: FIXED 2026-09-09` in
+> `provenance.yml`). The 83 material, minor and low findings remain open and are
+> recorded there for a later pass.
 
 ## Two defects that invalidate the existing checks
 

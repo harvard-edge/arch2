@@ -41,10 +41,6 @@ def main():
     out_pdf = out_ch_dir / "fig-ch07-defect-discovery-modalities.pdf"
     out_png = out_ch_dir / "fig-ch07-defect-discovery-modalities.png"
 
-    scratch_png = Path(
-        "/Users/VJ/.gemini/antigravity-cli/brain/3d006a40-dbce-4cfa-a3ef-6720bbd8c472/scratch/fig-ch07-defect-discovery-modalities.png"
-    )
-
     # Load Modality Data
     modalities = []
     mod_counts = []
@@ -276,12 +272,9 @@ def main():
     plt.savefig(out_svg, format="svg", bbox_inches="tight")
     plt.savefig(out_pdf, format="pdf", bbox_inches="tight")
     plt.savefig(out_png, format="png", dpi=300, bbox_inches="tight")
-    plt.savefig(scratch_png, format="png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(
-        f"Figure successfully updated:\n  {out_svg}\n  {out_pdf}\n  {out_png}\n  {scratch_png}"
-    )
+    print(f"Figure successfully updated:\n  {out_svg}\n  {out_pdf}\n  {out_png}")
 
 
 if __name__ == "__main__":
