@@ -33,7 +33,7 @@ def main():
         / "book"
         / "contents"
         / "chapters"
-        / "07-feedback"
+        / "02-pressures"
         / "images"
         / "fig-ch07-wilson-verification-scissors.svg"
     )
@@ -42,7 +42,7 @@ def main():
         / "book"
         / "contents"
         / "chapters"
-        / "07-feedback"
+        / "02-pressures"
         / "images"
         / "fig-ch07-wilson-verification-scissors.pdf"
     )
@@ -51,7 +51,7 @@ def main():
         / "book"
         / "contents"
         / "chapters"
-        / "07-feedback"
+        / "02-pressures"
         / "images"
         / "fig-ch07-wilson-verification-scissors.png"
     )
@@ -62,6 +62,7 @@ def main():
     first_silicon = []
     staff_ratio_years = []
     staff_ratio = []
+    latest_row = None
 
     with open(csv_file, "r", encoding="utf-8") as f:
         reader = csv.DictReader((row for row in f if not row.startswith("#")))
@@ -73,6 +74,8 @@ def main():
             if row["staffing_ratio_verif_to_design"] != "N/A":
                 staff_ratio_years.append(y)
                 staff_ratio.append(float(row["staffing_ratio_verif_to_design"]))
+            if latest_row is None or y > float(latest_row["study_year"]):
+                latest_row = row
 
     fig, (ax1, ax2) = plt.subplots(
         1, 2, figsize=(7.8, 3.6), gridspec_kw={"width_ratios": [1.12, 1.08]}
@@ -185,22 +188,24 @@ def main():
     # -------------------------------------------------------------
     # Panel B: Flaws Contributing to Silicon Respins (2024 Data)
     # -------------------------------------------------------------
-    categories = [
-        "Logic or Functional Flaws",
-        "Analog / Mixed-Signal Tuning",
-        "Clocking / CDC Flaws",
-        "Static Timing Defects (Setup)",
-        "Firmware / HW-SW Interaction",
-        "Power Consumption / IR Drop",
+    # Every bar is read from the latest study year in the dataset. The dataset
+    # carries exactly these five respin causes; do not add a sixth without a
+    # column to back it.
+    respin_causes = [
+        ("Logic or Functional Flaws", "logic_functional_flaws_respin_pct"),
+        ("Analog / Mixed-Signal Tuning", "analog_mixed_signal_respin_pct"),
+        ("Clocking / CDC Flaws", "clocking_cdc_flaws_respin_pct"),
+        ("Static Timing Defects (Setup)", "timing_defect_setup_respin_pct"),
+        ("Firmware / HW-SW Interaction", "firmware_hw_sw_respin_pct"),
     ]
-    pcts = [48.0, 43.0, 29.0, 23.0, 21.0, 19.0]
+    categories = [label for label, _ in respin_causes]
+    pcts = [float(latest_row[col]) for _, col in respin_causes]
     cat_colors = [
         COLORS["red"],
         COLORS["orange"],
         COLORS["blue"],
         COLORS["green"],
         COLORS["purple"],
-        COLORS["muted"],
     ]
 
     y_cat = np.arange(len(categories))

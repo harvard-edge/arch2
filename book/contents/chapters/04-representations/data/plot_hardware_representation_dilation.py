@@ -11,7 +11,6 @@ Literature Calibration & Provenance:
 - SERV (Olof Kindgren, 2020): 18 serial RISC-V CPU modules
 - Ibex Core (lowRISC, 2020): 33 embedded 32-bit RISC-V CPU modules
 - PicoRV32 (YosysHQ, Clifford Wolf): 1 monolithic RISC-V CPU core
-- CIRCT MLIR Dialects (LLVM Project): Structured hardware IR (hw, comb, seq)
 
 Dataset: book/contents/chapters/04-representations/data/fig-hardware-representation-dilation.csv
 Output Figures:  book/contents/chapters/04-representations/images/fig-hardware-representation-dilation.svg
@@ -150,6 +149,13 @@ def main():
     log_y_ast = np.log10(ast_dist_arr)
     poly_ast = np.polyfit(log_x, log_y_ast, 1)
     y_ast_fit = 10 ** (poly_ast[0] * np.log10(x_fit) + poly_ast[1])
+    # Largest measured per-module dilation in the dataset. The callout
+    # previously read 5,245x, which was picorv32's MeanDilationFactor, the sole
+    # member of an n=1 category, and not any maximum. Read the measured column
+    # rather than the ratio of the two fitted curves, which extrapolates the AST
+    # fit below one hop at the right edge and overstates the gap.
+    max_fitted_gap = max(r["dilation"] for r in valid_rows)
+    ast_med = float(np.median(ast_dist_arr))
 
     ax1.plot(
         x_fit,
@@ -172,7 +178,7 @@ def main():
     ax1.text(
         12,
         180,
-        "Spatial-Semantic\nDilation Gap\n(up to 5,245×)",
+        f"Spatial-Semantic\nDilation Gap\n(up to {max_fitted_gap:,.0f}\u00d7)",
         fontsize=5.4,
         color=COLORS["note_text"],
         ha="center",
@@ -191,7 +197,7 @@ def main():
     ax1.text(
         350,
         4200,
-        "Linear Token Distance\n($\\Delta_{\\mathrm{token}} \\propto N^{0.91}$)",
+        f"Linear Token Distance\n($\\Delta_{{\\mathrm{{token}}}} \\propto N^{{{poly_tok[0]:.2f}}}$)",
         fontsize=5.2,
         color=COLORS["constraints_ink"],
         ha="center",
@@ -210,7 +216,7 @@ def main():
     ax1.text(
         45,
         0.45,
-        "Topological AST Distance ($d_{\\mathrm{AST}} \\approx 1.1\\text{--}1.4\\text{ hops}$)",
+        f"Topological AST Distance (median ${ast_med:.1f}\\text{{ hops}}$)",
         fontsize=5.0,
         color=COLORS["ink"],
         ha="left",
@@ -327,11 +333,11 @@ def main():
         semantic_means.append(np.mean([r["semantic_pct"] for r in sub]))
         identifier_means.append(100.0 - scaffold_means[-1] - semantic_means[-1])
 
-    # CIRCT MLIR benchmark comparison
-    labels_clean.append("CIRCT (MLIR IR)")
-    scaffold_means.append(18.4)
-    semantic_means.append(61.2)
-    identifier_means.append(20.4)
+    # No CIRCT/MLIR bar. A seventh bar carrying 18.4/61.2/20.4 was drawn here
+    # from in-script literals with no row in the dataset and no measurement
+    # behind it, sitting in the same axes as six measured Verilog corpora with
+    # no visual distinction. Removed 2026-09-09. To restore the Verilog-vs-MLIR
+    # comparison, measure a CIRCT corpus into the dataset first.
 
     y_pos = np.arange(len(labels_clean))
     bar_height = 0.52
