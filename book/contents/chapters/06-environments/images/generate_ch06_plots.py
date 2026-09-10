@@ -126,7 +126,7 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
             xy=(kips, error),
             xytext=(offset[0], offset[1] * 1.8),
             textcoords="offset points",
-            fontsize=5.8,
+            fontsize=9.3,
             fontweight="bold",
             color=color if color != COLORS["muted"] else COLORS["ink"],
             ha=ha,
@@ -145,7 +145,7 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
             lw=0.8,
             connectionstyle="arc3,rad=-0.2",
         ),
-        fontsize=6.0,
+        fontsize=9.6,
         fontweight="bold",
         color=COLORS["evidence_ink"],
     )
@@ -154,9 +154,9 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
     ax.set_xlim(1.0, 20000000.0)
     ax.set_ylim(-1.5, 30.0)
 
-    ax.set_xlabel("Simulation Speedup / Throughput (KIPS, log scale)", fontsize=6.8)
+    ax.set_xlabel("Simulation Speedup / Throughput (KIPS, log scale)", fontsize=10.9)
     ax.set_ylabel(
-        "Microarchitectural Cycle Error Rate (%) (lower is better)", fontsize=6.8
+        "Microarchitectural Cycle Error Rate (%) (lower is better)", fontsize=10.9
     )
 
     ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
@@ -168,7 +168,7 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
         0.92,
         "Bubble size indicates setup & build overhead time",
         transform=ax.transAxes,
-        fontsize=5.6,
+        fontsize=9.0,
         color=COLORS["muted"],
         fontweight="bold",
         bbox=dict(

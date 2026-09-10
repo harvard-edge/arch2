@@ -97,7 +97,7 @@ def generate_figure(output_dir: Path) -> Path:
     )
     ax1_twin.set_ylabel(
         "Inline PTX Asm Statements",
-        fontsize=6.0,
+        fontsize=9.6,
         color=COLORS["constraints_ink"],
         labelpad=5,
     )
@@ -122,8 +122,8 @@ def generate_figure(output_dir: Path) -> Path:
         "v4.7\n('26)",
     ]
     ax1.set_xticks(x1)
-    ax1.set_xticklabels(versions_cutlass, fontsize=5.4)
-    ax1.set_ylabel("CUTLASS Include LOC (Thousands)", fontsize=6.0, color=COLORS["ink"])
+    ax1.set_xticklabels(versions_cutlass, fontsize=8.6)
+    ax1.set_ylabel("CUTLASS Include LOC (Thousands)", fontsize=9.6, color=COLORS["ink"])
     ax1.set_ylim(0, 880)
     ax1.set_yticks([0, 200, 400, 600, 800])
     ax1.tick_params(axis="both", labelsize=5.4, length=2, width=0.5)
@@ -133,7 +133,7 @@ def generate_figure(output_dir: Path) -> Path:
         "Arch LOC: 48.7x\n(4.3K -> 208K)",
         xy=(7, 735),
         xytext=(2.6, 735),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["evidence_ink"],
         bbox=dict(
@@ -153,7 +153,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     ax1.set_title(
         "A. Hardware Primitives (CUTLASS)\nExplosive Low-Level Specialization",
-        fontsize=6.6,
+        fontsize=10.6,
         fontweight="bold",
         pad=8,
         color=COLORS["ink"],
@@ -165,7 +165,7 @@ def generate_figure(output_dir: Path) -> Path:
         lines1 + lines1_t,
         labels1 + labels1_t,
         loc="upper left",
-        fontsize=4.8,
+        fontsize=8.0,
         framealpha=0.92,
         edgecolor="#E2E8F0",
     )
@@ -233,8 +233,8 @@ def generate_figure(output_dir: Path) -> Path:
         "v3.7\n('26)",
     ]
     ax2.set_xticks(x2)
-    ax2.set_xticklabels(versions_triton, fontsize=5.4)
-    ax2.set_ylabel("Compiler LOC (Thousands)", fontsize=6.0, color=COLORS["ink"])
+    ax2.set_xticklabels(versions_triton, fontsize=8.6)
+    ax2.set_ylabel("Compiler LOC (Thousands)", fontsize=9.6, color=COLORS["ink"])
     ax2.set_ylim(0, 390)
     ax2.set_yticks([0, 100, 200, 300])
     ax2.tick_params(axis="both", labelsize=5.4, length=2, width=0.5)
@@ -244,7 +244,7 @@ def generate_figure(output_dir: Path) -> Path:
         "Shared MLIR Narrow Waist\nscales 33x (3K -> 100K LOC)",
         xy=(6, 50),
         xytext=(2.6, 320),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["workload_ink"],
         bbox=dict(
@@ -264,7 +264,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     ax2.set_title(
         "B. Compiler Narrow Waist (Triton)\nMLIR IR Absorbs Target Shifts",
-        fontsize=6.6,
+        fontsize=10.6,
         fontweight="bold",
         pad=8,
         color=COLORS["ink"],
@@ -272,7 +272,7 @@ def generate_figure(output_dir: Path) -> Path:
     ax2.legend(
         loc="upper left",
         bbox_to_anchor=(0.0, 0.98),
-        fontsize=4.8,
+        fontsize=8.0,
         framealpha=0.92,
         edgecolor="#E2E8F0",
     )
@@ -354,9 +354,9 @@ def generate_figure(output_dir: Path) -> Path:
         "v0.27\n('26)",
     ]
     ax3.set_xticks(x3)
-    ax3.set_xticklabels(versions_vllm, fontsize=5.4)
+    ax3.set_xticklabels(versions_vllm, fontsize=8.6)
     ax3.set_ylabel(
-        "Custom C++/CUDA Kernel LOC (Thousands)", fontsize=6.0, color=COLORS["ink"]
+        "Custom C++/CUDA Kernel LOC (Thousands)", fontsize=9.6, color=COLORS["ink"]
     )
     ax3.set_ylim(0, 175)
     ax3.set_yticks([0, 40, 80, 120, 160])
@@ -367,7 +367,7 @@ def generate_figure(output_dir: Path) -> Path:
         "Kernel LOC: 48.7x\n(2.5K -> 120.5K)",
         xy=(7, 120.5),
         xytext=(3.4, 142),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["designspace_ink"],
         bbox=dict(
@@ -387,7 +387,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     ax3.set_title(
         "C. Inference Engine (vLLM)\nApplication Kernel Fragmentation",
-        fontsize=6.6,
+        fontsize=10.6,
         fontweight="bold",
         pad=8,
         color=COLORS["ink"],
@@ -395,7 +395,7 @@ def generate_figure(output_dir: Path) -> Path:
     ax3.legend(
         loc="upper left",
         bbox_to_anchor=(0.0, 0.98),
-        fontsize=4.8,
+        fontsize=8.0,
         framealpha=0.92,
         edgecolor="#E2E8F0",
     )

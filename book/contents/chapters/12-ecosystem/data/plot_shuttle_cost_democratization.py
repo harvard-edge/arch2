@@ -169,7 +169,7 @@ def main():
         0.05,
         85000,
         "Academic Grant Ceiling (~$50k)",
-        fontsize=4.9,
+        fontsize=8.0,
         fontweight="bold",
         color=COLORS["muted"],
         bbox=dict(
@@ -195,7 +195,7 @@ def main():
         4.8,
         2.2e6,
         "Commercial Lockout Zone\n(Apprenticeship Gap)",
-        fontsize=4.9,
+        fontsize=8.0,
         fontweight="bold",
         ha="center",
         va="center",
@@ -213,13 +213,13 @@ def main():
     ax1.set_ylim(10, 1.2e8)
     ax1.set_xlim(-0.6, len(comm_points) - 0.4)
     ax1.set_xticks(x_nodes)
-    ax1.set_xticklabels(labels_nodes, fontsize=4.6, color=COLORS["ink"])
+    ax1.set_xticklabels(labels_nodes, fontsize=8.0, color=COLORS["ink"])
     ax1.set_ylabel(
-        "Fabrication Cost (USD, Log Scale)", fontsize=6.2, color=COLORS["ink"]
+        "Fabrication Cost (USD, Log Scale)", fontsize=9.9, color=COLORS["ink"]
     )
     ax1.set_title(
         "(a) Physical Silicon Fabrication Cost Barrier",
-        fontsize=6.8,
+        fontsize=10.9,
         fontweight="bold",
         pad=8,
     )
@@ -227,7 +227,7 @@ def main():
         True, which="both", color=COLORS["grid"], linewidth=0.45, alpha=0.7, zorder=0
     )
     ax1.legend(
-        loc="upper left", fontsize=4.4, framealpha=0.92, edgecolor=COLORS["grid"]
+        loc="upper left", fontsize=8.0, framealpha=0.92, edgecolor=COLORS["grid"]
     )
 
     # -------------------------------------------------------------
@@ -255,10 +255,10 @@ def main():
     )
 
     ax2.set_ylim(0, 680)
-    ax2.set_ylabel("Submissions per Shuttle", fontsize=6.2, color=COLORS["ink"])
+    ax2.set_ylabel("Submissions per Shuttle", fontsize=9.9, color=COLORS["ink"])
     ax2.set_title(
         "(b) Open Silicon Submission Renaissance",
-        fontsize=6.8,
+        fontsize=10.9,
         fontweight="bold",
         pad=8,
     )
@@ -278,7 +278,7 @@ def main():
     )
     ax2_cumul.set_ylim(0, 4800)
     ax2_cumul.set_ylabel(
-        "Cumulative Verified Tapeouts", fontsize=6.2, color=COLORS["constraints_ink"]
+        "Cumulative Verified Tapeouts", fontsize=9.9, color=COLORS["constraints_ink"]
     )
     ax2_cumul.tick_params(axis="y", colors=COLORS["constraints_ink"], labelsize=5.4)
 
@@ -287,7 +287,7 @@ def main():
     ax2.set_xticks(x_tt[::step])
     ax2.set_xticklabels(
         [f"{tt_runs[i]}\n({tt_dates[i]})" for i in range(0, len(tt_runs), step)],
-        fontsize=4.4,
+        fontsize=8.0,
         rotation=45,
         ha="right",
         color=COLORS["ink"],
@@ -326,7 +326,7 @@ def main():
     ax2.legend(
         handles=legend_elements,
         loc="upper left",
-        fontsize=4.4,
+        fontsize=8.0,
         framealpha=0.92,
         edgecolor=COLORS["grid"],
     )
@@ -338,7 +338,7 @@ def main():
         xy=(rec_idx, 547),
         xytext=(rec_idx + 1.2, 580),
         arrowprops=dict(arrowstyle="->", color=COLORS["ink"], linewidth=0.65),
-        fontsize=4.6,
+        fontsize=8.0,
         fontweight="bold",
         color=COLORS["ink"],
         bbox=dict(
@@ -357,7 +357,7 @@ def main():
         xy=(last_idx, tt_cumul[-1]),
         xytext=(last_idx - 6.5, 2300),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints"], linewidth=0.65),
-        fontsize=4.7,
+        fontsize=8.0,
         fontweight="bold",
         color=COLORS["constraints_ink"],
         bbox=dict(

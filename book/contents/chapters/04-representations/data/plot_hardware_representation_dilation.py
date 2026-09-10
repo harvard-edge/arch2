@@ -179,7 +179,7 @@ def main():
         12,
         180,
         f"Spatial-Semantic\nDilation Gap\n(up to {max_fitted_gap:,.0f}\u00d7)",
-        fontsize=5.4,
+        fontsize=8.6,
         color=COLORS["note_text"],
         ha="center",
         va="center",
@@ -198,7 +198,7 @@ def main():
         350,
         4200,
         f"Linear Token Distance\n($\\Delta_{{\\mathrm{{token}}}} \\propto N^{{{poly_tok[0]:.2f}}}$)",
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["constraints_ink"],
         ha="center",
         va="center",
@@ -217,7 +217,7 @@ def main():
         45,
         0.45,
         f"Topological AST Distance (median ${ast_med:.1f}\\text{{ hops}}$)",
-        fontsize=5.0,
+        fontsize=8.0,
         color=COLORS["ink"],
         ha="left",
         va="bottom",
@@ -234,10 +234,10 @@ def main():
     ax1.set_xlim(2.8, 3200)
     ax1.set_ylim(0.4, 15000)
     ax1.set_xlabel(
-        "Hardware Module Scale (AST Node Count, log)", fontsize=6.5, color=COLORS["ink"]
+        "Hardware Module Scale (AST Node Count, log)", fontsize=10.4, color=COLORS["ink"]
     )
     ax1.set_ylabel(
-        "Mean Def-Use Distance (log scale)", fontsize=6.5, color=COLORS["ink"]
+        "Mean Def-Use Distance (log scale)", fontsize=10.4, color=COLORS["ink"]
     )
     ax1.grid(True, which="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
@@ -298,7 +298,7 @@ def main():
     ax1.legend(
         handles=ax1_handles,
         loc="upper left",
-        fontsize=4.7,
+        fontsize=8.0,
         framealpha=0.92,
         edgecolor=COLORS["grid"],
     )
@@ -378,9 +378,9 @@ def main():
     ax2.set_xlim(0, 100)
     ax2.set_yticks(y_pos)
     ax2.set_yticklabels(
-        labels_clean, fontsize=5.8, fontweight="bold", color=COLORS["ink"]
+        labels_clean, fontsize=9.3, fontweight="bold", color=COLORS["ink"]
     )
-    ax2.set_xlabel("Token Allocation Breakdown (%)", fontsize=6.5, color=COLORS["ink"])
+    ax2.set_xlabel("Token Allocation Breakdown (%)", fontsize=10.4, color=COLORS["ink"])
     ax2.grid(axis="x", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     for i, (sc, sem, idn) in enumerate(
@@ -393,7 +393,7 @@ def main():
             f"{sc:.0f}%",
             va="center",
             ha="center",
-            fontsize=5.0,
+            fontsize=8.0,
             fontweight="bold",
             color=COLORS["ink"],
         )
@@ -404,7 +404,7 @@ def main():
             f"{sem:.0f}%",
             va="center",
             ha="center",
-            fontsize=5.0,
+            fontsize=8.0,
             fontweight="bold",
             color="#ffffff",
         )
@@ -414,7 +414,7 @@ def main():
         "3.3× Higher Semantic Density\nin Typed Hardware IR",
         xy=(65, 6),
         xytext=(48, 4.4),
-        fontsize=5.2,
+        fontsize=8.3,
         fontweight="bold",
         color=COLORS["workload_ink"],
         arrowprops=dict(arrowstyle="->", color=COLORS["workload_ink"], lw=0.7),
@@ -454,7 +454,7 @@ def main():
         loc="lower left",
         bbox_to_anchor=(0.0, 1.02),
         ncol=3,
-        fontsize=4.8,
+        fontsize=8.0,
         frameon=False,
         handlelength=1.1,
         handletextpad=0.4,
@@ -464,14 +464,14 @@ def main():
     # Titles for subplots
     ax1.set_title(
         "A. Spatial-Semantic Dilation (Def-Use Distance)",
-        fontsize=6.8,
+        fontsize=10.9,
         fontweight="bold",
         color=COLORS["ink"],
         pad=8,
     )
     ax2.set_title(
         "B. Syntactic Boilerplate vs. Semantic Density",
-        fontsize=6.8,
+        fontsize=10.9,
         fontweight="bold",
         color=COLORS["ink"],
         pad=22,

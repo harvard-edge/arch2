@@ -103,7 +103,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
             lw=0.8,
             connectionstyle="arc3,rad=-0.12",
         ),
-        fontsize=6.2,
+        fontsize=9.9,
         fontweight="bold",
         color=COLORS["ink"],
         bbox=dict(
@@ -127,19 +127,19 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         xy=(40.0, 1.0),
         xytext=(26.5, 1.15),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
-        fontsize=6.2,
+        fontsize=9.9,
         fontweight="bold",
         color=COLORS["constraints_ink"],
     )
 
     ax.set_xlabel(
         "Candidate generation arrival rate g (proposals / day)",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["ink"],
     )
     ax.set_ylabel(
         "Stage utilization ρi = λi / μi",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["ink"],
     )
 
@@ -150,9 +150,9 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     yticks = [0.0, 0.25, 0.50, 0.75, 1.0, 1.25]
     ytick_labels = ["0%", "25%", "50%", "75%", "100% (Limit)", "125%"]
     ax.set_yticks(yticks)
-    ax.set_yticklabels(ytick_labels, fontsize=5.8)
+    ax.set_yticklabels(ytick_labels, fontsize=9.3)
 
-    ax.legend(frameon=False, fontsize=5.8, loc="upper left")
+    ax.legend(frameon=False, fontsize=9.3, loc="upper left")
     ax.grid(
         True, which="both", axis="both", color=COLORS["grid"], linewidth=0.45, zorder=0
     )

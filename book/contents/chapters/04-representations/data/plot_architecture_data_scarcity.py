@@ -84,7 +84,7 @@ def main():
         xlabel="Corpus Scale (log; units differ per tier)",
         threshold_inside=1e10,
         bar_edgecolor=COLORS["note_edge"],
-        fontsize=5.8,
+        fontsize=9.3,
     )
 
     save_figure_bundle(fig, out_plot_ch)

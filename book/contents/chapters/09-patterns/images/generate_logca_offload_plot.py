@@ -126,7 +126,7 @@ def generate_plot(output_dir: str | None = None) -> str:
             arrowstyle="->",
             lw=1.2,
         ),
-        fontsize=8.5,
+        fontsize=12.0,
         color=COLORS["GreenLine"],
         fontweight="bold",
     )
@@ -141,7 +141,7 @@ def generate_plot(output_dir: str | None = None) -> str:
             arrowstyle="->",
             lw=1.2,
         ),
-        fontsize=8.5,
+        fontsize=12.0,
         color=COLORS["BlueLine"],
         fontweight="bold",
     )
@@ -156,12 +156,12 @@ def generate_plot(output_dir: str | None = None) -> str:
             arrowstyle="->",
             lw=1.2,
         ),
-        fontsize=8.5,
+        fontsize=12.0,
         color=COLORS["GreenLine"],
         fontweight="bold",
     )
 
-    ax.legend(loc="upper left", framealpha=0.9, fontsize=8.5)
+    ax.legend(loc="upper left", framealpha=0.9, fontsize=12.0)
 
     fig = book_style.finalize_web_figure(fig)
 

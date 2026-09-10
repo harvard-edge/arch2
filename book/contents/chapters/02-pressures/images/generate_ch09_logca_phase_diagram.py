@@ -123,7 +123,7 @@ def generate_figure(output_dir: Path) -> Path:
         oi_star_min * 1.25,
         2e6,
         f"No link breaks even\nbelow OI = {oi_star_min:.4f}\nFLOP/byte",
-        fontsize=5.6,
+        fontsize=9.0,
         color=COLORS["constraints_ink"],
         fontweight="bold",
         va="center",
@@ -135,7 +135,7 @@ def generate_figure(output_dir: Path) -> Path:
         380,
         22,
         "On-Package Viability\n(Sub-μs fine-grained)",
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["evidence_ink"],
         ha="right",
         va="center",
@@ -146,7 +146,7 @@ def generate_figure(output_dir: Path) -> Path:
         380,
         3.5e2,
         "Coherent Socket / C2C Viability\n(Mid-granularity)",
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["workload_ink"],
         ha="right",
         va="center",
@@ -157,7 +157,7 @@ def generate_figure(output_dir: Path) -> Path:
         380,
         6e4,
         "Rack / Cluster Viability\n(Coarse batch offload)",
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["methods_ink"],
         ha="right",
         va="center",
@@ -170,22 +170,22 @@ def generate_figure(output_dir: Path) -> Path:
 
     ax.set_xlabel(
         r"Workload Operational Intensity $\mathrm{OI}$ (FLOPs / Byte moved across interface)",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["ink"],
     )
     ax.set_ylabel(
         r"Break-Even Granularity $g^*$ (Operations amortized per offload)",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["ink"],
     )
 
     ax.set_xticks([0.1, 1.0, 10.0, 100.0])
-    ax.set_xticklabels([r"0.1", r"1.0", r"10", r"100"], fontsize=5.8)
+    ax.set_xticklabels([r"0.1", r"1.0", r"10", r"100"], fontsize=9.3)
 
     ax.set_yticks([1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7])
     ax.set_yticklabels(
         [r"$10$", r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", r"$10^6$", r"$10^7$"],
-        fontsize=5.8,
+        fontsize=9.3,
     )
 
     ax.tick_params(axis="both", labelsize=5.8, length=2.5, width=0.5)
@@ -198,7 +198,7 @@ def generate_figure(output_dir: Path) -> Path:
 
     legend = ax.legend(
         loc="upper right",
-        fontsize=5.0,
+        fontsize=8.0,
         framealpha=0.94,
         edgecolor="#E2E8F0",
         frameon=True,

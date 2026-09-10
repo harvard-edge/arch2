@@ -103,7 +103,7 @@ def generate_search_efficiency(output_dir: Path) -> None:
             lw=0.8,
             connectionstyle="arc3,rad=0.15",
         ),
-        fontsize=6.0,
+        fontsize=9.6,
         fontweight="bold",
         color=COLORS["methods_ink"],
     )
@@ -118,7 +118,7 @@ def generate_search_efficiency(output_dir: Path) -> None:
             lw=0.8,
             connectionstyle="arc3,rad=-0.15",
         ),
-        fontsize=6.0,
+        fontsize=9.6,
         fontweight="bold",
         color=COLORS["designspace_ink"],
     )
@@ -127,10 +127,10 @@ def generate_search_efficiency(output_dir: Path) -> None:
     ax.set_xlim(1, 2000)
     ax.set_ylim(0.15, 1.0)
 
-    ax.set_xlabel("Physical Design Tool Evaluations (log scale)", fontsize=6.8)
-    ax.set_ylabel("Normalized Floorplan PPA Quality Score", fontsize=6.8)
+    ax.set_xlabel("Physical Design Tool Evaluations (log scale)", fontsize=10.9)
+    ax.set_ylabel("Normalized Floorplan PPA Quality Score", fontsize=10.9)
 
-    ax.legend(frameon=False, fontsize=5.8, loc="lower right")
+    ax.legend(frameon=False, fontsize=9.3, loc="lower right")
     ax.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
     ax.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 

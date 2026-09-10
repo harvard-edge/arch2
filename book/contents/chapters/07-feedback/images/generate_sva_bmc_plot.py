@@ -84,8 +84,8 @@ def generate_plot(output_dir: Path | None = None) -> str:
     )
     ax1.axhline(100, color=COLORS["muted"], linestyle=":", linewidth=1.0, alpha=0.7)
 
-    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth (k)", fontsize=6.8)
-    ax1.set_ylabel("Formal State-Space Coverage (%)", fontsize=6.8)
+    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth (k)", fontsize=10.9)
+    ax1.set_ylabel("Formal State-Space Coverage (%)", fontsize=10.9)
     ax1.set_xlim(1, 60)
     ax1.set_ylim(0, 105)
     ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
@@ -104,7 +104,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
     ax2.set_yscale("log")
     ax2.set_ylabel(
         "Solver Runtime per Property (seconds, log scale)",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["purple"],
     )
     ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=5.8)
@@ -120,7 +120,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
             color=COLORS["green"],
             lw=0.9,
         ),
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["green"],
         fontweight="bold",
         bbox=dict(
@@ -142,7 +142,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
             color=COLORS["red"],
             lw=0.9,
         ),
-        fontsize=5.2,
+        fontsize=8.3,
         color=COLORS["red"],
         fontweight="bold",
         bbox=dict(
@@ -157,7 +157,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
 
     ax1.set_title(
         "SystemVerilog Assertion Coverage vs. BMC Unroll Depth in Accelerator Units",
-        fontsize=7.8,
+        fontsize=12.0,
         pad=9,
         fontweight="bold",
     )
@@ -172,7 +172,7 @@ def generate_plot(output_dir: Path | None = None) -> str:
     lines = line1 + line2 + line3 + line4 + line_rt
     labels = [l.get_label() for l in lines]
     ax1.legend(
-        lines, labels, loc="upper left", framealpha=0.92, fontsize=5.0, borderpad=0.25
+        lines, labels, loc="upper left", framealpha=0.92, fontsize=8.0, borderpad=0.25
     )
 
     if output_dir:

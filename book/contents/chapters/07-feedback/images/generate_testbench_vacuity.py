@@ -97,7 +97,7 @@ def main():
                 f"{b.get_height():.1f}",
                 ha="center",
                 va="bottom",
-                fontsize=5.4,
+                fontsize=8.6,
                 color=COLORS["muted"],
                 zorder=7,
                 bbox=dict(
@@ -106,7 +106,7 @@ def main():
             )
 
     ax.set_xticks(list(x))
-    ax.set_xticklabels(labels, fontsize=5.8)
+    ax.set_xticklabels(labels, fontsize=9.3)
     ax.set_ylim(0, 122)
     ax.set_yticks([0, 25, 50, 75, 100])
     ax.set_ylabel("Percent")
@@ -114,7 +114,7 @@ def main():
         loc="upper left",
         bbox_to_anchor=(0.0, 1.03),
         frameon=False,
-        fontsize=6.0,
+        fontsize=9.6,
         ncol=2,
     )
     for s in ("top", "right"):
@@ -136,7 +136,7 @@ def main():
         xg + 0.09,
         (line[0] + kill[0]) / 2,
         f"{gap:.1f} point\nvacuity gap",
-        fontsize=6.0,
+        fontsize=9.6,
         fontweight="bold",
         color=COLORS["constraints_ink"],
         va="center",

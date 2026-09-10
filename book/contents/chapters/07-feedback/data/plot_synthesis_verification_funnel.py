@@ -98,9 +98,9 @@ def main():
     ax1.set_yscale("log")
     ax1.set_ylim(1, 400000)
     ax1.set_xticks(x)
-    ax1.set_xticklabels(all_stages, fontsize=5.8, color=COLORS["ink"])
+    ax1.set_xticklabels(all_stages, fontsize=9.3, color=COLORS["ink"])
     ax1.set_ylabel(
-        "Passing Candidate Count (Log Scale)", fontsize=6.8, color=COLORS["ink"]
+        "Passing Candidate Count (Log Scale)", fontsize=10.9, color=COLORS["ink"]
     )
     ax1.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
     clean_spines(ax1, keep=("bottom", "left"))
@@ -120,7 +120,7 @@ def main():
     ax1_sub.set_ylim(0.01, 200)
     ax1_sub.set_ylabel(
         "Cumulative Yield (% Log Scale)",
-        fontsize=6.5,
+        fontsize=10.4,
         color=COLORS["constraints_ink"],
         labelpad=8,
     )
@@ -134,7 +134,7 @@ def main():
             f"{count:,}",
             ha="center",
             va="bottom",
-            fontsize=5.0,
+            fontsize=8.0,
             fontweight="bold",
             color=COLORS["ink"],
         )
@@ -154,9 +154,9 @@ def main():
     ax2.set_ylim(0, 105)
     ax2.set_xticks(x_stages)
     ax2.set_xticklabels(
-        [f"Stage {i+1}" for i in range(5)], fontsize=5.8, color=COLORS["ink"]
+        [f"Stage {i+1}" for i in range(5)], fontsize=9.3, color=COLORS["ink"]
     )
-    ax2.set_ylabel("Conditional Stage Pass Rate (%)", fontsize=6.8, color=COLORS["ink"])
+    ax2.set_ylabel("Conditional Stage Pass Rate (%)", fontsize=10.9, color=COLORS["ink"])
     ax2.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
     clean_spines(ax2, keep=("bottom", "left"))
 
@@ -167,7 +167,7 @@ def main():
             f"{rate:.1f}%",
             ha="center",
             va="bottom",
-            fontsize=5.5,
+            fontsize=8.8,
             fontweight="bold",
             color=COLORS["ink"],
         )

@@ -171,10 +171,10 @@ def main():
     ax1.axhline(0, color=COLORS["muted"], linestyle=":", linewidth=0.75, zorder=1)
     ax1.set_xticks(np.arange(len(design_order)))
     ax1.set_xticklabels(
-        display_names, fontsize=5.8, fontweight="bold", color=COLORS["ink"]
+        display_names, fontsize=9.3, fontweight="bold", color=COLORS["ink"]
     )
     ax1.set_ylabel(
-        "Silicon Area Dispersion vs. Median (%)", fontsize=6.6, color=COLORS["ink"]
+        "Silicon Area Dispersion vs. Median (%)", fontsize=10.6, color=COLORS["ink"]
     )
     ax1.set_ylim(-10.5, 12.0)
     ax1.grid(True, axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
@@ -190,7 +190,7 @@ def main():
             lw=0.75,
             connectionstyle="arc3,rad=-0.15",
         ),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["evidence_ink"],
     )
@@ -205,14 +205,14 @@ def main():
             lw=0.75,
             connectionstyle="arc3,rad=0.15",
         ),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["constraints_ink"],
     )
 
     ax1.set_title(
         "A: Area QoR Dispersion Across Logic Synthesis Pass Schedules",
-        fontsize=7.0,
+        fontsize=11.2,
         fontweight="bold",
         pad=6,
         color=COLORS["ink"],
@@ -250,9 +250,9 @@ def main():
         )
 
     ax2.set_xlabel(
-        "Wall-Clock Synthesis Runtime (seconds)", fontsize=6.6, color=COLORS["ink"]
+        "Wall-Clock Synthesis Runtime (seconds)", fontsize=10.6, color=COLORS["ink"]
     )
-    ax2.set_ylabel("Peak Process Memory / RSS (MB)", fontsize=6.6, color=COLORS["ink"])
+    ax2.set_ylabel("Peak Process Memory / RSS (MB)", fontsize=10.6, color=COLORS["ink"])
     ax2.set_xlim(0.0, 7.4)
     ax2.set_ylim(20.0, 135.0)
     ax2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
@@ -268,7 +268,7 @@ def main():
             lw=0.75,
             connectionstyle="arc3,rad=-0.12",
         ),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["ink"],
     )
@@ -283,7 +283,7 @@ def main():
             lw=0.75,
             connectionstyle="arc3,rad=0.15",
         ),
-        fontsize=5.3,
+        fontsize=8.5,
         fontweight="bold",
         color=COLORS["workload_ink"],
     )
@@ -293,16 +293,16 @@ def main():
         frameon=True,
         facecolor=COLORS["note_fill"],
         edgecolor=COLORS["note_edge"],
-        fontsize=5.0,
+        fontsize=8.0,
         title="Hardware Architecture",
-        title_fontsize=5.4,
+        title_fontsize=8.6,
         borderpad=0.4,
         labelspacing=0.3,
     )
 
     ax2.set_title(
         "B: Tool Resource Footprint & Execution Jitter (150 Runs)",
-        fontsize=7.0,
+        fontsize=11.2,
         fontweight="bold",
         pad=6,
         color=COLORS["ink"],
