@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""
-Hardware AST Complexity & Clock-Domain Scraper / Analyzer
----------------------------------------------------------
-Architecture 2.0: Track 2 — The AI Benchmark Mirage vs. Physical Silicon AST Complexity
-
-Extracts structural, topological, and microarchitectural complexity metrics:
-1. Lines of Code (LoC: Raw, Clean, Blank, Comment)
-2. Abstract Syntax Tree (AST: Node Count, Max Tree Depth, Expression Density)
-3. Clock Domains & Asynchronous Clock-Domain Crossings (CDC)
-4. Sequential State Bits (Flip-Flops vs Combinational Gates)
-5. Hierarchy Depth & Submodule Instantiation Count
+"""QUARANTINED SYNTHETIC DATA GENERATOR. DO NOT RUN.
+This generator synthesized numbers via literal tables with fake commit hashes.
+Replaced by data/scrapers/mine_hardware_ast_complexity_real.py (pyslang).
+Retained under data/synthetic/ solely for audit traceability. See FABRICATED-CLAIM-TRACE.md.
 
 Calibrated Corpora:
 - AI Synthetic Benchmarks: VerilogEval (NVlabs), RTLLM (HKUST), HumanEval-Synthesize (VeriGen)
@@ -19,6 +12,9 @@ Calibrated Corpora:
 Output Source data:
 - data/datasets/hardware_ast_complexity_gap.csv
 """
+
+raise SystemExit("QUARANTINED: this script synthesizes data. Do not execute.")
+
 
 import sys
 import re

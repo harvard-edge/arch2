@@ -201,13 +201,7 @@ def classify(label: str, info: dict) -> tuple[str, str, str]:
         py, src = found
         where = str(py.relative_to(ROOT))
 
-    data = reads_data(src)
-    if data:
-        return "ok-data", f"reads {data}", where
-
     rng = uses_rng(src)
-    n = literal_count(src)
-
     if rng:
         if declared:
             return "ok-constructed", f"{rng}, caption declares it", where
@@ -219,6 +213,12 @@ def classify(label: str, info: dict) -> tuple[str, str, str]:
             ),
             where,
         )
+
+    data = reads_data(src)
+    if data:
+        return "ok-data", f"reads {data}", where
+
+    n = literal_count(src)
 
     if n > LITERAL_THRESHOLD:
         if cited or declared:

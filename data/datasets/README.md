@@ -224,51 +224,48 @@ data/datasets/
   - *Foundry Manufacturing & Design Escalation:* Leading $300\text{ mm}$ wafer prices escalated $16.2\times$ ($\$1,850$ at $90\text{ nm} \to \$30,000+$ at $2\text{ nm}$), full reticle mask sets escalated $80.0\times$ ($\$0.75\text{M} \to \$60.0\text{M}+$), and complete SoC design costs jumped $25.9\times$ ($\$28.0\text{M}$ at $65\text{ nm} \to \$725.0\text{M}+$ at $2\text{ nm}$).
   - *The Corporate R&D Wall:* Total corporate R&D expenditures surged up to $278\times$ (NVIDIA: $\$0.08\text{B} \to \$22.8\text{B}$), while top fabless architects sustained intense $20\%\text{--}32\%$ revenue reinvestment rates (NVIDIA $32.4\%$, AMD $31.9\%$, Intel $31.2\%$, Broadcom $29.5\%$, Qualcomm $25.4\%$).
 
-### 2.11 Track 4.1: The Physical EDA Seed Dispersion & Stochastic QoR Lottery
-* **Source data:** `eda_seed_dispersion_qor_lottery.csv` ($N = 684$ physical synthesis and place-and-route runs)
-* **Scraper & EDA Simulator:** `data/scrapers/mine_eda_seed_dispersion.py`
-* **Plotting Script:** `plot_eda_seed_dispersion_distribution.py`
+### 2.11 Track 4.1: Physical Design Seed Dispersion in OpenROAD
+* **Source data:** `openroad_gcd_placement_seed_pilot.csv` ($N = 20$ measured placement runs on GCD Nangate45)
+* **Measurement Harness:** `data/scrapers/run_openroad_gcd_placement_seed_pilot.py`
+* **Plotting Script:** `data/studies/06-eda-seed-dispersion/plot_openroad_gcd_placement_seed_pilot.py`
 * **Generated Assets:**
-  - `data/datasets/eda_seed_dispersion_distribution.{svg,pdf,png}`
-  - `book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.{svg,pdf,png}`
+  - `data/studies/06-eda-seed-dispersion/openroad_gcd_placement_seed_pilot.{png,pdf,svg}`
 * **Primary Sources:**
-  1. *EDA Flow & Toolchains:* OpenROAD v2.0, Yosys 0.67, OpenSTA 2.6.0.
-  2. *Standard Cell Libraries & PDKs:* Nangate45 (45nm OpenCell), SKY130 (SkyWater 130nm HD), ASAP7 (7nm Predictive FinFET).
-  3. *Benchmark Hardware IP:* `PicoRV32`, `Ibex_Core` / `CV32E40P`, `SystolicArray_16x16`, `AES256_GCM`, `DynamicNode_NoC`, `BlackParrot_FE`.
-* **Key Empirical Metrics Tracked:**
-  - *The Natural Physical EDA Variance Envelope:* $1\sigma = \pm 2.22\%$ with peak-to-peak dispersion spanning $14.17\%$ purely from pseudo-random seed perturbations on frozen RTL and constraints.
-  - *"The 3% Illusion":* AI-for-EDA PPA gains of $3\%\text{--}5\%$ fall completely within the $\pm 2\sigma$ noise band of random seed initializations.
-  - *Concurrency Jitter:* Multi-threaded execution ($T=16$) expands variance by $1.26\times$ due to lock contention and non-deterministic floating-point accumulation.
+  1. *Toolchain:* OpenROAD v2.0 (digest-pinned container), ORFS commit `8359fde`.
+  2. *Standard Cell Library:* Nangate45 (45nm OpenCellLibrary).
+  3. *Benchmark Design:* `gcd` (Greatest Common Divisor coprocessor, Nangate45).
+* **Key Empirical Metrics Measured:**
+  - *Setup Slack Dispersion:* Setup slack span of $3.83\%$ across twenty random placement seeds on frozen floorplan and RTL.
+  - *Instance Area Invariance:* Detailed placement instance area moves only $0.84\%$ over the same runs.
+* **Note on Predecessor:** Former synthetic generator `mine_eda_seed_dispersion.py` and `SYNTHETIC-eda_seed_dispersion_qor_lottery.csv` quarantined to `data/synthetic/`. See `FABRICATED-CLAIM-TRACE.md`.
 
-### 2.12 Track 2.3 & 2.5: Testbench Mutation Vacuity & LLM-as-a-Judge Calibration
-* **Source data:** `testbench_vacuity_and_judge_calibration.csv` ($N = 1,563$ evaluated hardware testbenches and judge pairs)
-* **Scraper & Mutation Analyzer:** `data/scrapers/mine_testbench_vacuity_and_judge_bias.py`
-* **Plotting Script:** `plot_testbench_vacuity_and_judge_bias.py`
+### 2.12 Track 2.3 & 2.5: Testbench Mutation Vacuity (Transcribed Literature)
+* **Source data:** `chapter7-testbench-vacuity-mutation.csv` ($N = 4$ verification tiers)
+* **Plotting Script:** `book/contents/chapters/07-feedback/images/generate_testbench_vacuity.py`
 * **Generated Assets:**
-  - `data/datasets/fig_testbench_vacuity_and_judge_bias.{svg,pdf,png}`
+  - `book/contents/chapters/07-feedback/images/fig-ch07-testbench-vacuity.{png,pdf,svg}`
 * **Primary Sources:**
-  1. *Benchmark Test Suites:* VerilogEval (Liu et al., ICCAD 2023), RTLLM (Lu et al., IEEE TCAD 2024), VeriGen (Thakur et al., IEEE TCAD 2023).
-  2. *Formal Ground Truth Engines:* Cadence JasperGold 2024.09, SymbiYosys / SMT-BMC.
+  1. *Reference Literature:* Herdt, Grosse and Drechsler, *Mutation Testing for RISC-V Compliance Verification*, ASPDAC 2021.
+  2. *Verification Target:* OpenHW Group CORE-V (CV32E40P).
 * **Key Empirical Metrics Tracked:**
-  - *The Dynamic Vacuity Gap:* High line coverage ($92.9\%$) and branch coverage ($82.4\%$) masking low mutation kill rate ($37.1\%$), producing a **$55.8\%$ Vacuity Gap** where buggy silicon passes simulation silently.
-  - *LLM-as-a-Judge Confirmation Bias:* LLM judges exhibit an overall Expected Calibration Error of $\text{ECE} = 0.266$. When evaluating code from their own model family, sycophancy spikes the False Acceptance Rate to **$86.1\%$** ($2.22\times$ bias multiplier).
+  - *The Directed Vacuity Gap:* Directed unit tests reach $88.4\%$ line coverage while killing only $34.8\%$ of seeded mutants, exposing a **$53.6\text{ percentage point}$ Vacuity Gap**.
+  - *Formal Parity:* Formally guided symbolic execution closes the gap to $100\%$ mutation kill rate.
+* **Note on Predecessor:** Former synthetic study `08-testbench-vacuity-and-judge-bias` was withdrawn on 2026-09-03. See `FABRICATED-CLAIM-TRACE.md`.
 
 ---
 
 ## 3. Reproduction Instructions
 
-To regenerate all figures and verify their vector (SVG/PDF) and visual inspection (PNG) twin assets:
+To regenerate figures and verify data assets:
 
 ```bash
-# 1. Run all empirical data scrapers and AST analyzers
+# 1. Run measured data collection pipelines
 python3 data/scrapers/scrape_intel_amd_errata.py
-python3 data/scrapers/mine_hardware_ast_complexity.py
+python3 data/scrapers/mine_hardware_ast_complexity_real.py
 python3 data/scrapers/mine_mlperf_software_dividend.py
 python3 data/scrapers/scrape_tinytapeout_census.py
 python3 data/scrapers/mine_hardware_security_cves.py
 python3 data/scrapers/mine_sec_edgar_semiconductor_rd.py
-python3 data/scrapers/mine_eda_seed_dispersion.py
-python3 data/scrapers/mine_testbench_vacuity_and_judge_bias.py
 
 # 2. Run all publication plotting scripts
 python3 data/datasets/plot_github_divide.py

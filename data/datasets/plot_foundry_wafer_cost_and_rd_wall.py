@@ -28,7 +28,9 @@ apply_style()
 
 def main() -> None:
     datasets_dir = REPO_ROOT / "data" / "datasets"
+    study7_dir = REPO_ROOT / "data" / "studies" / "07-foundry-cost-and-rd-wall"
     data_csv = datasets_dir / "sec_edgar_semiconductor_rd_economics.csv"
+    nodes_csv = datasets_dir / "foundry_node_economics_timeline.csv"
 
     # Destination output paths
     out_dataset_png = datasets_dir / "fig-foundry-wafer-cost-and-rd-wall.png"
@@ -42,6 +44,16 @@ def main() -> None:
     out_ch2_png = chapter2_img_dir / "fig-ch02-foundry-cost-inversion-and-rd-wall.png"
     out_ch2_pdf = chapter2_img_dir / "fig-ch02-foundry-cost-inversion-and-rd-wall.pdf"
     out_ch2_svg = chapter2_img_dir / "fig-ch02-foundry-cost-inversion-and-rd-wall.svg"
+
+    study7_png = study7_dir / "fig-foundry-wafer-cost-and-rd-wall.png"
+    study7_pdf = study7_dir / "fig-foundry-wafer-cost-and-rd-wall.pdf"
+    study7_svg = study7_dir / "fig-foundry-wafer-cost-and-rd-wall.svg"
+
+    obs_img_dir = REPO_ROOT / "www" / "images" / "observatory"
+    obs_img_dir.mkdir(parents=True, exist_ok=True)
+    obs_png = obs_img_dir / "fig-foundry-wafer-cost-and-rd-wall.png"
+    obs_pdf = obs_img_dir / "fig-foundry-wafer-cost-and-rd-wall.pdf"
+    obs_svg = obs_img_dir / "fig-foundry-wafer-cost-and-rd-wall.svg"
 
     # 1. Load SEC EDGAR R&D Financials
     records: list[dict] = []
@@ -70,97 +82,28 @@ def main() -> None:
                 }
             )
 
-    # 2. Node Economics Reference Points (from TSMC / IBS / Gartner)
-    nodes_data = [
-        {
-            "node": "90 nm",
-            "year": 2004,
-            "wafer_cost": 1850.0,
-            "density": 1.25,
-            "cost_100m": 2.094,
-            "design_cost": 24.0,
-        },
-        {
-            "node": "65 nm",
-            "year": 2006,
-            "wafer_cost": 2100.0,
-            "density": 2.65,
-            "cost_100m": 1.121,
-            "design_cost": 30.0,
-        },
-        {
-            "node": "40 nm",
-            "year": 2008,
-            "wafer_cost": 2450.0,
-            "density": 5.80,
-            "cost_100m": 0.598,
-            "design_cost": 48.0,
-        },
-        {
-            "node": "28 nm",
-            "year": 2011,
-            "wafer_cost": 3000.0,
-            "density": 15.3,
-            "cost_100m": 0.277,
-            "design_cost": 75.0,
-        },
-        {
-            "node": "20 nm",
-            "year": 2014,
-            "wafer_cost": 3800.0,
-            "density": 21.8,
-            "cost_100m": 0.247,
-            "design_cost": 110.0,
-        },
-        {
-            "node": "16 nm",
-            "year": 2015,
-            "wafer_cost": 4500.0,
-            "density": 28.8,
-            "cost_100m": 0.221,
-            "design_cost": 160.0,
-        },
-        {
-            "node": "10 nm",
-            "year": 2017,
-            "wafer_cost": 6000.0,
-            "density": 52.5,
-            "cost_100m": 0.162,
-            "design_cost": 175.0,
-        },
-        {
-            "node": "7 nm",
-            "year": 2018,
-            "wafer_cost": 9800.0,
-            "density": 91.2,
-            "cost_100m": 0.152,
-            "design_cost": 249.0,
-        },
-        {
-            "node": "5 nm",
-            "year": 2020,
-            "wafer_cost": 16500.0,
-            "density": 138.2,
-            "cost_100m": 0.169,
-            "design_cost": 540.0,
-        },
-        {
-            "node": "3 nm",
-            "year": 2022,
-            "wafer_cost": 20000.0,
-            "density": 215.0,
-            "cost_100m": 0.132,
-            "design_cost": 600.0,
-        },
-        {
-            "node": "2 nm",
-            "year": 2025,
-            "wafer_cost": 30000.0,
-            "density": 280.0,
-            "cost_100m": 0.152,
-            "design_cost": 725.0,
-        },
-    ]
+    # 2. Node Economics Reference Points (from foundry_node_economics_timeline.csv)
+    nodes_data: list[dict] = []
+    with open(nodes_csv, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        n_header = []
+        for row in reader:
+            if not row or row[0].startswith("#"):
+                continue
+            if not n_header:
+                n_header = row
+                continue
+            d = dict(zip(n_header, row))
+            nodes_data.append(
+                {
+                    "node": d["process_node"],
+                    "year": int(d["introduction_year"]),
+                    "wafer_cost": float(d["wafer_cost_usd"]),
+                    "density": float(d["transistor_density_m_tr_mm2"]),
+                    "cost_100m": float(d["cost_per_100m_transistors_usd"]),
+                    "design_cost": float(d["design_cost_per_soc_usd_million"]),
+                }
+            )
 
     # Create 2-panel figure with refined width ratios and tight layout
     fig, (ax1, ax2) = plt.subplots(
@@ -197,6 +140,10 @@ def main() -> None:
         zorder=2,
     )
 
+    # Dynamic scaling multiples for Panel A legend
+    wafer_mult = wafer_costs[-1] / wafer_costs[0]
+    design_mult = design_costs[-1] / design_costs[0]
+
     # Left Y-Axis (Log scale): Wafer Cost ($) and Scaled SoC Design Cost ($M x 10)
     ax1.plot(
         node_years,
@@ -205,7 +152,7 @@ def main() -> None:
         marker="s",
         linewidth=1.7,
         markersize=4.2,
-        label=r"300mm Wafer Cost (\$ USD, +16.2$\times$)",
+        label=f"300mm Wafer Cost (\\$ USD, +{wafer_mult:.1f}x)",
         zorder=3,
     )
     ax1.plot(
@@ -217,7 +164,7 @@ def main() -> None:
         marker="o",
         linewidth=1.7,
         markersize=4.2,
-        label=r"SoC Design Cost (\$M $\times 10$, +25.9$\times$)",
+        label=f"SoC Design Cost (\\$M \u00d7 10, +{design_mult:.1f}x)",
         zorder=3,
     )
 
@@ -231,15 +178,19 @@ def main() -> None:
         linewidth=2.0,
         linestyle="--",
         markersize=4.6,
-        label=r"Cost per 100M Transistors (\$ USD)",
+        label="Cost per 100M Transistors (\\$ USD)",
         zorder=4,
     )
 
-    # Annotations on landmark nodes
+    # Dynamic Landmark Node Annotations
+    n28 = next(n for n in nodes_data if "28" in n["node"])
+    n7 = next(n for n in nodes_data if "7" in n["node"] and "725" not in n["node"])
+    n2 = next(n for n in nodes_data if n["node"].strip() in ("2 nm", "2nm"))
+
     # 28nm Planar Sweet Spot
     ax1.annotate(
-        "28nm Planar Sweet Spot\n(\\$3.0k/wafer, \\$0.28/100M)",
-        xy=(2011, 3000),
+        f"28nm Planar Sweet Spot\n(\\${n28['wafer_cost']/1000:.1f}k/wafer, \\${n28['cost_100m']:.2f}/100M)",
+        xy=(n28["year"], n28["wafer_cost"]),
         xytext=(-42, 16),
         textcoords="offset points",
         fontsize=4.7,
@@ -258,8 +209,8 @@ def main() -> None:
 
     # 7nm EUV stall
     ax1_twin.annotate(
-        "7nm (\\$0.15/100M Tr)\nCost scaling stalls",
-        xy=(2018, 0.152),
+        f"7nm (\\${n7['cost_100m']:.2f}/100M Tr)\nCost scaling stalls",
+        xy=(n7["year"], n7["cost_100m"]),
         xytext=(-38, 22),
         textcoords="offset points",
         fontsize=4.6,
@@ -278,8 +229,8 @@ def main() -> None:
 
     # 2nm GAA Inversion
     ax1.annotate(
-        "2nm GAA (\\$30k/wafer)\n\\$725M SoC Design Cost",
-        xy=(2025, 30000),
+        f"2nm GAA (\\${int(n2['wafer_cost']/1000)}k/wafer)\n\\${int(n2['design_cost'])}M SoC Design Cost",
+        xy=(n2["year"], n2["wafer_cost"]),
         xytext=(-78, -16),
         textcoords="offset points",
         fontsize=4.7,
@@ -315,10 +266,10 @@ def main() -> None:
     )
     ax1.set_xlabel("Node Introduction Year & Feature Scale", fontsize=6.8)
     ax1.set_ylabel(
-        r"Wafer Cost (\$) / Scaled Design Cost (\$M $\times 10$)", fontsize=6.6
+        "Wafer Cost (\\$) / Scaled Design Cost (\\$M \u00d7 10)", fontsize=6.6
     )
     ax1_twin.set_ylabel(
-        r"Cost per 100M Transistors (USD \$)",
+        "Cost per 100M Transistors (USD \\$)",
         fontsize=6.6,
         color=COLORS["constraints_ink"],
     )
@@ -357,7 +308,6 @@ def main() -> None:
             "color": COLORS["designspace"],
             "marker": "o",
             "lw": 1.9,
-            "label": r"NVIDIA (\$0.08B $\rightarrow$ \$22.8B)",
         },
         {
             "ticker": "INTC",
@@ -365,7 +315,6 @@ def main() -> None:
             "color": COLORS["workload"],
             "marker": "s",
             "lw": 1.6,
-            "label": r"Intel (\$3.9B $\rightarrow$ \$17.5B peak)",
         },
         {
             "ticker": "AVGO",
@@ -373,7 +322,6 @@ def main() -> None:
             "color": COLORS["constraints"],
             "marker": "^",
             "lw": 1.5,
-            "label": r"Broadcom (\$0.21B $\rightarrow$ \$12.8B)",
         },
         {
             "ticker": "QCOM",
@@ -381,7 +329,6 @@ def main() -> None:
             "color": COLORS["evidence"],
             "marker": "v",
             "lw": 1.5,
-            "label": r"Qualcomm (\$0.34B $\rightarrow$ \$9.6B)",
         },
         {
             "ticker": "AMD",
@@ -389,7 +336,6 @@ def main() -> None:
             "color": COLORS["methods"],
             "marker": "D",
             "lw": 1.5,
-            "label": r"AMD (\$0.65B $\rightarrow$ \$9.8B)",
         },
         {
             "ticker": "TSM",
@@ -397,7 +343,6 @@ def main() -> None:
             "color": COLORS["decision"],
             "marker": "P",
             "lw": 1.4,
-            "label": r"TSMC (\$0.25B $\rightarrow$ \$8.8B)",
         },
         {
             "ticker": "AAPL",
@@ -405,7 +350,6 @@ def main() -> None:
             "color": COLORS["muted"],
             "marker": "x",
             "lw": 1.3,
-            "label": r"Apple (\$0.38B $\rightarrow$ \$37.5B)",
         },
     ]
 
@@ -414,6 +358,14 @@ def main() -> None:
         c_recs.sort(key=lambda x: x["year"])
         xs = [r["year"] for r in c_recs]
         ys = [r["rd"] for r in c_recs]
+        start_rd = ys[0]
+        latest_rd = ys[-1]
+        if cfg["ticker"] == "INTC":
+            peak_rd = max(ys)
+            label = f"{cfg['name']} (\\${start_rd:.1f}B \u2192 \\${peak_rd:.1f}B peak)"
+        else:
+            fmt = ".2f" if start_rd < 1 else ".1f"
+            label = f"{cfg['name']} (\\${start_rd:{fmt}}B \u2192 \\${latest_rd:.1f}B)"
         ax2.plot(
             xs,
             ys,
@@ -421,7 +373,7 @@ def main() -> None:
             marker=cfg["marker"],
             linewidth=cfg["lw"],
             markersize=3.6,
-            label=cfg["label"],
+            label=label,
             zorder=3,
         )
 
@@ -466,10 +418,16 @@ def main() -> None:
         zorder=4,
     )
 
-    # Annotate NVIDIA's exponential explosion
+    # Annotate NVIDIA exponential explosion dynamically
+    nvda_recs = [r for r in records if r["ticker"] == "NVDA" and r["rd"] > 0]
+    nvda_recs.sort(key=lambda x: x["year"])
+    nvda_base = nvda_recs[0]
+    nvda_latest = nvda_recs[-1]
+    nvda_mult = int(round(nvda_latest["rd"] / nvda_base["rd"]))
+
     ax2.annotate(
-        "NVIDIA FY26: \\$22.8B R&D\n(278x escalation since 2000)",
-        xy=(2026, 22.8),
+        f"NVIDIA FY26: \\${nvda_latest['rd']:.1f}B R&D\n({nvda_mult}x escalation since {nvda_base['year']})",
+        xy=(nvda_latest["year"], nvda_latest["rd"]),
         xytext=(-95, -24),
         textcoords="offset points",
         fontsize=4.7,
@@ -491,7 +449,7 @@ def main() -> None:
     ax2.set_xticks([2000, 2005, 2010, 2015, 2020, 2025])
     ax2.set_xticklabels(["2000", "2005", "2010", "2015", "2020", "2025"], fontsize=5.8)
     ax2.set_xlabel("Fiscal Year (SEC EDGAR 10-K / 20-F)", fontsize=6.8)
-    ax2.set_ylabel(r"Annual R&D Expenditure (US\$ Billions)", fontsize=6.6)
+    ax2.set_ylabel("Annual R&D Expenditure (US\\$ Billions)", fontsize=6.6)
     ax2.set_title(
         "B. Corporate R&D Escalation Wall (2000–2026)",
         fontsize=7.4,
@@ -508,10 +466,12 @@ def main() -> None:
         borderpad=0.2,
     )
 
-    # Save to all target locations (datasets and chapter 2 image directories)
+    # Save to all target locations
     target_triplets = [
         (out_dataset_svg, out_dataset_pdf, out_dataset_png),
         (out_ch2_svg, out_ch2_pdf, out_ch2_png),
+        (study7_svg, study7_pdf, study7_png),
+        (obs_svg, obs_pdf, obs_png),
     ]
 
     for svg_path, pdf_path, png_path in target_triplets:
@@ -520,9 +480,9 @@ def main() -> None:
         plt.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
 
     plt.close()
-    print("Generated publication-quality figures successfully:")
-    print(f"  - Datasets: {out_dataset_svg}, {out_dataset_pdf}, {out_dataset_png}")
-    print(f"  - Chapter2: {out_ch2_svg}, {out_ch2_pdf}, {out_ch2_png}")
+    print(
+        "Generated publication-quality figures successfully across datasets, ch2, study7, and observatory."
+    )
 
 
 if __name__ == "__main__":

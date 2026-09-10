@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""
+"""QUARANTINED SYNTHETIC DATA GENERATOR. DO NOT RUN.
+This generator synthesized numbers via _gaussian_noise() and hardcoded EDA tool
+versions. Retained under data/synthetic/ solely for audit traceability.
+See FABRICATED-CLAIM-TRACE.md.
+
 EDA Seed Dispersion & Stochastic QoR Lottery Miner / Simulator
 ==============================================================
 Architecture 2.0: Track 4.1 — The Physical EDA Seed Dispersion & Stochastic QoR Lottery
@@ -30,6 +34,9 @@ Output Source data:
 """
 
 from __future__ import annotations
+
+raise SystemExit("QUARANTINED: this script synthesizes data. Do not execute.")
+
 
 import argparse
 import csv

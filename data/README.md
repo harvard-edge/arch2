@@ -11,13 +11,12 @@ data/
 ├── README.md                                 # This master data & provenance hub
 ├── scrapers/                                 # Automated data collection, AST analysis & PDF extraction pipelines
 │   ├── scrape_intel_amd_errata.py            # Track 1.1: Parses Intel & AMD processor errata specification updates
-│   ├── mine_hardware_ast_complexity.py       # Track 2.1: Static AST & CDC complexity analyzer (Pyverilog/CIRCT/cloc)
+│   ├── mine_hardware_ast_complexity_real.py  # Track 2.1: pyslang AST complexity parser on pinned commits
 │   ├── mine_mlperf_software_dividend.py      # Track 3.1 & 3.2: Historical MLCommons scraper & inference kernel telemetry
 │   ├── scrape_tinytapeout_census.py          # Track 6.1: Tiny Tapeout API & Open MPW longitudinal census scraper
 │   ├── mine_hardware_security_cves.py        # Track 1.5: Microarchitectural hardware security CVEs & mitigation taxes
-│   ├── mine_eda_seed_dispersion.py           # Track 4.1: Physical EDA seed dispersion & Monte Carlo QoR simulator
-│   ├── mine_sec_edgar_semiconductor_rd.py    # Track 5.2: SEC EDGAR 10-K R&D financial filings & wafer pricing miner
-│   └── mine_testbench_vacuity_and_judge_bias.py # Track 2.3 & 2.5: Testbench mutation vacuity & LLM judge calibration
+│   ├── run_openroad_gcd_placement_seed_pilot.py # Track 4.1: OpenROAD placement seed dispersion pilot (20 seeds)
+│   └── mine_sec_edgar_semiconductor_rd.py    # Track 5.2: SEC EDGAR 10-K R&D financial filings & wafer pricing miner
 ├── datasets/                          # Canonical versioned CSV datasets & publication plotting scripts
 │   ├── README.md                             # Detailed methodology, citation index, and mathematical derivations
 │   ├── regenerate.py                         # Batch driver for derived datasets
@@ -28,10 +27,13 @@ data/
 │   ├── tinytapeout_democratization_census.csv# 27 shuttle rounds, 4,780+ custom taped-out designs (Track 6)
 │   ├── shuttle_cost_historical_collapse.csv  # 45-year silicon fabrication cost collapse 1981–2026 (Track 6)
 │   ├── hardware_security_cve_mitigation_tax.csv # 8-year microarchitectural CVE derating dataset (Track 1.5)
-│   ├── eda_seed_dispersion_qor_lottery.csv   # N=684 physical synthesis and PnR runs (Track 4.1)
+│   ├── openroad_gcd_placement_seed_pilot.csv # N=20 measured OpenROAD Nangate45 placement runs (Track 4.1)
 │   ├── sec_edgar_semiconductor_rd_economics.csv # N=189 firm-year financial records (Track 5.2)
-│   ├── testbench_vacuity_and_judge_calibration.csv # N=1,563 testbench mutation & judge evaluations (Track 2.3/2.5)
+│   ├── chapter7-testbench-vacuity-mutation.csv # Transcribed mutation kill rates (Herdt et al., ASPDAC 2021)
 │   └── plot_*.py                             # Publication plotting scripts producing vector SVG/PDF/PNG assets
+├── synthetic/                         # Quarantined synthetic datasets and generators (NOT measurements)
+│   ├── README.md                             # Traceability ledger for quarantined synthetic artifacts
+│   └── SYNTHETIC-*.csv
 └── processed/                                # Processed corpora and intermediate database tables
     └── corpus-pilot/                         # Architectural corpus analytics
 ```
@@ -40,18 +42,16 @@ data/
 
 ## 2. Master One-Command Regeneration & Audit
 
-To execute all scrapers, verify dataset integrity, and regenerate all publication figures across the monograph:
+To execute measured data pipelines, verify dataset integrity, and regenerate publication figures:
 
 ```bash
-# Step 1: Run all data collection scrapers
+# Step 1: Run data collection and measurement scripts
 python3 data/scrapers/scrape_intel_amd_errata.py
-python3 data/scrapers/mine_hardware_ast_complexity.py
+python3 data/scrapers/mine_hardware_ast_complexity_real.py
 python3 data/scrapers/mine_mlperf_software_dividend.py
 python3 data/scrapers/scrape_tinytapeout_census.py
 python3 data/scrapers/mine_hardware_security_cves.py
 python3 data/scrapers/mine_sec_edgar_semiconductor_rd.py
-python3 data/scrapers/mine_eda_seed_dispersion.py
-python3 data/scrapers/mine_testbench_vacuity_and_judge_bias.py
 
 # Step 2: Regenerate all publication figures
 python3 data/datasets/plot_github_divide.py

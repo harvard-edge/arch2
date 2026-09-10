@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
-"""
-Testbench Mutation Vacuity & LLM-as-a-Judge Calibration Analyzer / Miner
-========================================================================
-Architecture 2.0: Track 2.3 & 2.5 — Dynamic Verification Vacuity vs. Formal Proofs
-
-This module implements a formal verification and mutation testbench auditor for
-AI-generated hardware descriptions (Verilog/SystemVerilog). It evaluates:
-1. Dynamic Testbench Vacuity: High structural line/branch coverage masking low
-   mutation kill rates across synthetic AI benchmarks (VerilogEval, RTLLM, VeriGen).
-2. LLM-as-a-Judge Calibration & Confirmation Bias: Miscalibration (Expected
-   Calibration Error, ECE) and in-family sycophancy when LLM evaluators judge
-   candidate RTL and testbenches compared against ground-truth formal proofs
-   (Cadence JasperGold and SymbiYosys / SMT-BMC engines).
+"""QUARANTINED SYNTHETIC DATA GENERATOR. DO NOT RUN.
+This generator synthesized numbers via random.Random() and rng.gauss(), and
+hardcoded formal tool versions (JasperGold, SymbiYosys). Retained under
+data/synthetic/ solely for audit traceability. See FABRICATED-CLAIM-TRACE.md.
 
 Output Datasets:
 - data/datasets/testbench_vacuity_and_judge_calibration.csv
 """
 
 from __future__ import annotations
+
+raise SystemExit("QUARANTINED: this script synthesizes data. Do not execute.")
+
 
 import csv
 import math
