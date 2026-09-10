@@ -408,7 +408,7 @@ To protect dataset integrity, execution harnesses classify each run into one of 
 
 These failure classifications shape how the environment handles edge cases. Formal verification tools, for instance, report specialized outcomes (such as bounded proofs, counterexample traces, and solver timeouts) [@Clarke2018ModelChecking]. This requires harnesses to preserve exact formal statuses rather than reducing complex proofs to binary success or failure flags.
 
-Similarly, signoff returns remain permanently bound to tool versions, libraries, operating corners, and constraint waivers; a clean zero-error return indicates only that the tool found no violations under its current configuration, not that the design is universally sound. If an optimizer introduces false-path waivers to eliminate timing violations, or if a physical layout suffers from undetected dynamic IR drop hot spots under toggle activity, treating a clean return as an unqualified pass creates design escapes that no later check is positioned to catch. To keep that context available, wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, so that a novel tool warning survives parsing even when no parser rule yet recognizes it.
+Similarly, signoff returns remain permanently bound to tool versions, libraries, operating corners, and constraint waivers; a clean zero-error return indicates only that the tool found no violations under its current configuration, not that the design is universally sound. If an optimizer introduces false-path waivers[^fn-false-path-c06] to eliminate timing violations, or if a physical layout suffers from undetected dynamic IR drop[^fn-ir-drop-c06] hot spots under toggle activity, treating a clean return as an unqualified pass creates design escapes that no later check is positioned to catch. To keep that context available, wrappers preserve raw logs alongside parsed structured attributes and unclassified residual lines, so that a novel tool warning survives parsing even when no parser rule yet recognizes it.
 
 ### Caching and Artifact Reuse
 
@@ -416,7 +416,15 @@ Each row of @tbl-failure-taxonomy names a recovery route, and every route except
 
 Of the three, reset is the one most often claimed and least often performed. A *reset* regenerates a run's mutable work state (run directories, tool databases, checkpoints, license leases, emulator memory) from its pinned immutable inputs, so that the next attempt inherits nothing from the last except what the lineage record says it may. That definition sets the bar for three cheaper operations a reset is routinely confused with. Killing a process is not a reset while its scratch directory and license token survive. Restoring a checkpoint is not a reset unless the checkpoint's own parent hashes match the pinned inputs. A soft reset of an emulator that leaves DRAM buffers and PCIe registers as the previous run left them is a partial reset, and the execution record has to label it as one.
 
-::: {.callout-important title="Validating cached library views"}
+::: {.callout-war-story title="The stale library view"}
+**The claim.** A design update reruns static timing analysis and receives a clean signoff report asserting that all bus timing constraints are met at the target accelerated clock frequency.
+
+**The gap.** The timing analyzer loaded a cached Liberty view from a previous lower-frequency run that omitted accelerated setup and hold characterizations; because the missing checks were never executed, no timing violations were reported.
+
+**The lesson.** Reusing stale library views produces deceptively clean signoff reports for failing designs. Harnesses must validate PDK, LEF, and Liberty checksums before admitting timing signoff returns.
+:::
+
+<!-- 
 Reusing a cached Liberty view from a previous run can omit required setup and hold characterizations, resulting in false-positive signoff reports during static timing analysis. To prevent this, harnesses must validate PDK, LEF, and Liberty checksums before admitting timing signoff returns.
 :::
 
@@ -545,3 +553,7 @@ An environment earns its name when an architect can answer, for every run, which
 [^fn-eda-formats-c06]: **EDA formats**: The physical design ecosystem relies on specialized file formats to separate concerns. A Liberty (`.lib`) file provides timing and power characterization for standard cells. A LEF (Library Exchange Format) file abstracts the physical dimensions and routing pins of a cell without revealing internal transistor layouts. UPF (Unified Power Format) describes power domains and voltage scaling logic, which are essential for low-power mobile SoCs.
 
 [^fn-process-containment-c06]: **Process containment**: Commercial EDA tools often spawn a messy tree of background daemons and child processes. If a parent script is killed, these orphaned children can silently persist in the background as "zombie processes," hoarding memory and floating licenses. Linux `cgroups` (control groups) provide a kernel-level mechanism to track and terminate the entire process family atomically, preventing resource leaks on shared compute clusters.
+
+[^fn-false-path-c06]: **False-path waivers**: Timing constraints that tell the static timing analyzer to ignore certain paths between registers (e.g., across asynchronous clock domains or paths that are logically impossible to activate), preventing the tool from artificially failing the design on unexercised timing violations.
+
+[^fn-ir-drop-c06]: **IR drop**: The voltage reduction (V = I $\times$ R) that occurs as current travels through the resistive metal layers of the power delivery network, which can cause transistors to switch slower or fail entirely under heavy toggle activity.
