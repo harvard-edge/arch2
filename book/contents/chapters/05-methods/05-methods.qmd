@@ -1,8 +1,8 @@
----
+,
 format:
   html:
     output-file: index.html
----
+,
 
 # Prediction, Generation, and Optimization {#sec-methods-generation-prediction-optimization}
 
@@ -14,9 +14,108 @@ Teams frequently adopt complex foundation models or reinforcement-learning loops
 
 Different bottlenecks demand specific methods. Direct simulation sweeps cleanly settle comparisons among small sets of microarchitectural configurations. Predictive surrogates screen candidates and search optimizers ration evaluation budgets when millions of configurations compete for scarce cycles. Generative models construct missing artifacts when synthesizable register-transfer level (RTL), testbenches, or compiler schedules do not exist. Direct tool execution always remains the default engineering baseline.
 
-Method selection requires strict resource accounting. Model training, surrogate calibration, and manual verification costs must not exceed the expense of direct execution. The limiting engineering role must dictate the chosen method and preserve independent physical oracles to qualify every output. We can formalize this intuition by modeling the toolchain as a feed-forward queueing network. This network balances the rate at which candidates arrive against the capacity of downstream services. For any tool stage $i$, let $c_i$ be its number of parallel slots, $t_i$ its mean candidate runtime, and $p_i$ its conditional pass rate. The stage's processing capacity is then $\mu_i = c_i / t_i$.
+Method selection requires strict resource accounting. Model training, surrogate calibration, and manual verification costs must not exceed the expense of direct execution. The limiting engineering role must dictate the chosen method and preserve independent physical oracles to qualify every output. This choice defines search spaces, budgets, and stopping rules. It explicitly links upstream representations (@sec-data-representations-world-models) to the execution environments and tool interfaces developed in @sec-architecture-environments-tool-interfaces.
 
-Meanwhile, the offered load (or effective arrival rate) arriving at stage $i$ is thinned by all preceding filters, expressed as $\lambda_i = g \prod_{j=1}^{i-1} p_j$, where $g$ is the initial generation rate. Dividing load by capacity yields the stage utilization: $\rho_i = \lambda_i / \mu_i$. To maintain steady-state stability and avoid unbounded queues, utilization must remain strictly below 1 ($\rho_i < 1$) across all stages. This constraint establishes the maximum viable candidate arrival rate $g$ (@eq-queue-stability-bound) [@Kleinrock1975QueueingSystems]:
+::: {.callout-learning-objectives}
+This chapter establishes the following learning objectives:
+
+- **Differentiate** architecture engineering roles, method families, and concrete techniques to decouple workflow requirements from automated algorithms.
+- **Determine** the smallest sufficient method by applying pre-flight criteria that prioritize analytical models and direct simulation sweeps over ungrounded machine learning.
+- **Model** a multi-tier evaluation pipeline as a queueing network, and derive the candidate arrival rate above which the slowest stage collapses into an unbounded backlog.
+- **Mitigate** the optimizer's curse, the systematic over-optimism of whichever candidate a noisy surrogate ranked first, using calibrated prediction intervals and empirical shrinkage.
+- **Compose** generation, prediction, and search into pipelines whose checking components share no assumptions with the generator and whose fallbacks are deterministic.
+:::
+
+## Engineering Roles and Method Families
+
+Accelerating hardware design requires decoupling functional engineering roles (what work must be done) from underlying method families (how that work is performed). In architecture studies, the goal is constructing missing artifacts, estimating physical consequences, searching decision spaces, or checking claimed properties. If candidate configurations are already known and directly evaluable, adding predictors or optimizers creates setup overhead and verification backlog without removing the actual bottleneck.
+
+::: {.callout-war-story title="A method family carries its assumptions"}
+**The claim.** Itanium's explicitly parallel instruction computing (EPIC) design moved instruction scheduling out of hardware into the compiler, assuming explicit parallelism, predication, and speculation would allow wide execution with static scheduling [@SchlanskerRau2000EPIC].
+
+**The gap.** Compilers had to resolve at *compile time* what dynamic hardware settles at *runtime*, including memory latencies and control flow revealed only during execution. General-purpose code lacked the assumed static parallelism.
+
+**The lesson.** A method family commits to its assumptions as firmly as to its mechanism. A method is viable only when its required information is available at the moment of execution.
+:::
+
+The *smallest sufficient method* is the least elaborate method that performs the required engineering job while preserving evaluators and verification checks. Selecting no added method is an explicit, positive engineering choice whenever direct evaluation costs less and maintains required checks. In a compact cache study, direct evaluation covers the three candidate capacities within the declared budget. If a study instead spans thousands of microarchitectural configurations (such as sizing central processing unit (CPU) instruction windows or neural processing unit (NPU) systolic array tile dimensions), cycle-accurate simulators like gem5, Sniper, SCALE-Sim, or Ramulator would rapidly exhaust compute budgets. Regression models or surrogates can then screen candidates before passing ranked finalists to simulators and physical signoff. Explicit design decisions separate the engineering role, method family, technique, and system composition (@tbl-role-by-stall-mode).
+
+| **Decision layer** | **Question** | **Choices** | **Required discipline** |
+| ,  | ,  | ,  | ,  |
+| **Engineering role** | What work must be done? | Propose, screen, search, critique, repair, check, explain, coordinate. | Name input, expected output, limits, and next check for each role. |
+| **Method family** | What broad operation performs the role? | Prediction, generation, optimization, or domain-specific operations. | Select operations from required outputs and feedback rather than fixed pipelines. |
+| **Technique** | What concrete mechanism fits the artifact and feedback? | Conventional, learned, or hybrid techniques (analytical models, regression, Gaussian processes, graph neural networks (GNNs), large language models (LLMs), Bayesian optimizers, solvers, heuristics). | State assumptions, applicable conditions, costs, and failure modes. |
+| **System composition** | Which components must work together? | Single technique plus tools, or composed generators, predictors, optimizers, and retrieval modules. | Assign every component distinct inputs, outputs, costs, and checks. |
+: **Choose the smallest approach that performs the needed work.** Four decision layers separate roles, method families, concrete techniques, and system compositions. {#tbl-role-by-stall-mode tbl-colwidths="[18,22,34,26]"}
+
+*Prediction* estimates properties or future states; PowerNet, for instance, estimates dynamic IR drop, the supply-voltage droop under switching current, from a design's power map before the signoff analysis runs [@XieEtAl2020PowerNet]. *Generation* constructs artifacts or candidates, whether a domain-adapted language model is drafting electronic design automation (EDA) tool scripts [@HeEtAl2024ChatEDA] or a first verification testbench [@QiuEtAl2024AutoBench]. *Optimization* selects among actions or candidates, as when a black-box optimizer explores an accelerator configuration space [@yazdanbakhsh2021apollo] or a learned policy schedules cluster resources [@MaoEtAl2016DeepRM]. Techniques operate as conventional, learned, or hybrid mechanisms. Hybrid techniques often take a neurosymbolic form, pairing probabilistic neural models with symbolic abstract syntax tree (AST) type checkers, control-data flow graphs (CDFGs), compiler intermediate representations (IRs), or analytical bounds to enforce hard invariants. Foundation models, retrieval modules, and agents act as components within compositions rather than standalone method families.
+
+The same separation locates a composition among the operational layers of @fig-ch01-three-layers-ai-integration; a Layer 2 optimizer tuning macro placement inside a fixed floorplan container improves the subsystem but cannot move the interfaces around it, whereas only a composition of all three families can. Whichever layer applies, the separation preserves direct tool paths; deciding on no added method means declared tools perform the work economically and reliably (@fig-role-method-map).
+
+![**Engineering tasks map dynamically across complementary method families.** Starting from declared engineering roles (proposing, screening, searching, critiquing, repairing, checking, explaining, or coordinating), direct tool evaluation provides the default baseline. When an added method is justified, selection routes through prediction, generation, or optimization, executed via conventional, learned, or hybrid mechanisms that terminate in inspectable outputs and property-specific checks.](images/fig-role-method-map){#fig-role-method-map width="100%" fig-alt="Four-stage map. Eight engineering roles connect through a many-to-many relationship to prediction, generation, optimization, and another method family, with a direct-tool option. The technique panel groups representative concrete mechanisms as conventional, learned, or hybrid. Every path ends with an inspectable output and a named next check."}
+
+No engineering role binds uniquely to a single method family. Proposing does not mandate generation, screening does not mandate learned prediction, and searching does not mandate reinforcement learning. Inspectable outputs and property-specific checks govern every execution path.
+
+![**The Agentic Sweet Spot.** For autonomous agent loops, intelligence isn't enough; generation latency matters. The Sweet Spot contains models that balance high SWE-Bench coding capability with high Effective Inference Speed, preventing loop bottlenecks. To map this tradeoff, we benchmarked the token generation latency and SWE-Bench scores of leading large language models.](images/plot_ch5.png){#fig-agentic-sweet-spot width="100%" fig-alt="Scatter plot of Token Generation Throughput vs Agentic Coding Score for various LLMs."}
+
+Instead of treating capability as the sole metric, an evaluation of model utility must account for response time. Delayed output severely limits multi-step, iterative processes in autonomous workflows, meaning that higher absolute task performance offers little practical advantage if the time to generate proposals starves the rest of the pipeline. As @fig-agentic-sweet-spot demonstrates, the models that most efficiently support automated loops operate within a constrained envelope, deliberately trading marginal gains in capability for the throughput required to sustain continuous operation.
+
+## Anchoring Architectural Method Selection
+
+Because no role binds uniquely to a single family, selecting an architectural method is an exercise in resource accounting rather than algorithmic fashion. Every additional learned model introduces engineering debt across training data curation, surrogate qualification runs, hyperparameter maintenance, and inference latency. A method earns its place only when it relieves an active engineering bottleneck more economically than conventional alternatives while preserving verifiable output checks.
+
+### Pre-Flight Evaluation Criteria
+
+Before authorizing expensive model training or configuring complex exploration loops, an architect must systematically evaluate whether an added method is warranted. To determine whether direct tool execution or conventional heuristics settle the question within budget, @fig-method-selection-guide composes these constraints into a conditional flow, branching on which kind of work is limiting rather than on which method is available.
+
+![**Method selection begins by identifying the primary bottleneck work.** Direct evaluation and conventional algorithms provide the first check whenever they settle decisions within budget. Bottlenecks in candidate construction, evaluation cost, or search-space scale route to generation, prediction, optimization, or composed pipelines, while saturated verification paths require throttling candidate arrivals or expanding checking capacity. Every decision branch terminates at declared support bounds, total cost accounting, property-specific checks, fallbacks, and stopping rules.](images/fig-method-selection-guide){#fig-method-selection-guide width="100%" fig-alt="Conditional method-selection flow. An architecture decision and output lead to a test of whether direct evaluation or a conventional method is sufficient. If not, one or more limiting forms of work point toward generation, prediction, optimization, transition-aware methods, or improving a saturated checking path. Every branch ends at declared support, total cost, a named check matched to the consequence, a fallback, and a stopping condition."}
+
+The flow imposes one discipline. Methods are chosen by their capacity to relieve the active limiting constraint, not by algorithmic popularity. A team discovering that their search space spans millions of viable floorplan permutations must first acknowledge that direct physical synthesis for every candidate is impossible. This realization forces a branch in the flow toward optimization or prediction. However, if the limiting factor is that no legal layout currently exists, the flow routes toward generation.
+
+Once the primary bottleneck determines the method family, the architect must translate that conceptual choice into a concrete engineering commitment. This requires stating what the method is authorized to do, what data it requires, and how its outputs will be independently verified. These constraints prevent an exploratory model from quietly making authoritative design decisions that require physical signoff.
+
+Evaluating methods requires an explicit pre-selection checklist across nine operational attributes (@tbl-method-role-limits).
+
+| **Attribute** | **Question to answer before selecting the approach** |
+| ,  | ,  |
+| **Job and question** | Which limiting work will this approach remove: construct, estimate, select, or establish a property? |
+| **Inputs and support** | Which represented state, artifacts, observations, workloads, design regions, and process assumptions may be used? |
+| **Approach status** | Is the method active, candidate, conditional, or disqualified for this problem? |
+| **Output and legal actions** | What exact output will be produced, and which legal actions or mutations are permitted? |
+| **Evaluator and checks** | Which evaluator, simulator, model, or tool checks the output, and what property-specific check qualifies it? |
+| **Feedback cost** | What are the compute, sample collection, training, and license costs of this method? |
+| **Support and failure mode** | When does the method fail, drift out of distribution, or hallucinate invalid designs? |
+| **Fallback** | What simpler method or deterministic tool will be used if this approach fails? |
+| **Stopping rule** | When does search or generation terminate: resolved decision, spent budget, or rejected slate? |
+: **Pre-selection checklist across nine operational attributes.** Explicit constraints ensure methods are chosen for justifiable engineering reasons rather than algorithmic novelty. {#tbl-method-role-limits tbl-colwidths="[24,76]"}
+
+Five conditions behind that checklist are too long to hold in a table cell.
+
+- **Legal space and known constraints:** Enumerated parameter sets call for direct comparison. Regular mapping spaces suit analytical models, heuristics, or optimizers. Sequential placement alters subsequent choices, requiring transition-aware formulations. Known legality rules must constrain action spaces or execute as deterministic checks before spending evaluations.
+- **Data, matching conditions, and evaluator:** Predictors require observations from matching workloads, design regions, tools, and process conditions. Evaluators must observe the exact properties claimed; compilers check syntax and types, simulators return conditioned behavior, solvers verify encoded properties, and physical tools expose implementation failures. Generated checkers share generator assumptions unless independent oracles are used.
+- **Total cost:** Cost accounting includes setup, qualification, inference, tool runtime, licenses, failed runs, checking, and expert review.
+- **Deployment conditions:** Response latency and data locality can rule out methods. Proprietary RTL, foundry process design kits (PDKs), and licensed reports often mandate local execution.
+- **Support, reversibility, and review capacity:** Methods must declare valid operating ranges. Reversible suggestions tolerate higher error rates than automated register-transfer level (RTL) edits or tapeout decisions.
+
+::: {.callout-design-principle title="Select the Smallest Sufficient Method"}
+**The principle:** Select the simplest method (whether conventional analysis, heuristic search, learned prediction, or candidate generation) that relieves the identified bottleneck.
+
+**The application:** A complex learned model must never be adopted when a lightweight conventional tool satisfies the decision's evidence requirement.
+:::
+
+```{=latex}
+\FloatBarrier
+```
+
+### Quantifying Evaluation Capacity {#sec-sample-efficiency-under-expensive-feedback}
+
+Authorizing a method requires rationing its downstream tool consumption. Generators propose candidates in seconds; physical signoff takes days. Flooding an evaluation path that can afford ten runs with ten thousand unpruned candidates creates unmanageable queue backlogs (@sec-evaluation-capacity-bounds-search). Multi-fidelity filtering reconciles this rate mismatch. Fast analytical rooflines filter non-starters in milliseconds. Spike functional emulators confirm instruction counts in minutes. gem5 simulations measure cycle-level contention over hours. Finally, OpenSTA timing signoff, Unified Power Format (UPF) power checks, and SystemVerilog Assertions (SVA) paired with bounded model checking (BMC) formal assertions certify physical tapeout readiness.[^fn-eda-signoff-c05]
+
+Enumerated parameter sets require modest budgets, whereas accelerator and tensor-program search spaces (NPU tile schedules in MAESTRO, Triton compiler schedules, AutoTVM autotuning, Timeloop mapping) span $10^6$ to $>10^{18}$ configurations [@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM; @ParasharEtAl2019Timeloop]. Large spaces justify analytical pruning, heuristics, and surrogate screening, whereas small spaces make added methodology more expensive than direct sweeps.
+
+The *queue stability blowup* paradox occurs when an upstream search optimizer or generative model improves. As its candidate qualification rate rises, the volume of candidates surviving initial screens surges, and so does the load delivered to downstream simulation clusters and commercial EDA tool license pools. Consider a 24-hour physical signoff stage (such as Cadence Innovus or Synopsys ICC2 place-and-route) provisioned for a 5% survival rate from early structural filters; it backs up as soon as an upstream RTL generator raises its lint and synthesis pass rate to 50%. If downstream license and compute capacity is fixed, an improving upstream generator pushes downstream stages past their stability threshold ($\rho_i \ge 1$), turning generative improvement into pipeline collapse.
+
+This intuition is formalized by modeling toolchains as feed-forward queueing networks balancing candidate arrival rates[^fn-feedback-c05] against downstream service capacity. For tool stage $i$ with $c_i$ parallel slots, mean candidate runtime $t_i$, and conditional pass rate $p_i$, stage capacity is $\mu_i = c_i / t_i$. Offered load is $\lambda_i = g \prod_{j=1}^{i-1} p_j$, and stage utilization is $\rho_i = \lambda_i / \mu_i$. Steady-state stability requires $\rho_i < 1$ across all stages, establishing the maximum viable candidate arrival rate $g$ (@eq-queue-stability-bound) [@Kleinrock1975QueueingSystems]:
 
 $$
 g < \min_i \left( \frac{\mu_i}{\prod_{j=1}^{i-1} p_j} \right).
@@ -48,7 +147,7 @@ finalist_rate = (
 ```
 
 | **Tool stage before review** | **Parallel slots $c_i$** | **Mean time $t_i$** | **Capacity $\mu_i$** | **Conditional advance $p_i$** |
-| --- | ---: | ---: | ---: | ---: |
+| ,  | , : | , : | , : | , : |
 | Structural and legality screen | 1 | 1 minute | 1,440/day | 0.25 |
 | Cycle-level simulation | 4 | 8 hours | 12/day | 0.10 |
 | Implementation screen | 1 | 24 hours | 1/day | 0.50 |
@@ -78,9 +177,7 @@ Candidate generation increases arrival rate $g$, deterministic screens reduce do
 
 The capacity model makes a cheap screen look like a free lever. If the implementation screen is the active limit, a faster check placed ahead of it lets fewer candidates through, and every multi-fidelity path in this chapter works that way. What the stability bound cannot say is how much service work the cheap stage removes, and the answer turns on how often the screen settles a comparison rather than on how fast it runs.
 
-We must measure speedups strictly in terms of *service work*, the expected evaluation effort per comparison, explicitly excluding external queueing delays [@Amdahl1967ValiditySingleProcessor]. Consider a high-fidelity reference path, such as a cycle-accurate RTL simulation or a gem5 full-system run, with a mean cost of $c_{\mathrm{hi}}$. We can introduce a cheaper screening model (like a SCALE-Sim estimate) with cost $c_{\mathrm{cheap}} < c_{\mathrm{hi}}$.
-
-The key metric for this screen is its *validated coverage* ($f$): the fraction of comparisons it can confidently settle without escalating to the reference path. If we submit a fraction $a$ of all candidates to the screen, the coverage $f$ can never exceed $a$. Any candidate the screen fails to confidently classify must fall back to the expensive reference path, incurring both costs. Using selective classification, we can cleanly account for this total effort [@ElYanivWiener2010SelectiveClassification]:
+Count only *service work*, the expected evaluation effort per target comparison with queueing delay excluded [@Amdahl1967ValiditySingleProcessor]. Let $c_{\mathrm{hi}}$ be the mean cost of the reference path, a cycle-accurate RTL simulation or a gem5 full-system run, and $c_{\mathrm{cheap}} < c_{\mathrm{hi}}$ the mean cost of a screen such as a SCALE-Sim estimate. The screen's *validated coverage* $f$ is the fraction of comparisons on which its ordering settles the advance decision within declared error bounds and without escalation. If $a$ is the fraction of comparisons submitted to the screen, then $f \le a$, and the submitted comparisons the screen cannot settle go on to the reference path anyway. Selective classification supplies the accounting [@ElYanivWiener2010SelectiveClassification]:
 
 $$
 S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
@@ -178,7 +275,7 @@ Coverage is the number a screening claim has to carry. A reported speedup needs 
 When design spaces span thousands of microarchitectural variations, evaluating every candidate in cycle-accurate simulators or physical synthesis is intractable. Predictive surrogates trade numerical precision for evaluation throughput, screening configurations before committing compute to detailed simulation (@tbl-prediction-techniques) [@IpekEtAl2006PredictiveDSE; @LeeBrooks2006RegressionModeling]. Predictors must estimate consequences consumed by the downstream decision, matching specific representation structures and empirical constraints.
 
 | **Predictive technique** | **Strong fit** | **Main reason to reject it** |
-| --- | --- | --- |
+| ,  | ,  | ,  |
 | Analytical / mechanistic cost model | Known relationships, limited data, inspectable assumptions. | Omitted interactions control the decision. |
 | Linear / regularized regression | Stable tabular features, modest complexity. | Sharp response changes or uncaptured feature structure. |
 | Decision trees / boosted forests | Tabular parameters, nonlinear interactions, mixed types. | Extrapolation into unobserved design regions. |
@@ -276,7 +373,7 @@ Screening surrogates must therefore preserve rank correlation ($r_s$) and top-$k
 
 Surrogate qualification requires dedicated test batches sampled from target candidate regions, evaluated through both surrogate and reference tool paths. Weak recall mandates expanding the survivor set or disabling screening altogether, recognizing that qualification runs consume part of the evaluation budget the surrogate aims to save. When optimizers push surrogates outside training support, point estimates and uncertainty bounds degrade [@OvadiaEtAl2019UncertaintyShift], while single-step transition errors compound across multi-step planning horizons.
 
-To prevent overconfident candidate filtering, surrogate point estimates must be paired with uncertainty quantification. Split-conformal prediction[^fn-ood-c05] attaches distribution-free, finite-sample prediction intervals $\hat{C}(x)$ to learned surrogates, guaranteeing marginal coverage at a declared confidence level $1-\alpha$ without parametric assumptions on error distributions [@LeiEtAl2018Conformal; @AngelopoulosBates2021Conformal]:[^fn-split-conformal-c05]
+To prevent overconfident candidate filtering, surrogate point estimates must be paired with uncertainty quantification. Split-conformal prediction[^fn-split-conformal-c05][^fn-ood-c05] attaches distribution-free, finite-sample prediction intervals $\hat{C}(x)$ to learned surrogates, guaranteeing marginal coverage at a declared confidence level $1-\alpha$ without parametric assumptions on error distributions [@LeiEtAl2018Conformal; @AngelopoulosBates2021Conformal]:
 
 $$
 \hat{C}(x) = [f(x) - q_{1-\alpha}, \, f(x) + q_{1-\alpha}]
@@ -405,7 +502,7 @@ Predictor-based screening requires audit windows (candidate counts, time interva
 Predictor-based screening presupposes that candidate designs already exist in an evaluable form. When the necessary implementation collateral (such as custom RTL modules, optimized compiler schedules, domain-specific testbenches, or floorplan topologies) is entirely missing, the engineering bottleneck shifts from predicting properties of known designs to synthesizing new candidate artifacts from functional specifications. Every synthesized artifact shifts the engineering burden directly onto downstream verification tools. Generation is justified only when candidates are missing and parameterized templates or conventional compiler passes cannot construct them deterministically [@RaganKelleyEtAl2017HalideCACM]. Artifact structure dictates the generative mechanism. Templates and grammars fit rigidly structured parameters, autoregressive code models generate source text [@Chen2021Codex; @LiuEtAl2023ChipNeMo; @ThakurEtAl2023VeriGen], and diffusion models refine spatial floorplans [@LeeEtAl2025DiffusionPlacement]. Verilog generation benchmarks like VerilogEval and RTLLM evaluate functional and synthesis properties [@VerilogEval; @RTLLM], but do not certify complete physical signoff. Before adopting retrieval-augmented generation or fine-tuning, studies must resolve inbound source licensing (verifying license terms permit derived hardware generation) and outbound data privacy (enforcing local execution to prevent proprietary RTL or foundry process design kit (PDK) data from leaking to external endpoints). Generative paths enforce distinct constraints during synthesis, while property-specific verification remains mandatory (@tbl-generation-techniques).
 
 | **Artifact or problem** | **Likely construction path** | **What the path can enforce or use** | **External check still required** |
-| --- | --- | --- | --- |
+| ,  | ,  | ,  | ,  |
 | Structured configuration / program | Template, grammar generator, solver, program synthesis. | Encoded syntax, types, and constraints. | Intended semantics and runtime behavior. |
 | Software, script, or compiler code | Autoregressive model, LLM, constrained decoding. | Supplied context and schema restrictions. | Execution semantics and target behavior. |
 | RTL | Autoregressive model / LLM evaluated with hardware benchmarks [@VerilogEval; @RTLLM]. | Supplied design context and grammar constraints. | Elaboration, clock-domain crossing (CDC) linting, reset sync, simulation, SystemVerilog Assertions (SVA) and bounded model checking (BMC) formal checks, synthesis in Yosys, static timing analysis (STA) in OpenSTA, Unified Power Format (UPF) power checks, physical signoff. |
@@ -513,7 +610,7 @@ Across difficulty levels, 0 to 67% of one-shot kernels pass functional correctne
 This drop-off changes how generative methods must be evaluated. Comparing only the best generated kernel against an unoptimized baseline ignores the discarded drafts, the compilation overhead, and the possibility that a conventional autotuner given the same compute budget would have found a better schedule. The matched comparison in @tbl-generation-construction-pair holds construction paths and budgets fixed against a credible conventional baseline, which is what makes a generated win a win rather than an accounting artifact.
 
 | **Aspect** | **Prospective matched-construction comparison** |
-| --- | --- |
+| ,  | ,  |
 | **Artifact and semantics** | Pin executable C/C++ compute kernel, target field-programmable gate array (FPGA) / application-specific integrated circuit (ASIC) library, clock, numerical tolerance, and high-level synthesis (HLS) version before selecting constructors. |
 | **Construction arms** | Predeclare strongest practical conventional HLS autotuner (Tcl pragma search or solver design-space exploration (DSE)) and one code-generating model. Both receive identical kernels and tool feedback. |
 | **Shared tools and checks** | Both paths use the same Vitis HLS flow, C-simulation, C/RTL co-simulation, logic synthesis, and timing signoff. |
@@ -618,7 +715,7 @@ Separating surrogate prediction from acquisition selection enables exploration o
 
 No single optimizer dominates universally across design spaces [@HendersonEtAl2018DeepRL; @KrishnanEtAl2023ArchGym]. Mathematical mechanics must align with design-space structure and feedback latency. Bounded spaces favor enumeration or deterministic domain heuristics. Bayesian optimization suits expensive evaluations over smooth continuous parameters, dominating low-sample regimes by constructing Gaussian process priors. Evolutionary algorithms search discrete combinatorial spaces. Reinforcement learning excels only when sample counts reach tens of thousands of evaluations to amortize policy training. Design-space structure, evaluation budgets, and tuning effort dictate method viability.
 
-Where algebraic formulations exist, mathematical programming and constraint solvers exploit structure directly without learned search overhead. Equality saturation is the same move applied to rewriting. A greedy sequence of transforms, operator fusion before algebraic re-association or pipelining before retiming, can lock in a phase order that forecloses a better implementation. An e-graph instead holds every structurally equivalent form of a circuit or schedule at once, grows by non-destructive rewrites until it saturates or hits a budget, and leaves an extraction pass to select the minimum-cost netlist or schedule by integer linear programming or dynamic programming (the `egg` library is the common implementation).[^fn-egraph-c05] The greedy trap disappears and the cost moves to extraction, which grows with the combinatorial state the rewrite rules open up. When legal spaces feature many declared parameters, screening experiments isolate dominant factors [@PlackettBurman1946Design], though screening assumes weak interactions that strong architectural coupling can invalidate.
+Where algebraic formulations exist, mathematical programming and constraint solvers exploit structure directly without learned search overhead. Equality saturation is the same move applied to rewriting.[^fn-egraph-c05] A greedy sequence of transforms, operator fusion before algebraic re-association or pipelining before retiming, can lock in a phase order that forecloses a better implementation. An e-graph instead holds every structurally equivalent form of a circuit or schedule at once, grows by non-destructive rewrites until it saturates or hits a budget, and leaves an extraction pass to select the minimum-cost netlist or schedule by integer linear programming or dynamic programming (the `egg` library is the common implementation). The greedy trap disappears and the cost moves to extraction, which grows with the combinatorial state the rewrite rules open up. When legal spaces feature many declared parameters, screening experiments isolate dominant factors [@PlackettBurman1946Design], though screening assumes weak interactions that strong architectural coupling can invalidate.
 
 However, static search techniques struggle when the problem structure is inherently sequential. For sequential decision processes where subsequent choices depend heavily on prior state changes, reinforcement learning coordinates multi-step actions. The placement of a single macro block immediately redefines the valid locations and routing constraints for all subsequent blocks. Reinforcement learning captures this dependency by treating layout as a sequential game, as demonstrated in macro placement (@fig-alphachip-placement) [@MirhoseiniEtAl2021GraphPlacement].
 
@@ -796,7 +893,7 @@ Architectural search is rarely a single-metric endeavor. Multi-objective optimiz
 Each search procedure is valid only under structural conditions the problem may or may not meet (@tbl-optimization-methods). An algorithm that assumes continuous gradients fails when applied directly to discrete cache capacities, and the failure is silent until a confirmation run exposes it.
 
 | **Search procedure** | **Strong fit** | **Required conditions** | **Common mismatch** |
-| --- | --- | --- | --- |
+| ,  | ,  | ,  | ,  |
 | Enumeration | Small, finite legal spaces where every candidate is evaluable. | Explicit action space, affordable exhaustive coverage. | Applying after space exceeds available budget. |
 | Random search / sampling | Large spaces permitting independent samples; transparent baseline. | Legal sampler, matched budget, retained failures. | Treating as insurance against flawed objectives. |
 | Deterministic heuristics | Spaces with exploitable domain structure. | Explicit rules, assumptions, clear stopping rules. | Hiding manual tuning or biasing search away from optimal regions. |
@@ -818,7 +915,7 @@ Search terminates when budgets expire, decisions stabilize, or feasibility const
 Standalone optimization algorithms operate over fixed, pre-constructed parameter representations. Yet hardware-software co-design rarely presents as an isolated parameter sweep. Broad architecture studies routinely require synthesizing missing RTL modules, predicting multi-fidelity execution latencies, and searching high-dimensional configuration spaces under physical placement and thermal constraints. Relieving these compound bottlenecks requires composing predictive surrogates, generative constructors, and search optimizers into heterogeneous pipelines. Rather than enforcing a rigid three-stage pipeline, hybrid compositions adapt to the active engineering bottleneck. In neurosymbolic architectures, neural generators propose candidate structures while symbolic solvers and static compiler passes enforce structural validity. AutoTVM and Ansor demonstrate successful optimization compositions for tensor programs [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor], but do not mandate a universal three-stage structure for broader architecture studies. Each engineering role a composed pipeline incorporates carries an explicit handoff contract (@tbl-method-role-handoffs).
 
 | **Engineering role** | **Concrete output** | **Next check or handoff** |
-| --- | --- | --- |
+| ,  | ,  | ,  |
 | **Proposal** | Named candidate or experiment request with identified changes. | Verify legality and scope before invoking expensive tools. |
 | **Screening** | Scoped estimate or ranking with predicted properties and uncertainty. | Route selected candidates to measurement path; retain predictions for qualification. |
 | **Search** | Next candidate or experiment, selection basis, remaining budget. | Hand request to execution environment without mutating design space. |
@@ -836,7 +933,7 @@ This modularity allows pipelines to be customized based on available compute bud
 Composing a pipeline is an exercise in resource constraint satisfaction. Component boundaries must reflect distinct computational jobs and independent verification requirements, and each composition in @tbl-method-organization states the condition that justifies its extra part.
 
 | **Composition** | **When justified** | **Minimal sufficiency condition** |
-| --- | --- | --- |
+| ,  | ,  | ,  |
 | Direct tools / conventional technique | Analytical models, solvers, or direct simulations perform work economically. | Add no learned component unless it removes distinct work without weakening checks. |
 | Generation only | Artifacts are missing; direct checking is affordable. | Terminate when sufficient candidates exist or review bandwidth limits progress. |
 | Prediction only | Candidates require cheap screening before expensive simulation. | Retain predictor only while qualification and confirmation cost less than direct evaluation. |
@@ -860,7 +957,7 @@ Compiler phase ordering and microarchitectural DSE justify multi-component compo
 Conversely, the illustrative cache study evaluates three discrete capacity settings (2\ MiB, 3\ MiB, and 4\ MiB) under a budget covering direct static random-access memory (SRAM) screening and cycle-level simulation. Adding generators, predictors, or optimizers would add overhead without accelerating discovery (@tbl-worked-method-decisions).
 
 | **Decision parameter** | **Compiler-tuning candidate** | **illustrative cache study** |
-| :--- | :--- | :--- |
+| :,  | :,  | :,  |
 | **Job** | Construct/select schedule improving operator on target hardware. | Compare 2\ MiB baseline against 3\ MiB and 4\ MiB without expanding scope. |
 | **Inputs and support** | Fixed operator, hardware target, legal schedule space, compiler state, historical observations, evaluation budget. | Three proposed `l2.capacity` settings, hardware/software specifications, SRAM constraints, no prior matching data. |
 | **Approach status** | Hybrid composition (e.g., schedule templates, learned surrogate, simulated annealing). Open until comparator and budget are fixed. | Direct evaluation. SRAM screening followed by matched cycle-level simulations. No generator, predictor, or optimizer. |
@@ -885,7 +982,7 @@ The rows that separate the two cases are inputs and feedback cost, not job. Both
 Grounded in the smallest sufficient method, the prospective illustrative cache study formalizes its execution strategy before invoking simulation tools. The Lighthouse cache evaluation specifies allowed mutations, tool contracts, cost bounds, and verification checks (@tbl-lighthouse-approach-decision), so that search remains bounded to realizable SRAM organizations without deploying unnecessary surrogate machinery.
 
 | **Handoff detail** | **Lighthouse cache method decision** |
-| :--- | :--- |
+| :,  | :,  |
 | **Selected approach** | Direct evaluation with no added learned components. |
 | **Allowed change** | Mutate only `l2.capacity` among 2\ MiB, 3\ MiB, and 4\ MiB. All other microarchitectural, software, and workload parameters remain fixed. |
 | **Required tool roles** | Analytical SRAM model evaluates macro area, access time, and leakage under TSMC N3E conditions. Cycle-accurate simulator (gem5) with cache/power models measures frame time, miss rates, and subsystem power. |
@@ -895,7 +992,7 @@ Grounded in the smallest sufficient method, the prospective illustrative cache s
 
 The plan is a design path rather than a design loop, for the reason @sec-architecture-20-ontology already gives about this same study: its three candidates are fixed before the first run, so a returned measurement can only reject a candidate or end the study. What the method choice adds is why that shape is correct here. Direct evaluation of an enumerable set has nothing for a return to redirect, and a plan that promised otherwise would be claiming a loop it does not need.
 
-Priced against the total-cost attribute of the method role limits rather than in tool runs alone, the plan costs the three SRAM evaluations and at most four cycle-level runs, the setup of one gem5 configuration with its cache and power models, the review of at most seven results by the design team, and no license held beyond the simulator's own. It carries no training set to assemble, no qualification batch to run through both a surrogate and a reference path, no surrogate to recalibrate when a candidate falls outside support, and no failed learned-model runs to charge. That last list is the bill a learned method would have to beat. It earns a place in a study of this shape only by removing work from the first list, and there is no work there to remove.
+Priced against the total-cost attribute of @tbl-method-role-limits rather than in tool runs alone, the plan costs the three SRAM evaluations and at most four cycle-level runs, the setup of one gem5 configuration with its cache and power models, the review of at most seven results by the design team, and no license held beyond the simulator's own. It carries no training set to assemble, no qualification batch to run through both a surrogate and a reference path, no surrogate to recalibrate when a candidate falls outside support, and no failed learned-model runs to charge. That last list is the bill a learned method would have to beat. It earns a place in a study of this shape only by removing work from the first list, and there is no work there to remove.
 
 ## Common Pitfalls
 
