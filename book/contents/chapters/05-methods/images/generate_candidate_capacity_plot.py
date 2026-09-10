@@ -32,7 +32,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     # Stage 3: Physical implementation screen (1 slot, 24 hrs => 1/day, p3 = 0.50)
     rho_3 = (g * 0.025) / 1.0
 
-    fig, ax = plt.subplots(figsize=(6.2, 3.5))
+    fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.13, right=0.95, top=0.86, bottom=0.19)
 
     # Shaded queue instability zone (rho > 1.0)

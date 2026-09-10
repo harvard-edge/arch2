@@ -35,7 +35,7 @@ def generate_search_efficiency(output_dir: Path) -> None:
     # Slow progress, hits 0.68 at N=2000
     random_quality = 0.20 + 0.14 * np.log10(samples)
 
-    fig, ax = plt.subplots(figsize=(5.6, 3.4))
+    fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
 
     # Plot search methodology curves

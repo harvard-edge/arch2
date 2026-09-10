@@ -99,7 +99,7 @@ def main():
 
     # Create figure with 2 panels
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.2, 3.4), gridspec_kw={"width_ratios": [1.02, 1.28]}
+        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.02, 1.28]}
     )
     fig.subplots_adjust(wspace=0.48, bottom=0.22, top=0.88, left=0.09, right=0.91)
 

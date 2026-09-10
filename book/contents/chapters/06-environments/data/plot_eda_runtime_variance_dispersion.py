@@ -125,7 +125,7 @@ def main():
 
     apply_style()
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.4, 3.5), gridspec_kw={"width_ratios": [1.12, 1.0]}
+        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.12, 1.0]}
     )
     fig.subplots_adjust(left=0.08, right=0.96, top=0.88, bottom=0.17, wspace=0.32)
 

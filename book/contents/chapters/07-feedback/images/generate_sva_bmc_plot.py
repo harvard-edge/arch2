@@ -23,7 +23,7 @@ from _python.plots import COLORS, apply_style
 def generate_plot(output_dir: Path | None = None) -> str:
     """Generate and save the SVA formal coverage vs BMC depth plot."""
     apply_style()
-    fig, ax1 = plt.subplots(figsize=(6.4, 3.4))
+    fig, ax1 = plt.subplots()
     fig.subplots_adjust(left=0.12, right=0.86, top=0.88, bottom=0.18)
 
     # BMC unroll depth array

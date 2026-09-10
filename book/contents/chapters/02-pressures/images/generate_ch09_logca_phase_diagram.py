@@ -36,7 +36,7 @@ def generate_figure(output_dir: Path) -> Path:
     with open(specs_path, "r", encoding="utf-8") as f:
         specs = list(csv.DictReader(l for l in f if not l.startswith("#")))
 
-    fig, ax = plt.subplots(figsize=(6.8, 4.0))
+    fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.11, right=0.96, top=0.88, bottom=0.15)
 
     # Baseline host execution parameters (2.5 GHz CPU core: 1 FLOP/cycle = 0.4 ns/FLOP)

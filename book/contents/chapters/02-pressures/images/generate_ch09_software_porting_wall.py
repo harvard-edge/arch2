@@ -37,7 +37,7 @@ def generate_figure(output_dir: Path) -> Path:
     vllm_rows = load_csv(datasets_dir / "chapter9-vllm-kernel-fragmentation.csv")
 
     # Create 3-panel horizontal figure with generous spacing
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(11.2, 3.6))
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(11.0, 3.5))
     fig.subplots_adjust(left=0.06, right=0.94, top=0.82, bottom=0.18, wspace=0.38)
 
     # -------------------------------------------------------------
