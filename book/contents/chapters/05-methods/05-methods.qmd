@@ -375,7 +375,7 @@ Screening surrogates must therefore preserve rank correlation ($r_s$) and top-$k
 
 Surrogate qualification requires dedicated test batches sampled from target candidate regions, evaluated through both surrogate and reference tool paths. Weak recall mandates expanding the survivor set or disabling screening altogether, recognizing that qualification runs consume part of the evaluation budget the surrogate aims to save. When optimizers push surrogates outside training support, point estimates and uncertainty bounds degrade [@OvadiaEtAl2019UncertaintyShift], while single-step transition errors compound across multi-step planning horizons.
 
-To prevent overconfident candidate filtering, surrogate point estimates must be paired with uncertainty quantification. Split-conformal prediction[^fn-split-conformal-c05] (complemented by out-of-distribution detection to identify when inputs fall completely outside the model's training manifold) attaches distribution-free, finite-sample prediction intervals $\hat{C}(x)$ to learned surrogates, guaranteeing marginal coverage at a declared confidence level $1-\alpha$ without parametric assumptions on error distributions [@LeiEtAl2018Conformal; @AngelopoulosBates2021Conformal]:
+To prevent overconfident candidate filtering, surrogate point estimates must be paired with uncertainty quantification. Split-conformal prediction[^fn-split-conformal-c05][^fn-ood-c05] attaches distribution-free, finite-sample prediction intervals $\hat{C}(x)$ to learned surrogates, guaranteeing marginal coverage at a declared confidence level $1-\alpha$ without parametric assumptions on error distributions [@LeiEtAl2018Conformal; @AngelopoulosBates2021Conformal]:
 
 $$
 \hat{C}(x) = [f(x) - q_{1-\alpha}, \, f(x) + q_{1-\alpha}]
@@ -401,14 +401,14 @@ A calibrated interval is only as good as its support assumptions (@fig-ch05-conf
 #| label: fig-ch05-conformal-coverage
 #| fig-cap: |
 #|   **A calibrated interval depends on its support assumptions.** Constructed illustration of a
-#|   split-conformal prediction (complemented by out-of-distribution detection to identify when inputs fall completely outside the model's training manifold) band ($\pm q_{1-\alpha}$) around a latency-like surrogate curve. In the
+#|   split-conformal prediction band ($\pm q_{1-\alpha}$) around a latency-like surrogate curve. In the
 #|   calibrated support regime on the left ($x \le 6.0$), empirical coverage matches the nominal 90%
 #|   confidence level ($\approx 96\%$). When the workload regime shifts on the right ($x > 6.0$), the
 #|   exchangeability assumption fails: observed values diverge from the surrogate, and empirical coverage
 #|   collapses to $\approx 16\%$ despite the unchanged band width. A sustained coverage mismatch must halt
 #|   predictor-based screening. All values are synthetic and illustrative.
 #| out-width: "100%"
-#| fig-alt: "Scatter plot of synthetic latency-like data with a fixed-width conformal prediction (complemented by out-of-distribution detection to identify when inputs fall completely outside the model's training manifold) band around a surrogate curve. In the calibrated support region on the left, nearly all points fall inside the band; in the distribution-shift region on the right, observed behavior rises away from the unchanged band and most points escape it, showing coverage collapse."
+#| fig-alt: "Scatter plot of synthetic latency-like data with a fixed-width conformal prediction band around a surrogate curve. In the calibrated support region on the left, nearly all points fall inside the band; in the distribution-shift region on the right, observed behavior rises away from the unchanged band and most points escape it, showing coverage collapse."
 
 import math
 import random
@@ -516,21 +516,21 @@ Predictor-based screening presupposes that candidate designs already exist in an
 
 Constrained decoding guarantees grammar membership [@WillardLouf2023GuidedGeneration; @GengEtAl2023GrammarConstrained], ensuring that generated Verilog parses cleanly without syntax errors, but cannot establish functional correctness, routability, or timing closure. A model forced to emit valid SystemVerilog grammar can still instantiate unclocked latches, generate multi-driver bus contention, or create unroutable combinational loops. Neurosymbolic workflows couple probabilistic neural generators with symbolic verifiers (abstract syntax tree (AST) checkers, Boolean satisfiability (SAT) and satisfiability modulo theories (SMT) solvers, static compiler passes) to reject malformed structures before heavy simulation. Generated testbenches do not provide independent verification if the generator repeats specification misinterpretations across both design and test; independent oracles or distinct tools are required to establish a verification boundary.
 
-Code that parses is not code that works, and the drop-off between the two is measurable. KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack) evaluates generated CUDA kernels against PyTorch baselines [@OuyangEtAl2025KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack)], and candidate qualification falls at each verification boundary in turn (@fig-ch05-kernel-funnel).
+Code that parses is not code that works, and the drop-off between the two is measurable. KernelBench[^fn-kernelbench-c05] evaluates generated CUDA kernels against PyTorch baselines [@OuyangEtAl2025KernelBench], and candidate qualification falls at each verification boundary in turn (@fig-ch05-kernel-funnel).
 
 ```{python}
 #| echo: false
 #| label: fig-ch05-kernel-funnel
 #| fig-cap: |
-#|   **Attempted is not correct, and correct is not fast.** One-shot KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack) evaluation across three
+#|   **Attempted is not correct, and correct is not fast.** One-shot KernelBench evaluation across three
 #|   difficulty tiers (Levels 1–3) for four language models (Llama-3.1-70B, DeepSeek V3, OpenAI o1,
-#|   DeepSeek R1) measured on an NVIDIA L40S GPU [@OuyangEtAl2025KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack)]. Across all panels, the dashed
+#|   DeepSeek R1) measured on an NVIDIA L40S GPU [@OuyangEtAl2025KernelBench]. Across all panels, the dashed
 #|   100% line marks attempted tasks. Blue bars show the share passing the testbench correctness oracle
 #|   (0% to 67%), while green bars show the share both correct and faster than the PyTorch Eager baseline
 #|   (0% to 36%). Candidate qualification drops steeply across execution and correctness checks, concentrating
 #|   realized speedup in a narrow survivor fraction.
 #| out-width: "100%"
-#| fig-alt: "Three-panel grouped bar chart of one-shot KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack) outcomes for Llama-3.1-70B, DeepSeek V3, OpenAI o1, and DeepSeek R1 at difficulty levels one, two, and three. In each panel a dashed line at one hundred percent marks tasks attempted; blue bars show the share passing the correctness oracle, from zero to sixty-seven percent, and green bars show the share both correct and faster than the PyTorch Eager baseline, from zero to thirty-six percent. Both bars sit far below the dashed line everywhere, and the fast share is always well below the correct share."
+#| fig-alt: "Three-panel grouped bar chart of one-shot KernelBench outcomes for Llama-3.1-70B, DeepSeek V3, OpenAI o1, and DeepSeek R1 at difficulty levels one, two, and three. In each panel a dashed line at one hundred percent marks tasks attempted; blue bars show the share passing the correctness oracle, from zero to sixty-seven percent, and green bars show the share both correct and faster than the PyTorch Eager baseline, from zero to thirty-six percent. Both bars sit far below the dashed line everywhere, and the fast share is always well below the correct share."
 
 import csv
 from pathlib import Path
@@ -565,7 +565,7 @@ def dataset_values(metric, level):
         if row["metric"] == metric and row["kernelbench_level"] == str(level)
     }
     if set(selected) != set(model_order):
-        raise ValueError(f"Incomplete KernelBench (noting that speedup metrics depend heavily on the underlying hardware like NVIDIA L40S and the specific compiler stack) dataset for {metric}, level {level}")
+        raise ValueError(f"Incomplete KernelBench dataset for {metric}, level {level}")
     return [selected[model] for model in model_order]
 
 correct = {
@@ -1012,7 +1012,7 @@ Method choice is formalized across this chapter as a deliberate architectural de
 
 - **Where is the optimal handoff boundary between closed-form analytical priors and learned statistical search?** Deploying deep neural surrogates or reinforcement learning search over microarchitectural parameters that Analytical roofline models, Little's law, or closed-form DRAM queueing equations resolve in microseconds violates the smallest sufficient method. Yet analytical models fail when high-dimensional, cross-layer interactions dominate, such as cache thrashing under multi-phase irregular memory traces or wire congestion during physical placement. Analogous to physics-informed architectures that hybridize differential equations with neural residuals, architecture search requires formal criteria to partition the design space into what analytical solvers settle directly and what must be handed to learned optimizers. Formulating runtime criteria that define this handoff boundary without falling victim to either analytical oversimplification or black-box compute waste remains an open optimization challenge.
 
-- **How much of a predicted surrogate win survives physical verification?** An optimization algorithm naturally selects candidates where the surrogate estimator exhibits maximum positive residual error, which frequently coincides with sparse training regions, as the reorder-buffer hypothetical of @sec-support-limits shows. Whether empirical shrinkage curves and conformal prediction (complemented by out-of-distribution detection to identify when inputs fall completely outside the model's training manifold) sets can systematically discount surrogate optimism as candidate pool sizes grow, or the optimizer's curse in high-dimensional exploration mandates full-physics signoff for all top-ranked candidates, remains unmeasured.
+- **How much of a predicted surrogate win survives physical verification?** An optimization algorithm naturally selects candidates where the surrogate estimator exhibits maximum positive residual error, which frequently coincides with sparse training regions, as the reorder-buffer hypothetical of @sec-support-limits shows. Whether empirical shrinkage curves and conformal prediction[^fn-ood-c05] sets can systematically discount surrogate optimism as candidate pool sizes grow, or the optimizer's curse in high-dimensional exploration mandates full-physics signoff for all top-ranked candidates, remains unmeasured.
 
 - **What does grammar-constrained decoding cost in candidate diversity?** Constrained decoding prunes invalid token sequences early because syntactically invalid designs offer zero utility. However, masking logits to enforce an HDL grammar also reshapes the underlying probability distribution the generative model was trained to sample from, suppressing valid but unconventional microarchitectural idioms. Whether grammar-constrained decoding prunes high-performing non-standard topologies, or the distribution shift from token masking is strictly cheaper than post-generation syntactic repair, defines where syntax filters belong in the generative pipeline.
 
@@ -1051,3 +1051,13 @@ With method selection grounded in the smallest sufficient method, the execution 
 [^fn-roofline-c05]: **Analytical roofline models**: A visual model that bounds theoretical peak compute performance and memory bandwidth to quickly identify whether a workload will bottleneck on processing power or memory access.
 
 [^fn-roofline-c05]: **Analytical Roofline Models**: A visual model that bounds theoretical peak compute performance and memory bandwidth to quickly identify whether a workload will bottleneck on processing power or memory access.
+
+[^fn-ood-c05]: **Out-of-Distribution (OOD) Detection**: OOD detection methods serve as a critical complement to conformal prediction by identifying when inputs fall completely outside the model's training manifold.
+
+[^fn-kernelbench-c05]: **KernelBench Hardware Dependency**: Metrics like "correct and faster than eager" depend heavily on the underlying hardware (e.g., NVIDIA L40S or H100) and the specific compiler stack.
+
+[^fn-ir-drop-c05]: **IR Drop**: A localized decrease in voltage within a chip's power distribution network caused by the resistance (R) of the wires and the current (I) drawn by switching transistors.
+
+[^fn-sta-c05]: **Static Timing Analysis (STA)**: A simulation method to compute the expected timing of a digital circuit without requiring simulation of the full circuit operation.
+
+[^fn-bmc-c05]: **Bounded Model Checking (BMC)**: A formal verification technique that unrolls a sequential circuit design up to a fixed number of steps to mathematically prove the absence of bugs.
