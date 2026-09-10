@@ -234,7 +234,7 @@ def add_note_box(
     text: str,
     *,
     xywh: tuple[float, float, float, float],
-    fontsize: float = 5.8,
+    fontsize: float = 9.0,
 ) -> None:
     """Add the shared boxed note used under compact quantitative plots."""
 
@@ -359,7 +359,7 @@ def draw_spectrum_bars(
     bar_edgecolor: str | None = None,
     in_bar_color: str = "#ffffff",
     out_bar_color: str | None = None,
-    fontsize: float = 5.8,
+    fontsize: float = 9.0,
 ) -> None:
     """Draw standardized horizontal spectrum bars with calibrated inside/outside labels."""
     y_pos = list(range(len(categories)))
@@ -400,10 +400,10 @@ def draw_spectrum_bars(
         ax.set_xlim(*xlim)
 
     ax.set_yticks(y_pos[::-1])
-    ax.set_yticklabels(categories, fontsize=6.2, fontweight="bold", color=COLORS["ink"])
+    ax.set_yticklabels(categories, fontsize=9.5, fontweight="bold", color=COLORS["ink"])
 
     if xlabel:
-        ax.set_xlabel(xlabel, fontsize=6.5, color=COLORS["ink"])
+        ax.set_xlabel(xlabel, fontsize=10.0, color=COLORS["ink"])
 
     ax.grid(axis="x", color=COLORS["grid"], linewidth=0.55, zorder=0)
     clean_spines(ax, keep=("bottom", "left"))
