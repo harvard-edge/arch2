@@ -2875,6 +2875,11 @@ def normalize_html_hub_links(html_root: Path = BUILD_DIR) -> int:
 def _epub_visible_text(payload: bytes) -> str:
     """Extract XHTML text while excluding literal examples and executable content."""
     try:
+        # Pre-process payload to fix Pandoc mermaid <figure class> bug
+        payload_str = payload.decode("utf-8")
+        payload_str = re.sub(r"<p><figure class></p>", "", payload_str)
+        payload_str = re.sub(r"<p></figure></p>", "", payload_str)
+        payload = payload_str.encode("utf-8")
         root = ET.fromstring(payload)
     except ET.ParseError:
         return ""
@@ -3052,6 +3057,11 @@ def normalize_epub_xhtml(epub_path: Path = EPUB_PATH) -> int:
             normalized.append((info, payload))
             continue
 
+        # Pre-process payload to fix Pandoc mermaid <figure class> bug
+        payload_str = payload.decode("utf-8")
+        payload_str = re.sub(r"<p><figure class></p>", "", payload_str)
+        payload_str = re.sub(r"<p></figure></p>", "", payload_str)
+        payload = payload_str.encode("utf-8")
         root = ET.fromstring(payload)
         document_changed = False
         for element in root.iter():
