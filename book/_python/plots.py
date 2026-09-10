@@ -112,6 +112,7 @@ def apply_style() -> None:
     # sizes data figures to roughly the text column. PDF output is vector
     # (sized by out-width), so this affects HTML only.
     mpl.rcParams["figure.dpi"] = 150
+    mpl.rcParams["figure.figsize"] = (6.5, 4.017)  # Golden ratio 1.618
 
 
 def top_log_axis(

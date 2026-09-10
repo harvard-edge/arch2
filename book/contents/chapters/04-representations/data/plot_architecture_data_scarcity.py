@@ -53,7 +53,7 @@ def main():
             constraints.append(row["PrimaryAccessConstraint"])
             citations.append(row["RepresentativeCitations"])
 
-    fig, ax = plt.subplots(figsize=(6.2, 2.7))
+    fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.34, right=0.94, top=0.90, bottom=0.18)
 
     colors_bars = [

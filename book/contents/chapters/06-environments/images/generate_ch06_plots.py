@@ -80,7 +80,7 @@ def generate_simulation_spectrum(output_dir: Path) -> None:
         ),
     ]
 
-    fig, ax = plt.subplots(figsize=(5.6, 3.4))
+    fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.18)
 
     # Plot Pareto optimal frontier connecting key simulation points

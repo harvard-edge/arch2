@@ -70,7 +70,7 @@ def main():
     all_yield = [100.0] + cumulative_yield
 
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.0, 3.2), gridspec_kw={"width_ratios": [1.25, 1.0]}
+        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.25, 1.0]}
     )
     fig.subplots_adjust(wspace=0.42, bottom=0.18, top=0.90)
 

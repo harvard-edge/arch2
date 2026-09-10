@@ -19,7 +19,7 @@ if repo_root not in sys.path:
 
 import numpy as np
 import matplotlib.pyplot as plt
-from book.tools.figures import style as book_style
+from book._python import plots as book_style
 
 
 def generate_plot(output_dir: str | None = None) -> str:

@@ -102,7 +102,7 @@ def main():
     }
 
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.2, 3.4), gridspec_kw={"width_ratios": [1.18, 1.0]}
+        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.18, 1.0]}
     )
     fig.subplots_adjust(left=0.08, right=0.96, top=0.82, bottom=0.15, wspace=0.35)
 

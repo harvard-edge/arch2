@@ -68,7 +68,7 @@ def main():
     line = [d[1] for d in data]
     kill = [d[2] for d in data]
 
-    fig, ax = plt.subplots(figsize=(6.6, 2.6))
+    fig, ax = plt.subplots()
     x = range(len(labels))
     w = 0.36
     b1 = ax.bar(
