@@ -6150,6 +6150,33 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"Supply Chain Levels for Software Artifacts",
         False,
     ),
+    "DAG": (
+        "directed acyclic graph",
+        False,
+        "a",
+        "software",
+        "A directed graph with no directed cycles.",
+        r"Directed\ Acyclic\ Graph",
+        False,
+    ),
+    "RAG": (
+        "retrieval-augmented generation",
+        False,
+        "a",
+        "ai",
+        "An AI framework that retrieves facts from an external knowledge base to ground large language models on accurate information.",
+        r"Retrieval\-Augmented\ Generation",
+        False,
+    ),
+    "FEC": (
+        "formal equivalence checking",
+        False,
+        "a",
+        "hardware",
+        "A mathematical verification process that proves two representations of a design exhibit exactly the same behavior.",
+        r"Formal\ Equivalence\ Checking",
+        False,
+    ),
 }
 
 CMOS_ARTICLE_CHECKS: dict[str, str] = {
