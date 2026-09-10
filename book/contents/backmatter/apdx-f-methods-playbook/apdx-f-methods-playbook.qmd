@@ -1,0 +1,68 @@
+# Algorithm and Method Playbook {#sec-apdx-methods-playbook}
+
+As the field of AI-native hardware design evolves rapidly, students and practitioners often face a paradox of choice. With techniques ranging from simple grid search to advanced reinforcement learning (RL) and multi-agent large language models (LLMs), selecting the right approach is critical to project success.
+
+This appendix provides a practical playbook and decision framework for matching AI methods to specific hardware design and optimization problems. It abstracts away the hype to focus on structural problem constraints: search space size, evaluation cost, and task objective.
+
+## The Method Selection Framework
+
+Instead of viewing AI methods as a laundry list of competing technologies, architects should treat them as specialized tools optimized for specific bottleneck geometries. The flowchart in @fig-methods-playbook provides a systematic decision tree for navigating these choices.
+
+```mermaid
+flowchart TD
+    Start([Define the Hardware Problem]) --> TaskType{What is the primary task?}
+
+    %% Generative Tasks
+    TaskType -->|Generation| GenTask{What are you generating?}
+    GenTask -->|RTL from Natural Language| RAG["LLM with retrieval-augmented generation (RAG)"]
+    GenTask -->|Fixing failing traces/vacuity| Agentic["Agentic Loop (LLMs + Verifiers)"]
+    GenTask -->|New architectures from scratch| EA_LLM["Evolutionary LLMs / Search"]
+
+    %% Optimization Tasks
+    TaskType -->|Optimization / Search| EvalCost{Is the simulation/evaluation cost high?}
+
+    %% High Cost
+    EvalCost -->|Yes (Hours/Days per run)| HighCost{Do you have a large historical dataset?}
+    HighCost -->|Yes| Surrogate["Train a Surrogate Model / Offline RL"]
+    HighCost -->|No| Bayesian["Bayesian optimization (BO)"]
+
+    %% Low Cost
+    EvalCost -->|No (Seconds/Minutes per run)| Diff{Is the objective function differentiable?}
+    Diff -->|Yes| Gradient["Gradient Descent (Differentiable Proxies)"]
+    Diff -->|No| SpaceSize{Is the search space massive?}
+
+    %% Space Size
+    SpaceSize -->|No| Grid["Grid Search / Random Search"]
+    SpaceSize -->|Yes| Seq{Is the task sequential with delayed rewards?}
+    Seq -->|Yes| RL["reinforcement learning (RL)"]
+    Seq -->|No| EA["Evolutionary Algorithms (EA)"]
+
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef decision fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef endpoint fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+
+    class TaskType,GenTask,EvalCost,HighCost,Diff,SpaceSize,Seq decision;
+    class RAG,Agentic,EA_LLM,Surrogate,Bayesian,Gradient,Grid,RL,EA endpoint;
+```
+::: {custom-style="Figure Caption"}
+**Figure F.1:** **The AI-Native Methods Playbook.** A decision framework for selecting the appropriate AI algorithm based on task type (generation vs. optimization), evaluation cost, differentiability, and search space complexity.
+:::
+{#fig-methods-playbook}
+
+## Playbook Guidelines
+
+### 1. Generative Tasks
+When the goal is creating netlists, testbenches, or assertions from intent:
+- **LLMs and RAG:** Use for zero-shot or few-shot translation of natural language specifications into SystemVerilog. RAG is strictly required to anchor the model to internal IP and prevent hallucinated protocols.
+- **Agentic Loops:** Use when the generated artifact must satisfy a strict physical or logical constraint (e.g., closing a vacuity gap). The agent uses formal equivalence checking (FEC) and simulation logs as environmental feedback.
+
+### 2. High-Cost Optimization
+When each evaluation requires hours of cycle-accurate simulation or place-and-route:
+- **Bayesian optimization (BO):** The premier choice when data is scarce. BO carefully models uncertainty to pick the most informative next candidate, making it ideal for microarchitectural parameter tuning.
+- **Surrogate Models:** If you possess a massive archive of historical runs, train a supervised surrogate (e.g., a Graph Neural Network for congestion) to replace the slow simulator.
+
+### 3. Low-Cost Optimization
+When evaluation is fast (e.g., algebraic checks, analytical models, or fast proxies):
+- **reinforcement learning (RL):** Best suited for massive, sequential decision-making problems where the reward is delayed, such as macro placement or compiler phase ordering.
+- **Differentiable Proxies:** If the hardware simulator can be smoothed into a differentiable graph, standard gradient descent will reliably out-perform RL by orders of magnitude.
+- **Grid/Random Search:** Never overlook these baselines. If the parameter space is small (e.g., $<10^4$ combinations), brute-force parallel search is cheaper and more robust than establishing an RL training pipeline.
