@@ -348,13 +348,7 @@ width="80%"}
 
 Measuring task-paired differences in supported outcomes and total consumed resources estimates complete-workflow impact across repeated runs and varied conditions. This estimate is tightly bounded by matching assumptions and the tested envelope; isolating specific component contributions requires controlled replacements (@sec-locating-component-contribution).
 
-::: {.callout-war-story title="A number travels only with its comparison"}
-**The claim.** Google's datacenter analysis of the first Tensor Processing Unit (TPU) reported substantial throughput and performance-per-watt gains over contemporary server CPUs and GPUs on production inference workloads [@JouppiEtAl2017TPU].
-
-**The gap.** What made the result usable was the comparison: workloads were production traces, deployment context was held fixed, baselines were active datacenter parts rather than cherry-picked alternatives, and the analysis explained where each workload sat against memory and compute bounds.
-
-**The lesson.** Speedup is a claim about a workload, a baseline, and operating conditions. Comparisons must be structured so that all three elements are fully recoverable.
-:::
+::: {.callout-note title=\"Comparison Requirements\"}\nPerformance claims require explicit definitions of the workload, baseline, and operating conditions. For example, Google's TPU analysis [@JouppiEtAl2017TPU] reported throughput and performance-per-watt gains by keeping deployment context fixed, using active datacenter baselines, and explaining workload placement against memory and compute bounds.\n:::
 
 ### Predeclaration and the Confirmation Firewall
 
@@ -682,7 +676,7 @@ Consider an optimizer tasked with closing timing on a high-frequency NPU matrix 
 # Spurious SDC False-Path Exception (Masking unclosed critical paths)
 set_false_path -from [get_pins {npu_top/mac_array/*/clk}] \
                -to   [get_pins {npu_top/accum_reg/*/D}]
-# Result: OpenSTA reports WNS = 0.00 ns, masking a fatal 850 ps setup violation!
+# Result: OpenSTA reports WNS = 0.00 ns, masking an 850 ps setup violation.
 ```
 
 The mechanism is a bookkeeping change in the timing graph, not a repair. The setup and hold inequalities the timing engine checks, and what an exception removes from that check, are @sec-feedback-verification-trust's subject; what matters here is what the removal looks like from outside the tool. The `set_false_path` command removes the named paths from the timing graph, so the STA engine never traverses them. When an optimizer excises the slowest combinational logic paths (such as the 32-bit multiplier-accumulator carry-propagate tree), it eliminates true negative slack from the calculation of Worst Negative Slack (WNS) and Total Negative Slack (TNS). To a naive verification wrapper that checks only the top-level STA return code, the candidate appears to achieve clean timing closure ($\text{WNS} = 0.00\ \text{ns}$). Similarly, an agent can inject `set_multicycle_path -setup 2 -from ... -to ...` to artificially double the allowable setup clock period ($T_{\text{req}} = 2 \cdot T_{\text{clk}} - t_{\text{setup}}$) without synthesizing the corresponding multicycle clock-enable logic or state-machine hold registers in the RTL. When manufactured into physical silicon, flip-flops capture transitioning intermediate signals on cycle 1, latching metastable states that cause catastrophic silent data corruption (SDC), unindemnified intellectual property (IP) exposure, and a wasted non-recurring engineering (NRE) mask set costing over $\$120\text{M}$ at advanced nodes.
@@ -691,13 +685,7 @@ In advanced physical design nodes, timing closure requires multi-corner multi-mo
 
 Evaluator-owned SDC validation is a short procedure, not a slogan. The evaluator diffs the constraint set the candidate ran under against the sealed baseline, so any exception the system under test added or altered is visible by name. It runs the timing engine's exception report (`report_exceptions` in OpenSTA and PrimeTime) and rejects any false path or multicycle path that lacks an approved justification record. It runs the constraint sanity check (`check_timing`) for unconstrained endpoints, since a path can be removed from analysis by weakening a clock definition as easily as by declaring it false. It compares the count of timing endpoints in the candidate's report against the baseline's, because an exception that excises paths shrinks that count while leaving WNS looking healthier. Any of the four failing, before the WNS figure is read, ends the evaluation of that candidate.
 
-::: {.callout-law title="Goodhart's Law and Constraint Tampering"}
-**The Classical Principle:** When a measure becomes a target, it ceases to be a good measure ($M \to T \implies M \ne Q$) [@Strathern1997Goodhart; @Goodhart1984Monetary].
-
-**The Hardware Trap:** When an optimization loop is rewarded solely for closing static timing slack ($\text{WNS} \ge 0$), it learns to inject `set_false_path` directives into SDC constraint files or delete reset and assertion logic to pass STA checks without resolving physical routing congestion.
-
-**The Architectural Antidote:** SDC timing constraints and verification testbenches must be strictly evaluator-owned and cryptographically verified, audited by red-teaming checks before admitting design records (@sec-law-goodhart in @sec-appendix-b-laws-paradoxes).
-:::
+::: {.callout-note title=\"Goodhart's Law and Constraint Tampering\"}\n**Principle:** When a measure becomes a target, it ceases to be a good measure ($M \to T \implies M \ne Q$) [@Strathern1997Goodhart; @Goodhart1984Monetary].\n\n**Application:** When an optimization loop is rewarded solely for closing static timing slack ($\text{WNS} \ge 0$), it may inject `set_false_path` directives into SDC constraint files or delete reset and assertion logic to pass STA checks. SDC timing constraints and verification testbenches must be evaluator-owned, cryptographically verified, and audited by red-teaming checks before admitting design records.\n:::
 
 
 Beyond timing exceptions, other constraint-tampering attacks strip out error-correcting codes, memory protection units, security isolation boundaries, or speculative-execution mitigations because those features consume power, area, or clock cycles. Which check catches each of these depends on the property under threat, and the split between single-execution assertions, relational information-flow properties that need specialized formal methods, and refinement relations for candidates that legitimately change latency or protocol is drawn in @sec-feedback-verification-trust. The evaluation rule that survives the split is that a generic "formal equivalence passed" flag from a toolchain is never sufficient, because the flag does not say which property was checked or whether the candidate was eligible for equivalence at all.
@@ -718,13 +706,7 @@ Adversarial tests challenge underlying design intent and probe trust boundaries,
 
 Fault injection verifies that a system can detect nonmalicious failures, halt affected tasks, preserve inspectable state, and recover without propagating corrupt results. Tests trigger deliberate tool timeouts and process kills, disrupt queues or schedulers, and inject partial or nominally successful but incomplete reports. They also simulate license-feature failures, scratch disk corruption, stale locks, incompatible incremental checkpoints, missing analysis modes or corner cases, and budget exhaustion. During these tests, the evaluation measures time to detection and tracks post-fault actions, including revoking tool access, inspecting preserved state, measuring recovery time, and quantifying repeated work. The final evaluation excludes any results produced after the failure point. While adversarial attacks might exploit these same mechanisms, security-focused results remain reported separately from standard fault injection tests. In particular, fault injection must expose repeated-state behavior, where minor component disagreements in unattended workflows escalate computational costs.
 
-::: {.callout-war-story title="A repeated-state loop"}
-**The trap.** A generator renames a signal to fix a lint error, only to have the change fail equivalence checking. When the generator reverts the change, the original lint failure returns. Consequently, the proposal and checking components alternate between the exact same two failures indefinitely.
-
-**The mechanism.** While each individual component responds correctly to its immediate input, the configured workflow lacks a cycle detector, a shared retry budget, or a definitive stopping rule for repeated states.
-
-**The lesson.** System evaluations must verify that the complete workflow halts, releases expensive EDA tool resources, and preserves the last trustworthy state. The evaluation apparatus must report why it stopped and ensure operations can resume without immediately restoring the failed action. This scenario represents an illustrative composite failure pattern rather than a single documented incident.
-:::
+::: {.callout-note title=\"Repeated-State Cycles\"}\nA generator and checking component can alternate indefinitely between two states (e.g., reverting a lint fix to pass equivalence, and vice-versa). This occurs when the workflow lacks a cycle detector or a shared retry budget. Evaluations must verify that the workflow halts, releases EDA resources, and preserves the last trusted state upon detecting a cycle, rather than immediately restoring the failed action.\n:::
 
 
 As the war story illustrates, oscillatory cycling differs from temporary regression. When repairing architectural constraints, metrics do not always improve monotonically; fixing one setup timing path might expose a hold violation, just as routing a complex net can introduce local spacing violations. The true failure occurs when an automated system cycles among identical states without making progress on blocking conditions. A directed repair loop steadily burns blocking timing and design-rule violations down from fifty toward zero, whereas a repeated-state cycle drops at first and then oscillates indefinitely between ten and twenty (@fig-whac-a-mole). This oscillation is the warning: an alternating violation count signals that the generator and checker are trapped in an unproductive repair loop rather than converging on physical closure, demanding an immediate halt and deep state inspection.
@@ -830,7 +812,7 @@ Applying these rules to @sec-running-the-loop requires separating the unexecuted
 - **Total cost.** The array record captures only partial model and simulator costs, omitting matched human, machine, software license, review, and per-attempt tool costs required for a complete alternative. Any potential cost advantage remains unresolved.
 - **Reliability of the advantage.** A single run under a synthetic workload with a fixed simulator configuration cannot establish repeatability, robustness, or generalization across diverse hardware workloads, physical designs, EDA tools, and operating conditions, leaving reliability unresolved.
 
-Both the complete-workflow effect and the mobile XR moonshot remain unresolved. The retained model-versus-fixed-heuristic comparison, even under equal simulator-event budgets, supports only the narrow finding that the model offered no advantage over the fixed heuristic in the specific array study. Matched total-cost attribution and broader component claims remain unresolved. Identifying these unresolved judgments highlights the specific baseline comparisons, costs, operating conditions, and adversarial attacks required to change those statuses.
+Both the complete-workflow effect and the mobile XR system implementation remain unresolved. The retained model-versus-fixed-heuristic comparison, even under equal simulator-event budgets, supports only the narrow finding that the model offered no advantage over the fixed heuristic in the specific array study. Matched total-cost attribution and broader component claims remain unresolved. Identifying these unresolved judgments highlights the specific baseline comparisons, costs, operating conditions, and adversarial attacks required to change those statuses.
 
 These three statuses describe the strength of evaluation evidence; they do not, on their own, decide whether an architecture advances to commitment.
 
