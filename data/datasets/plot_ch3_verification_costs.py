@@ -36,13 +36,16 @@ def main():
     ax.set_yscale("log")
     ax.set_xlim(8, 8000)
     ax.set_ylim(1.5, 1200)
-    ax.set_xlabel("Changed lines of code (log scale)")
-    ax.set_ylabel("Assumed execution time (minutes, log scale)")
+    ax.set_xlabel("Changed lines of code (log scale)", fontsize=10)
+    ax.set_ylabel("Assumed execution time (minutes, log scale)", fontsize=10)
+    ax.tick_params(labelsize=9)
     ax.set_title(
-        "Constructed example: illustrative times, not measurements", loc="left"
+        "Constructed example: assumed times, not measurements", loc="left", fontsize=10
     )
     ax.grid(True, which="major", color=COLORS["grid"], linewidth=0.5)
-    ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none")
+    ax.legend(
+        loc="upper left", frameon=True, facecolor="white", edgecolor="none", fontsize=9
+    )
     fig.tight_layout()
     output = REPO_ROOT / "book/contents/chapters/03-lifecycle/images/plot_ch3"
     for extension in ("svg", "pdf", "png"):
