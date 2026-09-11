@@ -28,6 +28,7 @@ import re
 import sys
 import tokenize
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -158,9 +159,10 @@ def collect_figures() -> dict[str, dict]:
     return figs
 
 
-def generator_for(stem: str | None) -> tuple[Path, str] | None:
-    if not stem:
-        return None
+@lru_cache(maxsize=1)
+def generator_sources() -> tuple[tuple[Path, str], ...]:
+    """Read the full generator inventory once per validation invocation."""
+    sources = []
     for py in sorted(ROOT.rglob("*.py")):
         sp = str(py)
         if "/.git/" in sp or "/.venv" in sp or "/.cache/" in sp:
@@ -169,6 +171,14 @@ def generator_for(stem: str | None) -> tuple[Path, str] | None:
             src = py.read_text(errors="ignore")
         except Exception:
             continue
+        sources.append((py, src))
+    return tuple(sources)
+
+
+def generator_for(stem: str | None) -> tuple[Path, str] | None:
+    if not stem:
+        return None
+    for py, src in generator_sources():
         if stem in src:
             return py, src
     return None
