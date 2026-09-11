@@ -183,7 +183,7 @@ The relevant mechanism is the growth of connections crossing block boundaries. T
 
 ## Trace Capture and Execution Coverage
 
-Static hardware netlists and microarchitectural specifications describe what a system is capable of executing, but dynamic software workloads determine which execution paths become active, which queues saturate, and which memory banks stall. Because cycle-accurate simulation runs orders of magnitude slower than physical silicon, capturing full application execution is computationally prohibitive. Representing dynamic hardware state therefore requires compact workload phase encodings, explicit sampling policies, and rigorous acquisition accounting within a unified execution state.
+Static hardware netlists and microarchitectural specifications describe what a system can execute. Dynamic workloads determine which paths become active, which queues saturate, and which memory banks stall. In the Lighthouse mapping study, changing a schedule can change that behavior even when the computation and hardware remain fixed. Collecting useful labels therefore requires choosing both an evaluation path and the workload intervals it will observe. Detailed simulation can make full-application coverage too costly, which motivates sampling rather than assuming that any short trace is representative.
 
 ### Workload Phase Encodings and Dynamic Environment State
 
@@ -194,7 +194,9 @@ Basic block vectors, memory stride histograms, and phase embeddings serve two pr
 1. **Surrogate model conditioning vectors:** Supplying dynamic workload context $w$ to learned performance predictors across diverse software applications.
 2. **Dynamic environment state encodings:** Supplying environment state $s_{\text{env}}$ in closed design loops (@sec-hardware-representation-formats) to reason about phase-dependent bottlenecks.
 
-For an illustrative mobile XR cache study, formulated as an L2 capacity evaluation under a 3\ W thermal design power (TDP) envelope, workload state requires a versioned snapshot of an extended-reality (XR) application alongside its software image and frame boundaries. Static memory traces cannot be assumed interchangeable across software images: changes in compilation, control flow, or timing-sensitive behavior may change the recorded stream. Representations must bind the workload feature vector $w_{\text{BBV}}$ to its software image, collection policy, frame identifiers, and execution parameters.
+For Lighthouse's extended-reality (XR) workload, a kernel measurement needs its input shape, data type, and schedule, while a frame measurement also needs the surrounding stages and their overlap. The subsystem's 3\ W thermal design power (TDP) envelope applies to the work within that system boundary. A fast isolated kernel may still wait for inputs or contend with rendering when integrated. The dataset should distinguish isolated-kernel observations from frame-level observations instead of treating both as labels for the same target.
+
+Compiler changes also affect what can be reused. A new tiling or scheduling choice may change the memory-access stream, so replaying the old schedule's trace would not evaluate the new one. The workload inputs and comparison interval can remain matched while each candidate produces its own trace. Basic block vectors likewise retain their association with the compiled image, collection policy, frame identifiers, and execution parameters. This distinction becomes especially useful when comparing a software-changing study with a cache study that holds the software image fixed.
 
 ### Observation Paths and Trace Limits
 
@@ -217,7 +219,9 @@ Evaluating architectural hypotheses across encoded workload phases requires choo
 
 A timing closure report from a gate-level netlist cannot substitute for a power integrity analysis of the routed layout. Similarly, a transaction-level model that omits arbitration or flit serialization cannot supply cycle-exact packet latency under contention. A method needs these limits attached to each observation so it can distinguish a useful proxy from a result about the target property.
 
-Acquisition costs dictate dataset density. Expensive observation paths yield fewer points, and direct comparisons require compatible designs, workloads, tools, and environmental conditions. Coverage requirements multiply acquisition costs across evaluation sweeps. Consider a 1\ GHz target, a 1\ s measured interval, 0.2\ s of warmup, a simulator rate of 100,000 target cycles per wall-clock second, three repetitions, and four workloads.
+For the mapping study, acquisition begins before the timed execution. A candidate schedule must compile for the target, pass the required output checks, and be loaded into the evaluation environment. A simulator or hardware run then supplies latency and any diagnostic counters. Preparing the compiler backend or calibrating the accelerator model is a shared setup cost; compilation, testing, execution, and diagnosis contribute costs per candidate. Repeated runs and additional workload shapes expand that cost. A dataset budget that counts only the final timing call misses much of the work needed to produce a usable label.
+
+The effect of execution coverage can be quantified independently of a particular Lighthouse candidate. Consider an illustrative 1\ GHz target, a 1\ s measured interval, 0.2\ s of warmup, a simulator rate of 100,000 target cycles per wall-clock second, three repetitions, and four workloads.
 
 ```{python}
 #| echo: false
@@ -278,7 +282,7 @@ Because expenses vary, detailed acquisition records must accompany every result.
 | **Matching attributes imply comparability** | Two rows support comparison only when candidate identities, permitted differences, workloads, and tool paths match. | Results with uncontrolled differences must be treated as advisory context rather than matched comparisons. |
 : **Architecture samples are costly, conditioned results.** Their meaning and comparability depend on lineage, property checks, acquisition status, and matched study conditions. {#tbl-architecture-observations-not-labels tbl-colwidths="[24,38,38]"}
 
-For the prospective Lighthouse study, we can specify the fields before collecting a single observation. The illustrative fragment in @lst-ch04-state-tuple shows design state $s_{\text{design}}$ and environmental state $s_{\text{env}}$ (encoding the workload context). Its identifiers and feature values are placeholders, including the SRAM name; they identify neither a retained execution nor a verified foundry macro. An actual observation would replace them with resolved artifact identities and captured workload features.
+The same accounting applies to the separate Lighthouse cache comparison introduced in @sec-architecture-20-ontology. Its software is fixed while capacity changes, making it a compact example of serialized state. The fragment in @lst-ch04-state-tuple shows design state $s_{\text{design}}$ and environmental state $s_{\text{env}}$ (encoding the workload context). Its identifiers and feature values are placeholders, including the SRAM name; they identify neither a retained execution nor a verified foundry macro. An actual observation would replace them with resolved artifact identities and captured workload features.
 
 ```{.json #lst-ch04-state-tuple lst-cap="Illustrative serialized state fragment with placeholder identities and values; no Lighthouse execution is represented."}
 {
