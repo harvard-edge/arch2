@@ -181,29 +181,35 @@ The execution harness can regulate submissions by limiting batch sizes or the nu
 
 For method selection, this calculation identifies where additional capability could help. Faster proposals are useful when the evaluation path can absorb them. When it cannot, the study may need fewer proposals, more evaluation capacity, or a reliable cheaper screen. The last option raises a separate question: how much expensive work can screening actually save?
 
-### Validated Coverage Bounds Screening Speedup
+### Screening Cost and Validated Coverage
 
-The capacity model makes a cheap screen look like a free lever. If the implementation screen is the active limit, a faster check placed ahead of it lets fewer candidates through, and every multi-fidelity path in this chapter works that way. What the stability bound cannot say is how much service work the cheap stage removes, and the answer turns on how often the screen settles a comparison rather than on how fast it runs.
+A cheap screen can reduce the work sent to an expensive evaluator, but running quickly is only part of its value. It must also resolve enough cases reliably. For the Lighthouse datapath, an early area estimate might reject an implementation that clearly exceeds the area limit. A candidate near the limit would still need a reference evaluation. The useful saving depends on how often the screen can make that decision within the study's allowed error, and on what it costs to check that the screening rule is reliable.
 
-Count only *service work*, the expected evaluation effort per target comparison with queueing delay excluded [@Amdahl1967ValiditySingleProcessor]. Let $c_{\mathrm{hi}}$ be the mean cost of the reference path, a cycle-accurate RTL simulation or a gem5 full-system run, and $c_{\mathrm{cheap}} < c_{\mathrm{hi}}$ the mean cost of a screen such as a SCALE-Sim estimate. The screen's *validated coverage* $f$ is the fraction of comparisons on which its ordering settles the advance decision within declared error bounds and without escalation. If $a$ is the fraction of comparisons submitted to the screen, then $f \le a$, and the submitted comparisons the screen cannot settle go on to the reference path anyway. Selective classification supplies the accounting [@ElYanivWiener2010SelectiveClassification]:
+Selective classification studies the trade-off between the fraction of cases a model answers and its error on those answers; it permits the model to abstain on the remaining cases [@ElYanivWiener2010SelectiveClassification]. For architectural screening, *validated coverage* $f$ is the fraction of the target comparison stream that a qualified screening rule settles without the reference evaluation, under declared error limits. It is not simply the fraction of candidates rejected. A rule that rejects many useful designs may save tool time while defeating the purpose of the search.
+
+To calculate the possible saving, count *service work*: the evaluation effort spent processing comparisons, excluding time waiting in queues. Let $c_{\mathrm{hi}}$ be the reference cost per comparison and $c_{\mathrm{cheap}}$ the cost of a cheap check, measured in the same units. This simplified model assigns a common reference cost to cases that are screened out and cases that proceed. If their costs differ systematically, the calculation must instead weight the work saved in each group.
+
+Suppose a fraction $a$ of all comparisons receives a cheap check and a fraction $f \le a$ is settled there. The fraction $a-f$ pays for both checks, while the fraction $1-a$ goes directly to the reference path. Thus $1-f$ still incurs reference cost. Screening adds $a c_{\mathrm{cheap}}$ per original comparison, plus routing, qualification, auditing, and rework costs. Let $\epsilon \ge 0$ denote that additional overhead per comparison, normalized by $c_{\mathrm{hi}}$. Dividing the original reference cost by the resulting cost gives:
 
 $$
 S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
 $${#eq-screening-efficiency-bound}
 
-In @eq-screening-efficiency-bound, $\epsilon \ge 0$ collects the normalized routing, auditing, and rework overhead the screen adds, and the speedup peaks when every executed cheap check settles its case ($a = f$). Let the screen become free ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \to 0$ and $\epsilon \to 0$) and the speedup still stops at $1/(1-f)$. The shape is Amdahl's. The unsettled fraction pays full reference cost, so a faster screen only approaches a ceiling that more validated coverage alone can raise. That coverage must be measured on a representative sample of the whole target stream; a screen qualified only on the comparisons it happened to settle inherits a sample-selection bias [@Heckman1979SampleSelectionBias] and reports coverage it does not have. A screen that shares its cache model, basic-block traces, or instruction-level assumptions with the reference it is validated against fails in the same places the reference does, and their agreement then says nothing about the property at risk.
+For fixed coverage and costs, @eq-screening-efficiency-bound is largest when every cheap check settles its case ($a=f$). This is an ideal routing bound: in practice, the system may not know which cases will be settled until it runs the screen. Universal screening uses $a=1$ and pays the cheap-check cost on every comparison, including those that subsequently need the reference path.
 
-The ceiling is already inside @tbl-candidate-check-capacity. The structural screen forwards a quarter of its arrivals, so even if every rejection it issues is within declared error its validated coverage is at most $0.75$, and the service work it can save the simulation stage is capped at $1/(1-0.75)$ however fast the one-minute check becomes. Raising that cap means settling more comparisons at the screen, which is a claim about the screen's error bounds and not about its runtime.
+Even if screening and its overhead become free, the remaining fraction $1-f$ still pays full reference cost. The speedup therefore approaches $1/(1-f)$, following the same unaffected-work argument as Amdahl's law [@Amdahl1967ValiditySingleProcessor]. For fixed coverage below one, reducing screening cost cannot exceed this ceiling. The screen can also make the process more expensive if its cost and overhead exceed the reference work it avoids.
 
-Sweeping the cost ratio $c_{\mathrm{cheap}}/c_{\mathrm{hi}}$ across 0.01, 0.1, and 0.3, for ideal routing ($a = f$) and for screening every candidate ($a = 1$), shows how little the ratio matters once coverage is fixed (@fig-rejection-bound-ceiling). Lowering the cheap-check cost moves each curve toward the free-check ceiling $1/(1-f)$ and no further; at $f = 0.6$ the ceiling holds the speedup to $2.5\times$ whatever the screen costs.
+The earlier capacity example illustrates the distinction between rejection rate and validated coverage. Its structural screen forwards a quarter of its arrivals (@tbl-candidate-check-capacity). If the rejected fraction can legitimately bypass simulation under the required checks, it provides coverage of $0.75$ for that screening decision. Under the common-cost assumption, a free screen would then cap the reduction in simulation service work at $1/(1-0.75)$. The observed pass fraction alone does not establish that the rejected candidates were safe to discard.
+
+The curves in @fig-rejection-bound-ceiling separate the effects of cost and coverage. At a given coverage, a cheaper screen produces a larger saving, and ideal routing avoids work that universal screening pays. All curves remain below the free-screen ceiling. At $f=0.6$, that ceiling is $2.5\times$; further gains require settling a larger fraction of comparisons reliably, not just executing the same screen faster.
 
 ```{python}
 #| echo: false
 #| label: fig-rejection-bound-ceiling
 #| fig-cap: |
-#|   **Validated coverage sets the upper bound on screening speedup.** In this illustrative zero-overhead service-work model [@ElYanivWiener2010SelectiveClassification; @Heckman1979SampleSelectionBias], review service-work speedup (y-axis) is plotted against validated coverage $f$ (x-axis) across three cheap-to-high-fidelity cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \in \{0.01, 0.1, 0.3\}$). Solid curves show ideal routing ($a=f$) and dashed curves show universal screening ($a=1$). Lowering check cost pushes performance toward the free-check ceiling $1/(1-f)$ (dashed black line); at $f=0.6$, speedup is capped at $2.5\times$ regardless of screening cost. Curves are constructed for illustration.
+#|   **Validated coverage sets the upper bound on screening speedup.** In the illustrative common-cost model of @eq-screening-efficiency-bound with zero overhead, evaluation service-work speedup (y-axis) is plotted against validated coverage $f$ (x-axis) across three cheap-to-reference cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \in \{0.01, 0.1, 0.3\}$). Solid curves show ideal routing ($a=f$) and dashed curves show universal screening ($a=1$). Lowering check cost pushes performance toward the free-check ceiling $1/(1-f)$ (dashed black line); at $f=0.6$, speedup is capped at $2.5\times$ regardless of screening cost. Curves are constructed for illustration, not measured workflow speedups.
 #| out-width: "100%"
-#| fig-alt: "Line plot of review service-cost speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
+#| fig-alt: "Line plot of evaluation service-work speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
@@ -211,7 +217,8 @@ from _python.plots import COLORS, apply_style
 apply_style()
 
 # Constructed illustrative parameters: the cost ratios and coverage fractions below are
-# author-chosen to show how a screening bound behaves, not measured. Former label: S_review(f, r, a) = 1 / ((1 - f) + a * r) derived from selective classification risk-coverage trade-offs (El-Yaniv & Wiener, 2010) and sample selection bias corrections (Heckman, 1979).
+# author-chosen to show how the chapter's common-cost screening model behaves,
+# not measured. Overhead is set to zero for the plotted curves.
 f_grid = [0.95 * i / 399 for i in range(400)]
 ratios = [
     {"label": "cost ratio 0.01", "r": 0.01, "color": COLORS["orange"]},
@@ -244,7 +251,7 @@ ax.set_yscale("log")
 ax.set_xlim(0, 0.95)
 ax.set_ylim(0.7, 30)
 ax.set_xlabel("validated coverage f  (share of cases settled without escalation)", fontsize=7)
-ax.set_ylabel("review service-work speedup", fontsize=7)
+ax.set_ylabel("evaluation service-work speedup", fontsize=7)
 ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
 ax.set_yticks([1, 2, 5, 10, 20])
 ax.set_yticklabels(["1x", "2x", "5x", "10x", "20x"], fontsize=6.4)
@@ -276,7 +283,9 @@ plt.show()
 plt.close(fig)
 ```
 
-Coverage is the number a screening claim has to carry. A reported speedup needs its cost ratio, its class-specific error bounds, and the confidence calculation behind its coverage estimate, stated as a conservative lower bound under a sampling procedure declared before the screen ran. The screen must also declare when it abstains and escalates an uncertain comparison to the reference path. The bound stops where the queue model begins. It prices service work and not wall-clock iteration time or workflow throughput, because queueing delay, cluster capacity, license limits, failed runs, and human review sit outside it. The two bounds are therefore read together. The stability bound says how many candidates the path can absorb; the coverage bound says how much a cheap stage can widen it. Both hold for the exact hardware and software versions that were measured, and a screen qualified on one target does not automatically carry that coverage to another (@sec-loop-patterns-across-stack). When the cheap screen is a learned surrogate, its support limits determine where this saving can be trusted.
+To use the bound in a study, estimate coverage and screening error on a representative sample of the whole target stream. Checking only the cases the screen chose to settle leaves performance on the omitted cases unknown and can introduce selection bias [@Heckman1979SampleSelectionBias]. Report the sampling procedure, uncertainty in the coverage estimate, and errors that matter to the decision, especially rejection of useful candidates. Shared assumptions between the screen and reference can hide errors from both; agreement establishes only what that reference path can check.
+
+The capacity and screening models answer different questions. The first identifies how much candidate traffic each stage can serve. The second estimates the evaluation work a screen can avoid. A reduction in service work does not directly establish a reduction in elapsed time: queueing, parallel resources, and any costs omitted from the accounting still matter. Coverage must also be checked when the candidate population or hardware and software conditions change (@sec-loop-patterns-across-stack). For a learned screen, the next issue is what its predictor can estimate and under which conditions those estimates are useful.
 
 ## Predictive Surrogates and Reference Paths {#sec-prediction-estimating-behavior-before-full-evaluation}
 
