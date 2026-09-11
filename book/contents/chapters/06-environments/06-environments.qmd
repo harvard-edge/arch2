@@ -374,21 +374,23 @@ A clean report also has limits. Timing and physical checks depend on the tool ve
 
 ### Caching and Artifact Reuse
 
-The recorded conditions determine whether more tool execution is needed. A parser failure may be repaired by reparsing retained output; a complete return can proceed to qualification. When work must run again, the harness records whether the new attempt reuses declared state, resumes a checkpoint, or starts from a reset. Retry links preserve both attempts and their individual costs, so the study charges for all work without counting the same backend execution twice.
+Retained work can reduce the cost of the next evaluation. A compiled simulator may serve several candidates, a generated netlist may feed more than one analysis, and a complete raw report may be reparsed after a parser repair. Each case reuses a different artifact with different dependencies. The runtime question is whether that artifact still applies to the requested operation, not simply whether a file with the expected name exists.
 
-Artifact caching requires matching keys across inputs, tool versions, PDK views, flags, and operating conditions. Default parameter changes in a minor tool release or an unpinned memory-hierarchy flag can change the evaluated configuration without causing a runtime error [@Dolstra2006Purely]. Reuse therefore depends on the recorded configuration, not just the candidate's name. Context windows in generative pipelines must also be sanitized between open-source baselines and proprietary IP evaluations.
+A cache key identifies the inputs and settings used to produce an artifact. Relevant dependencies may include source contents, tool versions, PDK views, flags, workloads, and operating conditions. Identifying build outputs through their dependencies has precedent in the purely functional deployment model [@Dolstra2006Purely]. In a hardware flow, an omitted library corner or tool default can still make two apparently matching requests evaluate different conditions. A key is useful only to the extent that its dependencies describe the work being reused; a matching hash does not establish that a library is appropriate for the requested analysis.
 
-A *reset* regenerates a run's mutable work state (run directories, tool databases, checkpoints, license leases, emulator memory) from its pinned immutable inputs, so that the next attempt inherits nothing from the last except what the lineage record says it may. That definition distinguishes a reset from three cheaper operations. Killing a process is not a reset while its scratch directory and license token survive. Restoring a checkpoint is not a reset unless the checkpoint's own parent hashes match the pinned inputs. A soft reset of an emulator that leaves DRAM buffers and PCIe registers as the previous run left them is a partial reset, and the execution record has to label it as one.
+Reuse also has to remain visible in the study's accounting. Returning a cached timing report supplies an existing observation, not an independent repeated measurement. The record should point to the producing attempt and distinguish the cost of retrieving the result from the original execution cost. For a generative step, retained model context is an input too. Context from a proprietary design must not silently enter an open-source baseline run; its reuse must follow the study's data-access and disclosure rules.
+
+Resuming a checkpoint is different from retrieving a completed artifact: it continues execution from an intermediate state. The harness must identify the checkpoint's inputs, tool configuration, and execution history and establish that it is suitable for the intended continuation. A *reset*, by contrast, restores the starting state required by the next attempt. It may initialize a fresh workspace or restore a suitable baseline checkpoint. In either case, the tool databases, emulator memory, and other relevant mutable state must match that starting state. A soft reset that leaves memory buffers or peripheral registers unchanged is sufficient only if the study permits that retained state and records it.
+
+Stopping a process does not itself perform a reset, and matching checkpoint hashes does not establish that restoration succeeded. License release is a separate resource-management operation, governed by the license server rather than regenerated from design inputs. When work runs again, the record identifies whether it started fresh or continued from retained state and preserves the cost of each execution segment without counting the same work twice. The stale-library example illustrates why this distinction between identity and suitability matters even for a seemingly simple cache hit.
 
 ::: {.callout-failure-mode title="The stale library view"}
-**The claim.** In this illustrative failure, a design update reruns static timing analysis and receives a clean report asserting that all bus timing constraints are met at the target accelerated clock frequency.
+**The claim.** In this illustrative failure, a design update reruns static timing analysis and receives a clean report indicating that the checked bus paths meet the requested clock period.
 
 **The gap.** The analyzer loaded a cached library view that did not match the intended operating conditions. The report described checks under that stale view; it did not establish timing at the requested conditions.
 
-**The lesson.** Reusing stale library views produces deceptively clean signoff reports for failing designs. Harnesses must validate PDK, LEF, and Liberty checksums before admitting timing signoff returns.
+**The lesson.** Before reusing a library view, the harness must check that it is the view required for the requested design and operating conditions. Checksums help identify PDK, LEF, and Liberty files, but compatibility also depends on their contents and intended use. A clean report from the wrong view cannot establish that the design meets timing under the intended conditions.
 :::
-
-
 
 ### Tool Drift and Flaky Environments {#sec-incremental-churn-dispersion}
 
