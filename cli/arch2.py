@@ -5571,6 +5571,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"single[- ]event upset",
         True,
     ),
+    "SPEF": (
+        "Standard Parasitic Exchange Format",
+        True,
+        "a",
+        "physical",
+        "An IEEE standard format for representing parasitic resistance and capacitance extracted from layout for static timing analysis.",
+        r"Standard\ Parasitic\ Exchange\ Format",
+        False,
+    ),
     "SIMD": (
         "single instruction, multiple data",
         False,

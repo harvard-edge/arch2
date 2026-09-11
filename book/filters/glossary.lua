@@ -111,6 +111,7 @@ local acronyms = {
   ["SNM"] = "static noise margin: A circuit figure of merit measuring the maximum DC noise voltage an SRAM bitcell can tolerate without inadvertently flipping its stored logic state.",
   ["SoC"] = "system-on-chip: An integrated circuit consolidating an entire electronic or computing system onto a single semiconductor die.",
   ["SPEC"] = "Standard Performance Evaluation Corporation: A non-profit organization establishing standardized benchmark suites to measure computing system performance.",
+  ["SPEF"] = "Standard Parasitic Exchange Format: An IEEE standard format for representing parasitic resistance and capacitance extracted from layout for static timing analysis.",
   ["SPMD"] = "single-program, multiple-data: A parallel programming model in which multiple tasks execute the same program on different data and may follow different control paths.",
   ["SRAM"] = "static random-access memory: Fast, volatile semiconductor memory using bistable latching circuitry used for on-chip caches and scratchpads.",
   ["SSA"] = "single static assignment: A compiler representation in which each variable is assigned once, making definition-use relationships explicit.",
