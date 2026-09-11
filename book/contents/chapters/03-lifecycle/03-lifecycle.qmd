@@ -79,7 +79,7 @@ Implementation also determines which checks to run first. The constructed exampl
 
 An early check saves later work only when it can detect a reason to reject or repair the candidate. Passing that check leaves properties outside its scope unresolved. A behavioral simulation, for example, cannot establish that an implementation will meet the foundry's physical design rules.[^fn-drc-c03] Screening determines which candidates receive further implementation effort; it does not replace the checks needed for the final comparison.
 
-Implementation also checks that the tools examined the intended candidate. A syntactically valid configuration can select the wrong top-level module, hold an active-low reset asserted, or skip the target workload phase. A generated block may pass isolated tests yet violate an interconnect handshake or depend on the wrong compiler target. The candidate, supporting software, interface checks, and tool inputs must therefore remain linked throughout execution.
+Implementation also checks that the tools examined the intended candidate. A syntactically valid configuration can select the wrong top-level module, hold an active-low reset asserted, or skip the target workload phase. A generated block may pass isolated tests yet violate an interconnect handshake, omit required power-domain isolation, or depend on the wrong compiler target. The candidate, supporting software, interface checks, and tool inputs must therefore remain linked throughout execution.
 
 A failed run needs diagnosis before it can inform a design choice. A license timeout supplies no timing result. An out-of-memory failure may reflect resource allocation, a tool problem, or a candidate whose implementation is unusually demanding. Recording what ran and what failed preserves these distinctions. Evaluate then asks what the completed checks can establish about the design.
 
@@ -132,6 +132,8 @@ Evaluate needs both the results from Implement and the criteria declared in Form
 Reviewing the NPU study requires more than its best timing report. Another architect needs to know which candidate produced it, which workload and constraints were used, why that candidate was selected, and what earlier failures taught the team. Much of this information may already exist in repositories, experiment logs, and verification reports. The documentation task is to connect it to the question and the resulting decision.
 
 The book calls this connected account a *study record*. It includes the plan, candidate revisions, comparisons, explanations, failed or unfinished work, and the decision or stopping reason. An *execution record* supplies the details of a particular attempt: its inputs, tool environment, outputs, and status. The distinction matters in the NPU example. One execution record may show a timing violation; the study record explains how that observation led to another accumulator design. A retry retains the failed attempt and identifies what changed, rather than overwriting its directory and losing the reason for the new run.
+
+Logs should retain the inputs and settings that affect a run, including random seeds when applicable, library versions, and diagnostic output. A shared scratch directory is insufficient if later attempts overwrite the information needed to explain an earlier result.
 
 A *Design-Loop Card* is an optional compact index to this information. It borrows the idea of concise, contextual documentation from Model Cards, which describe model uses and evaluation conditions, and Datasheets for Datasets, which document dataset composition and collection [@MitchellEtAl2019ModelCards; @GebruEtAl2021Datasheets]. Here the subject is an architecture study. The card can link existing engineering records; it need not duplicate them or introduce a new project-wide documentation system.
 
@@ -200,18 +202,6 @@ Four cycle-level executions allow the plan to examine three capacities with limi
 
 The following technical chapters develop the ingredients used throughout this life cycle. @sec-data-representations-world-models examines how design information is represented; @sec-methods-generation-prediction-optimization develops prediction, generation, and optimization; @sec-architecture-environments-tool-interfaces explains reliable tool execution; and @sec-feedback-verification-trust develops verification and feedback. These ingredients serve several stages, rather than matching the stages one for one. @sec-running-the-loop then brings them together in a worked application.
 
-## Common Pitfalls
-
-Deploying learned optimizers, generators, and automated toolchains across a multi-stage life cycle introduces operational failure modes of its own. When an optimizer runs under an unconstrained reward function, it exploits whatever physical properties or interface rules the early models omit, a failure known as proxy gaming. Maintaining life-cycle integrity requires recognizing these recurring patterns.
-
-- **Amplifying an unverified baseline across stages**: Sweeping candidates against an unverified baseline microarchitecture propagates initial modeling errors across every downstream stage, producing high-confidence data for an invalid comparison. If a reference baseline omits memory controller contention or models idealized cache fill latencies, the entire study optimizes for non-existent bottlenecks.[^fn-data-cascades-c03]
-- **Bypassing versioned hardware–software contracts**: Generating hardware blocks or instruction set architecture (ISA) extensions against unversioned software dependencies, unstated application binary interface (ABI) constraints, or informal memory rules risks integration failure. Candidates may pass isolated unit checks while violating Arm Microcontroller Bus Architecture (AMBA) Advanced eXtensible Interface 5 (AXI5) interconnect handshakes, Unified Power Format (UPF) power-domain isolation rules, or compiler target flags.
-- **Exploiting simulation fidelity gaps over physical reality**: Optimizers quickly learn to maximize reward functions by selecting configurations that exploit simulator timing flaws or missing wire-delay models, producing candidate architectures that fail during gate-level synthesis [@Mytkowicz2009WrongData].[^fn-reward-hack-c03] For example, an optimizer might widen an execution crossbar to 128 ports because the simulator treats wire delays as zero, creating an unroutable silicon floorplan that fails static timing analysis (STA).
-- **Bypassing targeted repair paths**: Resetting an entire study to formulation after a local tool crash or script parse failure discards verified evidence and spends budget that a routed repair would have preserved.
-- **Operating without execution records**: Invoking tools and generative models in shared scratch directories without logging inputs, random seeds, environment flags, library views, and raw stderr output leaves shadow state that no reviewer can inspect or replay.
-
-[^fn-data-cascades-c03]: **Data cascades in architecture life cycles**: This compounding of early modeling errors across downstream life-cycle stages mirrors the phenomenon of *data cascades* in high-stakes AI systems [@SambasivanEtAl2021DataCascades], where unaddressed upstream baseline flaws compound into systemic downstream failures that standard evaluation metrics miss.
-
 ## Open Questions
 
 Separating architectural design into six responsibilities makes local failures easier to investigate. The harder cases arise when their causes cross the boundaries, or when the information needed for repair has disappeared. These limits leave several questions for deploying the life cycle in practice.
@@ -239,8 +229,6 @@ The life cycle's claim is that stage boundaries exist for repair, not for ceremo
 
 An operational workflow is only as good as the representations of architectural state that its generators, optimizers, and tools can act on, and how that state is formalized, discovered, and maintained across the design stack is the subject of @sec-data-representations-world-models, which opens Part II.
 
-
-[^fn-reward-hack-c03]: **Reward Hacking**: In the broader AI literature, this phenomenon is known as 'reward hacking': where a model discovers a loophole in the proxy objective that allows it to achieve high scores without actually solving the intended problem.
 
 [^fn-drc-c03]: **Design rule check (DRC)**: A check of layout geometry against manufacturing rules, such as minimum wire widths and spacing. Passing behavioral simulation does not establish compliance with these rules.
 
