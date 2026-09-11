@@ -237,7 +237,7 @@ A specialized block is useful only as part of the system that supplies its work 
 
 ### Specialization Traps and Amdahl's Law
 
-Specialization spans a continuous spectrum rather than a binary leap from a general-purpose CPU to a custom accelerator. Designers can integrate vector and matrix units into general-purpose cores, assign data-parallel workloads to GPUs, construct domain-specific accelerators with custom dataflows, or eliminate software flexibility entirely with fixed-function application-specific integrated circuits (ASICs). Moving along this spectrum trades the breadth of workloads and software paths the hardware can execute for raw energy efficiency and throughput density.
+Specialization spans a continuous spectrum rather than a binary leap from a general-purpose CPU to a custom accelerator. Designers can integrate vector and matrix units into general-purpose cores, assign data-parallel workloads to GPUs, construct domain-specific accelerators with custom dataflows, or restrict execution to specific operations in fixed-function application-specific integrated circuits (ASICs). Moving along this spectrum trades the breadth of workloads and software paths the hardware can execute for potential gains in energy efficiency and throughput density.
 
 This spectrum redefines what architectural comparisons must weigh. While microarchitecture and multicore scaling refine a general-purpose foundation, specialization bends hardware around a specific workload. Evaluation metrics must therefore shift to reflect the expanded design space under study. Optimization targets differ fundamentally between an energy-constrained mobile system-on-chip (SoC) (optimizing milliwatts and joules per frame) and a warehouse-scale data center (optimizing total cost of ownership (TCO) and throughput per kilowatt). A specialized block can only be fairly judged against the specific target it was engineered for.
 
@@ -471,9 +471,9 @@ An executable path makes the comparison possible, but does not keep it represent
 
 ### Changing Software and Fixed Hardware {#sec-software-changes-faster-than-silicon}
 
-Software and workloads constantly evolve during multi-year hardware design cycles. Architectural comparisons can therefore become stale long before silicon ships, even if the underlying register-transfer description remains entirely unchanged. This temporal disconnect means that an accelerator optimized for one generation of machine-learning models or compiler frameworks may deploy into production against a radically shifted software landscape.
+Software and workloads can change during hardware development. An architectural comparison may therefore need revisiting before silicon ships even when the RTL is unchanged. A design optimized for one model or compiler may encounter different shapes, schedules, or data types in deployment.
 
-Several parts of the target can shift during this interval. Hardware designs must accommodate shifts across the software stack, including quantization standards (FP8 vs. MXFP4), dynamic key-value (KV) cache management, compiler scheduling passes, and serving batch sizes. For instance, precision formats such as 8-bit floating-point (FP8), 4-bit integer (INT4), and block-scale formats evolve rapidly, yet supported data types must eventually freeze in silicon.[^fn-block-scale-formats-c02]
+Several parts of the target can shift during this interval, including key-value (KV) cache management, compiler scheduling, and serving batch size. Numerical formats introduce a further choice: supporting 8-bit floating-point (FP8), 4-bit integer (INT4), or block-scale formats changes the arithmetic and data paths needed in hardware.[^fn-block-scale-formats-c02] Software may adopt a new format after the design has fixed which operations it implements directly.
 
 [^fn-block-scale-formats-c02]: **Block-scale formats**: Low-precision number formats amortize shared exponent or scale metadata across a block of elements rather than storing independent metadata for every element [@RouhaniEtAl2023Microscaling]. Committing to one in silicon fixes datapath choices even as formats and workloads continue to evolve, requiring careful judgment of whether the choice will remain useful over time.
 
@@ -481,7 +481,7 @@ Before fabrication, hardware and software teams can revise the design together, 
 
 The primary challenge lies in determining whether a software change invalidates an architectural comparison or leaves it intact. Detecting that two traces or software versions differ does not answer this question. Architects must identify which specific differences could reverse design decisions and determine which measurements will test that possibility.
 
-While specialization can improve efficiency, it also makes designs far less tolerant of workload drift. Conversely, generality preserves flexibility, but often at a steep cost in performance per watt. As a result, architects must bound the workload, continuously measure how it changes, and proactively revisit hardware decisions whenever original assumptions no longer hold.
+Specialization makes some assumptions about the workload more consequential. General-purpose execution can preserve flexibility, at a possible cost in performance or energy efficiency. The design question is which assumptions are stable enough to build into hardware and which changes its remaining flexibility can accommodate.
 
 The assumptions worth monitoring include the kernel family, data types and precision, memory behavior, programming interface, deployment quality-of-service targets, and operating conditions (@fig-domain-specificity-shapes). They need not remain unchanged. The question is whether a change exceeds the flexibility or margin built into the design.
 
@@ -589,7 +589,7 @@ toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
 toy_candidate_evaluations = toy_design_candidates * 3
 ```
 
-Because model scales and software stacks shift across multi-year hardware development cycles, the production workload frequently diverges from the proxy used during initial design sizing. Architectural evaluations must therefore explicitly record the exact model, compiler, runtime, and trace versions supporting each technical commitment. Public product announcements illustrate cadence markers rather than internal design durations (@fig-silicon-cadence). In this sample, Apple client SoCs appear at 7- to 19-month intervals (M1 through M4 [@Apple2020M1; @Apple2022M2; @Apple2023M3; @Apple2024M4]), while NVIDIA data-center accelerators follow 22- to 24-month cycles (A100 through Rubin [@NVIDIA2020A100; @NVIDIA2022H100; @NVIDIA2024B100; @NVIDIA2026Rubin]).
+Relating software change to hardware development requires more than a model's publication date. Public product announcements provide one visible timeline (@fig-silicon-cadence): the selected Apple SoCs have announcement intervals of 7–19 months, while the selected NVIDIA accelerators have intervals of 22–24 months. These markers locate products in time but do not reveal the internal design durations or the dates when their architecture decisions became fixed.
 
 ```{python}
 #| label: fig-silicon-cadence
@@ -781,7 +781,7 @@ Timeloop [@ParasharEtAl2019Timeloop], an analytical framework for mapping and ev
 | :--- | :--- | :--- |
 | DNN accelerator mapping | Timeloop enumerates loop permutations, factorization choices, and level-bypass alternatives [@ParasharEtAl2019Timeloop]. | Mapping is itself a combinatorial problem; architecture evaluation depends on the mapper and its constraints. |
 | DNN accelerator DSE | MAESTRO, an analytical cost model for estimating DNN dataflow performance, reports 480M candidates, 2.5M valid designs, and 0.17M designs/s [@KwonEtAl2019MAESTRO]. | Pruning rules determine which candidates are evaluated and which are never seen. |
-| TPU-block floorplanning | The AlphaChip paper (describing Google's reinforcement-learning layout generation engine) reported reducing placement generation from months of human effort to hours of machine time [@MirhoseiniEtAl2021GraphPlacement]. | Routed physical quality and strong baselines still require separate evaluation. |
+| TPU-block floorplanning | AlphaChip uses reinforcement learning to generate macro placements [@MirhoseiniEtAl2021GraphPlacement]. | Reported gains depend on the cases, baselines, compute budgets, and downstream checks, which remain disputed in the reproduction and reply [@ChengEtAl2023MacroPlacement; @GoldieEtAl2024ThatChipHasSailed]. |
 | Tensor-program tuning | AutoTVM, a machine learning-based tensor program optimizer, describes tensor-operator search spaces on the order of billions of possible implementations for a single GPU operator [@ChenEtAl2018AutoTVM]. | Compiler schedules create a hardware-dependent search problem of their own. |
 : **Large search spaces place different demands on evaluation.** Mapping, accelerator DSE, floorplanning, and tensor-program tuning combine candidate scale, validity constraints, feedback cost, and different evidence requirements. {#tbl-design-loop-scale-anchors tbl-colwidths="[24,38,38]"}
 
