@@ -522,7 +522,7 @@ Native sources map onto these structured and learned views without ceasing to be
 
 ## Representation Pipelines and Data Handoffs
 
-Because no single representation format bears the full weight of an architectural design loop, modern toolchains must link multiple formats together: learned vector embeddings lose the fine-grained pin and clock structure required for logic synthesis, while native SystemVerilog netlists preserve syntax without certifying functional correctness, workload coverage, or physical viability. To resolve this tension, AI-native design systems construct linked representation pipelines that combine exact native artifacts with structured topological graphs and traceable context records.
+The Lighthouse mapping example needs several views of the same candidate. The operator graph describes the computation, the scheduled compiler IR describes its implementation choices, and execution results describe its observed behavior. A feature vector may be sufficient for a predictor while omitting relationships needed to generate another schedule. Links among these views let the method recover the appropriate detail without requiring one representation to serve every task.
 
 These connections let a method's inputs and outputs be traced back to their sources. Retain authoritative native artifacts, construct the explicit structure needed to expose legal actions and constraints, and introduce learned representations when their capabilities justify validation and maintenance overhead.
 
@@ -534,16 +534,18 @@ These connections let a method's inputs and outputs be traced back to their sour
 
 ### Invariants and Feature Encodings
 
-Representation pipelines must enforce boundaries between mutable parameters and nonnegotiable invariants. In the illustrative mobile XR cache study, L2 capacity serves as the sole mutable parameter. Evaluating 2\ MiB, 3\ MiB, and 4\ MiB candidates for a 3\ W mobile XR SoC powered by an RV64GCV RISC-V core in TSMC N3E technology requires verifying that every option resolves to a realizable SRAM macro organization while holding network-on-chip (NoC) topology, coherence policy, compiler, runtime, software image, and workload fixed under a 3\ W power envelope, $1.5\text{ mm}^2$ macro area, and $2.5\text{ ns}$ access-time limit.
+The representation must distinguish choices the study may change from requirements it must preserve. In the mapping study, tile sizes and software scheduling can change, but the initial hardware target, workload inputs, and required numerical behavior remain fixed. A generated schedule needs to be expressible by the compiler and checked against that behavior. If useful software changes require a different accelerator interface or memory organization, the study would need a broader formulation and representations of the matching hardware changes.
+
+The cache study provides a contrasting case. L2 capacity serves as its sole mutable parameter. Evaluating 2\ MiB, 3\ MiB, and 4\ MiB candidates for a 3\ W mobile XR SoC powered by an RV64GCV RISC-V core in TSMC N3E technology requires verifying that every option resolves to a realizable SRAM macro organization while holding network-on-chip (NoC) topology, coherence policy, compiler, runtime, software image, and workload fixed under a 3\ W power envelope, $1.5\text{ mm}^2$ macro area, and $2.5\text{ ns}$ access-time limit.
 
 ::: {.callout-lighthouse title="One permitted change, with its dependencies"}
 **Declared context and change.** The study compares realizable 2\ MiB, 3\ MiB, and 4\ MiB L2 capacities while holding the XR workload and system state constant.
 
 **What the method may change.** An automated method can select the capacity and update both the generated cache instance and dependent configurations required to realize it.
 
-**Required invariants and checks.** The cache policy, NoC topology, compiler, runtime, software image, workload snapshot, and memory system are fixed. The proposed comparison checks subsystem power, macro area, and access time. Thermal and IR-drop reviews remain separate downstream work before any physical commitment.
+**Required invariants and checks.** The cache policy, NoC topology, compiler, runtime, software image, workload snapshot, and memory system are fixed. The proposed comparison checks subsystem power, macro area, and access time. Thermal and IR-drop reviews remain separate downstream work before fabrication approval.
 
-**Takeaway and reformulation boundary.** A proposal modifying compiler behavior simultaneously answers a different architectural question and demands a newly formulated comparison.
+**Takeaway and reformulation boundary.** In this capacity-only comparison, a proposal modifying compiler behavior would require revising the study's scope. The mapping example elsewhere in this chapter permits software changes because it asks a different question.
 :::
 
 *Parametric changes* select new values within an existing organization (such as cache capacity or queue depth), whereas *structural changes* alter components or topology (such as adding pipeline stages or rearchitecting interconnects). Both can belong to one study when its formulation permits them and its representations and checks can express their consequences. A change outside the frozen cache comparison above would instead require revising that comparison. System and software contracts, including instruction set architecture (ISA) specifications and memory consistency models, remain dependencies and invariants where the formulation holds them fixed.
@@ -554,19 +556,21 @@ Feature scaling and candidate legality are separate choices. On a linear capacit
 
 ### Provenance and Blind Spots
 
-Just as feature encodings must faithfully reflect the geometric realities of the parameter space, the representation pipeline must also preserve the vertical relationships between those parameters. Architectural decisions cascade vertically through the hardware–software stack. Modifying high-level parameters propagates through generators, RTL netlists, logic synthesis, floorplanning, and static timing signoff. Cross-layer provenance maintains these relationships, binding architectural intent to implementation objects and constraints to localize broken assumptions.
+A change may affect several linked artifacts. Changing an NPU schedule changes generated code and can change the trace used to estimate activity. Changing the accelerator organization may additionally affect RTL, synthesis, floorplanning, and timing analysis. Cross-layer provenance records how these artifacts were derived so that a later result can be traced to the design choice that produced it. It also identifies which observations need to be reacquired after a revision.
 
 ::: {.callout-design-principle title="Bind Observations to Generating Context"}
 **The principle:** Bind every architectural measurement, tool return, and expert judgment directly to its generating context.
 
-**The application:** An observation loses authority the moment it is separated from its underlying RTL revision, compiler flags, workload trace, tool version, and operating conditions.
+**The application:** Preserve the relevant design revision, compiler settings, workload, tool version, and operating conditions so a later user can judge whether an observation applies to a new comparison.
 :::
 
-Reusing an artifact therefore requires making its hidden context and unmodeled dependencies explicit at every tier, and the hidden column of @tbl-representation-formats is the inventory of what a reuse has to recover. A paper or plot preserves the claim and hides the tool flags, failed candidates, and tuning history, so the endpoint is visible and the path cannot be reconstructed; a cross-layer mapping preserves the links from architecture choices to lower objects and hides the intermediate transformations nobody recorded, so a physical failure cannot be traced to the choice that caused it. Every representation conceals dependencies, and the concealment becomes technical debt when it goes undeclared. Usable representations state their scope, omitted physical properties, and verification boundaries; without those declarations, an optimizer exploits the unmodeled degrees of freedom and returns candidates that maximize a proxy while violating a constraint nobody wrote down.
+The blind spots in @tbl-representation-formats identify information a reuse may need to recover. A plot may report a speedup without the compiler flags or rejected schedules needed to reproduce it. A link between a high-level choice and a netlist may omit the transformations needed to explain a failing path. Keeping those links is useful, but their completeness must be assessed for the question at hand. An optimizer can favor a candidate that looks good under an incomplete model; the omitted transfer, timing, or power effects still determine whether it works in the system.
 
 ### Representation Handoff
 
-The prospective cache comparison now has enough structure to expose what a method would receive and what it would still need to acquire. The handoff in @tbl-represented-problem joins the permitted capacity change to fixed system state, workload snapshots, constraints, and an initially empty execution history. Its blind spots matter as much as its available fields: an algorithm cannot resolve a missing thermal assessment by searching the capacity values more thoroughly.
+For the Lighthouse mapping study, the handoff consists of the selected computation and inputs, the hardware target, a representation of permitted schedules, the compilation and checking paths, and a collection plan with an explicit budget. Available observations must be distinguished from the schema for observations still to be collected. A method can then assess whether existing data covers the needed shapes and schedules, which features are available before execution, and what new evaluations would cost. No timing dataset or working compiler backend has been demonstrated for this prospective example.
+
+The smaller cache comparison makes a different handoff concrete. The table in @tbl-represented-problem joins the permitted capacity change to fixed system state, workload snapshots, constraints, and an initially empty execution history. This is a plan for comparing three candidates, not an existing training corpus for a general cache predictor. An algorithm cannot resolve a missing thermal assessment by searching the capacity values more thoroughly.
 
 The table expands the represented state in the Design-Loop Card introduced in @sec-design-loop-card. Its first row carries the question and permitted change; the constraints and observations rows carry the checks, budget, and execution history. The person responsible for the eventual decision remains identified by the study record. This handoff specifies what a method receives without implying that a decision has been made.
 
@@ -583,7 +587,7 @@ The table expands the represented state in the Design-Loop Card introduced in @s
 | **Useful scope and handoff** | Supports this specific cache comparison to select at most one candidate for RTL evaluation. Prohibits endorsing unmodeled changes to prefetching, coherence, NoC, compiler, floorplanning, or security. |
 : **Represented problems make architecture comparisons inspectable.** Exact design and workload identities, legal changes, checks, history, freshness, and limits connect without prematurely selecting methods or claiming results. {#tbl-represented-problem tbl-colwidths="[26,74]"}
 
-The blind-spots and useful-scope rows show how to read the rest of the table. Missing thermal or IR-drop results remain unfinished checks even if the frame-time comparison succeeds. A capacity recommendation would support advancing at most one candidate to RTL evaluation under the stated conditions; it would not establish that the surrounding subsystem is ready for physical commitment.
+The blind-spots and useful-scope rows show how to read the rest of the table. Missing thermal or IR-drop results remain unfinished checks even if the frame-time comparison succeeds. A capacity recommendation would support advancing at most one candidate to RTL evaluation under the stated conditions; it would not establish that the surrounding subsystem is ready for fabrication. Both Lighthouse examples make the question evaluable, but their different candidate spaces and collection costs can lead to different method choices.
 
 ## Open Questions
 
