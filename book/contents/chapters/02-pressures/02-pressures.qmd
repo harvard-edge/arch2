@@ -964,95 +964,16 @@ Because physical constraints and reliability concerns define a vast search space
 
 ### Simulation Throughput and Fidelity {#sec-stronger-evaluation-expensive}
 
-Designing larger systems exposes vastly more candidate configurations, software states, physical corners, and failure modes. Expanding the choice space inherently drives up demand for simulator runs, synthesis runs, physical-design tools, verification passes, and expert review. Not every candidate can run through every tool. Because evaluations consume compute clusters, software licenses, project schedule, and human attention, the feedback loop starves whenever a study demands more checking capacity than available engineers and tools can provide.
+Once a model includes the effects needed for a comparison, execution time becomes a constraint of its own. Longer workloads and more candidate configurations compete for compute, tool licenses, and the time needed to interpret results. The question is how much representative behavior the available evaluation budget can cover.
 
-Architectural evaluation tools span a broad spectrum where adjacent tiers differ by orders of magnitude in execution speed, setup overhead, and license cost. Suppose, as an illustrative working rate, that a detailed simulator like gem5 sustains ten to one hundred thousand instructions per second. At those rates, simulating just one real-time second of a workload retiring one billion instructions per second takes $10^{9}/10^{5}$ to $10^{9}/10^{4}$ host seconds, roughly three to twenty-eight hours on a single host core. Fast parallel simulators such as Sniper or compiled C++ RTL models generated via Verilator run significantly faster, while hardware emulation platforms (such as Cadence Palladium, an enterprise hardware emulation system, or Synopsys ZeBu, a high-throughput emulation engine) and FPGA prototypes (such as FireSim, an FPGA-accelerated full-system simulation platform [@KarandikarEtAl2018FireSim]) accelerate execution even further. Yet, each step up the fidelity spectrum demands different hardware, complex logic synthesis (via open-source engines like Yosys or industrial suites), and substantial bring-up costs. Because actual rates depend on the model, workload, host, tool, and platform, the capacity allocation problem is deciding which candidate designs justify the computational and licensing cost of gate-level simulation or hardware emulation.
+Suppose a detailed simulator sustains ten to one hundred thousand target instructions per host second. These are illustrative rates, not a gem5 benchmark. Simulating one second of a workload that retires one billion instructions in that interval would take $10^9/10^5$ to $10^9/10^4$ host seconds, or approximately `{python} f'{1e9 / 1e5 / 3600:.1f}'` to `{python} f'{1e9 / 1e4 / 3600:.1f}'` hours. Multiplying candidates or workload windows can therefore consume the budget quickly even when preparing each run is easy.
 
-Architecture methodologies ration expensive cycle-accurate simulation using statistical sampling and representative trace windows. For example, SimPoint [@SherwoodEtAl2002SimPoint] isolates representative program regions, while SMARTS [@WunderlichEtAl2003SMARTS] provides error bounds for sampled simulation. Analytical models, reduced workloads, and multi-fidelity evaluation serve this same purpose across design levels. Because each technique trades fidelity for capacity, architects must state what cheaper evaluations preserve and flag which candidates mandate stronger checks.
+Architectural simulators, compiled RTL simulation, hardware emulators, and FPGA platforms offer different ways to trade setup effort against execution capacity. They also model different things. A fast architectural simulator may simplify timing interactions; Verilator executes an RTL model; FireSim uses FPGA acceleration to run full-system, cycle-exact RTL simulations [@KarandikarEtAl2018FireSim]. Their accuracy must be judged for the behavior each model represents. An RTL model can represent functional details absent from an architectural model while still omitting routed wire delays or thermal behavior. The useful tool is the one whose model and execution capacity answer the study's question at an acceptable total cost.
 
-Allocating evaluation capacity is challenging. While generating or scoring an additional candidate is inexpensive, an inaccurate screening tool can discard a promising design or advance a flawed one into expensive back-end stages. Architects must decide which inexpensive checks can safely reject a candidate, which uncertainties demand stronger tools, and which measurements can overturn the final decision. Without these distinctions, generating candidates faster merely dumps unproductive work into the design program's most expensive stages.
+Sampling can reduce execution cost without simply removing model detail. SimPoint selects representative program regions [@SherwoodEtAl2002SimPoint], while SMARTS uses statistical sampling with error estimates [@WunderlichEtAl2003SMARTS]. Analytical screening, sampled detailed simulation, and full-workload execution can therefore complement one another. A study should state which behavior the sample represents, how initialization and warmup are handled, and which conclusions require additional runs.
 
-The substantial costs of leading-edge chip development illustrate the magnitude of this constraint. Public estimates vary, but they agree on the order of magnitude; reported design costs rise roughly twenty-fourfold from the 65\ nm node to the 2\ nm node (@fig-design-cost-by-node) [@SemiconductorIndustryAssociation2026ChipDesign; @BauerEtAl2020SemiconductorDesignManufacturing; @Shilov2023IBSDesignCost]. Designing a leading-edge chip increased from approximately \$30M at 65\ nm in 2006 to over \$540M at 5\ nm in 2020 and \$725M at 2\ nm, with industry estimates counting software development, verification, validation, and IP qualification rather than masks and wafers alone.
+The allocation decision has two risks: a cheap estimate may discard a promising candidate or send an unsuitable one into an expensive evaluation. More representative simulation can reduce uncertainty about performance, but it does not establish correctness for every behavior the design permits. That remaining obligation leads to verification.
 
-```{python}
-#| label: fig-design-cost-by-node
-#| fig-cap: |
-#|   **Reported design cost for a new chip rises roughly twenty-fourfold from $65\ \text{nm}$ to $2\ \text{nm}$.**
-#|   Estimated design costs scale from approximately \$30M at $65\ \text{nm}$ (2006) to \$175M at $10\ \text{nm}$, \$300M at $7\ \text{nm}$,
-#|   \$540M at $5\ \text{nm}$ (2020), and \$725M at $2\ \text{nm}$ (2024). The $65\ \text{nm}$ and $5\ \text{nm}$ anchors come from an industry association summary
-#|   [@SemiconductorIndustryAssociation2026ChipDesign], the $10\ \text{nm}$, $7\ \text{nm}$, and $5\ \text{nm}$ figures derive from McKinsey
-#|   [@BauerEtAl2020SemiconductorDesignManufacturing], and the $2\ \text{nm}$ breakdown comes from International Business Strategies
-#|   (IBS) [@Shilov2023IBSDesignCost], where software development (\$314M) and verification (\$154M) account for roughly
-#|   65% of the total design expense.
-#| out-width: "100%"
-#| fig-alt: "Horizontal bar chart of reported chip design cost by process node. The 65 nanometer node is about 30 million dollars, the 10 nanometer node about 175 million, the 7 nanometer node about 300 million, the 5 nanometer node about 540 million, and the 2 nanometer node about 725 million dollars. The 2 nanometer bar notes that software and verification constitute the majority of the investment."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Sourced constants: data/datasets/chapter2-leading-node-design-cost.csv
-nodes = ["65 nm\n(2006)", "10 nm", "7 nm", "5 nm\n(2020)", "2 nm\n(2024)"]
-costs = [30, 175, 300, 540, 725]
-sources = [
-    "SIA",
-    "McKinsey",
-    "McKinsey",
-    "SIA & McKinsey",
-    "IBS (SW: $314M, Verif: $154M)",
-]
-
-fig, ax = plt.subplots(figsize=(6.4, 2.9))
-positions = range(len(nodes))
-
-ax.barh(
-    positions,
-    costs,
-    height=0.58,
-    color=COLORS["note_fill"],
-    edgecolor=COLORS["constraints"],
-    linewidth=1.4,
-    zorder=3,
-)
-
-for pos, cost, source in zip(positions, costs, sources):
-    ax.text(
-        cost + 12,
-        pos,
-        f"${cost}M",
-        va="center",
-        ha="left",
-        fontsize=7,
-        fontweight="bold",
-        color=COLORS["constraints_ink"],
-        zorder=4,
-    )
-    ax.text(
-        cost + 100,
-        pos,
-        source,
-        va="center",
-        ha="left",
-        fontsize=6,
-        color=COLORS["muted"],
-        zorder=4,
-    )
-
-ax.set_yticks(list(positions))
-ax.set_yticklabels(nodes, fontsize=7, color=COLORS["ink"])
-ax.invert_yaxis()
-ax.set_xlim(0, 1150)
-ax.set_xlabel("Reported cost to design one new chip (US$M)", fontsize=7, color=COLORS["ink"])
-ax.tick_params(axis="x", labelsize=6.5)
-ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
-for spine in ["top", "right", "left"]:
-    ax.spines[spine].set_visible(False)
-plt.show()
-plt.close(fig)
-```
-
-Two structural patterns in @fig-design-cost-by-node matter more than the raw totals. First, design costs scale superlinearly across successive nodes, with each process shrink demanding a steeper increment of non-recurring engineering (NRE) expense. Second, the estimates count architecture, design, validation, verification, and IP qualification, not masks and wafers, meaning the chart reflects the price of the engineering and checking work this chapter describes. An expensive evaluation tier draws on that same budget, making candidate promotion a program-level resource decision rather than a local convenience. Forcing a silicon respin incurs fabrication, validation, and schedule penalties before learning whether a correction worked, and investments in simulation, emulation, and signoff exist precisely to minimize the probability of paying for that iteration.
 
 ### Verification Bottlenecks
 
@@ -1267,6 +1188,88 @@ The physical and economic severity of this transition becomes visible when track
 In the general-purpose computing era, non-recurring engineering (NRE) investments were comfortably absorbed across hundreds of millions of identical processor dies sold over several years. Domain specialization fundamentally fractures that economic model. Because accelerators earn their efficiency by tailoring hardware to a narrow workload, each design targets a substantially smaller market, and chiplet composition divides production volume further. Consequently, as the per-design cost climbs drastically across these advanced process nodes while the addressable market per chip shrinks, the traditional path to financial amortization closes entirely.
 
 Embedded and edge products sit where that squeeze is tightest. A device such as a mobile XR headset must deliver server-class neural rendering within a strict 3\ W thermal envelope, which demands deep specialization, yet it cannot command the pricing or carry the verification staff of a hyperscale data-center accelerator. Whether a design program can reach a defensible, silicon-ready decision within the budget its volume supports is the commitment question @sec-what-architect-owns prices; what matters here is that the pressure lands hardest exactly where the volume to absorb it is smallest.
+
+The substantial costs of leading-edge chip development illustrate the magnitude of this constraint. Public estimates vary, but they agree on the order of magnitude; reported design costs rise roughly twenty-fourfold from the 65\ nm node to the 2\ nm node (@fig-design-cost-by-node) [@SemiconductorIndustryAssociation2026ChipDesign; @BauerEtAl2020SemiconductorDesignManufacturing; @Shilov2023IBSDesignCost]. Designing a leading-edge chip increased from approximately \$30M at 65\ nm in 2006 to over \$540M at 5\ nm in 2020 and \$725M at 2\ nm, with industry estimates counting software development, verification, validation, and IP qualification rather than masks and wafers alone.
+
+```{python}
+#| label: fig-design-cost-by-node
+#| fig-cap: |
+#|   **Reported design cost for a new chip rises roughly twenty-fourfold from $65\ \text{nm}$ to $2\ \text{nm}$.**
+#|   Estimated design costs scale from approximately \$30M at $65\ \text{nm}$ (2006) to \$175M at $10\ \text{nm}$, \$300M at $7\ \text{nm}$,
+#|   \$540M at $5\ \text{nm}$ (2020), and \$725M at $2\ \text{nm}$ (2024). The $65\ \text{nm}$ and $5\ \text{nm}$ anchors come from an industry association summary
+#|   [@SemiconductorIndustryAssociation2026ChipDesign], the $10\ \text{nm}$, $7\ \text{nm}$, and $5\ \text{nm}$ figures derive from McKinsey
+#|   [@BauerEtAl2020SemiconductorDesignManufacturing], and the $2\ \text{nm}$ breakdown comes from International Business Strategies
+#|   (IBS) [@Shilov2023IBSDesignCost], where software development (\$314M) and verification (\$154M) account for roughly
+#|   65% of the total design expense.
+#| out-width: "100%"
+#| fig-alt: "Horizontal bar chart of reported chip design cost by process node. The 65 nanometer node is about 30 million dollars, the 10 nanometer node about 175 million, the 7 nanometer node about 300 million, the 5 nanometer node about 540 million, and the 2 nanometer node about 725 million dollars. The 2 nanometer bar notes that software and verification constitute the majority of the investment."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+# Sourced constants: data/datasets/chapter2-leading-node-design-cost.csv
+nodes = ["65 nm\n(2006)", "10 nm", "7 nm", "5 nm\n(2020)", "2 nm\n(2024)"]
+costs = [30, 175, 300, 540, 725]
+sources = [
+    "SIA",
+    "McKinsey",
+    "McKinsey",
+    "SIA & McKinsey",
+    "IBS (SW: $314M, Verif: $154M)",
+]
+
+fig, ax = plt.subplots(figsize=(6.4, 2.9))
+positions = range(len(nodes))
+
+ax.barh(
+    positions,
+    costs,
+    height=0.58,
+    color=COLORS["note_fill"],
+    edgecolor=COLORS["constraints"],
+    linewidth=1.4,
+    zorder=3,
+)
+
+for pos, cost, source in zip(positions, costs, sources):
+    ax.text(
+        cost + 12,
+        pos,
+        f"${cost}M",
+        va="center",
+        ha="left",
+        fontsize=7,
+        fontweight="bold",
+        color=COLORS["constraints_ink"],
+        zorder=4,
+    )
+    ax.text(
+        cost + 100,
+        pos,
+        source,
+        va="center",
+        ha="left",
+        fontsize=6,
+        color=COLORS["muted"],
+        zorder=4,
+    )
+
+ax.set_yticks(list(positions))
+ax.set_yticklabels(nodes, fontsize=7, color=COLORS["ink"])
+ax.invert_yaxis()
+ax.set_xlim(0, 1150)
+ax.set_xlabel("Reported cost to design one new chip (US$M)", fontsize=7, color=COLORS["ink"])
+ax.tick_params(axis="x", labelsize=6.5)
+ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
+for spine in ["top", "right", "left"]:
+    ax.spines[spine].set_visible(False)
+plt.show()
+plt.close(fig)
+```
+
+Two structural patterns in @fig-design-cost-by-node matter more than the raw totals. First, design costs scale superlinearly across successive nodes, with each process shrink demanding a steeper increment of non-recurring engineering (NRE) expense. Second, the estimates count architecture, design, validation, verification, and IP qualification, not masks and wafers, meaning the chart reflects the price of the engineering and checking work this chapter describes. An expensive evaluation tier draws on that same budget, making candidate promotion a program-level resource decision rather than a local convenience. Forcing a silicon respin incurs fabrication, validation, and schedule penalties before learning whether a correction worked, and investments in simulation, emulation, and signoff exist precisely to minimize the probability of paying for that iteration.
 
 ## Compounding Loop Pressures {#sec-compounding-design-loop-pressure}
 
