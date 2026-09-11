@@ -114,6 +114,7 @@ local acronyms = {
   ["SPEC"] = "Standard Performance Evaluation Corporation: A non-profit organization establishing standardized benchmark suites to measure computing system performance.",
   ["SPMD"] = "single-program, multiple-data: A parallel programming model in which every thread runs the same program over a distinct slice of the data, indexed by its own thread identifier.",
   ["SRAM"] = "static random-access memory: Fast, volatile semiconductor memory using bistable latching circuitry used for on-chip caches and scratchpads.",
+  ["SSA"] = "single static assignment: A compiler representation in which each variable is assigned once, making definition-use relationships explicit.",
   ["STA"] = "static timing analysis: A deterministic verification method calculating circuit delays across all signal paths to verify setup and hold timing without dynamic simulation.",
   ["SVA"] = "SystemVerilog Assertions: A declarative language extension within IEEE 1800 SystemVerilog used to specify temporal and Boolean properties for formal verification and dynamic simulation.",
   ["TCM"] = "tightly coupled memory: Fast, deterministic on-chip static RAM mapped directly into the processor core's memory map with zero wait states.",
@@ -130,6 +131,7 @@ local acronyms = {
   ["VLA"] = "vector-length-agnostic: A processor architecture or compiler property where software binaries dynamically adapt to any hardware vector register length without recompilation.",
   ["VLSI"] = "very-large-scale integration: The process of creating integrated circuits by combining millions or billions of MOS transistors onto a single silicon chip.",
   ["WSC"] = "warehouse-scale computing: Massive datacenter computing systems engineered as a unified, coordinated warehouse of compute nodes, storage, and networking.",
+  ["WSE"] = "Wafer-Scale Engine: A Cerebras processor that integrates compute, memory, and communication across a silicon wafer.",
 }
 
 if not quarto.doc.is_format('html') then

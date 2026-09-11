@@ -5390,6 +5390,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"warehouse[- ]scale computing",
         True,
     ),
+    "WSE": (
+        "Wafer-Scale Engine",
+        True,
+        "a",
+        "hardware",
+        "A Cerebras processor that integrates compute, memory, and communication across a silicon wafer.",
+        r"Wafer-Scale Engine",
+        False,
+    ),
     # Physical Design, Manufacturing & Signoff
     "BSPDN": (
         "backside power delivery network",
@@ -5741,6 +5750,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         "compilers",
         "A modular compiler infrastructure within LLVM providing extensible dialects for domain-specific transformations and multi-stage hardware/software lowering.",
         r"Multi-Level Intermediate Representation",
+        False,
+    ),
+    "SSA": (
+        "single static assignment",
+        False,
+        "an",
+        "compilers",
+        "A compiler representation in which each variable is assigned once, making definition-use relationships explicit.",
+        r"single static assignment",
         False,
     ),
     "TLM": (

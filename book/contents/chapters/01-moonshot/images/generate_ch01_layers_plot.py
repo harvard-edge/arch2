@@ -179,17 +179,17 @@ SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" w
     <text class="font col-header" x="595" y="50" fill="#59429E">Governance &amp; Signoff Boundary</text>
     <text class="font limit-text" x="595" y="68">• Human acts as manual integration bus</text>
     <text class="font limit-text" x="595" y="86">• Generates syntax without signoff proof</text>
-    <text class="font limit-text" x="595" y="104">• Severe physical attrition (&lt;1% tapeout-ready)</text>
+    <text class="font limit-text" x="595" y="104">• Physical qualification remains necessary</text>
   </g>
 
   <!-- Bottom Annotation Bar -->
   <g transform="translate(65, 510)">
     <rect width="865" height="46" rx="5" fill="#F8FAFC" stroke="#9AA8B5" stroke-width="1.0"/>
     <text class="font banner-text" x="432" y="20" text-anchor="middle">
-      <tspan font-weight="700" fill="#136680">The Architecture 2.0 Premise:</tspan> Point assistance (Layer 1) and subsystem tuning (Layer 2) accelerate components,
+      <tspan font-weight="700" fill="#136680">The Architecture 2.0 Ambition:</tspan> Extend point assistance and subsystem search to cross-boundary exploration.
     </text>
     <text class="font banner-text" x="432" y="36" text-anchor="middle" fill="#3E474B">
-      but only AI-native system orchestration (Layer 3) carries compact intent through real tools to physically realizable silicon.
+      Layer 3 aims to carry compact intent through real tools to physically realizable silicon; the moonshot remains open.
     </text>
   </g>
 </svg>
@@ -210,9 +210,22 @@ def main() -> None:
         check=True,
     )
 
-    print(f"Converting SVG to PNG (1800px width) via rsvg-convert -> {png_path}...")
+    print(
+        f"Converting SVG to PNG (300 dpi, 3000px width) via rsvg-convert -> {png_path}..."
+    )
     subprocess.run(
-        ["rsvg-convert", "-w", "1800", str(svg_path), "-o", str(png_path)],
+        [
+            "rsvg-convert",
+            "-d",
+            "300",
+            "-p",
+            "300",
+            "-w",
+            "3000",
+            str(svg_path),
+            "-o",
+            str(png_path),
+        ],
         check=True,
     )
     print("Done! All three format twins created successfully.")

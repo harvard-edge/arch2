@@ -31,7 +31,9 @@ def _declare_font_stack(svg_path: Path) -> None:
         text = text.replace("</defs>", font_style + "</defs>", 1)
     else:
         text = text.replace("<svg", "<svg><defs>\n" + font_style + "</defs>", 1)
-    svg_path.write_text(text, encoding="utf-8")
+    svg_path.write_text(
+        "\n".join(line.rstrip() for line in text.splitlines()) + "\n", encoding="utf-8"
+    )
 
 
 def main():
@@ -99,7 +101,7 @@ def main():
 
     # Create figure with 2 panels
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.02, 1.28]}
+        1, 2, figsize=(12.0, 5.25), gridspec_kw={"width_ratios": [1.02, 1.28]}
     )
     fig.subplots_adjust(wspace=0.48, bottom=0.22, top=0.88, left=0.09, right=0.91)
 
@@ -146,20 +148,19 @@ def main():
         marker="*",
         s=140,
         linewidth=0.8,
-        label="Tiny Tapeout Tile ($50–$300)",
+        label=r"Tiny Tapeout Tile (\$50–\$300)",
         zorder=6,
     )
 
-    # Also plot Google Open MPW $0 point as reference annotation
-    ax1.scatter(
-        [open_x],
-        [15],  # Visual floor on log scale
+    # Zero cannot be plotted on a log axis; identify the free offering in text.
+    ax1.text(
+        0.04,
+        0.05,
+        "Google Open MPW: $0\n(not plotted on log scale)",
+        transform=ax1.transAxes,
         color=COLORS["workload"],
-        edgecolor=COLORS["ink"],
-        marker="D",
-        s=36,
-        linewidth=0.8,
-        label="Google Open MPW (Free: $0)",
+        fontsize=7.0,
+        bbox=dict(facecolor="white", edgecolor="none", alpha=0.95),
         zorder=6,
     )
 
@@ -168,7 +169,7 @@ def main():
     ax1.text(
         0.05,
         85000,
-        "Academic Grant Ceiling (~$50k)",
+        "Illustrative Budget ($50k)",
         fontsize=8.0,
         fontweight="bold",
         color=COLORS["muted"],
@@ -194,7 +195,7 @@ def main():
     ax1.text(
         4.8,
         2.2e6,
-        "Commercial Lockout Zone\n(Apprenticeship Gap)",
+        "Above Illustrative Budget",
         fontsize=8.0,
         fontweight="bold",
         ha="center",
@@ -213,7 +214,7 @@ def main():
     ax1.set_ylim(10, 1.2e8)
     ax1.set_xlim(-0.6, len(comm_points) - 0.4)
     ax1.set_xticks(x_nodes)
-    ax1.set_xticklabels(labels_nodes, fontsize=8.0, color=COLORS["ink"])
+    ax1.set_xticklabels(labels_nodes, fontsize=7.0, color=COLORS["ink"])
     ax1.set_ylabel(
         "Fabrication Cost (USD, Log Scale)", fontsize=9.9, color=COLORS["ink"]
     )
@@ -264,7 +265,7 @@ def main():
     )
     ax2.grid(True, axis="y", color=COLORS["grid"], linewidth=0.45, alpha=0.7, zorder=0)
 
-    # Twin axis for Cumulative Tapeout Count
+    # Twin axis for cumulative submissions, including undelivered designs.
     ax2_cumul = ax2.twinx()
     line_cumul = ax2_cumul.plot(
         x_tt,
@@ -274,11 +275,11 @@ def main():
         markersize=2.8,
         linewidth=1.2,
         zorder=5,
-        label="Cumulative Tapeouts",
+        label="Cumulative Submissions",
     )
     ax2_cumul.set_ylim(0, 4800)
     ax2_cumul.set_ylabel(
-        "Cumulative Verified Tapeouts", fontsize=9.9, color=COLORS["constraints_ink"]
+        "Cumulative Submissions", fontsize=9.9, color=COLORS["constraints_ink"]
     )
     ax2_cumul.tick_params(axis="y", colors=COLORS["constraints_ink"], labelsize=5.4)
 
@@ -350,10 +351,10 @@ def main():
         zorder=6,
     )
 
-    # Annotate cumulative milestone: 4,026 tapeouts
+    # Annotate cumulative milestone: 4,026 submitted designs.
     last_idx = len(tt_runs) - 1
     ax2_cumul.annotate(
-        "4,026 Cumulative\nSilicon Designs",
+        "4,026 Cumulative\nSubmissions",
         xy=(last_idx, tt_cumul[-1]),
         xytext=(last_idx - 6.5, 2300),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints"], linewidth=0.65),
