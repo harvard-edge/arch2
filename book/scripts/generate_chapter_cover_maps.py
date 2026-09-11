@@ -62,9 +62,9 @@ CHAPTERS = (
         1,
         1,
         "01-moonshot",
-        "EXPAND COMPACT INTENT",
-        "A prompt is not yet an architecture result",
-        "Compact Lighthouse intent expands into a cross-stack specification, an AI-native design system, checked evidence, and a separate commitment decision.",
+        "CONNECT THE DESIGN WORK",
+        "From a system goal to evaluated designs",
+        "A system goal leads to explicit requirements, coordinated design experiments, and evaluation of design quality and engineering effort, followed by human review.",
     ),
     Chapter(
         2,
@@ -335,26 +335,26 @@ def flow_arrow(svg: SVG, x1: float, x2: float, y: float) -> None:
 def chapter_1(svg: SVG) -> None:
     y, h = 112, 103
     cards = (
-        (14, 136, "Compact intent", ("Lighthouse request",), "workload"),
+        (14, 136, "System goal", ("System request",), "workload"),
         (
             176,
             190,
-            "Cross-stack specification",
-            ("requirements + constraints", "checks + evidence needs"),
+            "Requirements",
+            ("constraints + design choices", "workload + required behavior"),
             "artifact",
         ),
         (
             392,
             204,
-            "AI-native design system",
-            ("state + methods + real tools", "independent checks included"),
+            "Design experiments",
+            ("models + engineering tools", "feedback guides the next change"),
             "neutral",
         ),
         (
             622,
             154,
-            "Supported result",
-            ("better result", "or lower cost", "reference / unresolved"),
+            "Evaluate",
+            ("design quality", "engineering effort", "remaining questions"),
             "evidence",
         ),
     )
@@ -369,21 +369,12 @@ def chapter_1(svg: SVG) -> None:
         y,
         142,
         h,
-        "Named authority",
-        ("advance / hold", "reject"),
+        "Human review",
+        ("revise / test further", "decide what to build"),
         role="decision",
         title_size=14,
         body_size=11,
         center=True,
-    )
-    svg.text(
-        784,
-        244,
-        "RECOMMENDATION INFORMS; AUTHORITY COMMITS",
-        size=11.5,
-        weight=700,
-        fill=ROLES["decision"][2],
-        anchor="middle",
     )
 
 
