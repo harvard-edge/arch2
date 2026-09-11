@@ -117,47 +117,10 @@ plt.savefig(chapter_png(2), dpi=300, bbox_inches="tight")
 plt.close()
 
 # Ch3: fig-verification-wall (plot_ch3.png)
-rows = get_rows("ch3_data.csv")
-lint = [r for r in rows if r["ci_stage"] == "Lint"]
-sim = [r for r in rows if r["ci_stage"] == "Sim"]
-pnr = [r for r in rows if r["ci_stage"] == "PnR"]
+from plot_ch3_verification_costs import main as plot_ch3
 
-plt.figure(figsize=(8, 6))
-plt.scatter(
-    [float(r["pr_complexity_loc"]) for r in lint],
-    [float(r["execution_time_minutes"]) for r in lint],
-    c="#2563eb",
-    s=80,
-    alpha=0.85,
-    label="Lint ($O(N)$, linear)",
-)
-plt.scatter(
-    [float(r["pr_complexity_loc"]) for r in sim],
-    [float(r["execution_time_minutes"]) for r in sim],
-    c="#16a34a",
-    s=80,
-    alpha=0.85,
-    label="RTL Simulation ($O(N^{1.5})$, polynomial)",
-)
-plt.scatter(
-    [float(r["pr_complexity_loc"]) for r in pnr],
-    [float(r["execution_time_minutes"]) for r in pnr],
-    c="#dc2626",
-    s=80,
-    alpha=0.85,
-    label="Physical PnR ($O(e^N)$, exponential)",
-)
-
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("PR Complexity (Lines of Code, LOC, Log)")
-plt.ylabel("Execution Time (Minutes, Log)")
-plt.xlim(8, 8000)
-plt.ylim(1.5, 1200)
-plt.grid(True, alpha=0.25, linestyle="--", which="both")
-plt.legend(loc="upper left", framealpha=0.92, facecolor="white", edgecolor="none")
-plt.savefig(chapter_png(3), dpi=300, bbox_inches="tight")
-plt.close()
+with plt.rc_context():
+    plot_ch3()
 
 # Ch4: fig-topological-explosion (plot_ch4.png)
 rows = get_rows("ch4_data.csv")
