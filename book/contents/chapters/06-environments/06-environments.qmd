@@ -412,20 +412,20 @@ The study therefore needs to specify how repeated evaluations fit its budget and
 
 ## Execution Records {#sec-execution-records}
 
-Each authorized request/attempt leaves an execution record, including an attempt refused before any backend invocation. @sec-architecture-20-ontology introduced this record as the statement of whether requested work ran on the intended state. The environment now supplies its operational detail. Refusals, evicted jobs, quarantined terminations, retries, seeds, and thread counts remain reviewable only if the harness retains them. The record joins the request to its zero, one, or multiple backend executions, their returns, and their costs. Once finalized, it preserves that history rather than being overwritten by a later successful retry.
+The execution record brings together the information needed to answer three questions: what work was attempted, what happened, and what can be examined afterward? @sec-architecture-20-ontology introduced its role in connecting requested work to the state actually evaluated. Here it consolidates the identities, outputs, and costs developed throughout the chapter. A refused request needs a record even though no tool ran; an attempt with several backend jobs needs their outcomes linked together. A later successful retry adds to this history rather than replacing it.
 
-To support post-execution review across distributed clusters, execution records capture six core dimensions:
+Six groups of information make the record useful:
 
-- **Request and attempt identity**: Study, request, run specification, candidate, configuration, workload, attempt universally unique identifier (UUID), submission token, and the identifier of every scheduler job attached to the attempt.
-- **Starting state**: Pinned inputs, source revisions, artifact hashes, tool versions, container digest.
-- **Execution outcome**: Admission status, terminal cause, artifact checks, parser status, retry eligibility.
-- **Returned material**: Raw logs, hashes, structured metrics with units, warnings, residual output.
-- **Lineage and retries**: Parent inputs, transformations, retry/reset parent links.
-- **Realized cost**: Consumed wall-clock time, CPU/accelerator hours, peak memory, storage, license-hours, and billable amounts.
+- **Request and attempt identity**: Study, request, run specification, candidate, configuration, workload, attempt universally unique identifier (UUID), submission token, and attached scheduler job identifiers.
+- **Starting state**: Input artifacts, source revisions, tool and container versions, library views, and operating conditions.
+- **Execution outcome**: Admission status, job outcomes, terminal cause, artifact completeness, parser status, and recovery eligibility.
+- **Returned material**: Raw reports and logs, artifact references and hashes, structured metrics with units and scope, warnings, and unrecognized output.
+- **Lineage and retries**: Dependencies, producing transformations, and links to earlier attempts or restored checkpoints, with references to any checks performed.
+- **Resource use and cost**: Wall-clock time, CPU/accelerator hours, peak memory, storage use, license-hours, and charges, distinguishing measured values from estimates or unknowns.
 
-Standardizing this information lets the system query past outcomes or resume interrupted work without losing its context. The hypothetical instance in @lst-execution-record-schema shows part of that schema. Its identifiers, measurements, and costs are invented teaching values, not results from Lighthouse. It omits several fields listed above, including workload identity, parser status, raw-artifact links, and retry lineage; an operational record would need those too.
+The excerpt in @lst-execution-record-schema illustrates a completed analysis that reports a timing violation. All identifiers, artifact references, metrics, and costs are invented teaching values; this is not an executed Lighthouse result. A generic licensed analysis tool is used so the example does not imply that a particular product produced every metric. Workload and activity references identify the inputs relevant to the power estimate, while the scope identifies what that estimate covers. The excerpt remains abbreviated: a complete record would also retain full input identities, host settings, per-job details, and applicable retry or checkpoint links.
 
-```{.yaml #lst-execution-record-schema lst-cap="**Illustrative execution record excerpt.** This hypothetical instance shows identity, starting state, a returned timing violation, and costs. Values are invented; this is neither a complete schema nor an executed Lighthouse result."}
+```{.yaml #lst-execution-record-schema lst-cap="**A completed analysis can report a timing violation.** This hypothetical excerpt joins inputs and conditions to execution status, reports, metrics, and costs. Values are invented; this is neither a complete schema nor an executed Lighthouse result."}
 study_id: "lighthouse-xr-soc-v1"
 evidence_status: "HYPOTHETICAL_TEACHING_EXAMPLE"
 request_id: "req-illustrative-0417"
@@ -433,15 +433,29 @@ attempt_id: "att-8f3a91c2-7b1e"
 submission_token: "tok-lighthouse-0417"
 scheduler_jobs: ["slurm-4471902"]
 candidate_id: "cand-l2-3mib-npu16x16"
+configuration_id: "cfg-illustrative-0417"
+workload_id: "xr-workload-illustrative-v1"
 starting_state:
   git_commit: "9a2f1b4c"
   container_digest: "sha256:d4e7b1a8c9e..."
-  tool_version: "OpenROAD-v2.0-1124"
-  pdk_variant: "TSMC_N3E_1.0a"
+  tool_version: "illustrative-licensed-analysis-tool-v1"
+  library_view: "illustrative-library-corner-v1"
+  netlist: "artifact-netlist-0417"
+  constraints: "artifact-constraints-0417"
+  activity: "artifact-activity-0417"
+  power_scope: "modeled XR subsystem"
 outcome:
+  admission_status: "ADMITTED"
   status: "COMPLETED"
   terminal_cause: "NORMAL_EXIT"
   exit_code: 0
+  artifact_status: "REQUIRED_OUTPUTS_PRESENT"
+  parser_status: "PARSED"
+reports:
+  timing: "artifact-timing-report-0417"
+  area: "artifact-area-report-0417"
+  power: "artifact-power-report-0417"
+  raw_log: "artifact-log-0417"
 metrics:
   worst_negative_slack_ps: -12.4
   macro_area_mm2: 1.42
@@ -453,9 +467,11 @@ costs:
   license_token_hours: 1.15
 ```
 
-The strictness of these records is directly tied to the scientific validity of the results. ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. Exact replay relies on submitting identical retained requests and recorded states.
+The `COMPLETED` status and zero exit code describe execution, while the negative timing slack reports a violation under the recorded constraints. These statements are compatible: the analysis completed and found a problem. The raw report reference lets a reviewer inspect which paths and conditions produced that result. Similarly, the subsystem power value is an estimate under the identified activity and library assumptions; it does not establish that the complete Lighthouse system meets its power budget. The cost fields describe resources consumed by this attempt, independently of whether the candidate met its requirements.
 
-Submitting the same retained request can still consume different amounts of host wall-clock time when scheduling or unpinned host dependencies drift [@JimenezEtAl2017PopperConvention]. The three sources of run-to-run variation separated in @sec-incremental-churn-dispersion are why the record preserves seeds, thread counts, tool settings, and host conditions alongside the returned metrics. Its lineage entries separately bridge content hashes to architectural semantics, indicating whether lowered representations preserve the original design intent.
+Records also support later attempts to reproduce the work. ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. A record supplies information for these activities, but carrying them out also requires access to the artifacts and an executable procedure. The Popper convention similarly emphasizes preserving executable evaluation workflows [@JimenezEtAl2017PopperConvention].
+
+Even with the same recorded inputs, host time or returned results may vary for the reasons discussed in @sec-incremental-churn-dispersion. Lineage identifies how artifacts were produced; references to behavioral checks show what was tested, not what hashes alone prove. The record makes these distinctions available to later analysis. Applying them to a prospective study shows how the environment's rules and its execution history fit together.
 
 ## Mobile XR Subsystem Evaluation Environment {#sec-mobile-xr-evaluation}
 
