@@ -949,39 +949,47 @@ For the compact cache comparison, the limit remains four cycle-level runs, with 
 
 ## Composing Prediction, Generation, and Optimization {#sec-one-model-specialists-hybrid}
 
-The preceding search procedures need a representation of the candidates or actions they may select. A broader architecture study may also need to generate a different organization, estimate its consequences, and revise it after evaluation. These jobs can justify composing methods, without making all three families necessary in every study. In neurosymbolic architectures, neural generators propose candidate structures while symbolic solvers and static compiler passes enforce encoded structural constraints. AutoTVM and Ansor demonstrate optimization compositions for tensor programs [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor], but do not mandate a universal three-stage structure for broader architecture studies. Each engineering role a composed pipeline incorporates needs a concrete output and next check (@tbl-method-role-handoffs).
+A search procedure needs candidates or actions to select, and feedback with which to compare them. Generation can construct those candidates; prediction can estimate properties that are expensive to evaluate. Composing these methods is useful when their contributions improve the study together. It does not require every study to use all three families.
+
+Consider an illustrative redesign of the Lighthouse arithmetic datapath. A generator proposes a different arithmetic organization or pipeline structure, subject to the specified computation and interface requirements. After initial structural and functional checks, a supported surrogate estimates area and delay. An optimizer uses those estimates, previous evaluation results, and the remaining budget to select which candidate should receive a more expensive implementation evaluation. Energy, area, and timing results then inform the next selection or request for revision. The generator supplies alternatives, the predictor estimates consequences, and the optimizer directs the search toward the objective.
+
+The feedback determines whether the combination works. A timing failure may motivate a revised pipeline structure; a large prediction error may instead require evaluating similar candidates directly or updating the surrogate before relying on it again. Newly generated structures can fall outside the predictor's supported representations even when they are functionally correct. The components therefore need to share the candidate's identity and evaluation conditions, while distinguishing predicted properties from checked results. This is a possible design loop, not a report of an executed Lighthouse experiment.
+
+The roles need not correspond to separate models or occur once in a fixed order. An evolutionary procedure, for example, can both construct variants and select among them. A neural generator can also work with symbolic solvers or static compiler passes that enforce encoded constraints. AutoTVM and Ansor provide concrete examples of composing search and learned cost models for tensor programs [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor]. Their compositions serve their particular search problems; they do not establish a universal sequence for architecture design.
+
+As a loop grows, it may also need repair, diagnosis, and coordination. The distinctions in @tbl-method-role-handoffs specify what each job produces and how another component can use it. They describe responsibilities that a human, a conventional tool, or a learned component might perform.
 
 | **Engineering role** | **Concrete output** | **Next check or handoff** |
 | --- | --- | --- |
 | **Proposal** | Named candidate or experiment request with identified changes. | Verify legality and scope before invoking expensive tools. |
 | **Screening** | Scoped estimate or ranking with predicted properties and uncertainty. | Route selected candidates to measurement path; retain predictions for qualification. |
-| **Search** | Next candidate or experiment, selection basis, remaining budget. | Hand request to execution environment without mutating design space. |
-| **Static Analysis** | Testable defect, missing assumption, or conflict tied to named artifact. | Route to revision owner; analysis neither alters candidates nor replaces checks. |
+| **Search** | Next candidate or experiment, selection basis, remaining budget. | Execute within the current search formulation; make any proposed change to that formulation explicit. |
+| **Static Analysis** | Testable defect, missing assumption, or conflict tied to named artifact. | Use the finding to guide revision; check whether the revised candidate resolves it. |
 | **Repair** | Revised artifact linked to parent and modification record. | Treat as fresh candidate; rerun affected checks. |
-| **Checking** | Result from named check under declared conditions (including timeouts/failures). | Hand return to verification testbench (@sec-feedback-verification-trust) to determine supported claims. |
+| **Checking** | Result from named check under declared conditions (including timeouts/failures). | Interpret what the check establishes and what remains untested (@sec-feedback-verification-trust). |
 | **Diagnostic Localization** | Proposed mechanism and distinguishing contrast conditions. | Request targeted measurement; analysis does not substitute for verification. |
 | **Coordination** | Ordered request graph with dependencies, budgets, and artifact IDs. | Hand requests to environment for tool orchestration. |
-: **Engineering roles require explicit outputs and handoff contracts.** Role definitions decouple workflow logic from specific human or automated executors. {#tbl-method-role-handoffs tbl-colwidths="[20,38,42]"}
+: **Each engineering role produces an output that another role can use.** Separating proposals, estimates, revisions, and checked results makes their different contributions explicit. {#tbl-method-role-handoffs tbl-colwidths="[20,38,42]"}
 
-These handoffs keep a candidate, a prediction about it, and a checked result distinguishable. They also allow teams to substitute a human expert, a deterministic script, or a learned component for a role, provided it supplies the required output and preserves the next check.
+The repair row illustrates why these distinctions matter. A revised datapath is a new candidate: the earlier timing result belongs to its parent and cannot be carried forward as if no design change occurred. Likewise, a diagnosis suggests what to investigate, while a targeted check tests that explanation. A component can perform several roles, but its outputs still need to preserve these differences.
 
-This modularity allows pipelines to be customized based on available compute budget and simulation latency. If simulation is fast but the design space is vast, the pipeline might use a search optimizer without a learned predictor or generator. If simulation takes days, a predictive screener becomes attractive, provided matching data and validated coverage make it cheaper than spending those runs directly. Expensive feedback alone cannot establish that the surrogate will pay for itself.
+We can simplify the datapath loop by asking which work is actually needed. If a few candidate implementations already exist and direct evaluation is affordable, neither generation nor a learned screen may be necessary. If candidate construction is needed but each design is cheap to evaluate, generation and optimization can use direct feedback. If evaluations take days, prediction becomes attractive only when suitable data and sufficient accuracy allow it to save more evaluation work than it adds in fitting and qualification.
 
-Composing a pipeline is an exercise in resource constraint satisfaction. Component boundaries must reflect distinct computational jobs and independent verification requirements, and each composition in @tbl-method-organization states the condition that justifies its extra part.
+These alternatives lead to different compositions (@tbl-method-organization). Here, “generation only” means generation is the only added method family; compilation, checking, and evaluation are still required. The same convention applies to the other rows. The choice concerns which methods improve the work, not which essential engineering checks can be omitted.
 
-| **Composition** | **When justified** | **Minimal sufficiency condition** |
+| **Composition** | **When justified** | **What must be established** |
 | --- | --- | --- |
 | Direct tools / conventional technique | Analytical models, solvers, or direct simulations perform work economically. | Retain unless an added component improves result quality or total cost while preserving checks. |
-| Generation only | Artifacts are missing; direct checking is affordable. | Terminate when sufficient candidates exist or review bandwidth limits progress. |
+| Generation only | New or revised artifacts are needed; direct checking is affordable. | Generated candidates meet the intended requirements at an acceptable construction and checking cost. |
 | Prediction only | Candidates require cheap screening before expensive simulation. | Retain predictor only while qualification and confirmation cost less than direct evaluation. |
-| Optimization only | Declared objective guides selection over large non-enumerable space. | Benchmark against simple baselines; stop when further search yields diminishing returns. |
-| Generation + prediction | Candidate construction required, but full simulation is unaffordable. | Predictor screens only properties with compatible support data. |
+| Optimization only | Selecting among existing candidates or legal actions requires a search. | Benchmark against simple baselines; stop when further search yields diminishing returns. |
+| Generation + prediction | Candidate construction and cheap screening are useful before expensive evaluation. | Predictor has support for the generated structures; selected candidates receive the required confirmation. |
 | Generation + optimization | Candidate construction required under selective search budget without supported surrogate. | Optimizer uses direct tool feedback; generated candidates pass verification. |
 | Prediction + optimization | Surrogate enables selective search under expensive tool feedback. | Keep surrogate, acquisition rule, and confirmation stages separately inspectable. |
-| Generation + prediction + optimization | Missing artifacts, costly simulation, and large search spaces coincide. | Each component maintains distinct inputs, outputs, costs, and stopping rules. |
+| Generation + prediction + optimization | Constructing alternatives, estimating consequences, and directing search each improve the study. | Their combined benefit exceeds fitting, integration, and checking costs at the required result quality. |
 : **Pipeline components must earn their cost in the declared study.** Each composition addresses particular work and introduces qualification, integration, and checking costs. The comparison is against a credible simpler path at the required result quality. {#tbl-method-organization tbl-colwidths="[24,34,42]"}
 
-The rows are alternatives, not stages through which a study must progress. A generator and optimizer may be useful without a surrogate; a supported surrogate may help an existing search without requiring generated artifacts. Each addition must identify the work it improves and the cost it introduces. The two cases below apply that comparison to different candidate spaces.
+The generation-plus-optimization row fits a datapath search that constructs alternatives and evaluates them directly. Adding prediction is a separate decision, justified only if the screen improves that search at the available budget. The rows therefore describe alternatives rather than a progression toward an ideal three-component system. The compiler and cache studies apply this reasoning to two different candidate spaces and evaluation costs.
 
 ## Method Selection in Two Contrasting Studies
 
