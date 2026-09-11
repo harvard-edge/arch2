@@ -22,7 +22,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     # Candidate arrival rates g (proposals per day)
     g = np.linspace(0, 50, 250)
 
-    # Stage capacities and advance fractions from Section 5.2.2 / Table 5.2
+    # Stage capacities and advance fractions from the chapter's illustrative capacity table
     # Stage 1: Structural screen (1 slot, 1 min => 1440/day, p1 = 0.25)
     rho_1 = (g * 1.0) / 1440.0
 
@@ -83,7 +83,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         zorder=2,
     )
 
-    # Highlight Table 5.2 operating point (g = 32 candidates/day)
+    # Highlight the illustrative operating point (g = 32 candidates/day)
     ax.scatter(
         [32.0],
         [0.80],
@@ -94,7 +94,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         zorder=5,
     )
     ax.annotate(
-        "Table 5.2 Operating Point\n(g = 32 candidates/day, ρ3 = 80%)",
+        "Illustrative Operating Point\n(g = 32 candidates/day, ρ3 = 80%)",
         xy=(32.0, 0.80),
         xytext=(22.0, 0.28),
         arrowprops=dict(
@@ -123,13 +123,14 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         zorder=2,
     )
     ax.annotate(
-        "Maximum Stable Rate\ng_max = 40 proposals/day",
+        "Full-Utilization Boundary\ng_max = 40 proposals/day",
         xy=(40.0, 1.0),
         xytext=(26.5, 1.15),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
         fontsize=9.9,
         fontweight="bold",
         color=COLORS["constraints_ink"],
+        bbox=dict(facecolor="white", edgecolor="none", pad=1.5),
     )
 
     ax.set_xlabel(
@@ -152,7 +153,13 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     ax.set_yticks(yticks)
     ax.set_yticklabels(ytick_labels, fontsize=9.3)
 
-    ax.legend(frameon=False, fontsize=9.3, loc="upper left")
+    ax.legend(
+        frameon=False,
+        fontsize=8.5,
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.02),
+        ncol=2,
+    )
     ax.grid(
         True, which="both", axis="both", color=COLORS["grid"], linewidth=0.45, zorder=0
     )

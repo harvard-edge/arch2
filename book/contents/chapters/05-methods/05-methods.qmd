@@ -62,13 +62,11 @@ Even within one family, a stronger benchmark score need not identify the best co
 
 ![**Model capability and inference throughput are separate selection dimensions.** Software problem-solving capability, measured by SWE-bench Verified pass rate [@JimenezEtAl2024SWEBench], is plotted against token generation throughput from Artificial Analysis provider benchmarks [@ArtificialAnalysis2026Briefcase]. The plotted regions suggest capability-throughput trade-offs for the sampled models; they do not establish an optimal model for architecture repair. End-to-end latency also depends on output length, retries, tool execution, and queueing.](images/plot_ch5.png){#fig-agentic-sweet-spot width="95%" fig-alt="Scatter plot showing SWE-bench Verified pass rate against token generation throughput for eight large language models, categorizing sweet spot, balanced trade-off, and throughput-bound regions."}
 
-If generation dominates turnaround, faster output can make more repair attempts affordable. If simulation dominates, reducing generation time may save little, while a more capable model that reduces failed attempts could save expensive tool runs. We therefore need the cost of a completed, checked attempt before choosing between the plotted points. The capacity model below makes the downstream part of that comparison explicit.
+If generation dominates turnaround, faster output can make more repair attempts affordable. If simulation dominates, reducing generation time may save little, while a more capable model that reduces failed attempts could save expensive tool runs. We therefore need the cost of a completed, checked attempt before choosing between the plotted points. This makes model capability one part of a broader method choice, alongside the candidate space, available observations, and evaluation cost.
 
 ## Anchoring Architectural Method Selection
 
 The method families describe different computational capabilities. To use them in a design system, we need to connect those capabilities to the problem's structure and the information its tools can return. A learned predictor needs suitable observations, a generator needs a way to express permitted changes, and an optimizer needs an objective and feedback that distinguish useful alternatives. Method selection examines whether those requirements can be met and whether the resulting approach can improve the work within the available budget.
-
-### Matching Methods to the Problem
 
 Start with what can change. In the illustrative Lighthouse datapath, choosing among three supplied implementations is different from constructing a new arrangement of operations and registers. A small candidate set may permit direct evaluation. A larger space with explicit algebraic constraints may suit a solver or domain heuristic. Sequential choices, where one change affects the options available afterward, require a method that represents those dependencies. Known legality rules should constrain candidate construction or be checked before expensive evaluations.
 
@@ -103,189 +101,7 @@ Finally, match the output to the check it needs. A compiler's syntax check canno
 **The application:** Use a conventional tool as the comparator when it meets the evidence requirement. Add complexity only when the expected improvement in result quality or total cost warrants qualification, integration, and checking; retain the simpler path when the added method does not earn that cost.
 :::
 
-The remaining question is how much evaluation the chosen approach can request. A method may produce useful candidates faster than the available tools can check them. That mismatch makes downstream capacity part of method selection.
-
-```{=latex}
-\FloatBarrier
-```
-
-### Quantifying Evaluation Capacity {#sec-sample-efficiency-under-expensive-feedback}
-
-Producing a candidate creates work for the tools that evaluate it. A generator may draft a hardware implementation quickly, while simulation and physical implementation take much longer. An optimizer can create the same mismatch by requesting evaluations faster than the tools finish them (@sec-evaluation-capacity-bounds-search). To choose a useful proposal rate, we need to count both the evaluations each tool can complete and the fraction of candidates that reach it.
-
-Evaluation paths often begin with cheaper checks that eliminate unsuitable candidates before more expensive work. Analytical rooflines test encoded bounds; Spike checks functional execution; gem5 models cycle-level contention. Implementation questions require other checks, such as static timing analysis (STA) in OpenSTA, power analysis under Unified Power Format (UPF) intent, and SystemVerilog Assertions (SVA) checked with bounded model checking (BMC).[^fn-eda-signoff-c05] These tools establish different properties. The path must be chosen for the design question; a faster check cannot replace a slower one that establishes a different property.
-
-The number of possible candidates can greatly exceed that path's capacity. Accelerator mapping and tensor-program search spaces studied with MAESTRO, AutoTVM, and Timeloop can span $10^6$ to $>10^{18}$ configurations [@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM; @ParasharEtAl2019Timeloop]. Such spaces motivate pruning and selective evaluation. Even a small candidate set, however, can be costly if each evaluation is slow; candidate count and evaluation cost must be considered together.
-
-Improving candidate quality can also increase the load. At an unchanged proposal rate, a generator whose outputs pass early checks more often sends more work to downstream tools. If those tools have spare capacity, they can evaluate more promising candidates. If they are already near capacity, the same improvement can produce a growing backlog. The relevant question is how the changed pass rates affect arrivals at each stage.
-
-Model the path as a sequence of tool stages with a steady proposal rate $g$. For this calculation, assume fixed mean runtimes and conditional pass rates, separate capacity at each stage, and no retries or returning candidates.[^fn-feedback-c05] Stage $i$ has $c_i$ parallel slots and mean runtime $t_i$, giving a service capacity $\mu_i = c_i/t_i$. Its conditional pass rate $p_i$ is the fraction of its inputs that advance to the next stage.
-
-Only candidates that pass all preceding stages reach stage $i$, so its offered arrival rate is $\lambda_i = g \prod_{j=1}^{i-1}p_j$. For the first stage, the product is one: every proposal arrives there. The ratio $\rho_i = \lambda_i/\mu_i$ compares incoming work with available service capacity. Keeping arrivals below capacity at every stage gives the load bound in @eq-queue-stability-bound [@Kleinrock1975QueueingSystems]:
-
-$$
-g < \min_i \left( \frac{\mu_i}{\prod_{j=1}^{i-1} p_j} \right).
-$${#eq-queue-stability-bound}
-
-The minimum identifies the stage that first runs out of capacity as proposals increase. This is a steady-flow model, not a prediction of turnaround time. Bursty arrivals and variable runtimes can cause waiting even below the bound, and a finite study may finish before a steady regime develops. Shared license pools and retries require additional accounting.
-
-Consider the illustrative path in @tbl-candidate-check-capacity. At 32 proposals per day, a 1-minute structural screen advances one quarter of its inputs. Four simulation slots each take 8 hours per candidate and advance one tenth of their inputs. A single implementation slot takes 24 hours per candidate and advances half of its inputs. These are constructed parameters for the calculation, not measured runtimes for the Lighthouse datapath.
-
-```{python}
-#| echo: false
-candidate_rate = 32.0
-structural_capacity = 24.0 * 60.0
-simulation_capacity = 4.0 * (24.0 / 8.0)
-implementation_capacity = 1.0
-structural_advance = 0.25
-simulation_advance = 0.10
-implementation_advance = 0.50
-
-structural_load = candidate_rate / structural_capacity
-simulation_arrival = candidate_rate * structural_advance
-simulation_load = simulation_arrival / simulation_capacity
-implementation_arrival = simulation_arrival * simulation_advance
-implementation_load = implementation_arrival / implementation_capacity
-finalist_rate = (
-    candidate_rate
-    * structural_advance
-    * simulation_advance
-    * implementation_advance
-)
-```
-
-| **Tool stage before review** | **Parallel slots $c_i$** | **Mean time $t_i$** | **Capacity $\mu_i$** | **Conditional advance $p_i$** |
-| --- | ---: | ---: | ---: | ---: |
-| Structural and legality screen | 1 | 1 minute | 1,440/day | 0.25 |
-| Cycle-level simulation | 4 | 8 hours | 12/day | 0.10 |
-| Implementation screen | 1 | 24 hours | 1/day | 0.50 |
-: **An illustrative pre-review tool-path capacity model exposes the active tool limit.** Values provide an inspectable load calculation rather than measurements of a specific commercial toolchain. {#tbl-candidate-check-capacity tbl-colwidths="[34,15,15,18,18]"}
-
-We can now follow the workload through the table. Simulation receives $\lambda_2 = 32 \times 0.25 = 8\ \text{candidates/day}$. Its four slots provide $\mu_2 = 4 \times (24/8) = 12\ \text{candidates/day}$, giving $\rho_2 = 8/12 = 0.67$. Implementation receives $\lambda_3 = 8 \times 0.10 = 0.8\ \text{candidates/day}$ against a capacity of $1.0\ \text{candidate/day}$, giving $\rho_3 = 0.80$. The structural screen uses only 2.2% of its capacity ($32/1{,}440$). Implementation is closest to saturation and therefore limits further increases in the proposal rate.
-
-Expected finalist throughput across an $M$-stage pipeline ($M=3$) is:
-
-$$
-q = g \prod_{i=1}^M p_i.
-$${#eq-finalist-throughput}
-
-Under these parameters, @eq-finalist-throughput yields 0.40 finalists per day. The final pass rate $p_3$ affects this output rate, but not the work entering the implementation stage: candidates consume that stage's service before they pass or fail. A finalist has cleared the modeled checks; choosing a design still requires comparison with the baseline and any further checks needed for the intended use.
-
-Increasing proposals with the same pass rates raises each stage's load (@fig-candidate-check-capacity). At $g_{\text{max}} = 40\ \text{proposals/day}$, implementation reaches $\rho_3 = 1$; operation with spare capacity requires a rate below that boundary. Above it, sustained arrivals exceed service capacity. An unlimited queue would grow without bound, while a bounded execution system must delay, block, or reject submissions.
-
-![**Downstream capacity limits the sustainable proposal rate.** Stage utilization $\rho_i = \lambda_i / \mu_i$ across the three stages in @tbl-candidate-check-capacity as proposal rate $g$ increases. Physical implementation ($\mu_3 = 1\ \text{candidate/day}$) reaches full utilization at $g_{\text{max}} = 40\ \text{proposals/day}$. The illustrated operating point of 32 proposals/day leaves this stage at 80% utilization. Sustained arrivals above the boundary exceed capacity; an unlimited queue would grow, while a bounded system must control submissions. Values are illustrative.](images/fig-candidate-check-capacity){#fig-candidate-check-capacity width="100%" fig-alt="Plot of candidate proposal rate g on the x-axis versus stage utilization rho_i on the y-axis across three verification stages. Structural screen (blue line) remains near zero, simulation (dashed orange line) climbs moderately, and physical implementation (solid red line) climbs rapidly, crossing the 100% queue stability threshold at g_max = 40 proposals per day. A callout box marks the selected operating point at g = 32 proposals per day and 80% utilization, while a red shaded region above g = 40 highlights the unstable queue backlog area."}
-
-The bound applies to conventional optimizers and learned generators alike. If several agents produce candidates for the same tools, their combined arrival rate counts against the available capacity. Better early pass rates also require recalculating the bound: a larger fraction of the same proposal stream now reaches the expensive stages.
-
-The execution harness can regulate submissions by limiting batch sizes or the number of outstanding evaluations. Token-bucket or leaky-bucket admission control provides other ways to enforce a rate limit. These controls act on candidate requests; a language model's token generation rate alone does not specify its demand for tool evaluations. Increasing filtering can reduce demand too, but only if the revised screen retains the candidates needed for the study's decision.
-
-For method selection, this calculation identifies where additional capability could help. Faster proposals are useful when the evaluation path can absorb them. When it cannot, the study may need fewer proposals, more evaluation capacity, or a reliable cheaper screen. The last option raises a separate question: how much expensive work can screening actually save?
-
-### Screening Cost and Validated Coverage
-
-A cheap screen can reduce the work sent to an expensive evaluator, but running quickly is only part of its value. It must also resolve enough cases reliably. For the Lighthouse datapath, an early area estimate might reject an implementation that clearly exceeds the area limit. A candidate near the limit would still need a reference evaluation. The useful saving depends on how often the screen can make that decision within the study's allowed error, and on what it costs to check that the screening rule is reliable.
-
-Selective classification studies the trade-off between the fraction of cases a model answers and its error on those answers; it permits the model to abstain on the remaining cases [@ElYanivWiener2010SelectiveClassification]. For architectural screening, *validated coverage* $f$ is the fraction of the target comparison stream that a qualified screening rule settles without the reference evaluation, under declared error limits. It is not simply the fraction of candidates rejected. A rule that rejects many useful designs may save tool time while defeating the purpose of the search.
-
-To calculate the possible saving, count *service work*: the evaluation effort spent processing comparisons, excluding time waiting in queues. Let $c_{\mathrm{hi}}$ be the reference cost per comparison and $c_{\mathrm{cheap}}$ the cost of a cheap check, measured in the same units. This simplified model assigns a common reference cost to cases that are screened out and cases that proceed. If their costs differ systematically, the calculation must instead weight the work saved in each group.
-
-Suppose a fraction $a$ of all comparisons receives a cheap check and a fraction $f \le a$ is settled there. The fraction $a-f$ pays for both checks, while the fraction $1-a$ goes directly to the reference path. Thus $1-f$ still incurs reference cost. Screening adds $a c_{\mathrm{cheap}}$ per original comparison, plus routing, qualification, auditing, and rework costs. Let $\epsilon \ge 0$ denote that additional overhead per comparison, normalized by $c_{\mathrm{hi}}$. Dividing the original reference cost by the resulting cost gives:
-
-$$
-S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
-$${#eq-screening-efficiency-bound}
-
-For fixed coverage and costs, @eq-screening-efficiency-bound is largest when every cheap check settles its case ($a=f$). This is an ideal routing bound: in practice, the system may not know which cases will be settled until it runs the screen. Universal screening uses $a=1$ and pays the cheap-check cost on every comparison, including those that subsequently need the reference path.
-
-Even if screening and its overhead become free, the remaining fraction $1-f$ still pays full reference cost. The speedup therefore approaches $1/(1-f)$, following the same unaffected-work argument as Amdahl's law [@Amdahl1967ValiditySingleProcessor]. For fixed coverage below one, reducing screening cost cannot exceed this ceiling. The screen can also make the process more expensive if its cost and overhead exceed the reference work it avoids.
-
-The earlier capacity example illustrates the distinction between rejection rate and validated coverage. Its structural screen forwards a quarter of its arrivals (@tbl-candidate-check-capacity). If the rejected fraction can legitimately bypass simulation under the required checks, it provides coverage of $0.75$ for that screening decision. Under the common-cost assumption, a free screen would then cap the reduction in simulation service work at $1/(1-0.75)$. The observed pass fraction alone does not establish that the rejected candidates were safe to discard.
-
-The curves in @fig-rejection-bound-ceiling separate the effects of cost and coverage. At a given coverage, a cheaper screen produces a larger saving, and ideal routing avoids work that universal screening pays. All curves remain below the free-screen ceiling. At $f=0.6$, that ceiling is $2.5\times$; further gains require settling a larger fraction of comparisons reliably, not just executing the same screen faster.
-
-```{python}
-#| echo: false
-#| label: fig-rejection-bound-ceiling
-#| fig-cap: |
-#|   **Validated coverage sets the upper bound on screening speedup.** In the illustrative common-cost model of @eq-screening-efficiency-bound with zero overhead, evaluation service-work speedup (y-axis) is plotted against validated coverage $f$ (x-axis) across three cheap-to-reference cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \in \{0.01, 0.1, 0.3\}$). Solid curves show ideal routing ($a=f$) and dashed curves show universal screening ($a=1$). Lowering check cost pushes performance toward the free-check ceiling $1/(1-f)$ (dashed black line); at $f=0.6$, speedup is capped at $2.5\times$ regardless of screening cost. Curves are constructed for illustration, not measured workflow speedups.
-#| out-width: "100%"
-#| fig-alt: "Line plot of evaluation service-work speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-# Constructed illustrative parameters: the cost ratios and coverage fractions below are
-# author-chosen to show how the chapter's common-cost screening model behaves,
-# not measured. Overhead is set to zero for the plotted curves.
-f_grid = [0.95 * i / 399 for i in range(400)]
-ratios = [
-    {"label": "cost ratio 0.01", "r": 0.01, "color": COLORS["orange"]},
-    {"label": "cost ratio 0.1", "r": 0.1, "color": COLORS["green"]},
-    {"label": "cost ratio 0.3", "r": 0.3, "color": COLORS["red"]},
-]
-
-def s_review(cov, r, a):
-    return 1.0 / ((1.0 - cov) + a * r)
-
-fig, ax = plt.subplots(figsize=(5.25, 3.0))
-fig.subplots_adjust(left=0.12, right=0.86, top=0.82, bottom=0.16)
-
-ceiling = [1.0 / (1.0 - x) for x in f_grid]
-ax.fill_between(f_grid, ceiling, 30, color=COLORS["grid"], alpha=0.35, zorder=0)
-ax.text(0.04, 9.0, "unreachable without more validated coverage", ha="left", va="center", fontsize=6.0, color=COLORS["muted"], fontstyle="italic")
-ax.plot(f_grid, ceiling, color=COLORS["ink"], linewidth=0.8, linestyle=(0, (4, 3)), zorder=2)
-
-ax.axhline(1.0, color=COLORS["muted"], linewidth=0.7, zorder=1)
-ax.text(0.93, 1.04, "no speedup", ha="right", va="bottom", fontsize=6.0, color=COLORS["muted"])
-
-for c in ratios:
-    ax.plot(f_grid, [s_review(x, c["r"], x) for x in f_grid], color=c["color"], linewidth=1.9, zorder=3, label=c["label"])
-    ax.plot(f_grid, [s_review(x, c["r"], 1.0) for x in f_grid], color=c["color"], linewidth=1.2, linestyle=(0, (2, 2)), zorder=3)
-
-ax.scatter([0.6], [2.5], marker="o", s=22, facecolor=COLORS["note_fill"], edgecolor=COLORS["ink"], linewidth=1.3, zorder=4)
-ax.text(0.58, 2.95, "f = 0.6 caps the speedup at 2.5x", ha="right", va="bottom", fontsize=6.0, color=COLORS["ink"])
-
-ax.set_yscale("log")
-ax.set_xlim(0, 0.95)
-ax.set_ylim(0.7, 30)
-ax.set_xlabel("validated coverage f  (share of cases settled without escalation)", fontsize=7)
-ax.set_ylabel("evaluation service-work speedup", fontsize=7)
-ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
-ax.set_yticks([1, 2, 5, 10, 20])
-ax.set_yticklabels(["1x", "2x", "5x", "10x", "20x"], fontsize=6.4)
-ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.4)
-ax.grid(axis="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-
-legend = ax.legend(
-    loc="lower left",
-    bbox_to_anchor=(0.0, 1.02),
-    fontsize=6.0,
-    frameon=True,
-    facecolor="white",
-    edgecolor="white",
-    framealpha=0.92,
-    handlelength=1.6,
-    borderpad=0.15,
-    labelspacing=0.3,
-    ncol=1,
-)
-for text in legend.get_texts():
-    text.set_color(COLORS["ink"])
-
-plt.show()
-plt.close(fig)
-```
-
-To use the bound in a study, estimate coverage and screening error on a representative sample of the whole target stream. Checking only the cases the screen chose to settle leaves performance on the omitted cases unknown and can introduce selection bias [@Heckman1979SampleSelectionBias]. Report the sampling procedure, uncertainty in the coverage estimate, and errors that matter to the decision, especially rejection of useful candidates. Shared assumptions between the screen and reference can hide errors from both; agreement establishes only what that reference path can check.
-
-The capacity and screening models answer different questions. The first identifies how much candidate traffic each stage can serve. The second estimates the evaluation work a screen can avoid. A reduction in service work does not directly establish a reduction in elapsed time: queueing, parallel resources, and any costs omitted from the accounting still matter. Coverage must also be checked when the candidate population or hardware and software conditions change (@sec-loop-patterns-across-stack). For a learned screen, the next issue is what its predictor can estimate and under which conditions those estimates are useful.
+These criteria become useful when connected to the mechanisms themselves. Prediction provides a starting point: what information can a model use to estimate a design's consequences before the reference tools run?
 
 ## Predictive Surrogates and Reference Paths {#sec-prediction-estimating-behavior-before-full-evaluation}
 
@@ -416,7 +232,7 @@ $$
 \mathbb{P}\left(Y_{n+1} \in \hat{C}(X_{n+1})\right) \ge 1 - \alpha.
 $$
 
-Here, coverage means the probability that an interval contains the reference value. It differs from the screening coverage $f$ in @eq-screening-efficiency-bound, which measures the fraction of comparisons settled without a reference evaluation. A wide prediction interval can have high coverage while settling few design decisions.
+Here, coverage means the probability that an interval contains the reference value. A wide prediction interval can have high coverage while settling few design decisions. The evaluation-cost model in @sec-method-evaluation-costs uses a different quantity, screening coverage $f$, for the fraction of comparisons settled without a reference evaluation (@eq-screening-efficiency-bound).
 
 The conformal guarantee is marginal: it applies to a new exchangeable sample, not separately to every design region or to whichever candidate an optimizer selects. Adaptive search can therefore invalidate the guarantee even before an obvious workload or process change. Once candidates no longer match the calibration conditions, the band width need not announce the failure. Tests for unfamiliar inputs can help identify changes, but cannot certify that the assumptions still hold.[^fn-ood-c05] Interval-based screening consequently needs reference checks on the candidate stream where it is used.
 
@@ -546,7 +362,7 @@ Project information can enter a learned generator in different ways. Retrieval s
 | --- | --- | --- | --- |
 | Structured configuration / program | Template, grammar generator, solver, program synthesis. | Encoded syntax, types, and constraints. | Intended semantics and runtime behavior. |
 | Software, script, or compiler code | Autoregressive model, LLM, constrained decoding. | Supplied context and schema restrictions. | Execution semantics and target behavior. |
-| RTL | Autoregressive model / LLM evaluated with hardware benchmarks [@VerilogEval; @RTLLM]. | Supplied design context and grammar constraints. | Elaboration, clock-domain crossing (CDC) linting, reset sync, simulation, SVA/BMC formal checks, synthesis in Yosys, STA in OpenSTA, power analysis under UPF intent, and physical signoff for implementation claims. |
+| RTL | Autoregressive model / LLM evaluated with hardware benchmarks [@VerilogEval; @RTLLM]. | Supplied design context and grammar constraints. | Elaboration, clock-domain crossing (CDC) linting, reset sync, simulation, SystemVerilog Assertions (SVA) checked with bounded model checking (BMC), synthesis in Yosys, static timing analysis (STA) in OpenSTA, power analysis under Unified Power Format (UPF) intent, and physical signoff for implementation claims. |
 | Project-specific text or code | Retrieval-supported generation. | Retrieved documents and examples. | Source consistency and artifact-specific checks. |
 | Netlist / connectivity object | Graph-generative / conditioned model. | Represented nodes, edges, graph constraints. | Electrical, functional, timing, and physical checks. |
 | Placement or floorplan | Diffusion or spatial generator [@LeeEtAl2025DiffusionPlacement]. | Spatial distributions and boundary geometry. | Legalization, routing, timing, power, and design rule checking (DRC). |
@@ -780,7 +596,7 @@ Bayesian optimization uses the surrogate and acquisition rule described in @sec-
 
 Mathematical programming and constraint solvers use explicit objectives and constraints to search an encoded problem. They can exploit known structure without first learning a search policy, although the encoding and solution process have their own costs. Equality saturation provides a related way to retain alternatives during rewriting.[^fn-egraph-c05] A greedy sequence of transformations can discard a form that would have enabled a better later transformation. An e-graph instead retains equivalent forms reached through supplied rewrite rules, until those rules add no new information or the search reaches its budget. An extraction pass chooses a low-cost represented netlist or schedule using a cost model and an algorithm such as integer linear programming or dynamic programming; the `egg` library provides one implementation. The rewrite rules must preserve the intended semantics, and graph growth and extraction still consume resources.
 
-Screening experiments provide another way to reduce a search before committing to many evaluations. They estimate which factors have the largest effects [@PlackettBurman1946Design]. Their interpretation can rely on interactions being small enough not to obscure those effects. In the datapath example, pipeline depth and resource sharing may interact, so screening each factor without accounting for that dependence could discard a useful combination.
+Factor-screening experiments provide another way to reduce a search before committing to many evaluations. They estimate which factors have the largest effects [@PlackettBurman1946Design]. Unlike candidate screening, which decides which designs proceed to evaluation, factor screening helps identify which design choices deserve attention. Their interpretation can rely on interactions being small enough not to obscure those effects. In the datapath example, pipeline depth and resource sharing may interact, so screening each factor without accounting for that dependence could discard a useful combination.
 
 Reinforcement learning learns a policy for choosing actions from represented state using rewards from interaction. This can suit sequential problems in which earlier actions change later options, although sequential structure alone does not rule out conventional search or planning. Macro placement provides an example: placing a block changes the available space and can affect later routing choices. A policy can select placements from the partial floorplan, with feedback assessing the resulting arrangement (@fig-alphachip-placement) [@MirhoseiniEtAl2021GraphPlacement].
 
@@ -945,7 +761,193 @@ The toolchain's existing optimizer is another important comparator. Synthesis tr
 
 Choose stopping conditions before running the search. A study may stop when a candidate meets its declared improvement and feasibility criteria, when its evaluation or tool-time budget is exhausted, or when the expected value of further improvement no longer warrants another evaluation block. Charge failed and incomplete runs against the resources they consume. Meeting an acceptance criterion establishes a sufficient result for that study, not necessarily a global optimum; failing to find a feasible candidate within budget does not prove that none exists.
 
-For the compact cache comparison, the limit remains four cycle-level runs, with earlier stopping only if the declared comparison and feasibility checks resolve the capacity decision. For the datapath, acceptance might require confirmed energy improvement while meeting throughput, area, and timing constraints. Each rule connects the search to a decision rather than to an indefinite pursuit of a better score. A broader design system can then combine that search mechanism with generation and prediction where those methods perform additional work.
+For a compact comparison of supplied cache capacities, a fixed run limit can bound the work, with earlier stopping only if the declared comparison and feasibility checks resolve the capacity decision. For the datapath, acceptance might require confirmed energy improvement while meeting throughput, area, and timing constraints. Each rule connects the search to a decision rather than to an indefinite pursuit of a better score. Putting such a budget into practice also requires knowing how much evaluation the available tools can provide.
+
+## Evaluation Capacity and Screening Cost {#sec-method-evaluation-costs}
+
+A method must fit the evaluation resources available to the study. Two calculations help assess that fit: how quickly the tools can process candidates, and how much reference evaluation a cheaper screen can reliably avoid. These limits apply whether candidates come from a conventional search, a learned generator, or a combination.
+
+```{=latex}
+\FloatBarrier
+```
+
+### Quantifying Evaluation Capacity {#sec-sample-efficiency-under-expensive-feedback}
+
+Producing a candidate creates work for the tools that evaluate it. A generator may draft a hardware implementation quickly, while simulation and physical implementation take much longer. An optimizer can create the same mismatch by requesting evaluations faster than the tools finish them (@sec-evaluation-capacity-bounds-search). To choose a useful proposal rate, we need to count both the evaluations each tool can complete and the fraction of candidates that reach it.
+
+Evaluation paths often begin with cheaper checks that eliminate unsuitable candidates before more expensive work. Analytical rooflines test encoded bounds; Spike checks functional execution; gem5 models cycle-level contention. Implementation questions require other checks, such as STA in OpenSTA, power analysis under UPF intent, and SVA checked with BMC.[^fn-eda-signoff-c05] These tools establish different properties. The path must be chosen for the design question; a faster check cannot replace a slower one that establishes a different property.
+
+The number of possible candidates can greatly exceed that path's capacity. Accelerator mapping and tensor-program search spaces studied with MAESTRO, AutoTVM, and Timeloop can span $10^6$ to $>10^{18}$ configurations [@KwonEtAl2019MAESTRO; @ChenEtAl2018AutoTVM; @ParasharEtAl2019Timeloop]. Such spaces motivate pruning and selective evaluation. Even a small candidate set, however, can be costly if each evaluation is slow; candidate count and evaluation cost must be considered together.
+
+Improving candidate quality can also increase the load. At an unchanged proposal rate, a generator whose outputs pass early checks more often sends more work to downstream tools. If those tools have spare capacity, they can evaluate more promising candidates. If they are already near capacity, the same improvement can produce a growing backlog. The relevant question is how the changed pass rates affect arrivals at each stage.
+
+Model the path as a sequence of tool stages with a steady proposal rate $g$. For this calculation, assume fixed mean runtimes and conditional pass rates, separate capacity at each stage, and no retries or returning candidates.[^fn-feedback-c05] Stage $i$ has $c_i$ parallel slots and mean runtime $t_i$, giving a service capacity $\mu_i = c_i/t_i$. Its conditional pass rate $p_i$ is the fraction of its inputs that advance to the next stage.
+
+Only candidates that pass all preceding stages reach stage $i$, so its offered arrival rate is $\lambda_i = g \prod_{j=1}^{i-1}p_j$. For the first stage, the product is one: every proposal arrives there. The ratio $\rho_i = \lambda_i/\mu_i$ compares incoming work with available service capacity. Keeping arrivals below capacity at every stage gives the load bound in @eq-queue-stability-bound [@Kleinrock1975QueueingSystems]:
+
+$$
+g < \min_i \left( \frac{\mu_i}{\prod_{j=1}^{i-1} p_j} \right).
+$${#eq-queue-stability-bound}
+
+The minimum identifies the stage that first runs out of capacity as proposals increase. This is a steady-flow model, not a prediction of turnaround time. Bursty arrivals and variable runtimes can cause waiting even below the bound, and a finite study may finish before a steady regime develops. Shared license pools and retries require additional accounting.
+
+Consider the illustrative path in @tbl-candidate-check-capacity. At 32 proposals per day, a 1-minute structural screen advances one quarter of its inputs. Four simulation slots each take 8 hours per candidate and advance one tenth of their inputs. A single implementation slot takes 24 hours per candidate and advances half of its inputs. These are constructed parameters for the calculation, not measured runtimes for the Lighthouse datapath.
+
+```{python}
+#| echo: false
+candidate_rate = 32.0
+structural_capacity = 24.0 * 60.0
+simulation_capacity = 4.0 * (24.0 / 8.0)
+implementation_capacity = 1.0
+structural_advance = 0.25
+simulation_advance = 0.10
+implementation_advance = 0.50
+
+structural_load = candidate_rate / structural_capacity
+simulation_arrival = candidate_rate * structural_advance
+simulation_load = simulation_arrival / simulation_capacity
+implementation_arrival = simulation_arrival * simulation_advance
+implementation_load = implementation_arrival / implementation_capacity
+finalist_rate = (
+    candidate_rate
+    * structural_advance
+    * simulation_advance
+    * implementation_advance
+)
+```
+
+| **Tool stage before review** | **Parallel slots $c_i$** | **Mean time $t_i$** | **Capacity $\mu_i$** | **Conditional advance $p_i$** |
+| --- | ---: | ---: | ---: | ---: |
+| Structural and legality screen | 1 | 1 minute | 1,440/day | 0.25 |
+| Cycle-level simulation | 4 | 8 hours | 12/day | 0.10 |
+| Implementation screen | 1 | 24 hours | 1/day | 0.50 |
+: **An illustrative pre-review tool-path capacity model exposes the active tool limit.** Values provide an inspectable load calculation rather than measurements of a specific commercial toolchain. {#tbl-candidate-check-capacity tbl-colwidths="[34,15,15,18,18]"}
+
+We can now follow the workload through the table. Simulation receives $\lambda_2 = 32 \times 0.25 = 8\ \text{candidates/day}$. Its four slots provide $\mu_2 = 4 \times (24/8) = 12\ \text{candidates/day}$, giving $\rho_2 = 8/12 = 0.67$. Implementation receives $\lambda_3 = 8 \times 0.10 = 0.8\ \text{candidates/day}$ against a capacity of $1.0\ \text{candidate/day}$, giving $\rho_3 = 0.80$. The structural screen uses only 2.2% of its capacity ($32/1{,}440$). Implementation is closest to saturation and therefore limits further increases in the proposal rate.
+
+Expected finalist throughput across an $M$-stage pipeline ($M=3$) is:
+
+$$
+q = g \prod_{i=1}^M p_i.
+$${#eq-finalist-throughput}
+
+Under these parameters, @eq-finalist-throughput yields 0.40 finalists per day. The final pass rate $p_3$ affects this output rate, but not the work entering the implementation stage: candidates consume that stage's service before they pass or fail. A finalist has cleared the modeled checks; choosing a design still requires comparison with the baseline and any further checks needed for the intended use.
+
+Increasing proposals with the same pass rates raises each stage's load (@fig-candidate-check-capacity). At $g_{\text{max}} = 40\ \text{proposals/day}$, implementation reaches $\rho_3 = 1$; operation with spare capacity requires a rate below that boundary. Above it, sustained arrivals exceed service capacity. An unlimited queue would grow without bound, while a bounded execution system must delay, block, or reject submissions.
+
+![**Downstream capacity limits the sustainable proposal rate.** Stage utilization $\rho_i = \lambda_i / \mu_i$ across the three stages in @tbl-candidate-check-capacity as proposal rate $g$ increases. Physical implementation ($\mu_3 = 1\ \text{candidate/day}$) reaches full utilization at $g_{\text{max}} = 40\ \text{proposals/day}$. The illustrated operating point of 32 proposals/day leaves this stage at 80% utilization. Sustained arrivals above the boundary exceed capacity; an unlimited queue would grow, while a bounded system must control submissions. Values are illustrative.](images/fig-candidate-check-capacity){#fig-candidate-check-capacity width="100%" fig-alt="Plot of candidate proposal rate g on the x-axis versus stage utilization rho_i on the y-axis across three verification stages. Structural screen (blue line) remains near zero, simulation (dashed orange line) climbs moderately, and physical implementation (solid red line) climbs rapidly, crossing the 100% queue stability threshold at g_max = 40 proposals per day. A callout box marks the selected operating point at g = 32 proposals per day and 80% utilization, while a red shaded region above g = 40 highlights the unstable queue backlog area."}
+
+The bound applies to conventional optimizers and learned generators alike. If several agents produce candidates for the same tools, their combined arrival rate counts against the available capacity. Better early pass rates also require recalculating the bound: a larger fraction of the same proposal stream now reaches the expensive stages.
+
+The execution harness can regulate submissions by limiting batch sizes or the number of outstanding evaluations. Token-bucket or leaky-bucket admission control provides other ways to enforce a rate limit. These controls act on candidate requests; a language model's token generation rate alone does not specify its demand for tool evaluations. Increasing filtering can reduce demand too, but only if the revised screen retains the candidates needed for the study's decision.
+
+For method selection, this calculation identifies where additional capability could help. Faster proposals are useful when the evaluation path can absorb them. When it cannot, the study may need fewer proposals, more evaluation capacity, or a reliable cheaper screen. The last option raises a separate question: how much expensive work can screening actually save?
+
+### Screening Cost and Validated Coverage
+
+A cheap screen can reduce the work sent to an expensive evaluator, but running quickly is only part of its value. It must also resolve enough cases reliably. For the Lighthouse datapath, an early area estimate might reject an implementation that clearly exceeds the area limit. A candidate near the limit would still need a reference evaluation. The useful saving depends on how often the screen can make that decision within the study's allowed error, and on what it costs to check that the screening rule is reliable.
+
+Selective classification studies the trade-off between the fraction of cases a model answers and its error on those answers; it permits the model to abstain on the remaining cases [@ElYanivWiener2010SelectiveClassification]. For architectural screening, *validated coverage* $f$ is the fraction of the target comparison stream that a qualified screening rule settles without the reference evaluation, under declared error limits. It is not simply the fraction of candidates rejected. A rule that rejects many useful designs may save tool time while defeating the purpose of the search.
+
+To calculate the possible saving, count *service work*: the evaluation effort spent processing comparisons, excluding time waiting in queues. Let $c_{\mathrm{hi}}$ be the reference cost per comparison and $c_{\mathrm{cheap}}$ the cost of a cheap check, measured in the same units. This simplified model assigns a common reference cost to cases that are screened out and cases that proceed. If their costs differ systematically, the calculation must instead weight the work saved in each group.
+
+Suppose a fraction $a$ of all comparisons receives a cheap check and a fraction $f \le a$ is settled there. The fraction $a-f$ pays for both checks, while the fraction $1-a$ goes directly to the reference path. Thus $1-f$ still incurs reference cost. Screening adds $a c_{\mathrm{cheap}}$ per original comparison, plus routing, qualification, auditing, and rework costs. Let $\epsilon \ge 0$ denote that additional overhead per comparison, normalized by $c_{\mathrm{hi}}$. Dividing the original reference cost by the resulting cost gives:
+
+$$
+S_{\mathrm{screen}} = \frac{1}{(1-f) + a \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon} \le \frac{1}{(1-f) + f \cdot (c_{\mathrm{cheap}}/c_{\mathrm{hi}}) + \epsilon}.
+$${#eq-screening-efficiency-bound}
+
+For fixed coverage and costs, @eq-screening-efficiency-bound is largest when every cheap check settles its case ($a=f$). This is an ideal routing bound: in practice, the system may not know which cases will be settled until it runs the screen. Universal screening uses $a=1$ and pays the cheap-check cost on every comparison, including those that subsequently need the reference path.
+
+Even if screening and its overhead become free, the remaining fraction $1-f$ still pays full reference cost. The speedup therefore approaches $1/(1-f)$, following the same unaffected-work argument as Amdahl's law [@Amdahl1967ValiditySingleProcessor]. For fixed coverage below one, reducing screening cost cannot exceed this ceiling. The screen can also make the process more expensive if its cost and overhead exceed the reference work it avoids.
+
+The earlier capacity example illustrates the distinction between rejection rate and validated coverage. Its structural screen forwards a quarter of its arrivals (@tbl-candidate-check-capacity). If the rejected fraction can legitimately bypass simulation under the required checks, it provides coverage of $0.75$ for that screening decision. Under the common-cost assumption, a free screen would then cap the reduction in simulation service work at $1/(1-0.75)$. The observed pass fraction alone does not establish that the rejected candidates were safe to discard.
+
+The curves in @fig-rejection-bound-ceiling separate the effects of cost and coverage. At a given coverage, a cheaper screen produces a larger saving, and ideal routing avoids work that universal screening pays. All curves remain below the free-screen ceiling. At $f=0.6$, that ceiling is $2.5\times$; further gains require settling a larger fraction of comparisons reliably, not just executing the same screen faster.
+
+```{python}
+#| echo: false
+#| label: fig-rejection-bound-ceiling
+#| fig-cap: |
+#|   **Validated coverage sets the upper bound on screening speedup.** In the illustrative common-cost model of @eq-screening-efficiency-bound with zero overhead, evaluation service-work speedup (y-axis) is plotted against validated coverage $f$ (x-axis) across three cheap-to-reference cost ratios ($c_{\mathrm{cheap}}/c_{\mathrm{hi}} \in \{0.01, 0.1, 0.3\}$). Solid curves show ideal routing ($a=f$) and dashed curves show universal screening ($a=1$). Lowering check cost pushes performance toward the free-check ceiling $1/(1-f)$ (dashed black line); at $f=0.6$, speedup is capped at $2.5\times$ regardless of screening cost. Curves are constructed for illustration, not measured workflow speedups.
+#| out-width: "100%"
+#| fig-alt: "Line plot of evaluation service-work speedup against validated coverage f on the x-axis. A dashed ceiling curve traces one over one minus f, and three colored cost-ratio curves for 0.01, 0.1, and 0.3 sit below it; an annotated point marks f equals 0.6 capping the speedup at about 2.5x."
+
+import matplotlib.pyplot as plt
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+# Constructed illustrative parameters: the cost ratios and coverage fractions below are
+# author-chosen to show how the chapter's common-cost screening model behaves,
+# not measured. Overhead is set to zero for the plotted curves.
+f_grid = [0.95 * i / 399 for i in range(400)]
+ratios = [
+    {"label": "cost ratio 0.01", "r": 0.01, "color": COLORS["orange"]},
+    {"label": "cost ratio 0.1", "r": 0.1, "color": COLORS["green"]},
+    {"label": "cost ratio 0.3", "r": 0.3, "color": COLORS["red"]},
+]
+
+def s_review(cov, r, a):
+    return 1.0 / ((1.0 - cov) + a * r)
+
+fig, ax = plt.subplots(figsize=(5.25, 3.0))
+fig.subplots_adjust(left=0.12, right=0.86, top=0.82, bottom=0.16)
+
+ceiling = [1.0 / (1.0 - x) for x in f_grid]
+ax.fill_between(f_grid, ceiling, 30, color=COLORS["grid"], alpha=0.35, zorder=0)
+ax.text(0.04, 9.0, "unreachable without more validated coverage", ha="left", va="center", fontsize=6.0, color=COLORS["muted"], fontstyle="italic")
+ax.plot(f_grid, ceiling, color=COLORS["ink"], linewidth=0.8, linestyle=(0, (4, 3)), zorder=2)
+
+ax.axhline(1.0, color=COLORS["muted"], linewidth=0.7, zorder=1)
+ax.text(0.93, 1.04, "no speedup", ha="right", va="bottom", fontsize=6.0, color=COLORS["muted"])
+
+for c in ratios:
+    ax.plot(f_grid, [s_review(x, c["r"], x) for x in f_grid], color=c["color"], linewidth=1.9, zorder=3, label=c["label"])
+    ax.plot(f_grid, [s_review(x, c["r"], 1.0) for x in f_grid], color=c["color"], linewidth=1.2, linestyle=(0, (2, 2)), zorder=3)
+
+ax.scatter([0.6], [2.5], marker="o", s=22, facecolor=COLORS["note_fill"], edgecolor=COLORS["ink"], linewidth=1.3, zorder=4)
+ax.text(0.58, 2.95, "f = 0.6 caps the speedup at 2.5x", ha="right", va="bottom", fontsize=6.0, color=COLORS["ink"])
+
+ax.set_yscale("log")
+ax.set_xlim(0, 0.95)
+ax.set_ylim(0.7, 30)
+ax.set_xlabel("validated coverage f  (share of cases settled without escalation)", fontsize=7)
+ax.set_ylabel("evaluation service-work speedup", fontsize=7)
+ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
+ax.set_yticks([1, 2, 5, 10, 20])
+ax.set_yticklabels(["1x", "2x", "5x", "10x", "20x"], fontsize=6.4)
+ax.tick_params(axis="both", length=2.5, width=0.6, pad=2, labelsize=6.4)
+ax.grid(axis="both", color=COLORS["grid"], linewidth=0.5, zorder=0)
+
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+legend = ax.legend(
+    loc="lower left",
+    bbox_to_anchor=(0.0, 1.02),
+    fontsize=6.0,
+    frameon=True,
+    facecolor="white",
+    edgecolor="white",
+    framealpha=0.92,
+    handlelength=1.6,
+    borderpad=0.15,
+    labelspacing=0.3,
+    ncol=1,
+)
+for text in legend.get_texts():
+    text.set_color(COLORS["ink"])
+
+plt.show()
+plt.close(fig)
+```
+
+To use the bound in a study, estimate coverage and screening error on a representative sample of the whole target stream. Checking only the cases the screen chose to settle leaves performance on the omitted cases unknown and can introduce selection bias [@Heckman1979SampleSelectionBias]. Report the sampling procedure, uncertainty in the coverage estimate, and errors that matter to the decision, especially rejection of useful candidates. Shared assumptions between the screen and reference can hide errors from both; agreement establishes only what that reference path can check.
+
+The capacity and screening models answer different questions. The first identifies how much candidate traffic each stage can serve. The second estimates the evaluation work a screen can avoid. A reduction in service work does not directly establish a reduction in elapsed time: queueing, parallel resources, and any costs omitted from the accounting still matter. Coverage must also be checked when the candidate population or hardware and software conditions change (@sec-loop-patterns-across-stack). Together, these calculations help decide whether a proposed combination of methods can save work or improve results within the available resources.
 
 ## Composing Prediction, Generation, and Optimization {#sec-one-model-specialists-hybrid}
 
