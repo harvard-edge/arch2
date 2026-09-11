@@ -238,7 +238,7 @@ An attempt record must survive the processes that perform its work. If a schedul
 
 Now suppose the harness accepts a submission, but its reply never reaches the caller. Sending the request again must not launch another copy of the work. An *idempotent* submission has the same effect when repeated: the caller supplies the same `submission_token`, and the harness returns the existing attempt rather than creating another [@Featonby2021IdempotentAPIs]. Reusing that token with changed request contents should be rejected. A deliberate retry of failed work uses a new token and creates a linked attempt; it is different from retransmitting a submission whose outcome is unknown.
 
-Providing this behavior requires more than attaching a token. The harness must retain the association among the token, request, attempt, and backend jobs. If it crashes during dispatch, recovery must determine whether work already exists before launching it again. When that cannot yet be established, the submission remains unresolved rather than being treated as evidence that no job started.
+Providing this behavior requires more than attaching a token. The harness records the accepted attempt before dispatch and retains its association with the token, request, and backend jobs. If it crashes during dispatch, recovery must determine whether work already exists before launching it again. Until that state is established, `poll` returns `RECONCILING`: the attempt is known, but its execution state is uncertain. The caller can continue polling; submitting the same work under a new token could create a duplicate. Recovery must resolve the uncertainty rather than treat it as evidence that no job started.
 
 The interface in @lst-harness-interface separates these operations. `submit` returns an attempt identifier and admission status; `poll` reports progress; `collect` retrieves the execution record once the attempt reaches a terminal state, including any partial outputs and failures. When several jobs belong to an attempt, the harness must define how their states determine the attempt's status. One completed job cannot by itself establish that the whole attempt is complete. `cancel` requests termination, which must be confirmed for all attached work.
 
@@ -310,13 +310,15 @@ ax.text(1, 2.65, "Submit request", ha="center", va="bottom", fontsize=6, color=C
 plt.show()
 ```
 
-```{.yaml #lst-harness-interface lst-cap="**Harness interface shape.** Three normal-path calls submit, poll, and collect an attempt. A fourth operation requests cancellation and reports whether termination is confirmed. Refused requests also retain an identifier and a collectable record."}
+```{.yaml #lst-harness-interface lst-cap="**Harness interface shape.** Three normal-path calls submit, poll, and collect an attempt. Polling distinguishes unresolved execution state from known progress or completion. A fourth operation requests cancellation and reports whether termination is confirmed. Refused requests also retain an identifier and a collectable record."}
 submit:
   takes: typed request, submission_token
   returns: attempt_id, admission status (ADMITTED | REFUSED)
 poll:
   takes: attempt_id
-  returns: REFUSED | QUEUED | RUNNING | EVICTED | COMPLETED | FAILED | CANCELED
+  returns: >-
+    REFUSED | QUEUED | RUNNING | EVICTED | RECONCILING |
+    COMPLETED | FAILED | CANCELED
 collect:
   takes: attempt_id
   returns: execution record (artifacts, parse status, cost, lineage)
@@ -328,11 +330,11 @@ cancel:
 Idempotency prevents duplicate work, but it does not limit the number of distinct requests. The capacity analysis in @sec-methods-generation-prediction-optimization explains why a fast proposal method can overload a slower evaluation stage. The runtime responsibility is to enforce that capacity plan through admission limits, bounded queues, and backpressure, which asks the caller to slow or pause submissions. Capacity at one stage does not imply capacity at the next; available processors may still be waiting for licenses or dependent results.
 
 ::: {.callout-law title="Queueing Congestion Collapse in Tool Loops"}
-**The Classical Principle:** In a queueing model with variable arrivals or service times, mean time in the system can grow without bound as arrival rate approaches service capacity ($W \to \infty$ as $\lambda \to \mu$) [@Kleinrock1975QueueingSystems]. Here $W$ includes waiting and execution time, $\lambda$ is the request arrival rate, and $\mu$ is the service rate.
+**The Classical Principle:** A single-server queue with independent Poisson arrivals, exponentially distributed service times, and no queue-size limit illustrates the congestion problem. Its mean time in the system grows without bound as arrival rate approaches service capacity from below ($W \to \infty$ as $\lambda \to \mu$) [@Kleinrock1975QueueingSystems]. Here $W$ includes waiting and execution time, $\lambda$ is the request arrival rate, and $\mu$ is the server's service rate.
 
 **The Hardware Trap:** A generator proposes candidates faster than the available simulators and licensed tools can evaluate them. Without admission limits, the queue keeps growing. By the time a simulation finishes, upstream specifications, compiler branches, or interface assumptions may have moved. The result still describes its recorded inputs, but may no longer answer the active design question.
 
-**The Architectural Antidote:** The execution harness must limit admitted work, throttling candidate generation as downstream utilization ($\rho = \lambda / \mu$) approaches capacity. Queue limits reduce the risk that results return after their input assumptions have become stale; they cannot guarantee freshness when tool durations or upstream changes are unpredictable (@sec-law-congestion-collapse in @sec-appendix-b-laws-paradoxes).
+**The Architectural Antidote:** The execution harness must limit admitted work according to downstream capacity. The single-server model uses utilization $\rho = \lambda / \mu$; a toolchain needs limits for each stage's workers, licenses, and other shared resources. Queue limits reduce the risk that results return after their input assumptions have become stale; they cannot guarantee freshness when tool durations or upstream changes are unpredictable (@sec-law-congestion-collapse in @sec-appendix-b-laws-paradoxes).
 :::
 
 ### Fault Containment and Execution Quarantines
