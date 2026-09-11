@@ -15,9 +15,9 @@ from any of those papers is retained, and the caption tells the reader the
 rates are invented. The two statements could not both be true, so the
 attribution is removed rather than the caption.
 
-Published benchmarks do report severe early-stage attrition, and the chapter
-cites VerilogEval and RTLLM for that qualitative point. Citing them for these
-specific numbers would be a false attribution.
+VerilogEval and RTLLM report syntax and functional failures under their
+respective evaluation protocols. They do not establish physical-signoff yields
+or support the constructed rates in this figure.
 
 Dataset: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
 Output Figure:   book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.svg
@@ -156,7 +156,9 @@ def main():
     ax2.set_xticklabels(
         [f"Stage {i+1}" for i in range(5)], fontsize=9.3, color=COLORS["ink"]
     )
-    ax2.set_ylabel("Conditional Stage Pass Rate (%)", fontsize=10.9, color=COLORS["ink"])
+    ax2.set_ylabel(
+        "Conditional Stage Pass Rate (%)", fontsize=10.9, color=COLORS["ink"]
+    )
     ax2.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
     clean_spines(ax2, keep=("bottom", "left"))
 
