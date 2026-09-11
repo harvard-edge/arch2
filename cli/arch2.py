@@ -5093,6 +5093,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"application-specific integrated circuit",
         False,
     ),
+    "CAM": (
+        "content-addressable memory",
+        False,
+        "a",
+        "hardware",
+        "A specialized hardware memory array that searches its entire contents in parallel and returns the location of matching data within a single cycle.",
+        r"content\-addressable\ memory",
+        False,
+    ),
     "CPU": (
         "central processing unit",
         False,

@@ -17,6 +17,7 @@ local acronyms = {
   ["BO"] = "Bayesian optimization: A sequential strategy for optimizing expensive black-box objectives using a probabilistic surrogate model and an acquisition function to select evaluations.",
   ["BSPDN"] = "backside power delivery network: A 3D semiconductor manufacturing technology that moves the power distribution metal grid to the backside of the silicon wafer to reduce IR-drop and routing congestion.",
   ["CAD"] = "computer-aided design: Software tools used by engineers to create, modify, analyze, and optimize physical hardware and circuit designs.",
+  ["CAM"] = "content-addressable memory: A specialized hardware memory array that searches its entire contents in parallel and returns the location of matching data within a single cycle.",
   ["CDC"] = "clock-domain crossing: An interface where a signal generated in one clock domain is sampled in an asynchronous or unrelated clock domain, risking metastability.",
   ["CDFG"] = "control-data flow graph: A directed graph representation capturing both control branches and data dependencies within a computational block.",
   ["CEC"] = "combinational equivalence checking: A formal verification technique using SAT/BDD methods to prove that two combinational logic circuits produce identical Boolean outputs for all inputs.",
