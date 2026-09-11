@@ -129,30 +129,8 @@ def generate_figure(output_dir: Path) -> Path:
     ax1.tick_params(axis="both", labelsize=5.4, length=2, width=0.5)
     ax1.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
-    ax1.annotate(
-        "Arch LOC: 48.7x\n(4.3K -> 208K)",
-        xy=(7, 735),
-        xytext=(2.6, 735),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["evidence_ink"],
-        bbox=dict(
-            boxstyle="round,pad=0.25",
-            facecolor=COLORS["note_fill"],
-            edgecolor=COLORS["evidence_ink"],
-            linewidth=0.7,
-        ),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["evidence_ink"],
-            lw=0.8,
-            connectionstyle="arc3,rad=-0.1",
-        ),
-        zorder=6,
-    )
-
     ax1.set_title(
-        "A. Hardware Primitives (CUTLASS)\nExplosive Low-Level Specialization",
+        "(a) CUTLASS\nLibrary source components",
         fontsize=10.6,
         fontweight="bold",
         pad=8,
@@ -240,30 +218,8 @@ def generate_figure(output_dir: Path) -> Path:
     ax2.tick_params(axis="both", labelsize=5.4, length=2, width=0.5)
     ax2.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
-    ax2.annotate(
-        "Shared MLIR Narrow Waist\nscales 33x (3K -> 100K LOC)",
-        xy=(6, 50),
-        xytext=(2.6, 320),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["workload_ink"],
-        bbox=dict(
-            boxstyle="round,pad=0.25",
-            facecolor=COLORS["note_fill"],
-            edgecolor=COLORS["workload_ink"],
-            linewidth=0.7,
-        ),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["workload_ink"],
-            lw=0.8,
-            connectionstyle="arc3,rad=-0.15",
-        ),
-        zorder=6,
-    )
-
     ax2.set_title(
-        "B. Compiler Narrow Waist (Triton)\nMLIR IR Absorbs Target Shifts",
+        "(b) Triton\nCompiler source components",
         fontsize=10.6,
         fontweight="bold",
         pad=8,
@@ -363,30 +319,8 @@ def generate_figure(output_dir: Path) -> Path:
     ax3.tick_params(axis="both", labelsize=5.4, length=2, width=0.5)
     ax3.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
-    ax3.annotate(
-        "Kernel LOC: 48.7x\n(2.5K -> 120.5K)",
-        xy=(7, 120.5),
-        xytext=(3.4, 142),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["designspace_ink"],
-        bbox=dict(
-            boxstyle="round,pad=0.25",
-            facecolor=COLORS["note_fill"],
-            edgecolor=COLORS["designspace_ink"],
-            linewidth=0.7,
-        ),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["designspace_ink"],
-            lw=0.8,
-            connectionstyle="arc3,rad=-0.1",
-        ),
-        zorder=6,
-    )
-
     ax3.set_title(
-        "C. Inference Engine (vLLM)\nApplication Kernel Fragmentation",
+        "(c) vLLM\nCustom kernel source",
         fontsize=10.6,
         fontweight="bold",
         pad=8,
