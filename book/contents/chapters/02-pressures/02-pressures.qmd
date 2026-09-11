@@ -979,115 +979,17 @@ The allocation decision has two risks: a cheap estimate may discard a promising 
 
 Verification faces an exponential state-space upper bound, even though careful structuring, abstraction, and advanced verification methods govern practical workload size. Adding a single state-holding flip-flop doubles the number of encoded states, meaning a design with $n$ sequential state elements can technically encode up to $2^n$ states. In practice, the reachable subset is far smaller because it depends on reset sequences and valid transition logic; verification flows therefore avoid blind enumeration of every encoded state.
 
-However, that theoretical upper bound rules out verifying every relevant property through brute-force enumeration. Instead, verification teams combine functional coverage targets, SystemVerilog Assertions (SVA), formal proofs, constrained-random testing with production simulators like Synopsys VCS, fast compiled C++ simulation using Verilator, deep nightly regressions, unresolved-defect reviews, and engineering judgment. A flattening bug-discovery curve serves as one key input to a tapeout decision rather than a standalone, infallible rule. A sudden influx of novel architectural candidates forces engineering teams to repeat substantial portions of this work.
+For a large design, brute-force enumeration is generally impractical. Verification teams instead combine functional coverage targets, SystemVerilog Assertions (SVA), formal checks, constrained-random and directed tests, regressions, and unresolved-defect reviews. Coverage describes the behaviors or requirements that the verification plan intended to exercise; a completed coverage target is not proof that every possible bug is absent. A new architectural organization can require new tests and properties even when much of the implementation is reused.
 
 For these reasons, architectural evaluations must explicitly weigh verification effort alongside the classic pillars of power, performance, and area (PPA). For instance, a highly speculative cache-coherence protocol might demonstrate an impressive simulated throughput gain, yet it remains an unacceptable candidate if checking its labyrinth of transient states and race conditions exceeds the design-program budget.
 
-Formal verification and simulation attack distinct parts of this problem. Simulation using engines such as VCS or Verilator exercises selected behaviors under specific stimuli. Formal methods mathematically prove a stated property across all possible behaviors covered by a model and its baseline assumptions, though formal capacity drops sharply depending on the property, abstraction level, and sequential depth. Bounded model checking (BMC) mitigates state explosion by verifying properties up to a specified cycle depth, while combinational equivalence checking circumvents sequential state-space growth by proving that two combinational descriptions implement the same Boolean function. Despite these tools, complex sequential protocols, liveness guarantees, and broad system interactions require deploying a balanced mix of formal checking and robust simulation [@Clarke2018ModelChecking].
+Simulation and formal methods provide different kinds of assurance. Simulation exercises selected behaviors under supplied stimuli. A completed formal proof establishes a stated property for all behaviors covered by the model and its assumptions, but the solver may not be able to complete that proof. Bounded model checking (BMC) searches behaviors up to a specified depth; finding no counterexample within that bound is generally not an unbounded proof. Combinational equivalence checking asks whether two combinational descriptions compute the same Boolean function. These techniques can complement one another, provided that their scopes and assumptions remain explicit [@Clarke2018ModelChecking].
 
 The semiconductor industry has grappled with this verification pressure for over a quarter of a century. As far back as 2001, the International Technology Roadmap for Semiconductors Design chapter declared verification "a bottleneck that has now reached crisis proportions" [@ITRS2001Design]. Today, the Semiconductor Research Corporation's MAPT roadmap explicitly warns of a widening verification gap looming across future technology transitions [@SemiconductorResearchCorporation2023MAPT]. While this history makes verification an indispensable constraint to check whenever someone proposes generating architectural candidates faster, it does not imply that verification will be the limiting constraint in every design program.
 
-Where it does bind, the reason is that proposing a candidate and checking one do not scale together. Better project information improves what a generator proposes without settling whether the proposal is physically correct. A first-pass RTL candidate can look syntactically flawless while concealing a timing race or a functional deadlock, so the distance between a generated artifact and a supported result is measured in executed verification checks rather than in generated lines of code. Published generation benchmarks report severe attrition at the parsing, interface-compliance, and functional-simulation stages [@VerilogEval; @RTLLM; @WangEtAl2025OpenRTLSet], and the attrition compounds through timing closure and layout checks into a narrow survival funnel (@sec-feedback-verification-trust). As design scope expands, the latency of proposing a candidate and the time to check it diverge by orders of magnitude (@fig-verification-scaling). Proposal generation stays under a minute at every abstraction level, while the check runs from milliseconds for a tensor operator to days or weeks for full SoC signoff and formal equivalence checking.
+A new candidate may need new verification work before its performance matters. Published RTL-generation benchmarks include failures at parsing, interface compliance, and functional testing [@VerilogEval; @RTLLM; @WangEtAl2025OpenRTLSet]. Those tests do not establish timing closure or system correctness, but they show why a plausible description is only a starting point. The cost and latency of producing and checking a candidate depend on its scope, the reused verification infrastructure, and the required assurance; there is no fixed generation-to-verification ratio across abstraction levels.
 
-```{python}
-#| label: fig-verification-scaling
-#| fig-cap: |
-#|   **Proposing a candidate and checking one do not scale together.** Across five design abstraction
-#|   levels (tensor operators, core microarchitecture, RTL block signoff, subsystem macros, and full SoC
-#|   signoff), candidate proposal latency remains under one minute while verification check time scales
-#|   from milliseconds (AutoTVM/MAESTRO) to days or weeks (Cadence/Formality full SoC signoff), opening a
-#|   four-order-of-magnitude verification gap. Constructed order-of-magnitude ranges, not per-candidate
-#|   measurements; a project's specific EDA tool flow sets where the separation lands.
-#| out-width: "100%"
-#| fig-alt: "Horizontal bar chart comparing AI candidate proposal latency against hardware verification check time across five design scales from tensor operators to full SoC signoff. Verification check time scales from milliseconds to days/weeks, while AI candidate generation remains under one minute."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-import numpy as np
-
-apply_style()
-
-categories = [
-    "Tensor Operator\n(AutoTVM / MAESTRO)",
-    "Core Microarch\n(gem5 / Spike)",
-    "RTL Block Signoff\n(Verilator / Yosys)",
-    "Subsystem Macro\n(OpenROAD 7nm)",
-    "Full SoC Signoff\n(Cadence / Formality)",
-]
-y_pos = np.arange(len(categories))
-eval_latency_min = np.array([0.001, 10.0, 300.0, 3600.0, 86400.0])
-eval_latency_max = np.array([0.1, 300.0, 3600.0, 28800.0, 604800.0])
-gen_latency = np.array([0.5, 2.0, 5.0, 15.0, 45.0])
-
-fig, ax = plt.subplots(figsize=(6.2, 3.4))
-fig.subplots_adjust(left=0.28, right=0.94, top=0.88, bottom=0.18)
-
-for i in range(len(categories)):
-    ax.barh(
-        y_pos[i] + 0.15,
-        eval_latency_max[i] - eval_latency_min[i],
-        left=eval_latency_min[i],
-        height=0.35,
-        color=COLORS["constraints"],
-        alpha=0.85,
-        edgecolor=COLORS["constraints_ink"],
-        linewidth=0.8,
-        label="Hardware verification check time" if i == 0 else "",
-        zorder=2,
-    )
-
-ax.scatter(
-    gen_latency,
-    y_pos - 0.15,
-    color=COLORS["workload"],
-    s=48,
-    zorder=4,
-    edgecolor="white",
-    linewidth=0.8,
-    label="AI candidate proposal latency",
-)
-
-ax.set_xscale("log")
-ax.set_yticks(y_pos)
-ax.set_yticklabels(categories, fontsize=6.2, color=COLORS["ink"])
-ax.invert_yaxis()
-
-ax.set_xlabel("Time per candidate (seconds, log scale)", fontsize=6.5, color=COLORS["ink"])
-ax.set_xlim(1e-4, 1e6)
-
-xticks = [1e-3, 1e-1, 10, 3600, 86400, 604800]
-xtick_labels = ["1 ms", "100 ms", "10 s", "1 hour", "1 day", "1 week"]
-ax.set_xticks(xticks)
-ax.set_xticklabels(xtick_labels, fontsize=5.8)
-
-
-leg = ax.legend(frameon=True, facecolor=COLORS["note_fill"], edgecolor=COLORS["note_edge"], fontsize=5.8, loc="upper right", framealpha=1.0)
-leg.set_zorder(10)
-ax.grid(True, which="both", axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
-
-ax.annotate(
-    "4-order-of-magnitude\nverification gap",
-    xy=(1e4, 3.85),
-    xytext=(5e-3, 1.8),
-    arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
-    fontsize=6.0,
-    fontweight="bold",
-    color=COLORS["constraints_ink"],
-    bbox=dict(boxstyle="round,pad=0.4", facecolor=COLORS["note_fill"], edgecolor=COLORS["constraints"], lw=0.8),
-    zorder=12,
-)
-
-for spine in ["top", "right"]:
-    ax.spines[spine].set_visible(False)
-ax.spines["left"].set_color(COLORS["ink"])
-ax.spines["bottom"].set_color(COLORS["ink"])
-plt.show()
-plt.close(fig)
-```
-
-The divergence follows from what each side has to do. A learned generator emits netlist tokens sequentially in seconds; qualifying the candidate means evaluating $O(10^3)$ tensor MAC operations in a fast analytical simulator at one end of the spectrum and, at the other, checking $O(10^8)$ parasitic $RC$ timing arcs across multi-corner static timing analysis and traversing the sequential state space that opened this section in formal property checking. The ranges in @fig-verification-scaling are constructed orders of magnitude, and a project's own tool flow sets where the separation lands, but no flow moves the check onto the generator's side of the gap.
-
-Generating RTL candidates faster than verification teams can construct assertions, achieve functional coverage closure, and review corner cases creates an unvetted backlog that accelerates nothing toward tapeout. Looking at the workforce, @Foster2022WilsonVerificationStudy summarizes the 2022 Wilson Research Group functional-verification study and confirms that verification demand has outpaced design staffing. Indexed to their 2007 baseline, mean peak staffing for IC and ASIC projects grew by 146% for verification engineers but by only 50% for design engineers over the same fifteen-year period (@fig-verification-demand-scissors). In the surveyed projects, checking hardware correctness now claims a share of peak staffing that rivals design work itself.
+Staffing surveys give one view of the work involved. In the 2022 Wilson Research Group study, mean peak staffing for IC and ASIC projects had grown by 146% for verification engineers and 50% for design engineers relative to 2007 (@fig-verification-demand-scissors) [@Foster2022WilsonVerificationStudy]. These are relative changes in surveyed staffing, not measurements of the time needed to verify an additional candidate.
 
 ```{python}
 #| label: fig-verification-demand-scissors
@@ -1163,19 +1065,22 @@ plt.show()
 plt.close(fig)
 ```
 
-These indexed lines highlight relative growth rather than absolute staffing levels, and the 2022 endpoints are chart-read approximations constrained by the study's published growth rates rather than printed data labels (@fig-verification-demand-scissors). These staffing trends do not pinpoint a single universal cause for the disparity, nor do they perfectly diagnose the bottleneck in any single project. However, they show that checking designs steadily consumes an ever-growing share of engineering capacity across the surveyed projects.
+The indexed lines in @fig-verification-demand-scissors show why verification capacity deserves explicit attention in a design plan. They do not identify the cause of the growth or determine the bottleneck in a particular project. The next comparison asks a different question: what do the surveys report about first-silicon outcomes alongside that effort?
 
-The added capacity has not bought first-pass correctness. Across the same longitudinal surveys, functional verification consumes an average of 58% of IC and ASIC project schedules, yet first-pass silicon success fell from 39% in 2002 to 14% in 2024, after two decades of constrained-random SystemVerilog testbenches and Universal Verification Methodology environments (@fig-ch07-wilson-verification-scissors a). Verification workload rising while first-pass success falls is the *verification scissors*, and the Wilson Research Group and Siemens EDA studies that Harry Foster has summarized document it across 22 years [@Foster2021WilsonICASICResources; @Foster2022WilsonVerificationStudy; @Foster2025WilsonVerification2024].
+In the 2024 survey, verification accounted for an average of 58% of project time, while 14% of projects reported first-silicon success [@Foster2025WilsonVerification2024]. The historical series in @fig-ch07-wilson-verification-scissors places these results beside earlier surveys. The population and designs change between studies, so the trends do not establish that additional verification effort caused worse outcomes or failed to help. They show that substantial effort coexists with persistent implementation and integration failures.
 
-![**The 22-year hardware verification scissors divergence (2002–2024).** (a) Longitudinal industry survey data from Harry Foster, the Wilson Research Group, and Siemens EDA, showing verification consuming approximately 58% of project schedules and staffing ratios surpassing 1.16 verifiers per designer while first-pass silicon success dropped to 14% [@Foster2022WilsonVerificationStudy; @Foster2025WilsonVerification2024]. (b) Primary root causes of silicon respins in 2024, dominated by logic/functional errors, analog integration, and clock-domain crossings.](images/fig-ch07-wilson-verification-scissors){#fig-ch07-wilson-verification-scissors width="80%" fig-alt="Two-panel visualization of longitudinal verification trends from 2002 to 2024. (a) Verification time holding at 58% and staffing ratios rising while first silicon success drops from 39% to 14%. (b) Horizontal bar chart of silicon respin causes led by logic flaws at 48% and analog tuning at 43%."}
+![**Verification effort and first-silicon outcomes measure different aspects of the problem.** (a) Survey trends through 2024 include verification time, staffing ratios, and first-silicon success. (b) Reported respin causes in 2024; respondents could select multiple causes. These population-level trends do not isolate causality within a project [@Foster2022WilsonVerificationStudy; @Foster2025WilsonVerification2024].](images/fig-ch07-wilson-verification-scissors){#fig-ch07-wilson-verification-scissors width="100%" fig-alt="Two-panel survey chart for 2002–2024. Verification time rises overall to 58% and first-silicon success falls overall to 14%, with intermediate fluctuations. The verification-to-design staffing ratio reaches 1.16 in 2024. The second panel shows five reported respin causes, led by logic or functional flaws and analog or mixed-signal issues."}
 
-The respin causes in @fig-ch07-wilson-verification-scissors b say what escaped. Core logic and functional flaws lead at 48%, followed by analog and mixed-signal tuning (43%), clock-domain crossings and metastability[^fn-metastability-c02] (29%), and hardware–firmware interactions (21%). Adding headcount to author more pseudo-random test vectors does not close this coverage gap, because random stimulus clusters in the typical execution paths while the deadlocks and races created by concurrency across asynchronous clock domains, coherence protocols, and dynamic power domains sit in corners it never reaches. Once a candidate reaches this late stage, evaluation is no longer inexpensive. Hardware implementation permits zero tolerance for post-silicon errors. Whether from mathematical lookup flaws (such as the \$475M 1994 Pentium floating-point division (FDIV) recall [@Edelman1997PentiumDivision; @Intel1995PentiumCharge]) or speculative execution side channels (such as Spectre and Meltdown [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre]), escaped microarchitectural defects become multimillion-dollar liabilities that software patches cannot cleanly resolve. In semiconductor engineering, defect remediation cost follows a steep order-of-magnitude escalation curve across lifecycle boundaries. Catching an RTL bug during pre-silicon behavioral simulation costs engineer-hours; isolating it after physical synthesis costs tool-license weeks; diagnosing it during post-silicon bring-up costs millions in mask respins and six-month schedule slips; and discovering it in shipped production silicon costs hundreds of millions in product recalls, security exploits, and brand destruction. Preventing this defect latency explosion is why verification and validation dominate leading-edge budgets.
+The reported causes span logic, analog integration, clock-domain crossings, timing, and hardware–firmware behavior (@fig-ch07-wilson-verification-scissors b). Clock-domain crossings, for example, require attention to metastability as well as the logical sequence seen by a testbench.[^fn-metastability-c02] More random stimulus alone may poorly exercise a rare interaction; directed tests, suitable constraints, assertions, and formal analysis can target what is missing. The useful question is which failure mechanisms the current checks can detect.
 
-While that Pentium charge highlights the fallout from a single escaped defect, leading-edge development raises commitment costs even without a public recall. Arm's 2023 prospectus shares International Business Strategies (IBS) estimates of \$249M to design a 7\ nm chip and \$725M for a 2\ nm chip, broad estimates rather than rigid project prices [@ArmHoldings2023Prospectus]. The composition of that 2\ nm estimate matters more to an architect than its total. In the IBS breakdown reported alongside those figures, software development accounts for roughly \$314M and verification for roughly \$154M, together about two-thirds of the \$725M total [@Shilov2023IBSDesignCost]. The majority of the estimated budget pays for the software and checking work that makes a chip usable and trustworthy, rather than for generating the raw RTL artifact.
+Escaped defects also differ in how they can be repaired. Some permit a firmware or software workaround; others require revised silicon, and a workaround may sacrifice performance or functionality. Intel's \$475M charge associated with the Pentium floating-point division (FDIV) defect illustrates the potential cost of a shipped hardware error [@Edelman1997PentiumDivision; @Intel1995PentiumCharge]. Spectre and Meltdown illustrate a different problem, in which microarchitectural behavior undermines software's security assumptions [@LippEtAl2018Meltdown; @KocherEtAl2019Spectre]. These cases motivate early detection without establishing one universal cost multiplier for every late defect.
 
-This reality predates the advanced nodes that produced these numbers. The 2001 ITRS Design chapter observed that software already accounted for 80% of embedded-systems development costs [@ITRS2001Design], and software and verification remain the dominant cost drivers across process node transitions. These costs alter what constitutes an architectural improvement. Producing additional candidate designs offers little value if surviving options add extensive simulation, synthesis, physical-design, verification, and code-review workloads to an already constrained queue. Architects must synthesize disparate tool outputs into a clear, rigorous comparison that reviewers can evaluate and leadership can use for tapeout decisions.
+
+Verification effort belongs in the architectural comparison when alternatives differ in the tests, properties, and integration work they require. Reusing a familiar interface may preserve much of that investment; changing the organization may require new checks. The resulting engineering cost, together with implementation and software work, determines which promising designs a program can afford to develop.
 
 ## The Economics of Specialized Silicon {#sec-design-cost-pressure}
+
+While that Pentium charge highlights the fallout from a single escaped defect, leading-edge development raises commitment costs even without a public recall. Arm's 2023 prospectus shares International Business Strategies (IBS) estimates of \$249M to design a 7\ nm chip and \$725M for a 2\ nm chip, broad estimates rather than rigid project prices [@ArmHoldings2023Prospectus]. The composition of that 2\ nm estimate matters more to an architect than its total. In the IBS breakdown reported alongside those figures, software development accounts for roughly \$314M and verification for roughly \$154M, together about two-thirds of the \$725M total [@Shilov2023IBSDesignCost]. The majority of the estimated budget pays for the software and checking work that makes a chip usable and trustworthy, rather than for generating the raw RTL artifact.
 
 The checking, simulation, and verification bottlenecks detailed above translate directly into an economic penalty (@fig-ch02-foundry-cost-inversion-and-rd-wall). The design costs @fig-design-cost-by-node traced now exceed half a billion dollars per chip, and two further series show where that pressure originates. Processed 300\ mm wafer prices rose $16.2\times$ from $\$1{,}850$ at $90\ \text{nm}$ to $\$30{,}000$ at $2\ \text{nm}$, as extreme ultraviolet lithography and the hundreds of masking steps needed to pattern FinFET and gate-all-around structures raised the capital cost of each wafer, and cost-per-transistor scaling stalled with it (@fig-ch02-foundry-cost-inversion-and-rd-wall a). Corporate research and development (R&D) spending climbed with the same steepness across audited SEC 10-K filings; NVIDIA's annual R&D expanded $278\times$ from \$81.6M in FY2000 to \$22.80B in FY2026 (@fig-ch02-foundry-cost-inversion-and-rd-wall b). The pressure on architecture is not only that these costs rise but that the volume which once amortized them is shrinking at the same time.
 
@@ -1403,4 +1308,4 @@ Once a team identifies the work delaying its next decision, it needs a way to co
 
 [^fn-rc-delay-c02]: **RC Delays**: As interconnect wires become thinner in advanced process nodes, their electrical resistance (R) and capacitance (C) increase. The product of these ($RC$) dictates the signal propagation delay, which can become the dominant factor limiting a chip's maximum clock speed.
 
-[^fn-metastability-c02]: **Metastability**: An unstable electrical state that occurs when a flip-flop captures a signal exactly as it is transitioning between 0 and 1, usually across asynchronous clock domains, leading to unpredictable logic levels and system failure.
+[^fn-metastability-c02]: **Metastability**: A storage element can take longer than the available time to settle to a valid logic level when its sampling requirements are violated. Sampling an asynchronous signal is a common source. Synchronizer design reduces the probability that this behavior propagates into the receiving logic.
