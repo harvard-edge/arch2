@@ -65,7 +65,6 @@ blockStart = function (tt, fmt)
 
   elseif fmt =="tex" then
     if tt.boxstyle=="foldbox.simple" then texEnv = "fbxSimple" end
-    if tt.type == "callout-crux" then texEnv = "fbxCrux" end
     return('\\Needspace{8\\baselineskip}\n'..
            '\\begin{'..texEnv..'}{'..tt.type..'}{'..tt.typlabelTag..'}{'..tt.title..'}\n'..
            '\\phantomsection\\label{'..tt.id..'}\n')
@@ -83,7 +82,6 @@ blockEnd = function (tt, fmt)
     return('</div></details>')
   elseif fmt =="tex" then
     if tt.boxstyle=="foldbox.simple" then texEnv = "fbxSimple" end
-    if tt.type == "callout-crux" then texEnv = "fbxCrux" end
      return('\\end{'..texEnv..'}\n')
   else return ('ende mit format '..fmt..'=================')
   end
