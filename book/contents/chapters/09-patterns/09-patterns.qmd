@@ -63,6 +63,9 @@ Every qualified component carries a *support region* (the joint set of workload,
 
 For this chapter's transfer test, generalization concerns performance on unseen cases within declared target conditions; transfer concerns reuse after a material change from source to target.[^fn-transfer-c09] Robustness concerns stability under named perturbations, faults, or attacks, which @sec-evaluating-agentic-architect measures for the complete system. The distribution-shift and requalification analysis in @sec-feedback-verification-trust determines when previously qualified evidence needs new checks.
 
+[^fn-transfer-c09]: **Generalization vs. Transfer**: These are operational meanings for the chapter's transfer test. A study must state its source and target conditions and which changes it evaluates before either term supports an architecture claim.
+
+
 Standard dataset-shift tests compare reference samples against incoming data to report divergence [@RabanserEtAl2019FailingLoudly]. In architectural evaluation, detecting a shift reopens the affected support claim immediately. The shift signal itself does not identify root causes or authorize automated adaptation; addressing it requires explicit dependency analysis and target checks.
 
 The preliminary spatial array experiment from @sec-running-the-loop shows where those lines fall in practice. Evaluating five systolic array shapes in SCALE-Sim [@RajEtAl2025ScaleSimV3] on a synthetic three-layer general matrix multiply (GEMM) slice, the source study found a tie under its cycle-and-utilization score and retained the 32 by 32 reference array. That no-change finding remains confined to its synthetic source context.
@@ -125,7 +128,7 @@ Machine-learning work on distribution shift and hidden dependencies [@WangEtAl20
 **The mechanism.** In this constructed illustration, the revised block layout requires longer global interconnect and more clock-distribution power after integration into the system-on-chip (SoC). The local saving is outweighed by costs outside the optimizer's measurement boundary.
 
 | Metric | Unoptimized Baseline | Locally Optimized Blocks |
-|---|---|---|
+|:---|---:|---:|
 | Accelerator Block Power (Local) | 120\ mW | 80\ mW |
 | Network-on-Chip Router Power | 40\ mW | 70\ mW |
 | Top-Level Clock Distribution | 30\ mW | 60\ mW |
@@ -147,7 +150,7 @@ Decomposing proposal, checking, and integration into separate components makes r
 
 ## Transfer Under Distribution Shift
 
-Applying the transfer map to the array study exposes properties the source study left unsettled (@tbl-ch9-source-target). Moving from cycle-level simulation toward physical silicon also reopens the architecture decision: a local no-change recommendation does not establish that the array and its interfaces satisfy implementation constraints. The prospective target below creates new obligations for workload coverage, integration checks, and fallbacks. Each row connects a changed condition to the work it requires; the target checks are proposed, not executed results.
+Applying the transfer map to the array study exposes properties the source study left unsettled (@tbl-ch9-source-target). Moving from cycle-level simulation toward physical silicon also reopens the architecture decision. A local no-change recommendation does not establish that the array and its interfaces satisfy implementation constraints. The prospective target below creates new obligations for workload coverage, integration checks, and fallbacks. Each row connects a changed condition to the work it requires; the target checks are proposed, not executed results.
 
 | **Condition** | **Executed array study** | **Implementation-facing target** | **Obligation created by the change** |
 | --- | --- | --- | --- |
@@ -174,6 +177,14 @@ The target checks become easier to choose when each shift is tied to the relatio
 4. **Workload paradigm shifts.** Dense matrix multiplication gives a systolic array regular tiles and opportunities for spatial data reuse. Mixture-of-experts workloads introduce token-dependent routing across experts, which can change tile sizes and the distribution of work. Autoregressive decoding also requires reading the key-value (KV) cache[^fn-kvcache-c09] as tokens are generated. Those changes can increase memory demand relative to useful array work, but their effect depends on batching, mapping, and the memory system. The transfer check therefore reruns representative target traces and measures both utilization and traffic. Low utilization would motivate a different mapping or data-movement mechanism; it would not, by itself, prove that the array must be replaced.
 5. **Interconnect and bandwidth density shifts.** Changing physical reach changes the link model that a transferred design needs. Channel loss and SerDes[^fn-serdes-c09] equalization can increase the energy spent crossing package and board boundaries, while short die-to-die links use different signaling and packaging assumptions. Bandwidth density, energy per bit, and reach therefore need to be compared under explicit interface conditions.
 
+[^fn-multicopy-relaxed-c09]: **Multi-Copy Atomicity**: Once a store is visible to another hart, it is conceptually visible to all harts. This property does not require every pair of a hart's memory operations to preserve program order [@RISCV2026UnprivilegedISA].
+
+[^fn-bspdn-c09]: **BSPDN (Backside Power Delivery Network)**: An arrangement that routes power through the backside of the silicon wafer, separating part of the power-delivery network from frontside signal routing. Its resistance and routing benefits depend on the implemented network and its connections to the devices.
+
+[^fn-kvcache-c09]: **KV-cache**: In transformer models, the Key-Value cache stores the previously computed key and value tensors for past tokens so they do not need to be recomputed. During autoregressive generation, reading these tensors can make attention bandwidth-intensive; whether that traffic limits generation depends on context length, batch size, model architecture, and the implementation.
+
+[^fn-serdes-c09]: **SerDes (Serializer/Deserializer)**: A functional block used in high-speed communications to convert parallel data to serial data and vice-versa, essential for pushing data across lossy long-distance electrical links but increasingly power-hungry at high speeds.
+
 The provisional values in @fig-interconnect-scaling have unresolved source support and require target-specific specification or measurement checks before they can guide a transferred design.
 
 Wafer-scale integration (@fig-cerebras-wse) reduces chip-boundary crossings for traffic kept on the wafer. Co-packaged optics (CPO) offers a different way to carry traffic beyond the package, with its own packaging and thermal constraints. In either case, transferring an accelerator requires identifying which boundaries its workload traffic actually crosses.
@@ -186,9 +197,15 @@ Start with representative target traces and identify the traffic crossing each d
 
 These examples require different actions because the affected units differ. A synchronization module may need fences and target litmus tests.[^fn-litmus-c09] A fixed-width kernel may need a new vector lowering while retaining its algorithm. A process-dependent surrogate first needs requalification; adaptation or retraining follows only if its errors warrant it. A workload shift reopens the array's utilization claim, while a change in interconnect reach calls for a cost model of the links actually used. The map helps choose among those actions without declaring every source artifact obsolete.
 
+[^fn-litmus-c09]: **Litmus Tests**: In memory consistency, litmus tests are small concurrent programs used to verify ordering rules. For example, testing whether RISC-V `amo.aq` (acquire) and `amo.rl` (release) modifiers correctly enforce visibility across harts.
+
 The measurement boundary also determines which physical conclusions a check can support. Timing closure in OpenSTA or Cadence Tempus establishes that the analyzed paths meet their timing constraints under the specified process, voltage, and temperature (PVT) corners and modeling assumptions.[^fn-pvt-c09] It does not independently establish dynamic $IR$-drop,[^fn-irdrop-c09] electromigration, spatial thermal hotspots, or total power under a real workload, so the thermal question the node shift raises stays open after the timing report closes. Lower reversibility then demands explicit containment (bypasses, disables, guardbands, spare cells) tested against credible failure classes before an irreversible physical commitment is made.
 
-::: {.callout-case-study title="A correction must reach the physical failure"}
+[^fn-pvt-c09]: **PVT corners**: Process, voltage, and temperature corners are specified combinations used to analyze circuit behavior. Timing closure establishes that the analyzed paths meet their timing constraints under the selected corners and modeling assumptions; it does not establish every functional, power-delivery, or thermal property of the chip.
+
+[^fn-irdrop-c09]: **$IR$-drop**: The voltage drop across the power delivery network due to wire resistance ($V = I \times R$). Excessive $IR$-drop reduces the supply voltage reaching transistors, which slows down logic gates and can cause timing or functional failures.
+
+::: {.callout-war-story title="A correction must reach the physical failure"}
 **The claim.** In January 2011, Intel disclosed a design error in the Cougar Point chipset shipping with Sandy Bridge platforms, stating consumers could safely continue using affected systems while manufacturers arranged a permanent solution [@Intel2011CougarPoint].
 
 **The gap.** The underlying silicon defect caused specific SATA ports to physically degrade over time. Intel halted shipments and taped out corrected silicon rather than attempting a software-only fix.
@@ -199,11 +216,14 @@ The measurement boundary also determines which physical conclusions a check can 
 
 Software turnover, the last row of @tbl-ch9-source-target, can change a result even when the hardware remains fixed. The offload economics that @sec-design-loop-no-longer-scales works out with the LogCA model[^fn-logca-rem-c09] relate an accelerator's break-even point to communication latency, host overhead, workload granularity, host computation, and acceleration. The host runtime and compiler decide where a workload sits relative to that point, by fusing operations into payloads large enough to amortize invocation overhead and by eliminating the off-chip intermediate allocations that pull operational intensity below the link's balance point. A transferred offload result therefore carries a compiler version inside it. Move the kernel to a target whose compiler fuses less, and the same accelerator can land on the wrong side of break-even with no hardware change at all. An isolated kernel speedup becomes a transferred result only when compiler-generated code executes on the target under a pinned toolchain, with numerics, memory-ordering semantics, application binary interfaces (ABIs), and device contracts preserved, which is why the software path is a transfer unit in its own right (@tbl-ch9-transfer-map).
 
+[^fn-logca-rem-c09]: **LogCA Model**: The parameters represent Latency, Overhead, Granularity, Computational Index, and Acceleration. Together they estimate break-even points for hardware offload under the model's assumptions.
+
+
 The version pair identifies the conditions under which a hardware–software result was measured. Changing an NPU array geometry or a compiler lowering pass may alter the executed schedule even when the source program stays fixed. Cross-layer optimizations, such as memory-aware algorithmic tiling (FlashAttention [@DaoEtAl2022FlashAttention]) and narrow numerical formats (Microscaling / MX formats [@RouhaniEtAl2023Microscaling]), make that dependence concrete. Requalification follows the affected latency, bandwidth, accuracy, or efficiency claim; a version change is a reason to inspect its dependencies, not evidence that every invariant has failed.
 
 Because software tuning cycles outpace hardware implementation checks, the two must co-evolve without allowing fast software iterations to overwrite slower hardware baselines. Fast software results can propose hardware revisions, but those revisions enter versioned target state only through a shared study record and explicit authorization. This structure decouples development velocity without sacrificing provenance. Software state encompasses compilers, runtimes, programming interfaces, drivers, and generated binaries; comparisons with an earlier baseline require restoring the compatible dependency versions that produced it, rather than assuming an isolated binary recreates the earlier system.
 
-MLCommons MLPerf datacenter submissions provide a setting for measuring this coupling [@MattsonEtAl2020MLPerf; @ReddiEtAl2020MLPerfInference]. The retained compilation in @fig-ch09-mlperf-software-dividend is provisional: its rows have not been reconciled against individual benchmark submissions, and its hardware/software bars select separate maxima across workloads. It therefore cannot establish a matched generational comparison. Published software optimizations motivate testing whether maturation changes a hardware comparison [@EassaEryilmaz2023H100MLPerfSoftware; @DaoEtAl2022FlashAttention]; that test must hold workload, system scale, result definition, and measurement window fixed enough for the intended claim.
+MLCommons MLPerf datacenter submissions provide a setting for measuring this coupling [@MattsonEtAl2020MLPerf; @ReddiEtAl2020MLPerfInference]. The retained compilation in @fig-ch09-mlperf-software-dividend is provisional. Its rows have not been reconciled against individual benchmark submissions, and its hardware/software bars select separate maxima across workloads. It therefore cannot establish a matched generational comparison. Published software optimizations motivate testing whether maturation changes a hardware comparison [@EassaEryilmaz2023H100MLPerfSoftware; @DaoEtAl2022FlashAttention]; that test must hold workload, system scale, result definition, and measurement window fixed enough for the intended claim.
 
 Suppose an architect compares a generated hardware candidate using an immature compiler backend with a production baseline that benefits from years of operator fusion. The end-to-end measurement may be useful as a comparison of the two available systems, but it does not isolate their microarchitectures. Pinning hardware revisions and compiler snapshots identifies the configurations being compared; reproducing the experiment also requires its inputs, procedures, and measurement conditions. Attribution requires an additional comparison that examines software effects, such as tuning both candidates under matched budgets or perturbing tile sizes to test whether one result depends on a favorable compiler schedule. A frozen toolchain preserves that interaction; it does not remove it.
 
@@ -213,7 +233,7 @@ Deployment observations motivate calibration studies for subsequent hardware gen
 
 ## Cross-Stack Pattern Transfer
 
-For the Lighthouse transfer, we can now assign work to the dependencies exposed earlier. The target remains prospective: the retained array sweep has not been extended into an implementation-facing study. Its admission check already identified a new design problem, because freezing the array and its interfaces carries consequences that the source simulator score cannot assess. The four stages specify how reusable source material could support that new study.
+For the Lighthouse transfer, we can now assign work to the dependencies exposed earlier. The target remains prospective. The retained array sweep has not been extended into an implementation-facing study. Its admission check already identified a new design problem, because freezing the array and its interfaces carries consequences that the source simulator score cannot assess. The four stages specify how reusable source material could support that new study.
 
 1. **Partition the source into transfer units.** Separate the source study into historical records, workload definitions, project state representations, proposing methods, the SCALE-Sim screen, tool interfaces, candidate artifacts, and conclusions.
 2. **Isolate the affected slice.** Trace changes across workload distributions, compiler mappings, executable paths, process libraries, physical checks, and power targets. Source simulator outputs serve as historical data but do not provide implementation evidence.
@@ -286,22 +306,3 @@ Transfer must also survive the software path. A transferred offload or kernel re
 :::
 
 The next step is to evaluate the complete approach across repeated, varied, and adversarial architectural studies (@sec-evaluating-agentic-architect). The source-to-target map identifies which claims each changed study must establish. Those comparisons can then test whether an AI-native design system improves the architecture result, reduces the total engineering cost of achieving it, or does both.
-
-
-[^fn-litmus-c09]: **Litmus Tests**: In memory consistency, litmus tests are small concurrent programs used to verify ordering rules. For example, testing whether RISC-V `amo.aq` (acquire) and `amo.rl` (release) modifiers correctly enforce visibility across harts.
-
-[^fn-logca-rem-c09]: **LogCA Model**: The parameters represent Latency, Overhead, Granularity, Computational Index, and Acceleration. Together they estimate break-even points for hardware offload under the model's assumptions.
-
-[^fn-transfer-c09]: **Generalization vs. Transfer**: These are operational meanings for the chapter's transfer test. A study must state its source and target conditions and which changes it evaluates before either term supports an architecture claim.
-
-[^fn-irdrop-c09]: **$IR$-drop**: The voltage drop across the power delivery network due to wire resistance ($V = I \times R$). Excessive $IR$-drop reduces the supply voltage reaching transistors, which slows down logic gates and can cause timing or functional failures.
-
-[^fn-kvcache-c09]: **KV-cache**: In transformer models, the Key-Value cache stores the previously computed key and value tensors for past tokens so they do not need to be recomputed. During autoregressive generation, reading these tensors can make attention bandwidth-intensive; whether that traffic limits generation depends on context length, batch size, model architecture, and the implementation.
-
-[^fn-pvt-c09]: **PVT corners**: Process, voltage, and temperature corners are specified combinations used to analyze circuit behavior. Timing closure establishes that the analyzed paths meet their timing constraints under the selected corners and modeling assumptions; it does not establish every functional, power-delivery, or thermal property of the chip.
-
-[^fn-multicopy-relaxed-c09]: **Multi-Copy Atomicity**: Once a store is visible to another hart, it is conceptually visible to all harts. This property does not require every pair of a hart's memory operations to preserve program order [@RISCV2026UnprivilegedISA].
-
-[^fn-bspdn-c09]: **BSPDN (Backside Power Delivery Network)**: An arrangement that routes power through the backside of the silicon wafer, separating part of the power-delivery network from frontside signal routing. Its resistance and routing benefits depend on the implemented network and its connections to the devices.
-
-[^fn-serdes-c09]: **SerDes (Serializer/Deserializer)**: A functional block used in high-speed communications to convert parallel data to serial data and vice-versa, essential for pushing data across lossy long-distance electrical links but increasingly power-hungry at high speeds.
