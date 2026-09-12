@@ -234,7 +234,9 @@ def main():
     ax1.set_xlim(2.8, 3200)
     ax1.set_ylim(0.4, 15000)
     ax1.set_xlabel(
-        "Hardware Module Scale (AST Node Count, log)", fontsize=10.4, color=COLORS["ink"]
+        "Hardware Module Scale (AST Node Count, log)",
+        fontsize=10.4,
+        color=COLORS["ink"],
     )
     ax1.set_ylabel(
         "Mean Def-Use Distance (log scale)", fontsize=10.4, color=COLORS["ink"]
