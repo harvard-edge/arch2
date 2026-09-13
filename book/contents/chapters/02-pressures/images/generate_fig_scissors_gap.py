@@ -3,8 +3,11 @@
 Generate fig-scissors-gap: Unchecked candidate generation outpaces evaluation capacity.
 --------------------------------------------------------------------------------------
 A precision technical scissors plot illustrating the "Scissors Gap" in AI-native architecture.
-As candidate generation velocity accelerates, physical evaluation and reviewer throughput scale
-sub-linearly, creating a widening wedge of unverified, unsettled candidates.
+Features:
+- Aspect-corrected true Euclidean circular handles with uniform wall thickness.
+- Aspect-corrected true circular pivot assembly (boss, washer, bushing, screw cap, slotted drive).
+- Precision sculpted hollow-ground blades with matched two-tone facet shading.
+- Balanced editorial typography with zero collisions.
 
 Outputs:
   - fig-scissors-gap.pdf
@@ -50,6 +53,16 @@ def generate_scissors_figure(output_dir: Path):
 
     ax.set_xlim(0, 10.8)
     ax.set_ylim(0, 9.4)
+
+    # Compute exact data-to-display aspect ratio so circular elements render as true visual circles
+    bbox = ax.get_position()
+    fig_w, fig_h = fig.get_size_inches()
+    ax_w_in = bbox.width * fig_w
+    ax_h_in = bbox.height * fig_h
+    dx_per_in = 10.8 / ax_w_in
+    dy_per_in = 9.4 / ax_h_in
+    aspect = dy_per_in / dx_per_in  # ~2.0679
+
     xc, yc = 3.30, 3.20
 
     # -------------------------------------------------------------------------
@@ -74,92 +87,118 @@ def generate_scissors_figure(output_dir: Path):
             zorder=0,
         )
 
+    theta = np.linspace(0, 2 * np.pi, 200)
+
     # -------------------------------------------------------------------------
-    # 1. Precision Shears Handles (Bows & Shanks)
+    # 1. Symmetrical True-Circle Handles
     # -------------------------------------------------------------------------
-    theta = np.linspace(0, 2 * np.pi, 150)
+    c_ux, c_uy = 1.45, 4.70
+    c_lx, c_ly = 1.45, 1.70
 
-    # --- BLUE UPPER HANDLE (Thumb Bow) ---
-    c_ux, c_uy = 1.35, 4.60
-    ang_u = np.radians(20)
-    rx_in_u, ry_in_u = 0.40, 0.58
+    r_in = 0.35
+    w = 0.18
+    r_out = r_in + w
 
-    inner_thumb_x = (
-        c_ux
-        + rx_in_u * np.cos(theta) * np.cos(ang_u)
-        - ry_in_u * np.sin(theta) * np.sin(ang_u)
-    )
-    inner_thumb_y = (
-        c_uy
-        + rx_in_u * np.cos(theta) * np.sin(ang_u)
-        + ry_in_u * np.sin(theta) * np.cos(ang_u)
-    )
-
-    blue_pts = np.array(
+    # Upper Handle (Blue Thumb Bow)
+    pts_u = np.array(
         [
-            [xc - 0.12, yc + 0.38],  # shank top at pivot boss
-            [2.52, 4.18],  # upper shank neck
-            [1.96, 4.88],  # outer bow top-right
-            [1.42, 5.34],  # bow crown
-            [0.78, 4.96],  # bow outer top-left
-            [0.64, 4.36],  # bow outer left
-            [0.86, 3.78],  # bow outer bottom-left
-            [1.44, 3.70],  # bow outer bottom
-            [2.15, 3.76],  # lower shank neck
-            [xc - 0.12, yc + 0.08],  # shank bottom at pivot boss (strictly above yc)
+            [xc - 0.12, yc + 0.38],
+            [2.45, 4.30],
+            [
+                c_ux + r_out * np.cos(np.radians(20)),
+                c_uy + r_out * aspect * np.sin(np.radians(20)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(90)),
+                c_uy + r_out * aspect * np.sin(np.radians(90)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(150)),
+                c_uy + r_out * aspect * np.sin(np.radians(150)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(180)),
+                c_uy + r_out * aspect * np.sin(np.radians(180)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(210)),
+                c_uy + r_out * aspect * np.sin(np.radians(210)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(270)),
+                c_uy + r_out * aspect * np.sin(np.radians(270)),
+            ],
+            [
+                c_ux + r_out * np.cos(np.radians(-40)),
+                c_uy + r_out * aspect * np.sin(np.radians(-40)),
+            ],
+            [2.35, 3.80],
+            [xc - 0.12, yc + 0.08],
         ]
     )
-    tck_b, _ = splprep([blue_pts[:, 0], blue_pts[:, 1]], s=0, per=True)
+
+    # Lower Handle (Red Finger Bow)
+    pts_l = np.array(
+        [
+            [xc - 0.12, yc - 0.08],
+            [2.35, 2.60],
+            [
+                c_lx + r_out * np.cos(np.radians(40)),
+                c_ly + r_out * aspect * np.sin(np.radians(40)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(90)),
+                c_ly + r_out * aspect * np.sin(np.radians(90)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(150)),
+                c_ly + r_out * aspect * np.sin(np.radians(150)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(180)),
+                c_ly + r_out * aspect * np.sin(np.radians(180)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(210)),
+                c_ly + r_out * aspect * np.sin(np.radians(210)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(270)),
+                c_ly + r_out * aspect * np.sin(np.radians(270)),
+            ],
+            [
+                c_lx + r_out * np.cos(np.radians(-20)),
+                c_ly + r_out * aspect * np.sin(np.radians(-20)),
+            ],
+            [2.45, 2.10],
+            [xc - 0.12, yc - 0.38],
+        ]
+    )
+
+    tck_u, _ = splprep([pts_u[:, 0], pts_u[:, 1]], s=0, per=True)
+    tck_l, _ = splprep([pts_l[:, 0], pts_l[:, 1]], s=0, per=True)
     u_fine = np.linspace(0, 1, 300)
-    xb_fine, yb_fine = splev(u_fine, tck_b)
+    xu, yu = splev(u_fine, tck_u)
+    xl, yl = splev(u_fine, tck_l)
 
-    # --- RED LOWER HANDLE (Drop-Forged Ergonomic Finger Bow) ---
-    c_lx, c_ly = 1.48, 1.82
-    ang_l = np.radians(-18)
-    rx_in_l, ry_in_l = 0.46, 0.72
-
-    inner_finger_x = (
-        c_lx
-        + rx_in_l * np.cos(theta) * np.cos(ang_l)
-        - ry_in_l * np.sin(theta) * np.sin(ang_l)
-    )
-    inner_finger_y = (
-        c_ly
-        + rx_in_l * np.cos(theta) * np.sin(ang_l)
-        + ry_in_l * np.sin(theta) * np.cos(ang_l)
-    )
-
-    red_pts = np.array(
-        [
-            [xc - 0.12, yc - 0.08],  # shank top at pivot boss (strictly below yc)
-            [2.55, 2.70],  # upper shank neck
-            [1.95, 2.75],  # bow top-right
-            [1.48, 2.78],  # bow top crown
-            [0.82, 2.58],  # bow upper-left
-            [0.46, 1.95],  # bow mid-left (strictly convex curvature)
-            [0.38, 1.35],  # bow lower-left heel
-            [0.46, 0.88],  # bow bottom-left transition
-            [1.15, 0.78],  # bow bottom crown
-            [1.85, 1.02],  # bow bottom-right transition
-            [2.45, 1.85],  # lower shank neck
-            [xc - 0.12, yc - 0.38],  # shank bottom at pivot boss
-        ]
-    )
-    tck_r, _ = splprep([red_pts[:, 0], red_pts[:, 1]], s=0, per=True)
-    xr_fine, yr_fine = splev(u_fine, tck_r)
+    # Pure visual circles for inner holes
+    inner_u_x = c_ux + r_in * np.cos(theta)
+    inner_u_y = c_uy + r_in * aspect * np.sin(theta)
+    inner_l_x = c_lx + r_in * np.cos(theta)
+    inner_l_y = c_ly + r_in * aspect * np.sin(theta)
 
     # Render handle bodies
     ax.fill(
-        xb_fine,
-        yb_fine,
+        xu,
+        yu,
         facecolor="#EBF5F8",
         edgecolor=COLORS["blue"],
         linewidth=2.2,
         zorder=3,
     )
     ax.fill(
-        inner_thumb_x,
-        inner_thumb_y,
+        inner_u_x,
+        inner_u_y,
         facecolor="white",
         edgecolor=COLORS["blue"],
         linewidth=1.6,
@@ -167,16 +206,16 @@ def generate_scissors_figure(output_dir: Path):
     )
 
     ax.fill(
-        xr_fine,
-        yr_fine,
+        xl,
+        yl,
         facecolor="#FDF2F2",
         edgecolor=COLORS["red"],
         linewidth=2.2,
         zorder=3,
     )
     ax.fill(
-        inner_finger_x,
-        inner_finger_y,
+        inner_l_x,
+        inner_l_y,
         facecolor="white",
         edgecolor=COLORS["red"],
         linewidth=1.6,
@@ -317,35 +356,44 @@ def generate_scissors_figure(output_dir: Path):
         )
 
     # -------------------------------------------------------------------------
-    # 4. Precision Mechanical Pivot Assembly
+    # 4. Precision Mechanical Pivot Assembly (Exact Visual Circles)
     # -------------------------------------------------------------------------
-    pivot_boss = patches.Circle(
+    r_boss_x = 0.22
+    r_outer_x = 0.16
+    r_mid_x = 0.11
+    r_inner_x = 0.075
+
+    pivot_boss = patches.Ellipse(
         (xc, yc),
-        0.46,
+        width=2 * r_boss_x,
+        height=2 * r_boss_x * aspect,
         facecolor="#F1F5F9",
         edgecolor=COLORS["ink"],
         linewidth=1.0,
         zorder=6,
     )
-    pivot_outer = patches.Circle(
+    pivot_outer = patches.Ellipse(
         (xc, yc),
-        0.34,
+        width=2 * r_outer_x,
+        height=2 * r_outer_x * aspect,
         facecolor="#E2E8F0",
         edgecolor=COLORS["ink"],
         linewidth=1.6,
         zorder=7,
     )
-    pivot_mid = patches.Circle(
+    pivot_mid = patches.Ellipse(
         (xc, yc),
-        0.24,
+        width=2 * r_mid_x,
+        height=2 * r_mid_x * aspect,
         facecolor="#CBD5E1",
         edgecolor=COLORS["ink"],
         linewidth=1.1,
         zorder=8,
     )
-    pivot_inner = patches.Circle(
+    pivot_inner = patches.Ellipse(
         (xc, yc),
-        0.16,
+        width=2 * r_inner_x,
+        height=2 * r_inner_x * aspect,
         facecolor="#F8FAFC",
         edgecolor=COLORS["ink"],
         linewidth=0.8,
@@ -356,10 +404,11 @@ def generate_scissors_figure(output_dir: Path):
     ax.add_patch(pivot_mid)
     ax.add_patch(pivot_inner)
 
+    # Slotted flathead drive (angled 38 deg in visual space)
     slot_angle = np.radians(38)
-    r_slot = 0.13
+    r_slot = 0.06
     dx = r_slot * np.cos(slot_angle)
-    dy = r_slot * np.sin(slot_angle)
+    dy = r_slot * np.sin(slot_angle) * aspect
     ax.plot(
         [xc - dx, xc + dx],
         [yc - dy, yc + dy],
@@ -413,9 +462,10 @@ def generate_scissors_figure(output_dir: Path):
     )
 
     # Pivot Callout
+    arrow_y_target = yc - r_boss_x * aspect
     ax.annotate(
         "Crossover / Fulcrum\n(generation matches capacity)",
-        xy=(xc, yc - 0.46),
+        xy=(xc, arrow_y_target),
         xytext=(xc, 0.95),
         textcoords="data",
         fontsize=6.2,
@@ -505,10 +555,10 @@ def generate_scissors_figure(output_dir: Path):
         zorder=6,
     )
 
-    # Headroom annotations
+    # Headroom annotations (with ample clearance from circular handles)
     ax.text(
-        1.35,
-        5.95,
+        1.45,
+        6.25,
         "Verification headroom\n(capacity exceeds generation)",
         fontsize=5.8,
         fontweight="bold",
@@ -518,8 +568,8 @@ def generate_scissors_figure(output_dir: Path):
         zorder=6,
     )
     ax.text(
-        1.48,
-        0.45,
+        1.45,
+        0.32,
         "Tractable initial volume",
         fontsize=5.8,
         fontweight="bold",
