@@ -92,18 +92,18 @@ def generate_scissors_figure(output_dir: Path):
     # -------------------------------------------------------------------------
     # 1. Symmetrical True-Circle Handles
     # -------------------------------------------------------------------------
-    c_ux, c_uy = 1.45, 4.70
-    c_lx, c_ly = 1.45, 1.70
+    c_ux, c_uy = 1.45, 4.00
+    c_lx, c_ly = 1.45, 1.65
 
     r_in = 0.35
     w = 0.18
     r_out = r_in + w
 
-    # Upper Handle (Blue Thumb Bow)
+    # Upper Handle (Blue Thumb Bow - lowered to align with lower capacity blade)
     pts_u = np.array(
         [
-            [xc - 0.12, yc + 0.38],
-            [2.45, 4.30],
+            [xc - 0.12, 3.30],
+            [2.40, 3.68],
             [
                 c_ux + r_out * np.cos(np.radians(20)),
                 c_uy + r_out * aspect * np.sin(np.radians(20)),
@@ -132,16 +132,16 @@ def generate_scissors_figure(output_dir: Path):
                 c_ux + r_out * np.cos(np.radians(-40)),
                 c_uy + r_out * aspect * np.sin(np.radians(-40)),
             ],
-            [2.35, 3.80],
-            [xc - 0.12, yc + 0.08],
+            [2.35, 3.32],
+            [xc - 0.12, 3.05],
         ]
     )
 
     # Lower Handle (Red Finger Bow)
     pts_l = np.array(
         [
-            [xc - 0.12, yc - 0.08],
-            [2.35, 2.60],
+            [xc - 0.12, yc - 0.14],
+            [2.35, 2.55],
             [
                 c_lx + r_out * np.cos(np.radians(40)),
                 c_ly + r_out * aspect * np.sin(np.radians(40)),
@@ -170,8 +170,8 @@ def generate_scissors_figure(output_dir: Path):
                 c_lx + r_out * np.cos(np.radians(-20)),
                 c_ly + r_out * aspect * np.sin(np.radians(-20)),
             ],
-            [2.45, 2.10],
-            [xc - 0.12, yc - 0.38],
+            [2.45, 2.05],
+            [xc - 0.12, yc - 0.40],
         ]
     )
 
@@ -558,7 +558,7 @@ def generate_scissors_figure(output_dir: Path):
     # Headroom annotations (with ample clearance from circular handles)
     ax.text(
         1.45,
-        6.25,
+        c_uy + r_out * aspect + 0.45,
         "Verification headroom\n(capacity exceeds generation)",
         fontsize=5.8,
         fontweight="bold",
@@ -569,13 +569,13 @@ def generate_scissors_figure(output_dir: Path):
     )
     ax.text(
         1.45,
-        0.32,
+        0.30,
         "Tractable initial volume",
         fontsize=5.8,
         fontweight="bold",
         color=COLORS["constraints_ink"],
         ha="center",
-        va="top",
+        va="center",
         zorder=6,
     )
 
