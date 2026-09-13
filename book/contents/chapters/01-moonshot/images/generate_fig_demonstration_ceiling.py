@@ -1,247 +1,328 @@
 #!/usr/bin/env python3
 """
-Generate fig-demonstration-ceiling SVG, PDF, and PNG with pristine typography,
-perfect curve clearance, and zero collisions.
+Generate fig-demonstration-ceiling: The Demonstration Ceiling in Game AI and Silicon Architecture
+------------------------------------------------------------------------------------------------
+Panel A: Game AI Demonstration Ceiling in Go (AlphaGo Lee vs AlphaGo Zero; Nature 2017).
+Panel B: Silicon Architecture Demonstration Ceiling in RTL (Layer 1 Imitation vs Layer 3 Closed-Loop).
+
+Adheres strictly to .claude/rules/figures.md:
+- Matplotlib script with apply_style() and canonical COLORS from book/_python/plots.py
+- Two clean subplots with crisp panel titles (A and B)
+- In-panel legends with generous whitespace and zero text clipping
+- Exports SVG, PDF, and high-DPI PNG twins
 """
 
+import sys
 from pathlib import Path
-import subprocess
+import matplotlib.pyplot as plt
+import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[5]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def generate_svg() -> str:
-    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 690" width="1100" height="690" role="img">
-  <title>The Demonstration Ceiling: Human Imitation vs. Ground-Truth Exploration</title>
-  <desc>A dual-panel comparison showing how AlphaGo Zero bypassed the human demonstration ceiling in Go via self-play against game rules, and how Architecture 2.0 seeks to bypass human RTL templates via closed-loop physical oracles.</desc>
-  <defs>
-    <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M0 1.5 L8 5 L0 8.5 Z" fill="#59636D"/>
-    </marker>
-    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M0 1.5 L8 5 L0 8.5 Z" fill="#1E9E48"/>
-    </marker>
-    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M0 1.5 L8 5 L0 8.5 Z" fill="#CF222E"/>
-    </marker>
-  </defs>
+from book._python.plots import COLORS, apply_style
 
-  <!-- Canvas Background -->
-  <rect width="1100" height="690" fill="#FFFFFF"/>
-
-  <!-- ======================================================================= -->
-  <!-- LEFT PANEL: GAME AI (ALPHAGO ZERO)                                      -->
-  <!-- ======================================================================= -->
-  <rect x="25" y="20" width="510" height="570" rx="8" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.5"/>
-
-  <!-- Left Header -->
-  <path d="M 25 28 A 8 8 0 0 1 33 20 L 527 20 A 8 8 0 0 1 535 28 L 535 62 L 25 62 Z" fill="#F6F8FA"/>
-  <line x1="25" y1="62" x2="535" y2="62" stroke="#D0D7DE" stroke-width="1.2"/>
-  <text x="42" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1F2328">(a) Game AI: Demonstration Ceiling in Go</text>
-  <text x="518" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#59636D" text-anchor="end">Silver et al. (Nature 2017)</text>
-
-  <!-- Left Plot Coordinates: Origin at (85, 345), Top at (85, 95), Right at (505, 345) -->
-  <line x1="85" y1="95" x2="85" y2="345" stroke="#8C959F" stroke-width="1.2"/>
-  <line x1="85" y1="345" x2="505" y2="345" stroke="#8C959F" stroke-width="1.2"/>
-
-  <!-- Y Ticks and Labels (Elo) -->
-  <line x1="80" y1="110" x2="85" y2="110" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="76" y="114" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">5,000</text>
-
-  <line x1="80" y1="160" x2="85" y2="160" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="76" y="164" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">4,000</text>
-
-  <line x1="80" y1="210" x2="85" y2="210" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="76" y="214" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">3,000</text>
-
-  <line x1="80" y1="260" x2="85" y2="260" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="76" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">2,000</text>
-
-  <line x1="80" y1="310" x2="85" y2="310" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="76" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">1,000</text>
-
-  <text x="36" y="220" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#24292F" transform="rotate(-90 36 220)" text-anchor="middle">Elo Rating</text>
-
-  <!-- X Ticks and Labels (Days) -->
-  <line x1="85" y1="345" x2="85" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="85" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">0</text>
-
-  <line x1="140" y1="345" x2="140" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="140" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">3 days</text>
-
-  <line x1="270" y1="345" x2="270" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="270" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">20 days</text>
-
-  <line x1="480" y1="345" x2="480" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="480" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">40 days</text>
-
-  <text x="295" y="380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#24292F" text-anchor="middle">Training Duration</text>
-
-  <!-- Human Ceiling Dashed Reference Line (3,500 Elo -> y = 185) -->
-  <line x1="85" y1="185" x2="500" y2="185" stroke="#CF222E" stroke-width="1.4" stroke-dasharray="4 3"/>
-  <rect x="250" y="160" width="245" height="20" rx="4" fill="#FFEBE9" stroke="#CF222E" stroke-width="0.8"/>
-  <text x="372" y="174" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#A40E26" text-anchor="middle">Human Grandmaster Ceiling (~3,500 Elo)</text>
-
-  <!-- Curve: AlphaGo Lee/Fan (Supervised Imitation on 100k human games) -->
-  <path d="M 85 270 Q 110 215, 140 196 T 220 188 T 495 186" fill="none" stroke="#D24D96" stroke-width="2.4"/>
-  <text x="495" y="216" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#7D1A4A" text-anchor="end">AlphaGo Lee / Fan</text>
-  <text x="495" y="231" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#59636D" text-anchor="end">Trained on 100k+ human games; plateaued</text>
-
-  <!-- Curve: AlphaGo Zero (Tabula Rasa) -->
-  <path d="M 85 340 Q 115 330, 130 250 T 140 185 Q 170 125, 230 115 T 495 104" fill="none" stroke="#1E9E48" stroke-width="2.8"/>
-
-  <!-- Breakthrough Annotation at Day 3 (140, 185) -->
-  <circle cx="140" cy="185" r="4.5" fill="#1E9E48"/>
-  <line x1="140" y1="185" x2="165" y2="148" stroke="#1E9E48" stroke-width="1.2"/>
-  <rect x="145" y="132" width="130" height="20" rx="3" fill="#E7F5EC" stroke="#1E9E48" stroke-width="0.8"/>
-  <text x="210" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#146C2E" text-anchor="middle">Passes Human in 72h</text>
-
-  <!-- AlphaGo Zero Curve Label (Placed above the curve) -->
-  <text x="495" y="78" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#1E9E48" text-anchor="end">AlphaGo Zero (&gt;5,000 Elo)</text>
-  <text x="495" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#59636D" text-anchor="end">Pure self-play tabula rasa against game rules</text>
-
-  <!-- Left Properties Card -->
-  <rect x="38" y="405" width="484" height="170" rx="6" fill="#F8FAFC" stroke="#D8DEE4" stroke-width="1.2"/>
-  <text x="52" y="427" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1F2328">Game Domain Characteristics:</text>
-
-  <circle cx="58" cy="452" r="3.5" fill="#1683A6"/>
-  <text x="70" y="456" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Evaluation Oracle:</tspan> Mathematical board rules (exact, deterministic)</text>
-
-  <circle cx="58" cy="478" r="3.5" fill="#1683A6"/>
-  <text x="70" y="482" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Oracle Evaluation Cost:</tspan> O(1) instantaneous, zero compute cost</text>
-
-  <circle cx="58" cy="504" r="3.5" fill="#1683A6"/>
-  <text x="70" y="508" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Objective Function:</tspan> Scalar, binary outcome (win vs. loss)</text>
-
-  <rect x="48" y="526" width="464" height="36" rx="4" fill="#E7F5EC" stroke="#1E9E48" stroke-width="0.8"/>
-  <text x="280" y="542" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#146C2E" text-anchor="middle">Epistemic Takeaway: Human data acted as an anchor.</text>
-  <text x="280" y="555" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#146C2E" text-anchor="middle">The system became superhuman only when human consensus was removed as the ceiling.</text>
-
-
-  <!-- ======================================================================= -->
-  <!-- RIGHT PANEL: CHIP ARCHITECTURE (ARCHITECTURE 2.0)                       -->
-  <!-- ======================================================================= -->
-  <rect x="565" y="20" width="510" height="570" rx="8" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.5"/>
-
-  <!-- Right Header -->
-  <path d="M 565 28 A 8 8 0 0 1 573 20 L 1067 20 A 8 8 0 0 1 1075 28 L 1075 62 L 565 62 Z" fill="#F6F8FA"/>
-  <line x1="565" y1="62" x2="1075" y2="62" stroke="#D0D7DE" stroke-width="1.2"/>
-  <text x="582" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1F2328">(b) Chip Architecture: Demonstration Ceiling in RTL</text>
-  <text x="1058" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#59636D" text-anchor="end">Architecture 2.0</text>
-
-  <!-- Right Plot Coordinates: Origin at (635, 345), Top at (635, 95), Right at (1045, 345) -->
-  <line x1="635" y1="95" x2="635" y2="345" stroke="#8C959F" stroke-width="1.2"/>
-  <line x1="635" y1="345" x2="1045" y2="345" stroke="#8C959F" stroke-width="1.2"/>
-
-  <!-- Y Ticks and Labels (Design Quality) -->
-  <line x1="630" y1="110" x2="635" y2="110" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="626" y="114" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">Optimal</text>
-
-  <line x1="630" y1="195" x2="635" y2="195" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="626" y="199" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">Human</text>
-
-  <line x1="630" y1="320" x2="635" y2="320" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="626" y="324" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" fill="#59636D">Baseline</text>
-
-  <text x="574" y="220" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#24292F" transform="rotate(-90 574 220)" text-anchor="middle">Design Quality (PPA Pareto Frontier)</text>
-
-  <!-- X Ticks and Labels (Exploration Budget) -->
-  <line x1="635" y1="345" x2="635" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="635" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">Initial</text>
-
-  <line x1="825" y1="345" x2="825" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="825" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">Intermediate Search</text>
-
-  <line x1="1025" y1="345" x2="1025" y2="350" stroke="#8C959F" stroke-width="1.2"/>
-  <text x="1025" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#59636D">Converged</text>
-
-  <text x="835" y="380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#24292F" text-anchor="middle">Design Exploration Budget</text>
-
-  <!-- Human Cognitive Ceiling Reference Line (y = 195) -->
-  <line x1="635" y1="195" x2="1035" y2="195" stroke="#CF222E" stroke-width="1.4" stroke-dasharray="4 3"/>
-  <rect x="645" y="162" width="125" height="28" rx="4" fill="#FFEBE9" stroke="#CF222E" stroke-width="0.8"/>
-  <text x="707" y="174" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="700" fill="#A40E26" text-anchor="middle">Human Ceiling</text>
-  <text x="707" y="186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="8.5" font-weight="500" fill="#A40E26" text-anchor="middle">(Legacy Templates)</text>
-
-  <!-- Curve: Layer 1 (AI-Assisted / Imitation on Human RTL Repos) -->
-  <path d="M 635 315 Q 675 240, 740 206 T 840 198 T 1035 197" fill="none" stroke="#D24D96" stroke-width="2.4"/>
-  <text x="1035" y="226" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#7D1A4A" text-anchor="end">Layer 1: AI-Assisted (Imitation)</text>
-  <text x="1035" y="241" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#59636D" text-anchor="end">Trained on human RTL; bounded by human idioms</text>
-
-  <!-- Curve: Layer 3 (AI-Native Redesign / Closed-Loop Ground Truth) -->
-  <path d="M 635 315 Q 695 305, 745 240 T 800 180 Q 850 130, 925 118 T 1035 106" fill="none" stroke="#1E9E48" stroke-width="2.8"/>
-
-  <!-- Breakthrough Annotation at (780, 195) -->
-  <circle cx="780" cy="195" r="4.5" fill="#1E9E48"/>
-  <line x1="780" y1="195" x2="805" y2="155" stroke="#1E9E48" stroke-width="1.2"/>
-  <rect x="795" y="140" width="135" height="20" rx="3" fill="#E7F5EC" stroke="#1E9E48" stroke-width="0.8"/>
-  <text x="862" y="154" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#146C2E" text-anchor="middle">Discovers Novel PPA</text>
-
-  <!-- Layer 3 Curve Label (Placed above the curve) -->
-  <text x="1035" y="78" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#1E9E48" text-anchor="end">Layer 3: AI-Native (Closed-Loop)</text>
-  <text x="1035" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#59636D" text-anchor="end">Evaluated by physical oracles &amp; surrogate hierarchies</text>
-
-  <!-- Right Properties Card -->
-  <rect x="578" y="405" width="484" height="170" rx="6" fill="#F8FAFC" stroke="#D8DEE4" stroke-width="1.2"/>
-  <text x="592" y="427" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1F2328">Hardware Domain Realities:</text>
-
-  <circle cx="598" cy="452" r="3.5" fill="#D24D96"/>
-  <text x="610" y="456" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Evaluation Oracle:</tspan> Physical signoff (STA, DRC, power, simulators)</text>
-
-  <circle cx="598" cy="478" r="3.5" fill="#D24D96"/>
-  <text x="610" y="482" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Oracle Evaluation Cost:</tspan> Expensive (hours to days; demands multi-fidelity hierarchy)</text>
-
-  <circle cx="598" cy="504" r="3.5" fill="#D24D96"/>
-  <text x="610" y="508" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#24292F"><tspan font-weight="700">Objective Function:</tspan> Multiobjective Pareto front (PPA, thermal, yield)</text>
-
-  <rect x="588" y="526" width="464" height="36" rx="4" fill="#F0ECFA" stroke="#6A4FC7" stroke-width="0.8"/>
-  <text x="820" y="542" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#38235D" text-anchor="middle">Physical Grounding: Reality arbitrates, not human style.</text>
-  <text x="820" y="555" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#38235D" text-anchor="middle">Closed-loop physical verification breaks through human cognitive templates.</text>
-
-  <!-- ======================================================================= -->
-  <!-- BOTTOM SYNTHESIS FOOTER                                                 -->
-  <!-- ======================================================================= -->
-  <rect x="25" y="605" width="1050" height="65" rx="6" fill="#F6F8FA" stroke="#D0D7DE" stroke-width="1.2"/>
-  <text x="550" y="630" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1F2328" text-anchor="middle">Architectural Principle: Imitation of human demonstration corpora bounds exploration to human cognitive conventions.</text>
-  <text x="550" y="652" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#59636D" text-anchor="middle">Automated discovery of non-obvious microarchitectures requires evaluating candidates against empirical, physical ground truth.</text>
-
-</svg>"""
-    return svg
+apply_style()
 
 
 def main():
-    out_dir = Path(
-        "/Users/VJ/GitHub/Arch2-editorial-remediation/book/contents/chapters/01-moonshot/images"
-    )
-    svg_path = out_dir / "fig-demonstration-ceiling.svg"
-    pdf_path = out_dir / "fig-demonstration-ceiling.pdf"
-    png_path = out_dir / "fig-demonstration-ceiling.png"
+    img_dir = REPO_ROOT / "book" / "contents" / "chapters" / "01-moonshot" / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
 
-    svg_content = generate_svg()
-    svg_path.write_text(svg_content + "\n", encoding="utf-8")
-    print(f"Wrote {svg_path}")
+    out_svg = img_dir / "fig-demonstration-ceiling.svg"
+    out_pdf = img_dir / "fig-demonstration-ceiling.pdf"
+    out_png = img_dir / "fig-demonstration-ceiling.png"
 
-    # Convert to PDF
-    subprocess.run(
-        ["rsvg-convert", "-f", "pdf", str(svg_path), "-o", str(pdf_path)], check=True
+    # Create 2-panel figure with balanced spacing and generous margins
+    fig, (ax1, ax2) = plt.subplots(
+        1, 2, figsize=(7.5, 3.4), gridspec_kw={"width_ratios": [1.0, 1.0]}
     )
-    print(f"Wrote {pdf_path}")
+    fig.subplots_adjust(wspace=0.38, left=0.10, right=0.96, top=0.88, bottom=0.18)
 
-    # Convert to PNG (high-res for inspection)
-    subprocess.run(
-        [
-            "rsvg-convert",
-            "-d",
-            "300",
-            "-p",
-            "300",
-            "-w",
-            "2200",
-            str(svg_path),
-            "-o",
-            str(png_path),
-        ],
-        check=True,
+    # -------------------------------------------------------------------------
+    # Panel A: Game AI Demonstration Ceiling in Go
+    # -------------------------------------------------------------------------
+    ax1.set_title(
+        "A. Game AI Demonstration Ceiling (Go)",
+        fontsize=7.2,
+        fontweight="bold",
+        pad=8,
+        color=COLORS["ink"],
     )
-    print(f"Wrote {png_path}")
+
+    x_go = np.linspace(0, 40, 300)
+
+    # AlphaGo Lee / Fan: trained on 100k+ human games; plateaus at ~3500 Elo
+    y_lee = 1800 + 1720 * (1.0 - np.exp(-x_go / 2.8)) - 110 * (x_go / 40.0)
+
+    # AlphaGo Zero: pure tabula rasa self-play against game rules; crosses human level at 72h (3d)
+    y_zero = 5150 - 4850 / (1.0 + (x_go / 2.22) ** 2.2)
+
+    # Human grandmaster ceiling line
+    ax1.axhline(
+        3500,
+        color=COLORS["red"],
+        linestyle="--",
+        linewidth=1.2,
+        alpha=0.85,
+        zorder=2,
+    )
+    ax1.text(
+        22.0,
+        3650,
+        "Human Grandmaster Ceiling (~3,500 Elo)",
+        fontsize=5.1,
+        fontweight="bold",
+        color=COLORS["constraints_ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["red"],
+            alpha=0.92,
+            lw=0.55,
+        ),
+        zorder=5,
+    )
+
+    # Plot curves
+    (l_lee,) = ax1.plot(
+        x_go,
+        y_lee,
+        color=COLORS["red"],
+        linewidth=1.9,
+        label="AlphaGo Lee (100k+ human games; plateaued)",
+        zorder=3,
+    )
+    (l_zero,) = ax1.plot(
+        x_go,
+        y_zero,
+        color=COLORS["green"],
+        linewidth=2.2,
+        label="AlphaGo Zero (>5,000 Elo; tabula rasa self-play)",
+        zorder=4,
+    )
+
+    # Point of inflection: 72 hours (3 days)
+    idx_3d = np.argmin(np.abs(x_go - 3.0))
+    x_cross = x_go[idx_3d]
+    y_cross = y_zero[idx_3d]
+    ax1.plot(
+        x_cross, y_cross, marker="o", markersize=4.8, color=COLORS["green"], zorder=6
+    )
+    ax1.annotate(
+        "Crosses human in 72h",
+        xy=(x_cross, y_cross),
+        xytext=(1.5, 4250),
+        textcoords="data",
+        fontsize=5.1,
+        fontweight="bold",
+        color=COLORS["evidence_ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.22",
+            facecolor="white",
+            edgecolor=COLORS["green"],
+            alpha=0.94,
+            lw=0.55,
+        ),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["green"],
+            lw=0.8,
+            shrinkB=3,
+        ),
+        zorder=6,
+    )
+
+    # In-panel clean legend in lower right quadrant
+    leg1 = ax1.legend(
+        handles=[l_zero, l_lee],
+        loc="lower right",
+        bbox_to_anchor=(0.98, 0.20),
+        fontsize=5.1,
+        frameon=True,
+        facecolor="white",
+        edgecolor=COLORS["grid"],
+        framealpha=0.94,
+    )
+    leg1.set_zorder(5)
+
+    ax1.set_xlim(-0.5, 41)
+    ax1.set_ylim(0, 5600)
+    ax1.set_xticks([0, 3, 10, 20, 30, 40])
+    ax1.set_xticklabels(["0", "3d", "10d", "20d", "30d", "40d"], fontsize=5.8)
+    ax1.set_yticks([0, 1000, 2000, 3000, 4000, 5000])
+    ax1.set_yticklabels(
+        ["0", "1,000", "2,000", "3,000", "4,000", "5,000"], fontsize=5.8
+    )
+    ax1.set_xlabel("Training Duration (Days)", fontsize=6.6)
+    ax1.set_ylabel("Elo Rating", fontsize=6.6)
+    ax1.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
+
+    # Oracle property card badge at bottom
+    ax1.text(
+        1.5,
+        350,
+        "Evaluation Oracle: Exact, deterministic board rules [O(1) cost]",
+        fontsize=4.6,
+        fontstyle="italic",
+        color=COLORS["muted"],
+        bbox=dict(
+            boxstyle="round,pad=0.22",
+            facecolor="#F6F8FA",
+            edgecolor=COLORS["grid"],
+            alpha=0.92,
+            lw=0.5,
+        ),
+        zorder=5,
+    )
+
+    # -------------------------------------------------------------------------
+    # Panel B: Silicon Architecture Demonstration Ceiling in RTL
+    # -------------------------------------------------------------------------
+    ax2.set_title(
+        "B. Silicon Architecture Demonstration Ceiling (RTL)",
+        fontsize=7.2,
+        fontweight="bold",
+        pad=8,
+        color=COLORS["ink"],
+    )
+
+    x_rtl = np.linspace(0, 100, 300)
+
+    # Layer 1: Point Assistance / Imitation: trained on human RTL corpora
+    y_l1 = 20.0 + 46.0 * (1.0 - np.exp(-x_rtl / 12.0)) - 2.5 * (x_rtl / 100.0)
+
+    # Layer 3: AI-Native Closed-Loop Exploration against physical verification oracles
+    y_l3 = 20.0 + 72.0 / (1.0 + (32.0 / np.maximum(x_rtl, 0.01)) ** 2.2)
+
+    # Human engineering ceiling
+    y_human = 64.0
+    ax2.axhline(
+        y_human,
+        color=COLORS["red"],
+        linestyle="--",
+        linewidth=1.2,
+        alpha=0.85,
+        zorder=2,
+    )
+    ax2.text(
+        42.0,
+        y_human + 2.5,
+        "Human Engineering Ceiling (Cognitive Templates)",
+        fontsize=5.1,
+        fontweight="bold",
+        color=COLORS["constraints_ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.2",
+            facecolor="white",
+            edgecolor=COLORS["red"],
+            alpha=0.92,
+            lw=0.55,
+        ),
+        zorder=5,
+    )
+
+    # Plot curves
+    (l_l1,) = ax2.plot(
+        x_rtl,
+        y_l1,
+        color=COLORS["red"],
+        linewidth=1.9,
+        label="Layer 1: Imitation (Human RTL corpora; bounded)",
+        zorder=3,
+    )
+    (l_l3,) = ax2.plot(
+        x_rtl,
+        y_l3,
+        color=COLORS["green"],
+        linewidth=2.2,
+        label="Layer 3: AI-Native (Closed-loop physical oracles)",
+        zorder=4,
+    )
+
+    # Point of breakthrough
+    idx_break = np.argmin(np.abs(y_l3 - y_human))
+    x_break = x_rtl[idx_break]
+    y_break = y_l3[idx_break]
+    ax2.plot(
+        x_break, y_break, marker="o", markersize=4.8, color=COLORS["green"], zorder=6
+    )
+    ax2.annotate(
+        "Discovers novel PPA trade-offs",
+        xy=(x_break, y_break),
+        xytext=(28, 76),
+        textcoords="data",
+        fontsize=5.1,
+        fontweight="bold",
+        color=COLORS["evidence_ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.22",
+            facecolor="white",
+            edgecolor=COLORS["green"],
+            alpha=0.94,
+            lw=0.55,
+        ),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["green"],
+            lw=0.8,
+            shrinkB=3,
+        ),
+        zorder=6,
+    )
+
+    # In-panel clean legend in lower right quadrant
+    leg2 = ax2.legend(
+        handles=[l_l3, l_l1],
+        loc="lower right",
+        bbox_to_anchor=(0.98, 0.20),
+        fontsize=5.1,
+        frameon=True,
+        facecolor="white",
+        edgecolor=COLORS["grid"],
+        framealpha=0.94,
+    )
+    leg2.set_zorder(5)
+
+    ax2.set_xlim(-1, 101)
+    ax2.set_ylim(10, 100)
+    ax2.set_xticks([0, 50, 100])
+    ax2.set_xticklabels(["Initial", "Intermediate Search", "Converged"], fontsize=5.8)
+    ax2.set_yticks([20, 64, 92])
+    ax2.set_yticklabels(["Baseline", "Human Ceiling", "Optimal Frontier"], fontsize=5.8)
+    ax2.set_xlabel("Design Exploration Budget (Compute & Iterations)", fontsize=6.6)
+    ax2.set_ylabel("Design Quality (PPA Pareto Frontier)", fontsize=6.6, labelpad=4)
+    ax2.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
+
+    # Oracle property card badge at bottom
+    ax2.text(
+        3.0,
+        15.5,
+        "Evaluation Oracle: Multi-fidelity physical signoff [STA, DRC, power: hours/days]",
+        fontsize=4.6,
+        fontstyle="italic",
+        color=COLORS["muted"],
+        bbox=dict(
+            boxstyle="round,pad=0.22",
+            facecolor="#F6F8FA",
+            edgecolor=COLORS["grid"],
+            alpha=0.92,
+            lw=0.5,
+        ),
+        zorder=5,
+    )
+
+    # Save outputs
+    fig.savefig(out_svg, format="svg", bbox_inches="tight")
+    fig.savefig(out_pdf, format="pdf", bbox_inches="tight")
+    fig.savefig(out_png, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"Generated:")
+    print(f"  {out_svg}")
+    print(f"  {out_pdf}")
+    print(f"  {out_png}")
 
 
 if __name__ == "__main__":
