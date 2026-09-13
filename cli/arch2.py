@@ -6485,7 +6485,7 @@ def generate_glossary_lua() -> str:
         ]
     )
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def glossary_findings() -> list[Finding]:
