@@ -69,14 +69,14 @@ def main():
         zorder=2,
     )
     ax1.text(
-        22.0,
-        3650,
+        21.0,
+        3820,
         "Human Grandmaster Ceiling (~3,500 Elo)",
         fontsize=5.1,
         fontweight="bold",
         color=COLORS["constraints_ink"],
         bbox=dict(
-            boxstyle="round,pad=0.2",
+            boxstyle="round,pad=0.22",
             facecolor="white",
             edgecolor=COLORS["red"],
             alpha=0.92,
@@ -113,7 +113,7 @@ def main():
     ax1.annotate(
         "Crosses human in 72h",
         xy=(x_cross, y_cross),
-        xytext=(1.5, 4250),
+        xytext=(7.5, 4150),
         textcoords="data",
         fontsize=5.1,
         fontweight="bold",
@@ -129,7 +129,7 @@ def main():
             arrowstyle="->",
             color=COLORS["green"],
             lw=0.8,
-            shrinkB=3,
+            shrinkB=4,
         ),
         zorder=6,
     )
@@ -207,14 +207,14 @@ def main():
         zorder=2,
     )
     ax2.text(
-        42.0,
+        1.5,
         y_human + 2.5,
-        "Human Engineering Ceiling (Cognitive Templates)",
+        "Human Engineering Ceiling\n(Cognitive Templates)",
         fontsize=5.1,
         fontweight="bold",
         color=COLORS["constraints_ink"],
         bbox=dict(
-            boxstyle="round,pad=0.2",
+            boxstyle="round,pad=0.22",
             facecolor="white",
             edgecolor=COLORS["red"],
             alpha=0.92,
@@ -251,7 +251,7 @@ def main():
     ax2.annotate(
         "Discovers novel PPA trade-offs",
         xy=(x_break, y_break),
-        xytext=(28, 76),
+        xytext=(20.0, 83.0),
         textcoords="data",
         fontsize=5.1,
         fontweight="bold",
@@ -267,7 +267,7 @@ def main():
             arrowstyle="->",
             color=COLORS["green"],
             lw=0.8,
-            shrinkB=3,
+            shrinkB=4,
         ),
         zorder=6,
     )
