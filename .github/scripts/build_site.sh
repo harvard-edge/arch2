@@ -21,6 +21,7 @@ mkdir -p \
   _site/design-loop-card \
   _site/examples/design-loop-cards \
   _site/images \
+  _site/notebooks \
   _site/schemas \
   _site/tools
 
@@ -40,6 +41,9 @@ echo "==> Copying public design-loop card artifacts"
 cp -R schemas/. _site/schemas/
 cp -R design-loop-card/. _site/design-loop-card/
 cp -R examples/design-loop-cards/. _site/examples/design-loop-cards/
+
+echo "==> Copying interactive provenance notebooks"
+cp -R www/notebooks/. _site/notebooks/
 
 echo "==> Building generated registry indexes"
 PYTHONPATH=.github/scripts python3 .github/scripts/build_catalog_index.py
