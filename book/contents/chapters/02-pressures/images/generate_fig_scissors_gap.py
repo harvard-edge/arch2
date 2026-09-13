@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from scipy.interpolate import splprep, splev
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -49,10 +50,10 @@ def generate_scissors_figure(output_dir: Path):
 
     ax.set_xlim(0, 10.8)
     ax.set_ylim(0, 9.4)
-    xc, yc = 3.3, 3.2
+    xc, yc = 3.25, 3.20
 
     # -------------------------------------------------------------------------
-    # 1. Background Grid & Framing
+    # 0. Grid
     # -------------------------------------------------------------------------
     for gx in np.arange(2.0, 9.5, 1.0):
         ax.axvline(
@@ -74,140 +75,130 @@ def generate_scissors_figure(output_dir: Path):
         )
 
     # -------------------------------------------------------------------------
-    # 2. Handles (Left of Pivot)
+    # 1. C2-Continuous Sculpted Handles (Left of Pivot)
     # -------------------------------------------------------------------------
-    t = np.linspace(0, 1, 60)
+    # --- BLUE UPPER HANDLE (Thumb Bow) ---
+    blue_pts = np.array(
+        [
+            [xc - 0.08, yc + 0.26],  # 0: shank top at pivot boss
+            [2.35, 4.00],  # 1: upper shank
+            [1.70, 4.88],  # 2: bow top-right transition
+            [1.25, 5.35],  # 3: bow crown
+            [0.65, 4.85],  # 4: bow outer top-left
+            [0.55, 4.18],  # 5: bow tip left
+            [0.85, 3.65],  # 6: bow bottom-left
+            [1.40, 3.55],  # 7: bow bottom transition
+            [2.10, 3.75],  # 8: lower shank
+            [xc - 0.08, yc - 0.20],  # 9: shank bottom at pivot boss
+        ]
+    )
+    tck_b, _ = splprep([blue_pts[:, 0], blue_pts[:, 1]], s=0, per=True)
+    u_fine = np.linspace(0, 1, 250)
+    xb_fine, yb_fine = splev(u_fine, tck_b)
 
-    # Upper Handle: Blue (Capacity exceeds demand before crossover)
-    # Loop center: (1.45, 4.65)
-    p0_bs = np.array([1.88, 4.15])
-    p1_bs = np.array([2.55, 3.65])
-    p2_bs = np.array([xc, yc])
-    s_b = (
-        (1 - t)[:, None] ** 2 * p0_bs
-        + 2 * (1 - t)[:, None] * t[:, None] * p1_bs
-        + t[:, None] ** 2 * p2_bs
+    theta = np.linspace(0, 2 * np.pi, 100)
+    inner_thumb_x = (
+        1.25
+        + 0.36 * np.cos(theta) * np.cos(np.radians(22))
+        - 0.52 * np.sin(theta) * np.sin(np.radians(22))
+    )
+    inner_thumb_y = (
+        4.45
+        + 0.36 * np.cos(theta) * np.sin(np.radians(22))
+        + 0.52 * np.sin(theta) * np.cos(np.radians(22))
     )
 
-    ax.plot(
-        s_b[:, 0],
-        s_b[:, 1],
-        color=COLORS["blue"],
-        linewidth=6.0,
-        solid_capstyle="round",
-        zorder=3,
+    # --- RED LOWER HANDLE (Finger Bow) ---
+    red_pts = np.array(
+        [
+            [xc - 0.08, yc + 0.20],  # 0: shank top at pivot boss
+            [2.50, 2.95],  # 1: upper shank
+            [1.95, 2.68],  # 2: bow top transition
+            [1.30, 2.65],  # 3: bow top crown
+            [0.65, 2.35],  # 4: bow top-left
+            [0.45, 1.70],  # 5: bow outer tip left
+            [0.60, 1.15],  # 6: bow bottom-left (ergonomic curve)
+            [1.10, 0.90],  # 7: bow bottom crown
+            [1.70, 1.05],  # 8: bow bottom-right transition
+            [2.35, 1.85],  # 9: lower shank
+            [xc - 0.08, yc - 0.26],  # 10: shank bottom at pivot boss
+        ]
     )
-    ax.plot(
-        s_b[:, 0],
-        s_b[:, 1],
-        color="#EBF5F8",
-        linewidth=2.8,
-        solid_capstyle="round",
-        zorder=4,
+    tck_r, _ = splprep([red_pts[:, 0], red_pts[:, 1]], s=0, per=True)
+    xr_fine, yr_fine = splev(u_fine, tck_r)
+
+    inner_finger_x = (
+        1.35
+        + 0.44 * np.cos(theta) * np.cos(np.radians(-20))
+        - 0.68 * np.sin(theta) * np.sin(np.radians(-20))
+    )
+    inner_finger_y = (
+        1.78
+        + 0.44 * np.cos(theta) * np.sin(np.radians(-20))
+        + 0.68 * np.sin(theta) * np.cos(np.radians(-20))
     )
 
-    # Thumb loop (elliptical bow)
-    thumb_outer = patches.Ellipse(
-        (1.45, 4.65),
-        1.25,
-        1.6,
-        angle=25,
+    # Draw both handle bodies with clean white cutouts
+    ax.fill(
+        xb_fine,
+        yb_fine,
         facecolor="#EBF5F8",
         edgecolor=COLORS["blue"],
-        linewidth=2.8,
-        zorder=5,
+        linewidth=2.4,
+        zorder=3,
     )
-    thumb_inner = patches.Ellipse(
-        (1.45, 4.65),
-        0.65,
-        0.95,
-        angle=25,
+    ax.fill(
+        inner_thumb_x,
+        inner_thumb_y,
         facecolor="white",
         edgecolor=COLORS["blue"],
         linewidth=1.8,
-        zorder=6,
-    )
-    ax.add_patch(thumb_outer)
-    ax.add_patch(thumb_inner)
-
-    # Lower Handle: Red (Work / Demand)
-    # Loop center: (1.45, 1.75)
-    p0_rs = np.array([1.88, 2.25])
-    p1_rs = np.array([2.55, 2.75])
-    p2_rs = np.array([xc, yc])
-    s_r = (
-        (1 - t)[:, None] ** 2 * p0_rs
-        + 2 * (1 - t)[:, None] * t[:, None] * p1_rs
-        + t[:, None] ** 2 * p2_rs
-    )
-
-    ax.plot(
-        s_r[:, 0],
-        s_r[:, 1],
-        color=COLORS["red"],
-        linewidth=6.0,
-        solid_capstyle="round",
-        zorder=3,
-    )
-    ax.plot(
-        s_r[:, 0],
-        s_r[:, 1],
-        color="#FDF2F2",
-        linewidth=2.8,
-        solid_capstyle="round",
         zorder=4,
     )
 
-    # Finger loop (elongated bow)
-    finger_outer = patches.Ellipse(
-        (1.45, 1.75),
-        1.5,
-        1.9,
-        angle=-20,
+    ax.fill(
+        xr_fine,
+        yr_fine,
         facecolor="#FDF2F2",
         edgecolor=COLORS["red"],
-        linewidth=2.8,
-        zorder=5,
+        linewidth=2.4,
+        zorder=3,
     )
-    finger_inner = patches.Ellipse(
-        (1.45, 1.75),
-        0.8,
-        1.15,
-        angle=-20,
+    ax.fill(
+        inner_finger_x,
+        inner_finger_y,
         facecolor="white",
         edgecolor=COLORS["red"],
         linewidth=1.8,
-        zorder=6,
+        zorder=4,
     )
-    ax.add_patch(finger_outer)
-    ax.add_patch(finger_inner)
 
     # -------------------------------------------------------------------------
-    # 3. Precision Blades & The Scissors Gap (Right of Pivot)
+    # 2. Precision Blades & The Scissors Gap (Right of Pivot)
     # -------------------------------------------------------------------------
-    tip_u = np.array([8.9, 7.8])
-    tip_l = np.array([8.9, 3.5])
+    tip_u = np.array([8.95, 7.85])
+    tip_l = np.array([8.95, 3.55])
 
-    # Upper Blade (Red: Demand / Work awaiting review)
+    # Upper Blade (Red: Demand / Candidate backlog)
     u_cut = cubic_bezier(
-        np.array([xc, yc]), np.array([5.0, 4.5]), np.array([7.0, 6.1]), tip_u, 100
+        np.array([xc, yc]), np.array([5.0, 4.55]), np.array([7.0, 6.15]), tip_u, 100
     )
     u_spine = cubic_bezier(
-        np.array([xc, yc + 0.38]),
-        np.array([4.8, 5.2]),
-        np.array([6.8, 7.0]),
+        np.array([xc, yc + 0.42]),
+        np.array([4.8, 5.30]),
+        np.array([6.8, 7.10]),
         tip_u,
         100,
     )
     u_bevel = cubic_bezier(
-        np.array([xc + 0.3, yc + 0.22]),
-        np.array([4.9, 4.85]),
-        np.array([6.9, 6.55]),
+        np.array([xc + 0.35, yc + 0.24]),
+        np.array([4.9, 4.92]),
+        np.array([6.9, 6.62]),
         tip_u,
         100,
     )
 
-    # Shading facets
+    # Facets
     u_facet_upper = np.vstack([u_spine, u_bevel[::-1]])
     ax.add_patch(
         patches.Polygon(u_facet_upper, facecolor="#FEE2E2", alpha=0.95, zorder=3)
@@ -243,21 +234,21 @@ def generate_scissors_figure(output_dir: Path):
         zorder=5,
     )
 
-    # Lower Blade (Blue: Capacity / Review & verification throughput)
+    # Lower Blade (Blue: Capacity / Physical verification throughput)
     l_cut = cubic_bezier(
-        np.array([xc, yc]), np.array([5.0, 3.25]), np.array([7.0, 3.38]), tip_l, 100
+        np.array([xc, yc]), np.array([5.0, 3.28]), np.array([7.0, 3.42]), tip_l, 100
     )
     l_spine = cubic_bezier(
-        np.array([xc, yc - 0.38]),
-        np.array([4.8, 2.8]),
-        np.array([6.8, 3.1]),
+        np.array([xc, yc - 0.42]),
+        np.array([4.9, 2.72]),
+        np.array([7.0, 3.08]),
         tip_l,
         100,
     )
     l_bevel = cubic_bezier(
-        np.array([xc + 0.3, yc - 0.20]),
-        np.array([4.9, 3.02]),
-        np.array([6.9, 3.32]),
+        np.array([xc + 0.35, yc - 0.20]),
+        np.array([4.95, 3.00]),
+        np.array([7.0, 3.25]),
         tip_l,
         100,
     )
@@ -298,13 +289,13 @@ def generate_scissors_figure(output_dir: Path):
     )
 
     # -------------------------------------------------------------------------
-    # 4. The Scissors Gap (Unsettled Work Area)
+    # 3. The Scissors Gap (Filled Area)
     # -------------------------------------------------------------------------
     gap_poly = np.vstack([u_cut, l_cut[::-1]])
     ax.add_patch(patches.Polygon(gap_poly, facecolor="#E4F1F6", alpha=0.88, zorder=1))
 
     for frac in [0.25, 0.45, 0.65, 0.85]:
-        gx = xc + frac * (8.9 - xc)
+        gx = xc + frac * (8.95 - xc)
         idx = int(frac * 99)
         ax.plot(
             [gx, gx],
@@ -317,8 +308,16 @@ def generate_scissors_figure(output_dir: Path):
         )
 
     # -------------------------------------------------------------------------
-    # 5. Mechanical Fulcrum / Pivot Screw Assembly
+    # 4. Mechanical Pivot Assembly
     # -------------------------------------------------------------------------
+    pivot_boss = patches.Circle(
+        (xc, yc),
+        0.44,
+        facecolor="#F1F5F9",
+        edgecolor=COLORS["ink"],
+        linewidth=1.0,
+        zorder=6,
+    )
     pivot_outer = patches.Circle(
         (xc, yc),
         0.32,
@@ -343,6 +342,7 @@ def generate_scissors_figure(output_dir: Path):
         linewidth=0.8,
         zorder=9,
     )
+    ax.add_patch(pivot_boss)
     ax.add_patch(pivot_outer)
     ax.add_patch(pivot_mid)
     ax.add_patch(pivot_inner)
@@ -361,7 +361,7 @@ def generate_scissors_figure(output_dir: Path):
     )
 
     # -------------------------------------------------------------------------
-    # 6. Typography & Labels
+    # 5. Typography & Annotations
     # -------------------------------------------------------------------------
     # Upper Curve Label
     ax.text(
@@ -386,7 +386,7 @@ def generate_scissors_figure(output_dir: Path):
     # Lower Curve Label
     ax.text(
         6.1,
-        2.25,
+        2.18,
         "tool and reviewer capacity",
         fontsize=8.2,
         fontweight="bold",
@@ -406,8 +406,8 @@ def generate_scissors_figure(output_dir: Path):
     # Pivot Callout
     ax.annotate(
         "Crossover / Fulcrum\n(generation matches capacity)",
-        xy=(xc, yc - 0.35),
-        xytext=(xc, 1.0),
+        xy=(xc, yc - 0.44),
+        xytext=(xc, 0.95),
         textcoords="data",
         fontsize=6.2,
         fontweight="bold",
@@ -450,7 +450,7 @@ def generate_scissors_figure(output_dir: Path):
     )
 
     # Dimension Bracket on the far right
-    bx = 9.15
+    bx = 9.20
     y_top = tip_u[1]
     y_bot = tip_l[1]
     y_mid = 0.5 * (y_top + y_bot)
@@ -492,9 +492,9 @@ def generate_scissors_figure(output_dir: Path):
         zorder=6,
     )
 
-    # Headroom annotation
+    # Headroom annotations
     ax.text(
-        1.45,
+        1.25,
         5.85,
         "Verification headroom\n(capacity exceeds generation)",
         fontsize=5.8,
@@ -504,9 +504,20 @@ def generate_scissors_figure(output_dir: Path):
         va="bottom",
         zorder=6,
     )
+    ax.text(
+        1.35,
+        0.45,
+        "Tractable initial volume",
+        fontsize=5.8,
+        fontweight="bold",
+        color=COLORS["constraints_ink"],
+        ha="center",
+        va="top",
+        zorder=6,
+    )
 
     # -------------------------------------------------------------------------
-    # 7. Axes Styling
+    # 6. Axes Styling
     # -------------------------------------------------------------------------
     ax.set_xlabel(
         "increasing design scope and result volume",
