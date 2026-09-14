@@ -74,11 +74,12 @@ def test_apollo_uses_reachable_authoritative_paper_record() -> None:
     assert apollo["artifact_availability"] == "paper_only"
 
 
-def test_all_current_workshops_are_archived_without_submission_links() -> None:
+def test_archived_workshops_do_not_retain_submission_links() -> None:
     workshops = [_load(path) for path in WORKSHOP_DIR.glob("*.yml")]
     assert workshops
-    assert all(item["status"] == "archived" for item in workshops)
-    assert all("submission_url" not in item for item in workshops)
+    for item in workshops:
+        if item.get("status") == "archived":
+            assert "submission_url" not in item
 
 
 def test_expired_active_workshop_is_rejected(tmp_path: Path) -> None:

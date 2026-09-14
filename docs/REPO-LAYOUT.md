@@ -63,7 +63,7 @@ Arch2/
 | **book** | Synthesis lecture | Quarto book via `arch2` | `book/contents/` |
 | **www** | Hub site | Quarto website | `www/*.qmd` (optional later: `www/contents/`) |
 | **tools** | Tool registry | Quarto + `registry/` | page at project root; data in `registry/` |
-| **labs** | Practice tracks | Python + notebooks | `tutorial/`, `notebooks/`, `full_course/`, `arch2_labs/` |
+| **labs** | Practice tracks | Python + notebooks | `notebooks/`, `arch2_labs/`, `examples/` |
 | **slides** | Decks | LaTeX / Makefile | `slides/` |
 | **card** | Study record | templates + schema | `design-loop-card/`, `schemas/`, `examples/` |
 

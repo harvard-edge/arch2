@@ -1,0 +1,1 @@
+../examples/scale_proxy_mirage/lab.py

@@ -187,7 +187,7 @@ def test_sourced_public_record_fixture_uses_the_canonical_card() -> None:
 
 
 def test_prompt_bootstrap_does_not_claim_canonical_completion() -> None:
-    source = Path("notebooks/lab_01_prompt_to_card.py").read_text()
+    source = _source(Path("notebooks/lab_01_prompt_to_card.py"))
 
     assert "Four-field bootstrap complete" in source
     assert "not a complete canonical design-loop card" in source
@@ -197,7 +197,7 @@ def test_prompt_bootstrap_does_not_claim_canonical_completion() -> None:
 
 
 def test_proxy_lab_persists_explicit_learner_decision() -> None:
-    source = Path("examples/scale_proxy_mirage/lab.py").read_text()
+    source = _source(Path("examples/scale_proxy_mirage/lab.py"))
 
     assert "record_human_decision" in source
     assert "render_objective_summary" in source
@@ -213,7 +213,7 @@ def test_proxy_lab_persists_explicit_learner_decision() -> None:
 
 
 def test_scissors_gap_separates_queue_load_from_search_effort() -> None:
-    source = Path("notebooks/lab_02_scissors_gap.py").read_text()
+    source = _source(Path("notebooks/lab_02_scissors_gap.py"))
 
     assert "offered_load = proposal_rate / adjudication_capacity" in source
     assert "queue_growth = max(0.0, proposal_rate - adjudication_capacity)" in source
