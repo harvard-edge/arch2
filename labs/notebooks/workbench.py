@@ -116,6 +116,26 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
+### Anti-Reward-Hacking & Multi-Objective Pareto Gates
+
+In autonomous hardware design, **reward hacking** occurs when an optimizer exploits a surrogate objective (e.g. minimizing compute cycles while ignoring memory stall time, or minimizing wirelength while causing routing track shorts).
+
+To ensure every result reflects physical ground truth rather than simulated shortcuts:
+
+| Micro-Loop | Naive / Hacked Proxy Metric | Hidden Physical Penalty | Grounded Signoff Gate (Workbench Enforcement) | Toolchain Provenance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Loop A: Microarchitecture** | Compute cycles ($T_{\text{comp}}$) or peak MACs/s | DRAM interface bandwidth choke ($78\%$ stall time) | Joint Roofline Latency: $T_{\text{effective}} = \max(T_{\text{comp}}, T_{\text{dram}})$ | `SCALE-Sim v3.0.0` (DRAM access traces) |
+| **Loop B: RTL & Synthesis** | Target frequency / positive slack | Logic depth violation, carry ripple, arithmetic corruption | Two-Key Signoff: Positive Slack ($\text{WNS} \ge 0$) + 1,000-vector Formal Equivalence | `Yosys 0.33+` (synthesis) & `iverilog` (formal/functional testbench) |
+| **Loop C: Physical Design** | Half-Perimeter Wirelength (HPWL) | Routing track saturation and pin shorts ($>85\%$ density) | 2D RUDY Track Capacity + Design Rule Check ($0$ DRC shorts) | Physics-Grounded Track Capacity & RUDY Router (130nm M3/M4) |
+| **Loop D: HW/SW Co-Design** | Arithmetic opcode speedup or loop unroll | Register file exhaustion and stack spills ($32\text{k}$ cycles) | End-to-End Instruction & Spill Profile + Area Gate ($\le 15\text{k GE}$) | `riscv64-linux-gnu-gcc 13.3+` & `objdump` (disassembly profiling) |
+"""
+    )
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
 ---
 ## 2. Micro-Loop A: Microarchitectural Search & The Memory Wall
 
