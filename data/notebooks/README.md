@@ -12,8 +12,8 @@ what the book claims.
 
 ## Why marimo rather than Jupyter
 
-The repository already uses marimo for `labs/notebooks/`, so this follows the
-house convention. Four properties earn it:
+The repository uses marimo for reproducible provenance audits. Four
+properties earn it:
 
 | Property | Why it matters here |
 | --- | --- |

@@ -32,7 +32,7 @@ Arch2/
 ├── book/                 # Synthesis lecture (Quarto book)
 ├── www/                  # Hub site (Quarto website)
 ├── tools/                # Tool registry
-├── labs/                 # Companion practice / tutorials
+├── labs/                 # Companion practice and empirical study data
 ├── slides/               # Talk and workshop decks
 ├── design-loop-card/     # Human templates
 ├── schemas/              # Machine contracts
@@ -63,7 +63,7 @@ Arch2/
 | **book** | Synthesis lecture | Quarto book via `arch2` | `book/contents/` |
 | **www** | Hub site | Quarto website | `www/*.qmd` (optional later: `www/contents/`) |
 | **tools** | Tool registry | Quarto + `registry/` | page at project root; data in `registry/` |
-| **labs** | Practice tracks | Python + notebooks | `notebooks/`, `arch2_labs/`, `examples/` |
+| **labs** | Practice and empirical data | Markdown + study references | `README.md`, `examples/` |
 | **slides** | Decks | LaTeX / Makefile | `slides/` |
 | **card** | Study record | templates + schema | `design-loop-card/`, `schemas/`, `examples/` |
 
