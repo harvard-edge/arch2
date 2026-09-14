@@ -9372,6 +9372,12 @@ def lab_tutorial(
         "--hero",
         help="Run the Hero demonstration (Loop B: 500 MHz Timing Closure)",
     ),
+    explore: bool = typer.Option(
+        False,
+        "--explore",
+        "-e",
+        help="Run parameter sensitivity sweeps (bitwidth & frequency scaling)",
+    ),
     loop: str = typer.Option(
         "b",
         "--loop",
@@ -9406,7 +9412,9 @@ def lab_tutorial(
 ) -> None:
     """Run the interactive Architecture 2.0 Live Screencast & Workshop Tutorial."""
     cmd = ["python3", "labs/tutorial.py"]
-    if hero:
+    if explore:
+        cmd.append("--explore")
+    elif hero:
         cmd.append("--hero")
     else:
         cmd.extend(["--loop", loop])

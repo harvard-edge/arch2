@@ -33,8 +33,8 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     python3-click \
     && rm -rf /var/lib/apt/lists/*
 
-# Install SCALE-Sim (Systolic CNN and GEMM Accelerator Simulator)
-RUN pip3 install --no-cache-dir --break-system-packages scalesim
+# Install Python packages (SCALE-Sim and Typer CLI engine)
+RUN pip3 install --no-cache-dir --break-system-packages scalesim typer
 
 # Working directory inside the container
 WORKDIR /workspace

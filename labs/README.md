@@ -2,6 +2,8 @@
 
 Welcome to the hands-on engineering testbed for *Architecture 2.0: Principles of AI-Native System and Chip Design*.
 
+> 📖 **Curriculum & Lab Manual:** See [**TUTORIAL_GUIDE.md**](TUTORIAL_GUIDE.md) for the complete 12-chapter hands-on curriculum map, university course syllabus, and interactive parameter sensitivity exercises.
+
 This workbench provides concrete, fully grounded, executable demonstrations that answer a foundational question of modern computer architecture: **Are we doing AI-native architecture here, or are we just doing AI-assisted or AI-driven optimization?**
 
 ---
