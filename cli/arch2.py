@@ -9614,6 +9614,12 @@ def lab_tutorial(
 
 @agent_app.command("run")
 def agent_run(
+    model: str = typer.Option(
+        "reference",
+        "--model",
+        "-m",
+        help="Agent brain model: 'reference' (default), 'gpt-4o', 'gemini-2.5-pro', or 'ollama/<model>'",
+    ),
     hero: bool = typer.Option(
         True,
         "--hero",
@@ -9637,6 +9643,11 @@ def agent_run(
         "-p",
         help="Pacing delay in seconds between agent reasoning turns (e.g. 1.5)",
     ),
+    max_turns: int = typer.Option(
+        3,
+        "--max-turns",
+        help="Maximum number of reasoning turns for closed-loop search",
+    ),
     width: int = typer.Option(
         88,
         "--width",
@@ -9649,7 +9660,14 @@ def agent_run(
     ),
 ) -> None:
     """Run an autonomous closed-loop AI-native design agent against physical EDA tools."""
-    cmd = ["python3", "labs/agent_loop.py"]
+    cmd = [
+        "python3",
+        "labs/agent_loop.py",
+        "--model",
+        model,
+        "--max-turns",
+        str(max_turns),
+    ]
     if hero:
         cmd.append("--hero")
     else:
@@ -9671,6 +9689,14 @@ def agent_run(
     raise typer.Exit(res.returncode)
 
 
+@agent_app.command("models")
+def agent_models() -> None:
+    """List supported AI model backends and inspect API key availability."""
+    script = ROOT / "labs" / "agent_loop.py"
+    res = subprocess.run([sys.executable, str(script), "--list-models"])
+    raise typer.Exit(res.returncode)
+
+
 @agent_app.command("inspect")
 def agent_inspect() -> None:
     """Inspect the physical receipts and decision log from the last agent run."""
@@ -9685,6 +9711,7 @@ def agent_inspect() -> None:
     console.print(
         Panel(
             f"[bold white]Problem:[/bold white] {data.get('problem')}\n"
+            f"[bold white]Brain Driver:[/bold white] {data.get('model_driver', 'reference')}\n"
             f"[dim]Timestamp: {data.get('timestamp')}[/dim]",
             title="[bold cyan]Last Autonomous Agent Trajectory[/bold cyan]",
             box=box.ROUNDED,
