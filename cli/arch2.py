@@ -141,6 +141,11 @@ docker_app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
+agent_app = typer.Typer(
+    help="Autonomous AI-Native design agent operating in closed physical loops.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
 
 
 def print_arch2_welcome() -> None:
@@ -187,6 +192,11 @@ def print_arch2_welcome() -> None:
         "🎬 Interactive Tutorial",
         "./arch2 tutorial --hero",
         "Live 3-act screencast & workshop demo (500 MHz PE accumulator in SKY130)",
+    )
+    t.add_row(
+        "🤖 Closed-Loop Agent",
+        "./arch2 agent run --hero",
+        "Autonomous agent search: diagnosis, Verilog mutation, and signoff",
     )
     t.add_row(
         "📈 Sensitivity Sweeps",
@@ -260,6 +270,7 @@ def main(
 
 
 # Primary Top-Level Modalities
+app.add_typer(agent_app, name="agent", rich_help_panel="Interactive Workbench & Demos")
 app.add_typer(lab_app, name="lab", rich_help_panel="Interactive Workbench & Demos")
 app.add_typer(
     docker_app, name="docker", rich_help_panel="Interactive Workbench & Demos"
@@ -9599,6 +9610,97 @@ def lab_tutorial(
     run_cmd = [sys.executable, str(script)] + cmd[2:]
     res = subprocess.run(run_cmd)
     raise typer.Exit(res.returncode)
+
+
+@agent_app.command("run")
+def agent_run(
+    hero: bool = typer.Option(
+        True,
+        "--hero",
+        help="Run the Hero PE Accumulator Closed-Loop Agent Demonstration",
+    ),
+    loop: str = typer.Option(
+        "b",
+        "--loop",
+        "-l",
+        help="Target micro-loop (b / hero)",
+    ),
+    step: bool = typer.Option(
+        False,
+        "--step",
+        "-s",
+        help="Step through agent turns interactively with [Enter]",
+    ),
+    pace: float = typer.Option(
+        0.0,
+        "--pace",
+        "-p",
+        help="Pacing delay in seconds between agent reasoning turns (e.g. 1.5)",
+    ),
+    width: int = typer.Option(
+        88,
+        "--width",
+        help="Terminal column width (default: 88)",
+    ),
+    use_docker: bool = typer.Option(
+        False,
+        "--docker",
+        help="Execute inside the arch2-workbench Docker container",
+    ),
+) -> None:
+    """Run an autonomous closed-loop AI-native design agent against physical EDA tools."""
+    cmd = ["python3", "labs/agent_loop.py"]
+    if hero:
+        cmd.append("--hero")
+    else:
+        cmd.extend(["--loop", loop])
+    if step:
+        cmd.append("--step")
+    if pace > 0.0:
+        cmd.extend(["--pace", str(pace)])
+    if width != 88:
+        cmd.extend(["--width", str(width)])
+
+    if use_docker:
+        code = _run_in_docker(cmd)
+        raise typer.Exit(code)
+
+    script = ROOT / "labs" / "agent_loop.py"
+    run_cmd = [sys.executable, str(script)] + cmd[2:]
+    res = subprocess.run(run_cmd)
+    raise typer.Exit(res.returncode)
+
+
+@agent_app.command("inspect")
+def agent_inspect() -> None:
+    """Inspect the physical receipts and decision log from the last agent run."""
+    history_file = ROOT / "labs" / "agent_history.json"
+    if not history_file.exists():
+        console.print(
+            "[red]No agent history found.[/red] Run './arch2 agent run' first."
+        )
+        raise typer.Exit(1)
+
+    data = json.loads(history_file.read_text(encoding="utf-8"))
+    console.print(
+        Panel(
+            f"[bold white]Problem:[/bold white] {data.get('problem')}\n"
+            f"[dim]Timestamp: {data.get('timestamp')}[/dim]",
+            title="[bold cyan]Last Autonomous Agent Trajectory[/bold cyan]",
+            box=box.ROUNDED,
+            border_style="cyan",
+        )
+    )
+    for turn in data.get("turns", []):
+        receipt = turn.get("receipt", {})
+        status = receipt.get("status")
+        badge = "[green]PASS[/green]" if status == "PASS" else "[red]FAIL[/red]"
+        console.print(
+            f"[bold]Turn {turn.get('turn')}: {turn.get('paradigm')}[/bold] -> {badge} "
+            f"(WNS: [bold]{receipt.get('slack'):+.3f} {receipt.get('unit')}[/bold])\n"
+            f"  [dim]Hypothesis:[/dim] {turn.get('hypothesis')}\n"
+            f"  [dim]Reflection:[/dim] [italic]{turn.get('reflection')}[/italic]\n"
+        )
 
 
 if __name__ == "__main__":
