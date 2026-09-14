@@ -9364,5 +9364,70 @@ def lab_demo(
     raise typer.Exit(res.returncode)
 
 
+@lab_app.command("tutorial")
+@app.command("tutorial")
+def lab_tutorial(
+    hero: bool = typer.Option(
+        False,
+        "--hero",
+        help="Run the Hero demonstration (Loop B: 500 MHz Timing Closure)",
+    ),
+    loop: str = typer.Option(
+        "b",
+        "--loop",
+        "-l",
+        help="Target micro-loop: a, b, c, d, or all (default: b / hero)",
+    ),
+    auto: bool = typer.Option(
+        False,
+        "--auto",
+        help="Run in non-interactive automated playback mode",
+    ),
+    pace: float = typer.Option(
+        0.0,
+        "--pace",
+        help="Pacing delay in seconds between stages (e.g. 1.2)",
+    ),
+    presenter: bool = typer.Option(
+        False,
+        "--presenter",
+        help="Display presenter speaker cues and talk pacing notes",
+    ),
+    width: int = typer.Option(
+        86,
+        "--width",
+        help="Target display width in terminal columns (default: 86)",
+    ),
+    use_docker: bool = typer.Option(
+        False,
+        "--docker",
+        help="Execute inside the arch2-workbench Docker container",
+    ),
+) -> None:
+    """Run the interactive Architecture 2.0 Live Screencast & Workshop Tutorial."""
+    cmd = ["python3", "labs/tutorial.py"]
+    if hero:
+        cmd.append("--hero")
+    else:
+        cmd.extend(["--loop", loop])
+    if auto:
+        cmd.append("--auto")
+    if pace > 0.0:
+        cmd.extend(["--pace", str(pace)])
+    if presenter:
+        cmd.append("--presenter")
+    if width != 86:
+        cmd.extend(["--width", str(width)])
+
+    if use_docker:
+        code = _run_in_docker(cmd)
+        raise typer.Exit(code)
+
+    script = ROOT / "labs" / "tutorial.py"
+    run_cmd = [sys.executable, str(script)] + cmd[2:]
+    res = subprocess.run(run_cmd)
+    raise typer.Exit(res.returncode)
+
+
 if __name__ == "__main__":
     app(prog_name="arch2")
