@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-NOTEBOOKS = REPO / "data" / "notebooks"
+NOTEBOOK_DIRS = [REPO / "data" / "notebooks", REPO / "labs" / "notebooks"]
 OUTPUT = REPO / "www" / "notebooks"
 
 # Anything matching these must never reach a published directory.
@@ -41,11 +41,16 @@ FORBIDDEN_NAMES = {
 FORBIDDEN_PREFIXES = (".claude", ".codex", ".gemini", ".cursor", ".aider")
 
 
-def marimo() -> str:
-    for candidate in (REPO / ".venv-ast" / "bin" / "marimo", Path("marimo")):
-        if candidate.exists() or shutil.which(str(candidate)):
-            return str(candidate)
-    sys.exit("marimo not found. pip install marimo, or use .venv-ast.")
+def marimo() -> list[str]:
+    for candidate in (
+        shutil.which("marimo"),
+        REPO / ".venv-ast" / "bin" / "marimo",
+        Path("/Library/Frameworks/Python.framework/Versions/3.14/bin/marimo"),
+        Path(sys.executable).parent / "marimo",
+    ):
+        if candidate and (isinstance(candidate, str) or candidate.exists()):
+            return [str(candidate)]
+    return [sys.executable, "-m", "marimo"]
 
 
 def scrub(directory: Path) -> list[Path]:
@@ -81,7 +86,14 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    books = sorted(p for p in NOTEBOOKS.glob("*.py") if p.name != Path(__file__).name)
+    import os
+
+    books = []
+    for d in NOTEBOOK_DIRS:
+        if d.exists():
+            books.extend(
+                sorted(p for p in d.glob("*.py") if p.name != Path(__file__).name)
+            )
     if not books:
         print("no notebooks found")
         return 0
@@ -105,7 +117,7 @@ def main() -> int:
         # 1. static page: already executed, opens instantly
         static = OUTPUT / f"{stem}.html"
         subprocess.run(
-            [exe, "export", "html", str(nb), "-o", str(static)],
+            exe + ["export", "html", str(nb), "-o", str(static)],
             check=True,
             capture_output=True,
         )
@@ -114,10 +126,40 @@ def main() -> int:
         if live.exists():
             shutil.rmtree(live)
         subprocess.run(
-            [exe, "export", "html-wasm", str(nb), "-o", str(live), "--mode", "run"],
+            exe + ["export", "html-wasm", str(nb), "-o", str(live), "--mode", "run"],
             check=True,
             capture_output=True,
         )
+
+        # 3. Colab notebook sync via jupytext (only for labs/notebooks)
+        if "labs" in nb.parts:
+            ipynb = nb.parent / f"{stem}.ipynb"
+            try:
+                env = os.environ.copy()
+                env[
+                    "PATH"
+                ] = "/Library/Frameworks/Python.framework/Versions/3.14/bin:" + env.get(
+                    "PATH", ""
+                )
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "jupytext",
+                        "--to",
+                        "notebook",
+                        str(nb),
+                        "-o",
+                        str(ipynb),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    env=env,
+                )
+                if ipynb.exists():
+                    print(f"  synced colab notebook: {ipynb.relative_to(REPO)}")
+            except Exception:
+                pass
 
         removed = scrub(live) + scrub(OUTPUT)
         total_removed += len(removed)
