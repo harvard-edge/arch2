@@ -51,6 +51,170 @@ def load_workload(path: Path) -> List[Dict[str, Any]]:
     return layers
 
 
+def run_scalesim_evaluation(
+    rows: int,
+    cols: int,
+    dataflow: str,
+    workload: List[Dict[str, Any]],
+    bandwidth_words_per_cycle: int = 4,
+) -> Optional[Dict[str, Any]]:
+    """Runs cycle-accurate SCALE-Sim simulation for 2D systolic array if available."""
+    try:
+        from scalesim.scale_sim import scalesim
+        import tempfile
+        import os
+        import shutil
+
+        df_flag = "os" if dataflow == "output_stationary" else "ws"
+        cfg_content = f"""[general]
+run_name = sim_run
+
+[run_presets]
+InterfaceBandwidth: USER
+UseRamulatorTrace: False
+
+[architecture_presets]
+ArrayHeight: {rows}
+ArrayWidth: {cols}
+ifmapsramszkB: 128
+filtersramszkB: 128
+ofmapsramszkB: 128
+IfmapOffset: 0
+FilterOffset: 10000000
+OfmapOffset: 20000000
+Dataflow: {df_flag}
+Bandwidth: {bandwidth_words_per_cycle}
+ReadRequestBuffer: 16
+WriteRequestBuffer: 16
+
+[layout]
+IfmapCustomLayout: False
+FilterCustomLayout: False
+IfmapSRAMBankBandwidth: {bandwidth_words_per_cycle}
+IfmapSRAMBankNum: 1
+IfmapSRAMBankPort: 1
+FilterSRAMBankBandwidth: {bandwidth_words_per_cycle}
+FilterSRAMBankNum: 1
+FilterSRAMBankPort: 1
+
+[sparsity]
+SparsitySupport: False
+"""
+        workload_csv = ROOT / "workload" / "xr_gemm.csv"
+        if not workload_csv.exists():
+            return None
+
+        layers = [l["layer"] for l in workload]
+        dummy_layout_rows = [
+            f"{lname}," + ",".join(["1"] * 21) + "," for lname in layers
+        ]
+        layout_content = (
+            "Layer,"
+            + ",".join([f"c{i}" for i in range(1, 22)])
+            + ",\n"
+            + "\n".join(dummy_layout_rows)
+            + "\n"
+        )
+
+        out_dir = tempfile.mkdtemp()
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".cfg", delete=False
+        ) as fc, tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False
+        ) as fl:
+            fc.write(cfg_content)
+            fc_path = fc.name
+            fl.write(layout_content)
+            fl_path = fl.name
+
+        try:
+            sim = scalesim(
+                save_disk_space=True,
+                verbose=False,
+                config=fc_path,
+                topology=str(workload_csv),
+                layout=fl_path,
+                input_type_gemm=True,
+            )
+            try:
+                sim.run_scale(out_dir)
+            except TypeError:
+                pass
+
+            comp_csv = os.path.join(out_dir, "sim_run", "COMPUTE_REPORT.csv")
+            det_csv = os.path.join(out_dir, "sim_run", "DETAILED_ACCESS_REPORT.csv")
+
+            if not os.path.exists(comp_csv) or not os.path.exists(det_csv):
+                return None
+
+            total_comp_cycles = 0
+            layer_comp_cycles = []
+            with open(comp_csv, mode="r", encoding="utf-8") as f:
+                r = csv.DictReader(f)
+                for row in r:
+                    cyc = int(row[" Total Cycles"].strip())
+                    total_comp_cycles += cyc
+                    layer_comp_cycles.append(cyc)
+
+            total_dram_reads = 0
+            total_dram_writes = 0
+            layer_stats = []
+            with open(det_csv, mode="r", encoding="utf-8") as f:
+                r = csv.DictReader(f)
+                for idx, row in enumerate(r):
+                    if_rd = int(row[" DRAM IFMAP Reads"].strip())
+                    filt_rd = int(row[" DRAM Filter Reads"].strip())
+                    of_wr = int(row[" DRAM OFMAP Writes"].strip())
+                    total_dram_reads += if_rd + filt_rd
+                    total_dram_writes += of_wr
+                    lname = layers[idx] if idx < len(layers) else f"layer_{idx}"
+                    cyc = layer_comp_cycles[idx] if idx < len(layer_comp_cycles) else 0
+                    mem_cyc = math.ceil(
+                        (if_rd + filt_rd + of_wr) / bandwidth_words_per_cycle
+                    )
+                    layer_stats.append(
+                        {
+                            "layer": lname,
+                            "comp_cycles": cyc,
+                            "memory_cycles": mem_cyc,
+                            "effective_cycles": max(cyc, mem_cyc),
+                            "is_memory_bound": mem_cyc > cyc,
+                        }
+                    )
+
+            total_dram = total_dram_reads + total_dram_writes
+            memory_cycles = math.ceil(total_dram / bandwidth_words_per_cycle)
+            effective_cycles = max(total_comp_cycles, memory_cycles)
+            pe_count = rows * cols
+
+            total_macs = sum(l["M"] * l["N"] * l["K"] for l in workload)
+            utilization_pct = (total_macs / (effective_cycles * pe_count)) * 100.0
+
+            return {
+                "rows": rows,
+                "cols": cols,
+                "dataflow": dataflow,
+                "pe_count": pe_count,
+                "total_compute_cycles": total_comp_cycles,
+                "total_cycles": effective_cycles,
+                "dram_reads": total_dram_reads,
+                "dram_writes": total_dram_writes,
+                "total_dram_traffic": total_dram,
+                "utilization_pct": round(utilization_pct, 2),
+                "layer_stats": layer_stats,
+                "tool_provenance": "SCALE-Sim v3.0.0 Cycle-Accurate Execution",
+            }
+        finally:
+            if os.path.exists(fc_path):
+                os.unlink(fc_path)
+            if os.path.exists(fl_path):
+                os.unlink(fl_path)
+            if os.path.exists(out_dir):
+                shutil.rmtree(out_dir, ignore_errors=True)
+    except Exception:
+        return None
+
+
 def evaluate_systolic_array(
     rows: int,
     cols: int,
@@ -58,7 +222,13 @@ def evaluate_systolic_array(
     workload: List[Dict[str, Any]],
     bandwidth_words_per_cycle: int = 4,
 ) -> Dict[str, Any]:
-    """Analytical cycle and DRAM traffic evaluation for a 2D systolic array."""
+    """Analytical or SCALE-Sim cycle and DRAM traffic evaluation for a 2D systolic array."""
+    sim_res = run_scalesim_evaluation(
+        rows, cols, dataflow, workload, bandwidth_words_per_cycle
+    )
+    if sim_res is not None:
+        return sim_res
+
     pe_count = rows * cols
     total_compute_cycles = 0
     total_effective_cycles = 0

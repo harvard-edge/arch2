@@ -94,17 +94,16 @@ class FloorplanModel:
             # Cross-layer co-adaptation: peripheral pin orientation + widened routing channels
             core = {"name": "Core", "box": (350, 350, 650, 650), "type": "compute"}
             macros = [
-                {"name": "SRAM0", "box": (40, 350, 260, 650), "pins": (150, 650)},
-                {"name": "SRAM1", "box": (740, 350, 960, 650), "pins": (850, 650)},
-                {"name": "SRAM2", "box": (350, 40, 650, 260), "pins": (650, 150)},
-                {"name": "SRAM3", "box": (350, 740, 650, 960), "pins": (650, 850)},
+                {"name": "SRAM0", "box": (40, 350, 240, 650), "pins": (250, 500)},
+                {"name": "SRAM1", "box": (760, 350, 960, 650), "pins": (750, 500)},
+                {"name": "SRAM2", "box": (350, 40, 650, 240), "pins": (500, 250)},
+                {"name": "SRAM3", "box": (350, 760, 650, 960), "pins": (500, 750)},
             ]
             hpwl_um = 8240.0
-            drc_violations = 0
             description = (
                 "Multi-objective placement with pin rotation & dedicated channels"
             )
-            action_taken = "Cross-layer adaptation: rotated pin breakout + dedicated 80 um routing avenues"
+            action_taken = "Cross-layer adaptation: rotated pin breakout + dedicated 110 um routing avenues"
 
         else:
             raise ValueError(f"Unknown paradigm: {paradigm}")
@@ -115,63 +114,61 @@ class FloorplanModel:
             core["box"][1] + core["box"][3]
         ) / 2
 
-        # Mark macro blockages
-        for block in [core] + macros:
-            bx0, by0, bx1, by1 = block["box"]
-            gx0 = max(0, int(bx0 / self.cell_w))
-            gy0 = max(0, int(by0 / self.cell_h))
-            gx1 = min(self.grid_size, int(bx1 / self.cell_w) + 1)
-            gy1 = min(self.grid_size, int(by1 / self.cell_h) + 1)
-            blockages[
-                gy0:gy1, gx0:gx1
-            ] = 0.45  # 45% routing capacity blocked by macro metal
+        # Physics-Grounded Track Capacity and RUDY Routing Model:
+        # Metal 3/4 track pitch in 130nm = 0.40 um -> 100 tracks per 40 um grid cell
+        tracks_per_cell = 100.0
+        capacity = np.full(
+            (self.grid_size, self.grid_size), tracks_per_cell, dtype=float
+        )
 
-        # Route synthetic nets from core to each macro
+        # Macro SRAMs block 80% of routing tracks in their bounding boxes
+        for m in macros:
+            bx0, by0, bx1, by1 = m["box"]
+            gx0, gy0 = int(bx0 / self.cell_w), int(by0 / self.cell_h)
+            gx1, gy1 = int(bx1 / self.cell_w), int(by1 / self.cell_h)
+            capacity[gy0:gy1, gx0:gx1] *= 0.20
+
+        # Core standard cells consume only 20% for local pin taps (80% available for global over-cell routing)
+        cx0, cy0 = int(core["box"][0] / self.cell_w), int(core["box"][1] / self.cell_h)
+        cx1, cy1 = int(core["box"][2] / self.cell_w), int(core["box"][3] / self.cell_h)
+        capacity[cy0:cy1, cx0:cx1] *= 0.80
+
+        # Routing demand: 128 wires per macro memory bus (data, address, control)
+        demand = np.zeros((self.grid_size, self.grid_size), dtype=float)
+
         for m in macros:
             px, py = m["pins"]
-            net_box = (min(cx, px), min(cy, py), max(cx, px), max(cy, py))
-            gx0 = max(0, int(net_box[0] / self.cell_w))
-            gy0 = max(0, int(net_box[1] / self.cell_h))
-            gx1 = min(self.grid_size, int(net_box[2] / self.cell_w) + 1)
-            gy1 = min(self.grid_size, int(net_box[3] / self.cell_h) + 1)
+            bx0 = max(0, int(min(cx, px) / self.cell_w))
+            by0 = max(0, int(min(cy, py) / self.cell_h))
+            bx1 = min(self.grid_size, int(max(cx, px) / self.cell_w) + 1)
+            by1 = min(self.grid_size, int(max(cy, py) / self.cell_h) + 1)
 
-            # Accumulate RUDY wire density
-            wire_density = 1.0 / (max(1, gx1 - gx0) * max(1, gy1 - gy0))
-            grid[gy0:gy1, gx0:gx1] += wire_density * 45.0
+            # RUDY wire density across bounding box
+            w_bins = max(1, bx1 - bx0)
+            h_bins = max(1, by1 - by0)
+            demand[by0:by1, bx0:bx1] += 48.0 / (w_bins * h_bins)
 
-        # In driven mode, inject severe pin-facing channel hotspot
-        if paradigm == "driven":
-            # Central perimeter channel choke
-            grid[7:18, 7:9] += 48.0  # Left channel
-            grid[7:18, 16:18] += 48.0  # Right channel
-            grid[7:9, 7:18] += 48.0  # Bottom channel
-            grid[16:18, 7:18] += 48.0  # Top channel
+            # Pin escape congestion: concentrated wires breaking out of macro pin facing
+            pin_gx = min(self.grid_size - 1, max(0, int(px / self.cell_w)))
+            pin_gy = min(self.grid_size - 1, max(0, int(py / self.cell_h)))
+            escape_density = (
+                75.0
+                if paradigm == "driven"
+                else (45.0 if paradigm == "assisted" else 12.0)
+            )
+            demand[pin_gy, pin_gx] += escape_density
 
-        elif paradigm == "assisted":
-            # Scattered criss-crossing nets
-            grid[4:21, 5:20] += 32.0
-
-        elif paradigm == "native":
-            # Smooth distribution across widened channels
-            grid[5:20, 5:20] += 12.0
-
-        # Add blockage penalty to effective congestion
-        effective_congestion = grid / (1.0 - blockages + 0.1)
-        # Normalize to target realistic peak percentages
-        if paradigm == "assisted":
-            scale = 94.2 / np.max(effective_congestion)
-        elif paradigm == "driven":
-            scale = 91.8 / np.max(effective_congestion)
-        else:
-            scale = 64.5 / np.max(effective_congestion)
-
-        final_congestion_grid = np.clip(effective_congestion * scale, 15.0, 100.0)
+        # Congestion percentage: (Demand / Capacity) * 100%
+        congestion_grid = (demand / np.maximum(capacity, 1.0)) * 100.0
+        final_congestion_grid = np.clip(congestion_grid, 10.0, 100.0)
 
         peak_congestion = float(np.max(final_congestion_grid))
         avg_congestion = float(np.mean(final_congestion_grid))
 
+        # DRC shorts occur where wire demand exceeds available metal tracks (>85% track saturation)
+        drc_violations = int(np.sum(final_congestion_grid > 85.0))
         congestion_passed = peak_congestion <= 85.0
-        signoff_passed = congestion_passed and (drc_violations == 0)
+        signoff_passed = (drc_violations == 0) and congestion_passed
 
         return {
             "paradigm": paradigm,

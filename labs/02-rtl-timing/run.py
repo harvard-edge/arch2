@@ -145,12 +145,12 @@ def simulate_timing(module_name: str, clock_period_ns: float = 2.0) -> Dict[str,
 def synthesize_with_yosys(
     module_name: str, rtl_file: Path, extra_opt: str = ""
 ) -> Optional[Dict[str, int]]:
-    """Runs Yosys synthesis to obtain gate and register counts."""
+    """Runs Yosys synthesis to obtain gate and register counts and topological path length."""
     yosys_bin = shutil.which("yosys")
     if not yosys_bin or not rtl_file.exists():
         return None
 
-    script = f"read_verilog {rtl_file}; synth -top {module_name} {extra_opt}; stat"
+    script = f"read_verilog {rtl_file}; synth -top {module_name} {extra_opt}; stat; ltp -noff"
     cmd = [yosys_bin, "-p", script]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
@@ -158,14 +158,23 @@ def synthesize_with_yosys(
             out = res.stdout
             sections = out.split(f"=== {module_name} ===")
             target_sec = sections[-1] if len(sections) > 1 else out
-            cell_match = re.search(r"(\d+)\s+cells", target_sec)
-            dff_match = re.search(r"(\d+)\s+.*DFF", target_sec)
+            cell_match = re.search(
+                r"Number of cells:\s+(\d+)", target_sec
+            ) or re.search(r"^\s*(\d+)\s+cells", target_sec, re.M)
+            dff_match = re.search(
+                r"\$[^\s]*DFF[^\s]*\s+(\d+)", target_sec
+            ) or re.search(r"^\s*(\d+)\s+.*DFF", target_sec, re.M)
+            ltp_match = re.search(
+                r"Longest topological path in .*?\(length=(\d+)\)", out
+            )
             total_cells = int(cell_match.group(1)) if cell_match else 0
             dff_count = int(dff_match.group(1)) if dff_match else 0
+            topological_depth = int(ltp_match.group(1)) if ltp_match else 0
             return {
                 "total_cells": total_cells,
                 "dff_count": dff_count,
                 "logic_gates": max(0, total_cells - dff_count),
+                "topological_depth": topological_depth,
             }
     except Exception:
         pass

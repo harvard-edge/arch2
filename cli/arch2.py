@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, List
 from urllib.parse import unquote, urlsplit
 
 import typer
@@ -113,6 +113,10 @@ lab_app = typer.Typer(
     help="Execute and inspect Grounded Micro-Loops Workbench labs.",
     no_args_is_help=True,
 )
+docker_app = typer.Typer(
+    help="Manage Docker container environment and containerized EDA execution.",
+    no_args_is_help=True,
+)
 
 
 class FindingFormat(str, Enum):
@@ -158,6 +162,7 @@ app.add_typer(layout_app, name="layout")
 app.add_typer(review_app, name="review")
 app.add_typer(loop_app, name="loop")
 app.add_typer(lab_app, name="lab")
+app.add_typer(docker_app, name="docker")
 
 
 @dataclass(frozen=True)
@@ -9206,6 +9211,83 @@ def lab_list() -> None:
     console.print(table)
 
 
+DOCKER_IMAGE = "arch2-workbench:latest"
+
+
+def _run_in_docker(command: List[str], interactive: bool = False) -> int:
+    docker_bin = shutil.which("docker")
+    if not docker_bin:
+        console.print("[red]Error: 'docker' executable not found on PATH.[/red]")
+        return 1
+    cmd = [docker_bin, "run", "--rm"]
+    if interactive and sys.stdin.isatty():
+        cmd.append("-it")
+    cmd.extend(["-v", f"{ROOT}:/workspace", DOCKER_IMAGE])
+    cmd.extend(command)
+    res = subprocess.run(cmd)
+    return res.returncode
+
+
+@docker_app.command("build")
+def docker_build(
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Do not use cache when building image"
+    ),
+) -> None:
+    """Build the arch2-workbench Docker container image."""
+    docker_bin = shutil.which("docker")
+    if not docker_bin:
+        console.print("[red]Error: 'docker' executable not found on PATH.[/red]")
+        raise typer.Exit(1)
+    dockerfile = ROOT / "docker" / "Dockerfile"
+    if not dockerfile.exists():
+        console.print(f"[red]Error: Dockerfile not found at {dockerfile}.[/red]")
+        raise typer.Exit(1)
+    cmd = [docker_bin, "build", "-t", DOCKER_IMAGE, "-f", str(dockerfile), str(ROOT)]
+    if no_cache:
+        cmd.append("--no-cache")
+    console.print(f"[bold cyan]Building Docker image {DOCKER_IMAGE}...[/bold cyan]")
+    res = subprocess.run(cmd)
+    if res.returncode == 0:
+        console.print(f"[green]✔ Successfully built {DOCKER_IMAGE}[/green]")
+    raise typer.Exit(res.returncode)
+
+
+@docker_app.command("run")
+def docker_run_cmd(
+    command: List[str] = typer.Argument(
+        ..., help="Command to run inside the Docker container"
+    ),
+) -> None:
+    """Execute any command inside the arch2-workbench Docker container."""
+    code = _run_in_docker(command, interactive=True)
+    raise typer.Exit(code)
+
+
+@docker_app.command("lab")
+def docker_lab(
+    target: str = typer.Argument("all", help="Target lab: 01, 02, 03, 04, or all"),
+    visual: bool = typer.Option(
+        True, "--visual/--no-visual", help="Generate visual plot"
+    ),
+) -> None:
+    """Run Grounded Workbench labs inside the Docker container."""
+    cmd = ["python3", "labs/run_all.py"]
+    if target.lower().strip() not in ("all", "*"):
+        cmd = ["python3", f"labs/{LAB_MAPPING[target.lower().strip()].name}/run.py"]
+    if not visual:
+        cmd.append("--no-visual")
+    code = _run_in_docker(cmd)
+    raise typer.Exit(code)
+
+
+@docker_app.command("demo")
+def docker_demo() -> None:
+    """Run the interactive master demonstration inside the Docker container."""
+    code = _run_in_docker(["python3", "labs/demo.py"])
+    raise typer.Exit(code)
+
+
 @lab_app.command("run")
 def lab_run(
     target: str = typer.Argument("all", help="Target lab: 01, 02, 03, 04, or all"),
@@ -9217,8 +9299,29 @@ def lab_run(
         "--visual/--no-visual",
         help="Generate publication-grade visual plot (results.png)",
     ),
+    use_docker: bool = typer.Option(
+        False,
+        "--docker",
+        help="Execute inside the arch2-workbench Docker container",
+    ),
 ) -> None:
     """Execute micro-loops across the Grounded Workbench."""
+    if use_docker:
+        cmd = (
+            ["python3", "labs/run_all.py"]
+            if target in ("all", "*")
+            else [
+                "python3",
+                f"labs/{LAB_MAPPING[target].name}/run.py",
+                "--paradigm",
+                paradigm,
+            ]
+        )
+        if not visual:
+            cmd.append("--no-visual")
+        code = _run_in_docker(cmd)
+        raise typer.Exit(code)
+
     target_clean = target.lower().strip()
     if target_clean in ("all", "*"):
         script = ROOT / "labs" / "run_all.py"
@@ -9245,8 +9348,17 @@ def lab_run(
 
 
 @lab_app.command("demo")
-def lab_demo() -> None:
+def lab_demo(
+    use_docker: bool = typer.Option(
+        False,
+        "--docker",
+        help="Execute inside the arch2-workbench Docker container",
+    ),
+) -> None:
     """Run the interactive master demonstration across all 4 micro-loops."""
+    if use_docker:
+        code = _run_in_docker(["python3", "labs/demo.py"])
+        raise typer.Exit(code)
     script = ROOT / "labs" / "run_all.py"
     res = subprocess.run([sys.executable, str(script), "--demo"])
     raise typer.Exit(res.returncode)
