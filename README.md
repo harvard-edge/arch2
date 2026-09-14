@@ -95,7 +95,7 @@ The public site connects the following maintained surfaces.
 | [`design-loop-card/`](design-loop-card/) and [`schemas/`](schemas/) | Human-readable templates and machine-checkable contracts for recording a study. |
 | [`examples/`](examples/) | Completed cards and supporting evidence that show how the contracts are used. |
 | [`www/`](www/) and [`tools/`](tools/) | Source for the project site, community resources, and tool registry. |
-| [`data/datasets/`](data/datasets/) and [`compliance/`](compliance/) | Source notes, permissions records, and publication checks. |
+| [`data/datasets/`](data/datasets/) | Source notes, provenance records, and dataset samples. |
 
 The repository is developed in public so that claims, examples, interfaces,
 and teaching material can be inspected and improved together. A tagged release
@@ -117,9 +117,20 @@ discipline.
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/profvjreddi"><img src="https://avatars.githubusercontent.com/u/6807956?v=4?s=100" width="100px;" alt="Vijay Janapa Reddi"/><br /><sub><b>Vijay Janapa Reddi</b></sub></a><br /><a href="https://github.com/harvard-edge/arch2/commits?author=profvjreddi" title="Documentation">📖</a> <a href="https://github.com/harvard-edge/arch2/commits?author=profvjreddi" title="Code">💻</a> <a href="#ideas-profvjreddi" title="Ideas, Planning, & Feedback">🤔</a> <a href="#design-profvjreddi" title="Design">🎨</a> <a href="https://github.com/harvard-edge/arch2/pulls?q=is%3Apr+reviewed-by%3Aprofvjreddi" title="Reviewed Pull Requests">👀</a> <a href="#tool-profvjreddi" title="Tools">🔧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Shashank-Tripathi-07"><img src="https://avatars.githubusercontent.com/u/178375647?v=4?s=100" width="100px;" alt="Rocky"/><br /><sub><b>Rocky</b></sub></a><br /><a href="https://github.com/harvard-edge/arch2/commits?author=Shashank-Tripathi-07" title="Code">💻</a> <a href="#security-Shashank-Tripathi-07" title="Security">🛡️</a> <a href="https://github.com/harvard-edge/arch2/issues?q=author%3AShashank-Tripathi-07" title="Bug reports">🐛</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/stefanabikaram-gtri"><img src="https://avatars.githubusercontent.com/u/187306827?v=4?s=100" width="100px;" alt="Stefan Abi-Karam"/><br /><sub><b>Stefan Abi-Karam</b></sub></a><br /><a href="#tool-stefanabikaram-gtri" title="Tools">🔧</a> <a href="#content-stefanabikaram-gtri" title="Content">🖋</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://iamchenyuwang.github.io/"><img src="https://avatars.githubusercontent.com/u/65165345?v=4?s=100" width="100px;" alt="Chenyu Wang"/><br /><sub><b>Chenyu Wang</b></sub></a><br /><a href="https://github.com/harvard-edge/arch2/commits?author=billwang485" title="Code">💻</a> <a href="#ideas-billwang485" title="Ideas, Planning, & Feedback">🤔</a></td>
+    </tr>
+  </tbody>
+</table>
 
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## Development

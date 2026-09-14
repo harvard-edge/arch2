@@ -88,6 +88,7 @@ to propose an entry for maintainer review.
 | **[VerilogEval](https://github.com/NVlabs/verilog-eval)** | Benchmark available; link checked 2026-07-10 | Specification-to-RTL and Verilog code-generation benchmark with executable checks. |
 | **[KernelBench](https://github.com/ScalingIntelligence/KernelBench)** | Benchmark available; link checked 2026-07-10 | GPU-kernel generation benchmark with correctness and performance evaluation. |
 | **[CircuitNet](https://github.com/circuitnet/CircuitNet)** | Dataset available; link checked 2026-07-10 | VLSI CAD dataset for machine-learning applications in EDA. |
+| **[HLS-Eval](https://github.com/sharc-lab/hls-eval)** | Benchmark available; link checked 2026-09-14 | HLS-Eval is a project that provides benchmarking infrastructure and benchmark tasks for high-level synthesis (HLS) design. |
 
 ## Physical Design and EDA
 

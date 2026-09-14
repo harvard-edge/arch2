@@ -15,7 +15,7 @@ Initial public sources consulted on 2026-06-20.
 - Springer Nature LaTeX best-practice guidelines:
   https://cms-resources.apps.public.k8s.springernature.io/springer-cms/rest/v1/content/27837778/data/v1
 - Springer Nature English book manuscript guidelines:
-  https://cms-resources.apps.public.k8s.springernature.io/springer-cms/rest/v1/content/27837760/data/v3
+  https://www.springernature.com/gp/authors/publish-a-book/manuscript-guidelines
 - Springer Nature book proposal form:
   https://media.springer.com/full/springer-instructions-for-authors-assets/pdf/SN_BPF_EN.pdf
 - Synthesis Lectures on Computer Architecture book list:
