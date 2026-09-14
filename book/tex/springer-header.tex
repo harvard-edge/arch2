@@ -397,3 +397,48 @@
 % accented letter so the stripped form compiles. (Any future name with a
 % different dot-accented letter needs its own alias here.)
 \providecommand{\e}{\.{e}}
+
+% Springer Nature alt text. Quarto writes each figure's fig-alt as
+% \includegraphics[alt={...}], and graphicx ignores that key under pdflatex.
+% SNmono.cls defines \Description, which appends "N (Fig. X) - text" to
+% DescriptionTexts.txt for Springer's production pipeline, using the number of
+% the figure about to be captioned. Quarto emits \includegraphics before
+% \caption, which is exactly where \Description must run, so route the key
+% there. Only figure floats are described, and a figure with several images, or
+% one typeset twice while being measured, is described once, by its first alt
+% text. graphicx reads keys inside a group, so the last-described marker must be
+% set \global or the guard forgets it. Pandoc escapes the alt value for LaTeX,
+% and \Description writes its argument verbatim, so an apostrophe would reach
+% Springer as \textquotesingle{}; undo the escapes Pandoc emits for characters
+% the source check allows. Guarded by ./arch2 validate alt-text (the hook
+% exists) and ./arch2 verify alt-text (the built file matches the manuscript
+% and carries no LaTeX escape).
+\makeatletter
+\def\archtwo@figuretype{figure}
+\def\archtwo@lastdescribed{}
+\ExplSyntaxOn
+\str_new:N \l__archtwo_description_str
+\cs_new_protected:Npn \archtwo@plaindescription #1
+  {
+    \str_set:Nn \l__archtwo_description_str {#1}
+    \str_replace_all:Nnn \l__archtwo_description_str { \textquotesingle {} } { ' }
+    \str_replace_all:Nnn \l__archtwo_description_str { \textquotesingle } { ' }
+    \str_replace_all:Nnn \l__archtwo_description_str { \textquotedbl {} } { " }
+    \str_replace_all:Nnn \l__archtwo_description_str { \textquotedbl } { " }
+    \str_replace_all:Nnn \l__archtwo_description_str { \ldots {} } { ... }
+    \str_replace_all:Nnn \l__archtwo_description_str { \textbar {} } { | }
+    \exp_args:NV \Description \l__archtwo_description_str
+  }
+\ExplSyntaxOff
+\def\archtwo@describe#1{%
+  \ifx\@captype\archtwo@figuretype
+    \edef\archtwo@current{\number\value{chapter}.\number\value{figure}}%
+    \ifx\archtwo@current\archtwo@lastdescribed\else
+      \global\let\archtwo@lastdescribed\archtwo@current
+      \archtwo@plaindescription{#1}%
+    \fi
+  \fi}
+\AtBeginDocument{%
+  \@ifundefined{Description}{}{%
+    \define@key{Gin}{alt}{\archtwo@describe{#1}}}}
+\makeatother
