@@ -109,6 +109,10 @@ generate_app = typer.Typer(
     help="Generate derived assets, schemas, and backmatter appendices.",
     no_args_is_help=True,
 )
+lab_app = typer.Typer(
+    help="Execute and inspect Grounded Micro-Loops Workbench labs.",
+    no_args_is_help=True,
+)
 
 
 class FindingFormat(str, Enum):
@@ -153,6 +157,7 @@ app.add_typer(verify_app, name="verify")
 app.add_typer(layout_app, name="layout")
 app.add_typer(review_app, name="review")
 app.add_typer(loop_app, name="loop")
+app.add_typer(lab_app, name="lab")
 
 
 @dataclass(frozen=True)
@@ -9157,6 +9162,94 @@ def doctor() -> None:
         table.add_row(name, status, detail[0] if detail else "")
     table.add_row("PDF", "ok" if PDF_PATH.exists() else "missing", _relative(PDF_PATH))
     console.print(table)
+
+
+# =============================================================================
+# Grounded Micro-Loops Workbench Commands
+# =============================================================================
+
+LAB_MAPPING = {
+    "01": ROOT / "labs" / "01-microarchitectural-sweep",
+    "02": ROOT / "labs" / "02-rtl-timing",
+    "03": ROOT / "labs" / "03-physical-floorplan",
+    "04": ROOT / "labs" / "04-hw-sw-codesign",
+    "a": ROOT / "labs" / "01-microarchitectural-sweep",
+    "b": ROOT / "labs" / "02-rtl-timing",
+    "c": ROOT / "labs" / "03-physical-floorplan",
+    "d": ROOT / "labs" / "04-hw-sw-codesign",
+}
+
+
+@lab_app.command("list")
+def lab_list() -> None:
+    """List all available micro-loops in the Grounded Workbench."""
+    import yaml
+
+    table = Table(title="Grounded Micro-Loops Workbench: Available Labs")
+    table.add_column("ID", style="bold cyan")
+    table.add_column("Title", style="bold")
+    table.add_column("Domain", style="green")
+    table.add_column("Target System", style="yellow")
+    table.add_column("Key Physical Constraint")
+
+    for lab_id in ("01", "02", "03", "04"):
+        lab_dir = LAB_MAPPING[lab_id]
+        contract_file = lab_dir / "contract.yaml"
+        if contract_file.exists():
+            data = yaml.safe_load(contract_file.read_text(encoding="utf-8"))
+            title = data.get("title", lab_dir.name)
+            domain = data.get("domain", "n/a")
+            target = data.get("target_system", "n/a")
+            c = data.get("constraints", {})
+            c_str = ", ".join(f"{k}: {v}" for k, v in list(c.items())[:2])
+            table.add_row(lab_id, title, domain, target, c_str)
+    console.print(table)
+
+
+@lab_app.command("run")
+def lab_run(
+    target: str = typer.Argument("all", help="Target lab: 01, 02, 03, 04, or all"),
+    paradigm: str = typer.Option(
+        "all", "--paradigm", "-p", help="Target paradigm: all, assisted, driven, native"
+    ),
+    visual: bool = typer.Option(
+        True,
+        "--visual/--no-visual",
+        help="Generate publication-grade visual plot (results.png)",
+    ),
+) -> None:
+    """Execute micro-loops across the Grounded Workbench."""
+    target_clean = target.lower().strip()
+    if target_clean in ("all", "*"):
+        script = ROOT / "labs" / "run_all.py"
+        cmd = [sys.executable, str(script)]
+        if not visual:
+            cmd.append("--no-visual")
+        res = subprocess.run(cmd)
+        raise typer.Exit(res.returncode)
+
+    if target_clean not in LAB_MAPPING:
+        console.print(
+            f"[red]Unknown lab identifier '{target}'. Choose from: 01, 02, 03, 04, or all.[/red]"
+        )
+        raise typer.Exit(1)
+
+    lab_dir = LAB_MAPPING[target_clean]
+    script = lab_dir / "run.py"
+    cmd = [sys.executable, str(script), "--paradigm", paradigm]
+    if visual:
+        cmd.append("--visual")
+
+    res = subprocess.run(cmd)
+    raise typer.Exit(res.returncode)
+
+
+@lab_app.command("demo")
+def lab_demo() -> None:
+    """Run the interactive master demonstration across all 4 micro-loops."""
+    script = ROOT / "labs" / "run_all.py"
+    res = subprocess.run([sys.executable, str(script), "--demo"])
+    raise typer.Exit(res.returncode)
 
 
 if __name__ == "__main__":

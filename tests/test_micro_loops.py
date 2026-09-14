@@ -111,6 +111,52 @@ class MicroLoopWorkbenchTests(unittest.TestCase):
         self.assertTrue(native["area_target_met"])
         self.assertLess(native["total_cycles"], driven["total_cycles"])
 
+    def test_master_run_all_and_plots(self) -> None:
+        import subprocess
+        import sys
+
+        run_all_py = LABS_DIR / "run_all.py"
+        res = subprocess.run(
+            [sys.executable, str(run_all_py)], capture_output=True, text=True
+        )
+        self.assertEqual(res.returncode, 0, f"run_all.py failed: {res.stderr}")
+
+        summary_file = LABS_DIR / "workbench_summary.json"
+        self.assertTrue(summary_file.is_file())
+
+        for sub in (
+            "01-microarchitectural-sweep",
+            "02-rtl-timing",
+            "03-physical-floorplan",
+            "04-hw-sw-codesign",
+        ):
+            plot_file = LABS_DIR / sub / "results.png"
+            self.assertTrue(plot_file.is_file(), f"Missing plot: {plot_file}")
+            self.assertGreater(
+                plot_file.stat().st_size,
+                5000,
+                f"Plot {plot_file} is suspiciously small",
+            )
+
+    def test_cli_lab_subcommands(self) -> None:
+        import subprocess
+        import sys
+
+        cli_py = ROOT / "cli" / "arch2.py"
+        res_list = subprocess.run(
+            [sys.executable, str(cli_py), "lab", "list"], capture_output=True, text=True
+        )
+        self.assertEqual(res_list.returncode, 0)
+        self.assertIn("Micro-Loop A", res_list.stdout)
+        self.assertIn("Micro-Loop D", res_list.stdout)
+
+        res_run = subprocess.run(
+            [sys.executable, str(cli_py), "lab", "run", "01", "--no-visual"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_run.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
