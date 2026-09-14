@@ -348,16 +348,56 @@ class GeminiDriver(BaseModelDriver):
         )
 
 
+def detect_installed_ollama_models(host: str = "http://localhost:11434") -> List[str]:
+    """Queries local Ollama daemon for installed models."""
+    try:
+        req = urllib.request.Request(
+            f"{host}/api/tags", headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return [m["name"] for m in data.get("models", [])]
+    except Exception:
+        return []
+
+
+def pick_default_ollama_model(installed: List[str]) -> str:
+    """Intelligently chooses the best installed local coding model."""
+    if not installed:
+        return "qwen2.5:7b"
+    # Check for preferred coding models in order of priority
+    for pref in (
+        "qwen2.5-coder",
+        "qwen2.5",
+        "deepseek-coder",
+        "deepseek",
+        "coder",
+        "gemma4",
+        "gemma",
+        "llama",
+    ):
+        for m in installed:
+            if pref in m.lower():
+                return m
+    return installed[0]
+
+
 class OllamaDriver(BaseModelDriver):
     """Local private model driver via Ollama REST API (localhost:11434)."""
 
     def __init__(
         self,
-        model_name: str = "qwen2.5-coder:32b",
+        model_name: str = "auto",
         host: str = "http://localhost:11434",
     ):
-        super().__init__(model_name=model_name)
         self.host = host
+        installed = detect_installed_ollama_models(host)
+        if model_name in ("auto", "ollama", "", None):
+            resolved_name = pick_default_ollama_model(installed)
+        else:
+            resolved_name = model_name
+        super().__init__(model_name=resolved_name)
+        self.installed_models = installed
 
     def propose_turn(
         self,
@@ -366,12 +406,55 @@ class OllamaDriver(BaseModelDriver):
         history: List[Any],
         last_receipt: Optional[Any] = None,
     ) -> TurnProposal:
-        prompt = f"{SYSTEM_PROMPT}\n\nTurn {turn_number} Request:\n"
         if turn_number == 1:
-            prompt += "Generate candidate Verilog module 'pe_accumulator_candidate' targeting 500 MHz in SKY130."
+            prompt = (
+                f"{SYSTEM_PROMPT}\n\n"
+                "Turn 1 Request:\n"
+                "Implement an initial candidate Verilog module 'pe_accumulator_candidate' targeting 500 MHz in SKY130.\n"
+                "Interface specification:\n"
+                "module pe_accumulator_candidate (\n"
+                "    input  wire        clk,\n"
+                "    input  wire        rst_n,\n"
+                "    input  wire        valid_in,\n"
+                "    input  wire [31:0] data_in,\n"
+                "    output wire [31:0] acc_out\n"
+                ");\n\n"
+                "Wrap your code in ```verilog ... ```. Keep explanation to 1 sentence."
+            )
         else:
-            prompt += (
-                "Previous turn failed timing. Output candidate in ```verilog ... ```."
+            prev_slack = (
+                f"{last_receipt.slack:+.3f} ns" if last_receipt else "-0.600 ns"
+            )
+            prev_depth = (
+                f"{last_receipt.logic_depth} stages" if last_receipt else "32 stages"
+            )
+            prompt = (
+                f"{SYSTEM_PROMPT}\n\n"
+                f"Turn {turn_number} Request:\n"
+                f"Previous design failed physical timing or functional equivalence:\n"
+                f"- Worst Negative Slack (WNS): {prev_slack}\n"
+                f"- Critical Path Logic Depth: {prev_depth}\n\n"
+                "ARCHITECTURAL DIRECTIVE:\n"
+                "Transistor sizing cannot break an O(N) carry propagation delay curve.\n"
+                "To achieve timing closure at 500 MHz (2.0 ns period) with zero latency drift, you must perform an "
+                "architectural representation shift into Redundant Carry-Save Arithmetic (CSA).\n"
+                "Split the accumulator state into two 32-bit registers: 'sum_reg' and 'carry_reg'.\n"
+                "You MUST use a full 3:2 compressor with both sum wire `s` and majority carry wire `c`:\n"
+                "  wire [31:0] s = sum_reg ^ carry_reg ^ data_in;\n"
+                "  wire [31:0] c = (sum_reg & carry_reg) | (carry_reg & data_in) | (sum_reg & data_in);\n\n"
+                "Inside the sequential always block, you MUST update both registers:\n"
+                "  always @(posedge clk or negedge rst_n) begin\n"
+                "    if (!rst_n) begin\n"
+                "      sum_reg   <= 32'd0;\n"
+                "      carry_reg <= 32'd0;\n"
+                "    end else if (valid_in) begin\n"
+                "      sum_reg   <= s;\n"
+                "      carry_reg <= {c[30:0], 1'b0}; // Shift majority carry c, NOT carry_reg\n"
+                "    end\n"
+                "  end\n"
+                "  assign acc_out = sum_reg + carry_reg;\n\n"
+                "Generate the complete synthesizable Verilog module 'pe_accumulator_candidate'.\n"
+                "Wrap your code in ```verilog ... ```. Keep explanation to 1 sentence."
             )
 
         payload = {
@@ -391,23 +474,35 @@ class OllamaDriver(BaseModelDriver):
                 content = data.get("response", "")
         except Exception as e:
             raise RuntimeError(
-                f"Failed to connect to local Ollama server at {self.host}: {e}"
+                f"Failed to query local Ollama server at {self.host} with model '{self.model_name}': {e}.\n"
+                f"Make sure Ollama is running ('ollama serve') and model is installed ('ollama pull {self.model_name}')."
             )
 
         verilog = (
             extract_verilog_block(content)
             or (RTL_DIR / "pe_accumulator_naive.v").read_text()
         )
+        # Ensure module name is correct
         verilog = re.sub(
             r"\bmodule\s+\w+", "module pe_accumulator_candidate", verilog, count=1
         )
+        # Sanitize 'output reg ... acc_out' when assign is used
+        if "assign acc_out" in verilog and "output reg" in verilog:
+            verilog = verilog.replace(
+                "output reg [31:0] acc_out", "output wire [31:0] acc_out"
+            )
+            verilog = verilog.replace(
+                "output reg [DATA_WIDTH-1:0] acc_out",
+                "output wire [DATA_WIDTH-1:0] acc_out",
+            )
+
         paradigm = "AI-Assisted" if turn_number == 1 else "AI-Native"
 
         return TurnProposal(
             turn_number=turn_number,
-            paradigm_label=f"{paradigm} (Local Ollama {self.model_name})",
+            paradigm_label=f"{paradigm} (Ollama: {self.model_name})",
             hypothesis=f"Local Model ({self.model_name}) proposed candidate architecture for Turn {turn_number}.",
-            proposed_action=f"Synthesize and formally verify local generated RTL.",
+            proposed_action=f"Synthesize with Yosys and formally verify with 1,000-vector lockstep referee.",
             action_type="RTL_GEN",
             verilog_code=verilog,
             synthesis_script=None,
@@ -431,18 +526,51 @@ def create_model_driver(model_spec: str) -> BaseModelDriver:
     elif spec_lower.startswith("gemini"):
         name = "gemini-2.0-flash" if spec_lower == "gemini" else spec_lower
         return GeminiDriver(model_name=name)
-    elif spec_lower.startswith("ollama"):
-        parts = spec_lower.split("/", 1)
-        name = parts[1] if len(parts) > 1 else "qwen2.5-coder:32b"
+    elif spec_lower.startswith("ollama") or ":" in spec_lower:
+        if "/" in spec_lower:
+            parts = spec_lower.split("/", 1)
+            name = parts[1]
+        elif spec_lower.startswith("ollama:"):
+            parts = spec_lower.split(":", 1)
+            name = parts[1]
+        elif spec_lower == "ollama":
+            name = "auto"
+        else:
+            name = spec_lower
         return OllamaDriver(model_name=name)
     else:
+        # Check if spec matches any installed Ollama model
+        installed = detect_installed_ollama_models()
+        for m in installed:
+            if spec_lower == m.lower() or spec_lower in m.lower():
+                return OllamaDriver(model_name=m)
         # Default to reference
         return ReferenceDriver()
 
 
 def list_available_models() -> List[Dict[str, Any]]:
     """Returns availability status for all supported model backends."""
+    installed_ollama = detect_installed_ollama_models()
+    ollama_running = len(installed_ollama) > 0 or shutil.which("ollama") is not None
+    ollama_desc = (
+        f"Installed local models: {', '.join(installed_ollama)}"
+        if installed_ollama
+        else "Local open-weights engine (run 'ollama pull qwen2.5:7b')"
+    )
+    ollama_status = (
+        f"READY ({len(installed_ollama)} models: {pick_default_ollama_model(installed_ollama)})"
+        if installed_ollama
+        else ("ONLINE (No models pulled)" if ollama_running else "NOT_RUNNING")
+    )
+
     return [
+        {
+            "id": "ollama",
+            "name": "Local Ollama (Open-Weights Engine)",
+            "provider": "Local Host (localhost:11434)",
+            "status": ollama_status,
+            "description": f"Private, 100% free, zero API keys. {ollama_desc}",
+        },
         {
             "id": "reference",
             "name": "Deterministic Golden Reference Engine",
@@ -467,14 +595,5 @@ def list_available_models() -> List[Dict[str, Any]]:
             if (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
             else "REQUIRES_KEY (GEMINI_API_KEY)",
             "description": "Google frontier model for silicon microarchitecture co-adaptation.",
-        },
-        {
-            "id": "ollama/qwen2.5-coder:32b",
-            "name": "Local Ollama (Qwen2.5-Coder / DeepSeek)",
-            "provider": "Local Subprocess",
-            "status": "READY (Ollama binary found)"
-            if shutil.which("ollama")
-            else "NOT_INSTALLED",
-            "description": "Completely private, local open-weights silicon design agent.",
         },
     ]

@@ -9308,6 +9308,11 @@ def doctor() -> None:
             ["riscv64-linux-gnu-gcc", "--version"],
             "RISC-V cross-compiler (optional; in docker)",
         ),
+        (
+            "ollama",
+            ["ollama", "list"],
+            "Local open-weights AI agent runner (optional; zero keys needed)",
+        ),
     ]
     table = Table(
         title="Architecture 2.0: System & Toolchain Diagnostics", box=box.ROUNDED
