@@ -30,6 +30,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Any, Dict, List, Optional
 import yaml
 
@@ -38,6 +39,7 @@ try:
     from rich.panel import Panel
     from rich.table import Table
     from rich.syntax import Syntax
+    from rich import box
 
     RICH_AVAILABLE = True
 except ImportError:
@@ -472,28 +474,22 @@ def print_rich_dashboard(
     data: Dict[str, Any], show_asm: bool, console: Console
 ) -> None:
     """Displays a formatted rich dashboard in the terminal."""
-    console.print()
-    console.print(
-        Panel(
-            "[bold cyan]Micro-Loop D: Hardware-Software Co-Design and Instruction Specialization[/bold cyan]\n"
-            "[dim]Target: Mobile XR Feature Detection (256x256 Filter) | Budget: <= 50,000 cycles, <= 15,000 GE[/dim]",
-            border_style="cyan",
-        )
-    )
-
     table = Table(
-        title="Paradigm Comparison: HW/SW Co-Design", header_style="bold magenta"
+        title="Micro-Loop D: Hardware-Software Co-Design & Specialization",
+        header_style="bold cyan",
+        box=box.ROUNDED,
+        show_header=True,
     )
-    table.add_column("Metric / Dimension", style="bold")
-    table.add_column("AI-Assisted (Open-Loop)", style="red")
-    table.add_column("AI-Driven (Compiler Sweep)", style="yellow")
-    table.add_column("AI-Native (Cross-Layer)", style="green")
+    table.add_column("Metric / Dimension", style="bold", no_wrap=True)
+    table.add_column("AI-Assisted", style="red", justify="center")
+    table.add_column("AI-Driven", style="yellow", justify="center")
+    table.add_column("AI-Native", style="green", justify="center")
 
     table.add_row(
         "Specialization",
-        "Isolated scalar custom.dot",
-        "Compiler unroll=8 on static ISA",
-        "SIMD-4 FMA + Post-Inc HW & Lowering",
+        "Scalar custom.dot",
+        "Compiler unroll=8",
+        "SIMD-4 + Post-Inc",
     )
     table.add_row(
         "Compute Cycles",
@@ -502,68 +498,75 @@ def print_rich_dashboard(
         f"{data['native']['compute_cycles']:,} (-63%)",
     )
     table.add_row(
-        "Address Math Cycles",
+        "Address Math",
         f"{data['assisted']['address_calc_cycles']:,}",
         f"{data['driven']['address_calc_cycles']:,}",
-        f"{data['native']['address_calc_cycles']:,} (-77% via post-inc)",
+        f"{data['native']['address_calc_cycles']:,} (-77%)",
     )
     table.add_row(
-        "Register Spill Cycles",
+        "Register Spills",
         f"{data['assisted']['register_spill_cycles']:,}",
-        f"{data['driven']['register_spill_cycles']:,} (stack thrashing)",
-        f"{data['native']['register_spill_cycles']:,} (-69% via SIMD)",
+        f"{data['driven']['register_spill_cycles']:,} (thrash)",
+        f"{data['native']['register_spill_cycles']:,} (-69%)",
     )
     table.add_row(
-        "Total Cycles",
+        "Total Latency",
         f"{data['assisted']['total_cycles']:,} [FAIL]",
         f"{data['driven']['total_cycles']:,} [FAIL]",
         f"{data['native']['total_cycles']:,} [PASS]",
     )
     table.add_row(
-        "Speedup vs Baseline",
-        "1.00x",
+        "Relative Speedup",
+        "1.00x (Baseline)",
         f"{data['assisted']['total_cycles'] / data['driven']['total_cycles']:.2f}x",
         f"{data['assisted']['total_cycles'] / data['native']['total_cycles']:.2f}x",
     )
     table.add_row(
-        "Hardware Area (GE)",
+        "Silicon Area (GE)",
         f"{data['assisted']['hardware_area_ge']:,} GE",
         f"{data['driven']['hardware_area_ge']:,} GE",
-        f"{data['native']['hardware_area_ge']:,} GE (Headroom: 5,600 GE)",
+        f"{data['native']['hardware_area_ge']:,} GE",
     )
     table.add_row(
-        "Design Signoff",
-        "[bold red]FAILED (2.9x Over Cycle Budget)[/bold red]",
-        "[bold yellow]FAILED (1.8x Over Cycle Budget)[/bold yellow]",
-        "[bold green]SIGNED OFF (1.75x Under Budget, Met Area)[/bold green]",
+        "Multi-Obj Signoff",
+        "[bold red]FAIL (2.9x Budget)[/bold red]",
+        "[bold yellow]FAIL (1.8x Budget)[/bold yellow]",
+        "[bold green]SIGNED OFF (5.1x)[/bold green]",
     )
 
+    console.print()
     console.print(table)
+    console.print()
 
     if show_asm:
-        console.print()
-        console.print("[bold yellow]Side-by-Side Assembly Comparison:[/bold yellow]")
+        console.print(
+            "[bold cyan]Comparative Instruction lowering & Register Allocation:[/bold cyan]"
+        )
         console.print(
             Panel(
-                Syntax(ASM_DRIVEN, "asm", theme="monokai", line_numbers=False),
-                title="[bold yellow]AI-Driven: Compiler Unrolling Causes 14 Stack Spills Per Loop[/bold yellow]",
+                Syntax(ASM_DRIVEN.strip(), "asm", theme="monokai", line_numbers=False),
+                title="[bold yellow]AI-Driven: Aggressive Compiler Unrolling Forces Stack Thrashing (14 Spills/Loop)[/bold yellow]",
                 border_style="yellow",
             )
         )
         console.print(
             Panel(
-                Syntax(ASM_NATIVE, "asm", theme="monokai", line_numbers=False),
-                title="[bold green]AI-Native: Co-Designed Post-Increment SIMD (Zero Spills)[/bold green]",
+                Syntax(ASM_NATIVE.strip(), "asm", theme="monokai", line_numbers=False),
+                title="[bold green]AI-Native: Co-Designed Vector Microarchitecture (Auto-Post-Increment, Zero Spills)[/bold green]",
                 border_style="green",
             )
         )
 
+    insight_text = (
+        "[bold white]Multi-Objective Signoff & HW/SW Co-Design Analysis:[/bold white]\n"
+        "• [bold red]AI-Assisted (Open-Loop):[/bold red] Specialized compute opcodes drafted in isolation accelerate arithmetic MACs but neglect overhead instructions: 71% of runtime is consumed by address recalculation (58k cycles) and register spilling (45k cycles).\n"
+        "• [bold yellow]AI-Driven (Tool Sweep):[/bold yellow] Aggressive compiler unrolling on fixed scalar hardware exhausts the 32-entry register file, forcing 32,000 cycles of stack spill-and-reload thrashing that prevents timing closure.\n"
+        "• [bold green]AI-Native (Cross-Layer Adaptation):[/bold green] Co-adapting the hardware datapath alongside the compiler lowering pipeline breaks the barrier: hardware auto-post-increment addressing eliminates address pointer overhead (6k cycles), while 4-way packed SIMD quenches register pressure (10k cycles), delivering a 5.09x net speedup within the 15,000 GE silicon envelope."
+    )
     console.print(
         Panel(
-            "[bold white]Architectural Causality Takeaway:[/bold white]\n"
-            "• [bold red]AI-Assisted:[/bold red] LLMs generate isolated compute opcodes, overlooking that 71% of runtime is spent on address calculation and register spills.\n"
-            "• [bold yellow]AI-Driven:[/bold yellow] Compiler-only unrolling hits a hard physical wall: the fixed 32-entry scalar register file is overwhelmed, spending 32,000 cycles thrashing stack memory.\n"
-            "• [bold green]AI-Native:[/bold green] The agent couples workload profiling to joint co-adaptation: introducing hardware post-increment addressing eliminates address arithmetic, while packed SIMD reduces register pressure, achieving a 5.09x speedup within the 15k GE area budget.",
+            insight_text,
+            title="[bold green]Signoff Verification & Diagnostic Assessment[/bold green]",
             border_style="green",
         )
     )
@@ -577,12 +580,25 @@ def main() -> None:
         "--paradigm",
         choices=["all", "assisted", "driven", "native"],
         default="all",
-        help="Target design paradigm",
+        help="Target design paradigm (default: all)",
     )
     parser.add_argument(
         "--visual",
         action="store_true",
+        default=True,
         help="Generate publication-grade visual plot (results.png)",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        default=False,
+        help="Run in demonstration mode with structured stage pacing",
+    )
+    parser.add_argument(
+        "--pace",
+        type=float,
+        default=0.0,
+        help="Pause interval in seconds between execution phases (default: 0.0, or 0.4 in --demo)",
     )
     parser.add_argument(
         "--asm", action="store_true", help="Display comparative assembly listings"
@@ -595,13 +611,100 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    pace = args.pace if args.pace > 0.0 else (0.4 if args.demo else 0.0)
+    show_asm = args.asm or args.demo
+
+    console = Console() if RICH_AVAILABLE else None
+
+    if console:
+        console.print()
+        console.print(
+            Panel(
+                "[bold white on blue] ARCHITECTURE 2.0: MICRO-LOOP D [/bold white on blue]\n"
+                "[bold cyan]Hardware-Software Co-Design & Instruction Specialization[/bold cyan]\n"
+                "[dim]Target: Mobile XR Spatial Filter (256x256 Image) | Limits: <= 50,000 cycles, <= 15,000 GE | ISA: RISC-V RV64GC[/dim]",
+                border_style="bright_blue",
+            )
+        )
+    else:
+        print("=" * 80)
+        print("Micro-Loop D: HW/SW Co-Design & Instruction Specialization")
+        print("Target: 256x256 Filter | Limits: <= 50,000 cycles, <= 15,000 GE")
+        print("=" * 80)
+
     results: Dict[str, Any] = {}
+
+    # Stage 1: AI-Assisted
     if args.paradigm in ("all", "assisted"):
-        results["assisted"] = evaluate_codesign("assisted")
+        if console and pace > 0:
+            with console.status(
+                "[bold cyan]Stage 1: Compiling AI-Assisted scalar custom opcode with riscv64-linux-gnu-gcc...[/bold cyan]",
+                spinner="dots",
+            ):
+                time.sleep(pace)
+                results["assisted"] = evaluate_codesign("assisted")
+        else:
+            results["assisted"] = evaluate_codesign("assisted")
+
+        if console:
+            console.print(
+                f"[bold red]• Stage 1 [AI-Assisted]:[/bold red] Isolated scalar custom.dot drafted -> "
+                f"Total Latency: [bold white]{results['assisted']['total_cycles']:,}[/bold white] cycles "
+                f"(Compute: {results['assisted']['compute_cycles']:,}, Addr Math: {results['assisted']['address_calc_cycles']:,}, Spill: {results['assisted']['register_spill_cycles']:,}; "
+                f"[bold red]2.9x Over Cycle Budget[/bold red])"
+            )
+        else:
+            print(
+                f"1. [AI-Assisted] Cycles: {results['assisted']['total_cycles']:,} | Area: {results['assisted']['hardware_area_ge']} GE | Status: FAIL"
+            )
+
+    # Stage 2: AI-Driven
     if args.paradigm in ("all", "driven"):
-        results["driven"] = evaluate_codesign("driven")
+        if console and pace > 0:
+            with console.status(
+                "[bold cyan]Stage 2: Executing AI-Driven compiler autotuning (aggressive unroll=8 on static ISA)...[/bold cyan]",
+                spinner="dots",
+            ):
+                time.sleep(pace)
+                results["driven"] = evaluate_codesign("driven")
+        else:
+            results["driven"] = evaluate_codesign("driven")
+
+        if console:
+            console.print(
+                f"[bold yellow]• Stage 2 [AI-Driven]:[/bold yellow] Aggressive unrolling exhausts 32-entry register file -> "
+                f"Total Latency: [bold white]{results['driven']['total_cycles']:,}[/bold white] cycles "
+                f"({results['driven']['register_spill_cycles']:,} stack spill cycles; "
+                f"[bold yellow]1.8x Over Cycle Budget[/bold yellow])"
+            )
+        else:
+            print(
+                f"2. [AI-Driven] Cycles: {results['driven']['total_cycles']:,} | Area: {results['driven']['hardware_area_ge']} GE | Status: FAIL"
+            )
+
+    # Stage 3: AI-Native
     if args.paradigm in ("all", "native"):
-        results["native"] = evaluate_codesign("native")
+        if console and pace > 0:
+            with console.status(
+                "[bold cyan]Stage 3: Synthesizing AI-Native SIMD-4 datapath with hardware auto-post-increment addressing...[/bold cyan]",
+                spinner="dots",
+            ):
+                time.sleep(pace)
+                results["native"] = evaluate_codesign("native")
+        else:
+            results["native"] = evaluate_codesign("native")
+
+        if console:
+            console.print(
+                f"[bold green]• Stage 3 [AI-Native]:[/bold green] Co-designed packed SIMD and post-increment addressing -> "
+                f"Total Latency: [bold white]{results['native']['total_cycles']:,}[/bold white] cycles, "
+                f"Silicon Area: {results['native']['hardware_area_ge']:,} GE "
+                f"([bold green]5.09x speedup, 1.75x inside budget, 5,600 GE area margin; MULTI-OBJECTIVE SIGNOFF CLOSED[/bold green])"
+            )
+        else:
+            print(
+                f"3. [AI-Native] Cycles: {results['native']['total_cycles']:,} | Area: {results['native']['hardware_area_ge']} GE | Status: PASS"
+            )
 
     args.json_out.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
@@ -610,31 +713,33 @@ def main() -> None:
         if "assisted" in results and "driven" in results and "native" in results:
             plot_path = ROOT / "results.png"
             generate_visual_plot(results, plot_path)
-            if not RICH_AVAILABLE:
+            if console:
+                console.print(
+                    f"[dim]Visual plot generated: [bold]{plot_path.name}[/bold][/dim]"
+                )
+            else:
                 print(f"Visual plot generated: {plot_path}")
 
     # Terminal output
-    if RICH_AVAILABLE:
-        console = Console()
+    if console:
         if args.paradigm == "all":
-            print_rich_dashboard(results, args.asm, console)
+            print_rich_dashboard(results, show_asm, console)
         else:
             p = args.paradigm
             data_p = results[p]
-            console.print(f"[bold]Paradigm: {p.upper()}[/bold]")
+            console.print(f"\n[bold]Selected Paradigm: {p.upper()}[/bold]")
             console.print(
                 f"Cycles: {data_p['total_cycles']:,} (Compute: {data_p['compute_cycles']:,}, Addr: {data_p['address_calc_cycles']:,}, Spill: {data_p['register_spill_cycles']:,})"
             )
             console.print(
                 f"Area: {data_p['hardware_area_ge']:,} GE | Status: {'PASS' if data_p['signoff_passed'] else 'FAIL'}"
             )
+        console.print(
+            f"[dim]Structured results written to: [bold]{args.json_out.name}[/bold][/dim]\n"
+        )
     else:
         print("=" * 80)
-        print("Micro-Loop D Results:")
-        for k, v in results.items():
-            print(
-                f"  [{k.upper()}] Cycles: {v['total_cycles']:,} | Area: {v['hardware_area_ge']:,} GE | Status: {'PASS' if v['signoff_passed'] else 'FAIL'}"
-            )
+        print(f"Structured results written to {args.json_out.name}")
         print("=" * 80)
 
 
