@@ -6214,6 +6214,24 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"Formal\ Equivalence\ Checking",
         False,
     ),
+    "CVE": (
+        "Common Vulnerabilities and Exposures",
+        True,
+        "a",
+        "software",
+        "A standardized, publicly disclosed dictionary of cybersecurity vulnerabilities and exposures identifying software and hardware flaws.",
+        r"Common\ Vulnerabilities\ and\ Exposures",
+        False,
+    ),
+    "SDF": (
+        "Standard Delay Format",
+        True,
+        "an",
+        "physical",
+        "An IEEE standard representation format for describing timing delays and timing constraints calculated by electronic computer-aided design tools for digital simulation.",
+        r"Standard\ Delay\ Format",
+        False,
+    ),
 }
 
 CMOS_ARTICLE_CHECKS: dict[str, str] = {
