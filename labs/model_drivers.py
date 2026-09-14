@@ -38,11 +38,14 @@ class TurnProposal:
     paradigm_label: str
     hypothesis: str
     proposed_action: str
-    action_type: str  # "RTL_GEN" or "TOOL_TUNE"
-    verilog_code: Optional[str]
-    synthesis_script: Optional[str]
+    action_type: str  # "ARCH_SWEEP", "RTL_GEN", "TOOL_TUNE", "FLOORPLAN_PLACE", "CODESIGN"
     code_diff_summary: str
     reflection: str
+    verilog_code: Optional[str] = None
+    synthesis_script: Optional[str] = None
+    arch_params: Optional[Dict[str, Any]] = None
+    floorplan_layout: Optional[Dict[str, Any]] = None
+    codesign_spec: Optional[Dict[str, Any]] = None
 
 
 SYSTEM_PROMPT = """You are an expert autonomous Silicon Microarchitecture Design Agent operating in a closed physical loop.
@@ -125,12 +128,13 @@ class BaseModelDriver:
         spec: Dict[str, Any],
         history: List[Any],
         last_receipt: Optional[Any] = None,
+        loop_domain: str = "b",
     ) -> TurnProposal:
         raise NotImplementedError
 
 
 class ReferenceDriver(BaseModelDriver):
-    """Deterministic golden reference driver."""
+    """Deterministic golden reference driver supporting all 4 design loops."""
 
     def __init__(self, model_name: str = "reference"):
         super().__init__(model_name=model_name)
@@ -142,6 +146,303 @@ class ReferenceDriver(BaseModelDriver):
         )
 
     def propose_turn(
+        self,
+        turn_number: int,
+        spec: Dict[str, Any],
+        history: List[Any],
+        last_receipt: Optional[Any] = None,
+        loop_domain: str = "b",
+    ) -> TurnProposal:
+        loop_norm = loop_domain.lower().strip()
+        if loop_norm in ("a", "01", "microarchitectural-sweep"):
+            return self._propose_turn_loop_a(turn_number, spec, history, last_receipt)
+        elif loop_norm in ("c", "03", "physical-floorplan"):
+            return self._propose_turn_loop_c(turn_number, spec, history, last_receipt)
+        elif loop_norm in ("d", "04", "hw-sw-codesign"):
+            return self._propose_turn_loop_d(turn_number, spec, history, last_receipt)
+        else:
+            return self._propose_turn_loop_b(turn_number, spec, history, last_receipt)
+
+    def _propose_turn_loop_a(
+        self,
+        turn_number: int,
+        spec: Dict[str, Any],
+        history: List[Any],
+        last_receipt: Optional[Any] = None,
+    ) -> TurnProposal:
+        if turn_number == 1:
+            return TurnProposal(
+                turn_number=1,
+                paradigm_label="AI-Assisted (Open-Loop Prompt)",
+                hypothesis="Single point prompt generation: 16x64 Output Stationary systolic array maximizes spatial unrolling.",
+                proposed_action="Simulate 16x64 OS array with 4-word/cycle bus in SCALE-Sim.",
+                action_type="ARCH_SWEEP",
+                code_diff_summary="+ ArrayHeight: 16; ArrayWidth: 64; Dataflow: os;",
+                reflection=(
+                    "CRITICAL MEMORY CHOKE: Execution stalls 94.2% of cycles on DRAM bandwidth. "
+                    "The 4-word/cycle bus cannot feed weights for 16x64 OS. Memory wall reached."
+                ),
+                arch_params={
+                    "rows": 16,
+                    "cols": 64,
+                    "dataflow": "output_stationary",
+                    "bandwidth_words_per_cycle": 4,
+                    "sram_kib": 128,
+                },
+            )
+        elif turn_number == 2:
+            return TurnProposal(
+                turn_number=2,
+                paradigm_label="AI-Driven (Aspect Ratio Sweep)",
+                hypothesis="Automated grid search over aspect ratios (8x128, 16x64, 32x32, 64x16, 128x8) under fixed OS dataflow will break the bottleneck.",
+                proposed_action="Execute 5-point aspect ratio sweep under Output Stationary in SCALE-Sim.",
+                action_type="ARCH_SWEEP",
+                code_diff_summary="! ArrayHeight: 32; ArrayWidth: 32; Dataflow: os;",
+                reflection=(
+                    "OPTIMIZATION PLATEAU REACHED: 32x32 yields 110,592 cycles (only 1.23x speedup). "
+                    "Tuning geometry cannot overcome the off-chip DRAM memory wall. Cross-layer dataflow shift required."
+                ),
+                arch_params={
+                    "rows": 32,
+                    "cols": 32,
+                    "dataflow": "output_stationary",
+                    "bandwidth_words_per_cycle": 4,
+                    "sram_kib": 128,
+                },
+            )
+        else:
+            return TurnProposal(
+                turn_number=turn_number,
+                paradigm_label="AI-Native (Cross-Layer Co-Adaptation)",
+                hypothesis=(
+                    "Evidence-triggered cross-abstraction redesign: converting dataflow to Weight Stationary "
+                    "and buffering weights in 128 KiB on-chip SRAM slashes DRAM restreaming by 2.73x."
+                ),
+                proposed_action="Simulate 32x32 WS with 128 KiB filter caching in SCALE-Sim.",
+                action_type="ARCH_SWEEP",
+                code_diff_summary="+ Dataflow: ws; + FilterSRAM: 128 KiB on-chip cache;",
+                reflection=(
+                    "MULTI-OBJECTIVE SIGNOFF ACHIEVED: 40,448 cycles (2.73x speedup), "
+                    "DRAM traffic dropped to 161,792 words, PE utilization rose to 15.8%."
+                ),
+                arch_params={
+                    "rows": 32,
+                    "cols": 32,
+                    "dataflow": "weight_stationary",
+                    "bandwidth_words_per_cycle": 4,
+                    "sram_kib": 128,
+                },
+            )
+
+    def _propose_turn_loop_c(
+        self,
+        turn_number: int,
+        spec: Dict[str, Any],
+        history: List[Any],
+        last_receipt: Optional[Any] = None,
+    ) -> TurnProposal:
+        if turn_number == 1:
+            return TurnProposal(
+                turn_number=1,
+                paradigm_label="AI-Assisted (Open-Loop Floorplan)",
+                hypothesis="Direct prompt generation: macros scattered around die periphery without routing feedback.",
+                proposed_action="Evaluate initial macro placement coordinates against 2D RUDY routing model.",
+                action_type="FLOORPLAN_PLACE",
+                code_diff_summary="+ Macro coordinates: (40,60), (740,80), (80,560), (620,720);",
+                reflection=(
+                    "PHYSICAL DRC FAILURE: HPWL = 12,400 um, Peak Congestion = 100.0%, 3 DRC shorts. "
+                    "Asymmetric placement chokes routing channels."
+                ),
+                floorplan_layout={
+                    "core": {
+                        "name": "Core",
+                        "box": (280, 260, 680, 660),
+                        "type": "compute",
+                    },
+                    "macros": [
+                        {
+                            "name": "SRAM0",
+                            "box": (40, 60, 240, 460),
+                            "pins": (240, 260),
+                        },
+                        {
+                            "name": "SRAM1",
+                            "box": (740, 80, 960, 480),
+                            "pins": (740, 280),
+                        },
+                        {
+                            "name": "SRAM2",
+                            "box": (80, 560, 300, 960),
+                            "pins": (200, 560),
+                        },
+                        {
+                            "name": "SRAM3",
+                            "box": (620, 720, 940, 920),
+                            "pins": (620, 720),
+                        },
+                    ],
+                    "paradigm": "assisted",
+                },
+            )
+        elif turn_number == 2:
+            return TurnProposal(
+                turn_number=2,
+                paradigm_label="AI-Driven (HPWL Minimization)",
+                hypothesis="Automated HPWL optimization: pack macros tightly around the core to minimize net wirelength.",
+                proposed_action="Cluster macros inward toward core edges to minimize HPWL.",
+                action_type="FLOORPLAN_PLACE",
+                code_diff_summary="! HPWL optimization: cluster macros (70,340), (710,340), (340,70), (340,710);",
+                reflection=(
+                    "SURROGATE GAMING DETECTED: HPWL fell 36.9% to 7,820 um, but inward pins created "
+                    "fatal 100% congestion choke in central avenue (2 DRC shorts)."
+                ),
+                floorplan_layout={
+                    "core": {
+                        "name": "Core",
+                        "box": (340, 340, 660, 660),
+                        "type": "compute",
+                    },
+                    "macros": [
+                        {
+                            "name": "SRAM0",
+                            "box": (70, 340, 290, 660),
+                            "pins": (290, 500),
+                        },
+                        {
+                            "name": "SRAM1",
+                            "box": (710, 340, 930, 660),
+                            "pins": (710, 500),
+                        },
+                        {
+                            "name": "SRAM2",
+                            "box": (340, 70, 660, 290),
+                            "pins": (500, 290),
+                        },
+                        {
+                            "name": "SRAM3",
+                            "box": (340, 710, 660, 930),
+                            "pins": (500, 710),
+                        },
+                    ],
+                    "paradigm": "driven",
+                },
+            )
+        else:
+            return TurnProposal(
+                turn_number=turn_number,
+                paradigm_label="AI-Native (Cross-Layer Co-Adaptation)",
+                hypothesis="Cross-layer adaptation: rotate macro pins outward toward peripheral power rails and allocate dedicated 80 um routing avenues.",
+                proposed_action="Co-adapt macro pin breakout facing peripherally and widen channels to 80 um.",
+                action_type="FLOORPLAN_PLACE",
+                code_diff_summary="+ Peripheral pin rotation + 80 um dedicated routing avenues;",
+                reflection=(
+                    "MULTI-OBJECTIVE SIGNOFF CLOSED: HPWL = 8,240 um (-33.5%), "
+                    "Peak Congestion drops to 34.3% (well within 85% limit), 0 DRC violations."
+                ),
+                floorplan_layout={
+                    "core": {
+                        "name": "Core",
+                        "box": (350, 350, 650, 650),
+                        "type": "compute",
+                    },
+                    "macros": [
+                        {
+                            "name": "SRAM0",
+                            "box": (40, 350, 240, 650),
+                            "pins": (250, 500),
+                        },
+                        {
+                            "name": "SRAM1",
+                            "box": (760, 350, 960, 650),
+                            "pins": (750, 500),
+                        },
+                        {
+                            "name": "SRAM2",
+                            "box": (350, 40, 650, 240),
+                            "pins": (500, 250),
+                        },
+                        {
+                            "name": "SRAM3",
+                            "box": (350, 760, 650, 960),
+                            "pins": (500, 750),
+                        },
+                    ],
+                    "paradigm": "native",
+                },
+            )
+
+    def _propose_turn_loop_d(
+        self,
+        turn_number: int,
+        spec: Dict[str, Any],
+        history: List[Any],
+        last_receipt: Optional[Any] = None,
+    ) -> TurnProposal:
+        if turn_number == 1:
+            return TurnProposal(
+                turn_number=1,
+                paradigm_label="AI-Assisted (Isolated Opcode)",
+                hypothesis="Isolated custom scalar dot-product opcode (custom.dot) speeds up multiplication.",
+                proposed_action="Compile scalar custom opcode with GCC -O3.",
+                action_type="CODESIGN",
+                code_diff_summary="+ custom.dot a3, a4, a5;",
+                reflection="CYCLE BUDGET VIOLATED: 145,000 cycles (2.9x budget). Address math (58k) and spills (45k) dominate 71% of runtime.",
+                codesign_spec={
+                    "specialization": "scalar_custom_dot",
+                    "compiler_strategy": "Standard GCC -O3",
+                    "paradigm": "assisted",
+                    "hardware_area_ge": 2400,
+                    "compute_cycles": 42000,
+                    "address_calc_cycles": 58000,
+                    "register_spill_cycles": 45000,
+                    "total_cycles": 145000,
+                    "instruction_set": "RV32IM + scalar custom.dot",
+                },
+            )
+        elif turn_number == 2:
+            return TurnProposal(
+                turn_number=2,
+                paradigm_label="AI-Driven (Compiler Unrolling)",
+                hypothesis="Aggressive compiler loop unrolling (factor 8) will eliminate branch overhead on static hardware.",
+                proposed_action="Apply compiler unrolling sweep (unroll=8) on static scalar hardware.",
+                action_type="CODESIGN",
+                code_diff_summary="! gcc -O3 -funroll-all-loops;",
+                reflection="REGISTER PRESSURE COLLAPSE: 92,000 cycles (1.8x budget). Unrolling exhausts 32 physical registers, forcing 32,000 spill-and-reload cycles.",
+                codesign_spec={
+                    "specialization": "compiler_unroll_8",
+                    "compiler_strategy": "GCC -O3 -funroll-all-loops",
+                    "paradigm": "driven",
+                    "hardware_area_ge": 2400,
+                    "compute_cycles": 34000,
+                    "address_calc_cycles": 26000,
+                    "register_spill_cycles": 32000,
+                    "total_cycles": 92000,
+                    "instruction_set": "RV32IM + scalar custom.dot",
+                },
+            )
+        else:
+            return TurnProposal(
+                turn_number=turn_number,
+                paradigm_label="AI-Native (Cross-Layer Co-Design)",
+                hypothesis="Simultaneous co-design: 4-way packed SIMD hardware datapath with auto-post-increment addressing + specialized vector lowering.",
+                proposed_action="Co-design packed SIMD hardware + compiler post-increment lowering.",
+                action_type="CODESIGN",
+                code_diff_summary="+ vdot4.postinc v0, (a0)+, (a1)+;",
+                reflection="MULTI-OBJECTIVE SIGNOFF CLOSED: 28,500 cycles (5.09x speedup, 1.75x inside budget) at 9,400 GE silicon area.",
+                codesign_spec={
+                    "specialization": "simd4_postinc",
+                    "compiler_strategy": "Matched vectorizer lowering",
+                    "paradigm": "native",
+                    "hardware_area_ge": 9400,
+                    "compute_cycles": 12500,
+                    "address_calc_cycles": 6000,
+                    "register_spill_cycles": 10000,
+                    "total_cycles": 28500,
+                    "instruction_set": "RV32IM + SIMD-4 vdot4.postinc",
+                },
+            )
+
+    def _propose_turn_loop_b(
         self,
         turn_number: int,
         spec: Dict[str, Any],

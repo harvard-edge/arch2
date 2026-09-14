@@ -523,6 +523,104 @@ def run_hero_loop_b(presenter: TutorialPresenter) -> None:
     )
 
 
+def run_micro_loop_a(presenter: TutorialPresenter) -> None:
+    """Executes Micro-Loop A: Systolic Microarchitecture & DRAM Roofline."""
+    c = presenter.console
+    width = presenter.width
+
+    presenter.print_master_header(
+        "Micro-Loop A: Systolic Microarchitecture & Memory Wall",
+        "Contract: Canonical GEMM (6.55M MACs) • DRAM Bandwidth ≤ 4 words/cyc • SRAM ≤ 128 KiB • Latency ≤ 50,000 cyc",
+    )
+
+    c.print(
+        Panel(
+            "[bold white]Physical Design Envelope & Microarchitectural Constraints:[/bold white]\n"
+            "• Workload: Canonical 128x128x128 GEMM (M=128, N=128, K=128 = 2,097,152 MACs)\n"
+            "• Silicon PE Budget: Max 1,024 Processing Elements (e.g. 32x32)\n"
+            "• On-Chip SRAM Buffer: Max 128 KiB on-chip memory capacity\n"
+            "• Memory Interface: Max 4 words/cycle off-chip DRAM bandwidth\n"
+            "• Signoff Target: Execution Latency ≤ 50,000 cycles without DRAM starving",
+            border_style="cyan",
+            box=box.ROUNDED,
+            width=width,
+        )
+    )
+
+    presenter.pause(
+        "Press [Enter] to inspect AI-Assisted microarchitecture...",
+        cue="Explain: 'Naively maximizing PE count without matching dataflow leads directly to memory wall starvation.'",
+    )
+
+    a_table = Table(
+        title="[bold cyan]Systolic Microarchitecture & Memory Wall Across Paradigms[/bold cyan]",
+        box=box.ROUNDED,
+        width=width,
+        header_style="bold cyan",
+    )
+    a_table.add_column("Paradigm", style="bold", width=18)
+    a_table.add_column("Array Geometry", justify="center", width=16)
+    a_table.add_column("Dataflow", justify="center", width=18)
+    a_table.add_column("DRAM Words", justify="center", width=16)
+    a_table.add_column("Cycles", justify="center", width=14)
+    a_table.add_column("Signoff Status", justify="center", width=16)
+
+    a_table.add_row(
+        "AI-Assisted",
+        "32x32 (1024 PEs)",
+        "Output Stationary",
+        "441,000 words",
+        "[red]110,250 cyc[/red]",
+        "[bold red]FAIL (Choked)[/bold red]",
+    )
+    a_table.add_row(
+        "AI-Driven",
+        "16x16 (256 PEs)",
+        "Output Stationary",
+        "208,000 words",
+        "[yellow]52,000 cyc[/yellow]",
+        "[bold yellow]FAIL (Plateau)[/bold yellow]",
+    )
+    a_table.add_row(
+        "AI-Native",
+        "32x32 (1024 PEs)",
+        "Weight Stationary",
+        "161,792 words",
+        "[green]40,448 cyc[/green]",
+        "[bold green]PASS (Signoff)[/bold green]",
+    )
+
+    c.print(a_table)
+
+    c.print()
+    roofline_box = (
+        "┌─────────────────────────────────────────────────────────────────────────────┐\n"
+        "│  DRAM BANDWIDTH ROOFLINE: Memory Choking vs. Weight Stationary Relief       │\n"
+        "├─────────────────────────────────────────────────────────────────────────────┤\n"
+        "│  AI-ASSISTED (Output Stationary):                                            │\n"
+        "│    Input A Traffic: 131,072 words | Weight B Traffic: 262,144 words        │\n"
+        "│    💥 Total DRAM Traffic: 441,000 words                                     │\n"
+        "│    💥 DRAM Bandwidth Bottleneck: 441,000 / 4 = 110,250 memory cycles!       │\n"
+        "│    💥 PE Array Idle Wait: 63.3% stall time waiting for DRAM words           │\n"
+        "├─────────────────────────────────────────────────────────────────────────────┤\n"
+        "│  AI-NATIVE (Weight Stationary + Double Buffered SRAM):                      │\n"
+        "│    Weights pinned in local PE registers; Inputs streamed horizontally       │\n"
+        "│    ✔ Total DRAM Traffic: 161,792 words (2.73x reduction in off-chip bytes!) │\n"
+        "│    ✔ Bound shifted from Memory Wall to Compute Roofline: 40,448 cycles      │\n"
+        "│    ✔ Meets physical signoff target (40,448 ≤ 50,000 cycles)                │\n"
+        "└─────────────────────────────────────────────────────────────────────────────┘"
+    )
+    c.print(
+        Panel(roofline_box, border_style="bright_blue", box=box.ROUNDED, width=width)
+    )
+
+    presenter.pause(
+        "Press [Enter] to conclude Micro-Loop A...",
+        cue="Final takeaway: 'Scaling PEs naively makes the memory wall worse. AI-Native co-adapts "
+        "the dataflow reuse pattern to keep DRAM traffic strictly within physical pin bandwidth.'",
+    )
+
+
 def run_micro_loop_c(presenter: TutorialPresenter) -> None:
     """Executes Micro-Loop C: Physical Macro Placement & Routing Congestion."""
     c = presenter.console
@@ -970,33 +1068,114 @@ def main() -> None:
         print("Install via: pip install rich")
         sys.exit(1)
 
-    console = Console(width=args.width, force_terminal=True)
-    presenter = TutorialPresenter(
-        console=console,
-        auto_advance=args.auto,
-        pace_seconds=args.pace,
-        show_presenter_notes=args.presenter,
+
+class InteractiveWorkshopTutorial:
+    """Pedagogical workshop tutorial orchestrator and student lab director."""
+
+    def __init__(
+        self,
+        width: int = DEFAULT_WIDTH,
+        auto: bool = False,
+        pace: float = 0.0,
+        presenter: bool = False,
+    ):
+        self.width = width
+        self.console = Console(width=width, force_terminal=True)
+        self.presenter = TutorialPresenter(
+            console=self.console,
+            auto_advance=auto,
+            pace_seconds=pace,
+            show_presenter_notes=presenter,
+            width=width,
+        )
+
+    def run_full_tutorial(self, loop: str = "b") -> None:
+        """Executes the complete tutorial experience for the requested loop."""
+        target = loop.lower().strip()
+        if target in ("a", "01", "systolic"):
+            run_micro_loop_a(self.presenter)
+        elif target in ("c", "03", "floorplan"):
+            run_micro_loop_c(self.presenter)
+        elif target in ("d", "04", "codesign"):
+            run_micro_loop_d(self.presenter)
+        elif target in ("all",):
+            run_micro_loop_a(self.presenter)
+            run_hero_loop_b(self.presenter)
+            run_micro_loop_c(self.presenter)
+            run_micro_loop_d(self.presenter)
+        else:
+            run_hero_loop_b(self.presenter)
+
+        print_grand_finale(self.console, width=self.width)
+
+    def run_parameter_exploration(self) -> None:
+        """Executes interactive parameter sweeps across timing, frequency, and bitwidth."""
+        run_sensitivity_exploration(self.console, width=self.width)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Architecture 2.0: Interactive Workshop Tutorial & Terminal Screencast Director"
+    )
+    parser.add_argument(
+        "--hero",
+        action="store_true",
+        help="Run the Hero demonstration (Micro-Loop B: RTL Timing Closure)",
+    )
+    parser.add_argument(
+        "--explore",
+        action="store_true",
+        help="Run parameter sensitivity exploration sweeps (bitwidth & frequency scaling)",
+    )
+    parser.add_argument(
+        "--loop",
+        type=str,
+        default="b",
+        choices=["a", "b", "c", "d", "all"],
+        help="Select micro-loop to demonstrate: a, b, c, d, or all (default: b)",
+    )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run in non-interactive automatic playback mode",
+    )
+    parser.add_argument(
+        "--pace",
+        type=float,
+        default=0.0,
+        help="Pacing delay in seconds between stages (e.g. 1.5 for video recording)",
+    )
+    parser.add_argument(
+        "--presenter",
+        action="store_true",
+        help="Display live presenter speaker notes and timing cues",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=DEFAULT_WIDTH,
+        help=f"Target terminal display width in columns (default: {DEFAULT_WIDTH})",
+    )
+    args = parser.parse_args()
+
+    if not RICH_AVAILABLE:
+        print("ERROR: Python 'rich' library is required to run the tutorial runner.")
+        print("Install via: pip install rich")
+        sys.exit(1)
+
+    t = InteractiveWorkshopTutorial(
         width=args.width,
+        auto=args.auto,
+        pace=args.pace,
+        presenter=args.presenter,
     )
 
     if args.explore:
-        run_sensitivity_exploration(console, width=args.width)
+        t.run_parameter_exploration()
         return
 
     loop_target = "b" if args.hero else args.loop.lower()
-
-    if loop_target in ("b", "hero"):
-        run_hero_loop_b(presenter)
-    elif loop_target == "c":
-        run_micro_loop_c(presenter)
-    elif loop_target == "d":
-        run_micro_loop_d(presenter)
-    elif loop_target in ("a", "all"):
-        run_hero_loop_b(presenter)
-        run_micro_loop_c(presenter)
-        run_micro_loop_d(presenter)
-
-    print_grand_finale(console, width=args.width)
+    t.run_full_tutorial(loop_target)
 
 
 if __name__ == "__main__":

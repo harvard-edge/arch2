@@ -96,10 +96,38 @@ ASM_NATIVE = """\
 
 
 def run_riscv_compilation_and_profiling() -> Optional[Dict[str, Any]]:
-    """Runs real RISC-V compilation via riscv64-linux-gnu-gcc, counts real instructions/spills via objdump, and verifies execution in QEMU."""
-    gcc_bin = shutil.which("riscv64-linux-gnu-gcc")
-    objdump_bin = shutil.which("riscv64-linux-gnu-objdump")
-    qemu_bin = shutil.which("qemu-riscv64-static") or shutil.which("qemu-riscv64")
+    """Runs real RISC-V compilation via riscv-gcc, counts real instructions/spills via objdump, and verifies execution in QEMU."""
+    gcc_candidates = [
+        "riscv64-unknown-elf-gcc",
+        "riscv64-linux-gnu-gcc",
+        "riscv32-unknown-elf-gcc",
+        "riscv-none-elf-gcc",
+    ]
+    gcc_bin = next(
+        (shutil.which(cmd) for cmd in gcc_candidates if shutil.which(cmd)), None
+    )
+
+    objdump_candidates = [
+        "riscv64-unknown-elf-objdump",
+        "riscv64-linux-gnu-objdump",
+        "riscv32-unknown-elf-objdump",
+        "riscv-none-elf-objdump",
+    ]
+    objdump_bin = next(
+        (shutil.which(cmd) for cmd in objdump_candidates if shutil.which(cmd)), None
+    )
+    if gcc_bin and not objdump_bin:
+        # Try matching prefix
+        prefix = gcc_bin.rsplit("gcc", 1)[0]
+        cand = shutil.which(f"{prefix}objdump")
+        if cand:
+            objdump_bin = cand
+
+    qemu_bin = (
+        shutil.which("qemu-riscv64-static")
+        or shutil.which("qemu-riscv64")
+        or shutil.which("qemu-riscv32")
+    )
 
     c_file = WORKLOAD_DIR / "xr_fast_corners.c"
     if not gcc_bin or not objdump_bin or not c_file.exists():
@@ -201,11 +229,15 @@ int main() {
             if os.path.exists(elf_path):
                 os.unlink(elf_path)
 
+    gcc_name = Path(gcc_bin).name if gcc_bin else "riscv-gcc"
+    objdump_name = Path(objdump_bin).name if objdump_bin else "objdump"
+    tool_desc = f"{gcc_name} + {objdump_name}" + (" + qemu" if qemu_verified else "")
+
     return {
         "baseline": base_stats,
         "driven": driven_stats,
         "qemu_verified": qemu_verified,
-        "tool": "riscv64-linux-gnu-gcc + objdump + qemu-user",
+        "tool": tool_desc,
     }
 
 
@@ -584,7 +616,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--visual",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate publication-grade visual plot (results.png)",
     )

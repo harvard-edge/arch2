@@ -62,6 +62,46 @@ def load_workload(path: Path) -> List[Dict[str, Any]]:
     return layers
 
 
+def _patch_scalesim_for_numpy2() -> None:
+    """Ensures SCALE-Sim functions correctly with NumPy 2.0+ array scalar conversions."""
+    try:
+        import numpy as np
+        import scalesim.memory.read_buffer as rb
+        import scalesim.memory.double_buffered_scratchpad_mem as db
+
+        if hasattr(rb, "read_buffer"):
+            orig_prefetch = rb.read_buffer.prefetch_active_buffer
+
+            def safe_prefetch(self, start_cycle=0):
+                ret = orig_prefetch(self, start_cycle=start_cycle)
+                if hasattr(self, "last_prefetch_cycle") and isinstance(
+                    self.last_prefetch_cycle, np.ndarray
+                ):
+                    self.last_prefetch_cycle = int(np.max(self.last_prefetch_cycle))
+                return ret
+
+            rb.read_buffer.prefetch_active_buffer = safe_prefetch
+
+        if hasattr(db, "double_buffered_scratchpad"):
+            orig_service = db.double_buffered_scratchpad.service_memory_requests
+
+            def safe_service(
+                self, ifmap_demand_mat, filter_demand_mat, ofmap_demand_mat
+            ):
+                ret = orig_service(
+                    self, ifmap_demand_mat, filter_demand_mat, ofmap_demand_mat
+                )
+                if hasattr(self, "total_cycles") and isinstance(
+                    self.total_cycles, np.ndarray
+                ):
+                    self.total_cycles = int(np.max(self.total_cycles))
+                return ret
+
+            db.double_buffered_scratchpad.service_memory_requests = safe_service
+    except Exception:
+        pass
+
+
 def run_scalesim_evaluation(
     rows: int,
     cols: int,
@@ -71,6 +111,7 @@ def run_scalesim_evaluation(
 ) -> Optional[Dict[str, Any]]:
     """Runs cycle-accurate SCALE-Sim simulation for 2D systolic array if available."""
     try:
+        _patch_scalesim_for_numpy2()
         from scalesim.scale_sim import scalesim
         import tempfile
         import os
@@ -147,10 +188,7 @@ SparsitySupport: False
                 layout=fl_path,
                 input_type_gemm=True,
             )
-            try:
-                sim.run_scale(out_dir)
-            except TypeError:
-                pass
+            sim.run_scale(out_dir)
 
             comp_csv = os.path.join(out_dir, "sim_run", "COMPUTE_REPORT.csv")
             det_csv = os.path.join(out_dir, "sim_run", "DETAILED_ACCESS_REPORT.csv")
@@ -617,7 +655,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--visual",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate high-resolution visualization plot (default: True)",
     )

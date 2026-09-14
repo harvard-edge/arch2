@@ -436,7 +436,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--visual",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate publication-grade visual plot (results.png)",
     )

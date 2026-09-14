@@ -146,37 +146,74 @@ def simulate_timing(module_name: str, clock_period_ns: float = 2.0) -> Dict[str,
 
 def synthesize_with_yosys(
     module_name: str, rtl_file: Path, extra_opt: str = ""
-) -> Optional[Dict[str, int]]:
-    """Runs Yosys synthesis to obtain gate and register counts and topological path length."""
+) -> Optional[Dict[str, Any]]:
+    """Runs Yosys synthesis to obtain gate and register counts, cell area, and topological path length.
+    Maps to SkyWater 130nm Liberty standard-cell library if available.
+    """
     yosys_bin = shutil.which("yosys")
     if not yosys_bin or not rtl_file.exists():
         return None
 
-    script = f"read_verilog {rtl_file}; synth -top {module_name} {extra_opt}; stat; ltp -noff"
+    tech_lib = ROOT / "tech" / "sky130_fd_sc_hd__tt_025C_1v80.lib"
+    use_liberty = tech_lib.exists()
+
+    if use_liberty:
+        script = (
+            f"read_verilog -sv {rtl_file}; "
+            f"synth -top {module_name} {extra_opt}; "
+            "ltp -noff; "
+            f"dfflibmap -liberty {tech_lib}; "
+            f"abc -liberty {tech_lib}; "
+            f"stat -liberty {tech_lib}"
+        )
+    else:
+        script = f"read_verilog -sv {rtl_file}; synth -top {module_name} {extra_opt}; ltp -noff; stat"
+
     cmd = [yosys_bin, "-p", script]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         if res.returncode == 0:
             out = res.stdout
             sections = out.split(f"=== {module_name} ===")
             target_sec = sections[-1] if len(sections) > 1 else out
-            cell_match = re.search(
-                r"Number of cells:\s+(\d+)", target_sec
-            ) or re.search(r"^\s*(\d+)\s+cells", target_sec, re.M)
-            dff_match = re.search(
-                r"\$[^\s]*DFF[^\s]*\s+(\d+)", target_sec
-            ) or re.search(r"^\s*(\d+)\s+.*DFF", target_sec, re.M)
+
+            cell_match = (
+                re.search(r"(\d+)\s+[\d\.\+eE-]+\s+cells", target_sec)
+                or re.search(r"Number of cells:\s+(\d+)", target_sec)
+                or re.search(r"^\s*(\d+)\s+cells", target_sec, re.M)
+            )
+
+            dff_match = (
+                re.search(r"(\d+)\s+[\d\.]+\s+sky130_fd_sc_hd__df", target_sec)
+                or re.search(r"mapped\s+(\d+)\s+\$_DFF.*?to\s+\\sky130", out)
+                or re.search(r"\$[^\s]*DFF[^\s]*\s+(\d+)", target_sec)
+            )
+
             ltp_match = re.search(
                 r"Longest topological path in .*?\(length=(\d+)\)", out
             )
+
+            area_match = re.search(r"Chip area for module.*?: ([\d\.]+)", target_sec)
+            seq_area_match = re.search(
+                r"of which used for sequential elements: ([\d\.]+)", target_sec
+            )
+
             total_cells = int(cell_match.group(1)) if cell_match else 0
             dff_count = int(dff_match.group(1)) if dff_match else 0
             topological_depth = int(ltp_match.group(1)) if ltp_match else 0
+            chip_area_um2 = float(area_match.group(1)) if area_match else 0.0
+            seq_area_um2 = float(seq_area_match.group(1)) if seq_area_match else 0.0
+
             return {
                 "total_cells": total_cells,
                 "dff_count": dff_count,
                 "logic_gates": max(0, total_cells - dff_count),
                 "topological_depth": topological_depth,
+                "chip_area_um2": round(chip_area_um2, 2),
+                "seq_area_um2": round(seq_area_um2, 2),
+                "tool_provenance": "Yosys 0.67+ mapped to SkyWater SKY130 (sky130_fd_sc_hd)"
+                if use_liberty
+                else "Yosys Generic Synthesis",
             }
     except Exception:
         pass
@@ -249,6 +286,13 @@ def evaluate_timing_and_ppa(
 
     gate_count = yosys_stats["total_cells"] if yosys_stats else nominal_gates
     reported_dffs = yosys_stats["dff_count"] if yosys_stats else dff_count
+    chip_area_um2 = yosys_stats.get("chip_area_um2", 0.0) if yosys_stats else 0.0
+    seq_area_um2 = yosys_stats.get("seq_area_um2", 0.0) if yosys_stats else 0.0
+    provenance = (
+        yosys_stats.get("tool_provenance", "Yosys 0.67+ Logic Synthesis")
+        if yosys_stats
+        else "Analytical Standard-Cell Model"
+    )
 
     return {
         "paradigm": paradigm,
@@ -263,6 +307,9 @@ def evaluate_timing_and_ppa(
         "timing_passed": slack_ns >= 0.0,
         "gate_count": gate_count,
         "dff_count": reported_dffs,
+        "chip_area_um2": chip_area_um2,
+        "seq_area_um2": seq_area_um2,
+        "tool_provenance": provenance,
         "synthesized_real": yosys_stats is not None,
     }
 
@@ -500,7 +547,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--visual",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate publication-grade visual plot (results.png)",
     )
