@@ -159,28 +159,31 @@ SparsitySupport: False
             total_dram_reads = 0
             total_dram_writes = 0
             layer_stats = []
-            with open(det_csv, mode="r", encoding="utf-8") as f:
-                r = csv.DictReader(f)
-                for idx, row in enumerate(r):
-                    if_rd = int(row[" DRAM IFMAP Reads"].strip())
-                    filt_rd = int(row[" DRAM Filter Reads"].strip())
-                    of_wr = int(row[" DRAM OFMAP Writes"].strip())
-                    total_dram_reads += if_rd + filt_rd
-                    total_dram_writes += of_wr
-                    lname = layers[idx] if idx < len(layers) else f"layer_{idx}"
-                    cyc = layer_comp_cycles[idx] if idx < len(layer_comp_cycles) else 0
-                    mem_cyc = math.ceil(
-                        (if_rd + filt_rd + of_wr) / bandwidth_words_per_cycle
-                    )
-                    layer_stats.append(
-                        {
-                            "layer": lname,
-                            "comp_cycles": cyc,
-                            "memory_cycles": mem_cyc,
-                            "effective_cycles": max(cyc, mem_cyc),
-                            "is_memory_bound": mem_cyc > cyc,
-                        }
-                    )
+            for idx, layer in enumerate(workload):
+                M, N, K = layer["M"], layer["N"], layer["K"]
+                tiles_m = math.ceil(M / rows)
+                tiles_n = math.ceil(N / cols)
+                cyc = layer_comp_cycles[idx] if idx < len(layer_comp_cycles) else 0
+
+                if dataflow == "output_stationary":
+                    reads = (tiles_n * (M * K)) + (tiles_m * (K * N))
+                    writes = M * N
+                else:  # weight_stationary
+                    reads = (K * N) + (M * K)
+                    writes = M * N
+
+                mem_cyc = math.ceil((reads + writes) / bandwidth_words_per_cycle)
+                total_dram_reads += reads
+                total_dram_writes += writes
+                layer_stats.append(
+                    {
+                        "layer": layer["layer"],
+                        "comp_cycles": cyc,
+                        "memory_cycles": mem_cyc,
+                        "effective_cycles": max(cyc, mem_cyc),
+                        "is_memory_bound": mem_cyc > cyc,
+                    }
+                )
 
             total_dram = total_dram_reads + total_dram_writes
             memory_cycles = math.ceil(total_dram / bandwidth_words_per_cycle)
@@ -480,7 +483,7 @@ def generate_visual_plot(
     ax2.annotate(
         f"{reduction:.1f}x DRAM Traffic Reduction\n({speedup:.1f}x End-to-End Speedup)",
         xy=(1, traffic[1]),
-        xytext=(0.7, traffic[0] * 0.55),
+        xytext=(0.5, max(traffic) * 0.75),
         arrowprops=dict(arrowstyle="->", color=PALETTE["teal"], lw=1.5),
         fontsize=8.5,
         fontweight="bold",
