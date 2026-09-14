@@ -9703,7 +9703,14 @@ def agent_models() -> None:
 
 
 @agent_app.command("inspect")
-def agent_inspect() -> None:
+def agent_inspect(
+    show_code: bool = typer.Option(
+        False,
+        "--code",
+        "-c",
+        help="Display the exact candidate Verilog code proposed in each turn",
+    ),
+) -> None:
     """Inspect the physical receipts and decision log from the last agent run."""
     history_file = ROOT / "labs" / "agent_history.json"
     if not history_file.exists():
@@ -9731,8 +9738,22 @@ def agent_inspect() -> None:
             f"[bold]Turn {turn.get('turn')}: {turn.get('paradigm')}[/bold] -> {badge} "
             f"(WNS: [bold]{receipt.get('slack'):+.3f} {receipt.get('unit')}[/bold])\n"
             f"  [dim]Hypothesis:[/dim] {turn.get('hypothesis')}\n"
-            f"  [dim]Reflection:[/dim] [italic]{turn.get('reflection')}[/italic]\n"
+            f"  [dim]Reflection:[/dim] [italic]{turn.get('reflection')}[/italic]"
         )
+        if show_code and turn.get("verilog"):
+            from rich.syntax import Syntax
+
+            console.print(
+                Panel(
+                    Syntax(
+                        turn["verilog"], "verilog", theme="monokai", line_numbers=True
+                    ),
+                    title=f"[dim]Turn {turn.get('turn')} Verilog RTL[/dim]",
+                    box=box.ROUNDED,
+                    border_style="dim",
+                )
+            )
+        console.print()
 
 
 if __name__ == "__main__":

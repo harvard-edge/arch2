@@ -76,6 +76,7 @@ class AgentTurn:
     code_diff_summary: str
     receipt: PhysicalReceipt
     agent_reflection: str
+    candidate_verilog: str = ""
 
 
 class SiliconDesignAgentLoop:
@@ -192,6 +193,7 @@ class SiliconDesignAgentLoop:
                 "The 32-bit ripple carry recurrence inside the registered feedback path creates 32 stages of logic depth. "
                 "Local gate sizing or buffer insertion needed."
             ),
+            candidate_verilog=naive_v,
         )
         self.history.append(turn_1)
         self._print_turn_card(turn_1)
@@ -251,6 +253,7 @@ class SiliconDesignAgentLoop:
                 "Transistor sizing cannot alter an O(N) asymptotic delay curve. "
                 "Single-layer optimization is exhausted. A cross-layer representation shift is mathematically required."
             ),
+            candidate_verilog=naive_v,
         )
         self.history.append(turn_2)
         self._print_turn_card(turn_2)
@@ -310,6 +313,7 @@ class SiliconDesignAgentLoop:
                 "Positive slack of +1,450 ps provides 3.7x frequency headroom without pipeline bubbles. "
                 "1,000-vector automated testbench guarantees bit-exact mathematical equivalence, preventing reward hacking."
             ),
+            candidate_verilog=csa_v,
         )
         self.history.append(turn_3)
         self._print_turn_card(turn_3)
@@ -384,6 +388,7 @@ class SiliconDesignAgentLoop:
                 code_diff_summary=proposal.code_diff_summary,
                 receipt=receipt,
                 agent_reflection=proposal.reflection,
+                candidate_verilog=proposal.verilog_code or "",
             )
             self.history.append(turn)
             self._print_turn_card(turn)
@@ -528,6 +533,7 @@ class SiliconDesignAgentLoop:
                     "paradigm": t.paradigm_label,
                     "hypothesis": t.agent_hypothesis,
                     "action": t.proposed_action,
+                    "verilog": t.candidate_verilog,
                     "receipt": asdict(t.receipt),
                     "reflection": t.agent_reflection,
                 }

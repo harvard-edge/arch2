@@ -314,7 +314,7 @@ endmodule
         cmd = [
             self.yosys_bin,
             "-p",
-            f"read_verilog {verilog_path}; prep -top {module_name}",
+            f"read_verilog -sv {verilog_path}; prep -top {module_name}",
         ]
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
@@ -339,6 +339,7 @@ endmodule
             sim_bin = cand_path.parent / "sim_referee"
             compile_cmd = [
                 self.iverilog_bin,
+                "-g2012",
                 "-o",
                 str(sim_bin),
                 str(self.golden_rtl_path),
@@ -412,7 +413,7 @@ endmodule
             cmd = [
                 self.yosys_bin,
                 "-p",
-                f"read_verilog {verilog_path}; synth -top {module_name}; stat; ltp -noff",
+                f"read_verilog -sv {verilog_path}; synth -top {module_name}; stat; ltp -noff",
             ]
             try:
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)

@@ -75,9 +75,42 @@ def extract_verilog_block(text: str) -> Optional[str]:
         r"```(?:verilog|systemverilog|v)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE
     )
     if matches:
-        # Return the longest code block
+        # Prefer blocks that define both module and endmodule
+        valid_mods = [m.strip() for m in matches if "module" in m and "endmodule" in m]
+        if valid_mods:
+            return max(valid_mods, key=len)
         return max(matches, key=len).strip()
     return None
+
+
+def ensure_top_module_named(
+    verilog: str, target_name: str = "pe_accumulator_candidate"
+) -> str:
+    """Ensures the top-level accumulator module is named target_name without renaming submodules."""
+    if re.search(rf"\bmodule\s+{re.escape(target_name)}\b", verilog):
+        return verilog
+    module_matches = list(
+        re.finditer(r"\bmodule\s+([A-Za-z_][A-Za-z0-9_]*)\b", verilog)
+    )
+    if not module_matches:
+        return verilog
+    if len(module_matches) == 1:
+        return re.sub(
+            r"\bmodule\s+[A-Za-z_][A-Za-z0-9_]*",
+            f"module {target_name}",
+            verilog,
+            count=1,
+        )
+    # Multiple modules: find the one that exposes acc_out
+    for mb in module_matches:
+        start = mb.start()
+        end = verilog.find("endmodule", start)
+        block = verilog[start : end if end != -1 else len(verilog)]
+        if "acc_out" in block:
+            return verilog[: mb.start(1)] + target_name + verilog[mb.end(1) :]
+    # Default: rename the last module in file
+    last_mb = module_matches[-1]
+    return verilog[: last_mb.start(1)] + target_name + verilog[last_mb.end(1) :]
 
 
 class BaseModelDriver:
@@ -246,9 +279,7 @@ class OpenAIDriver(BaseModelDriver):
             verilog = (RTL_DIR / "pe_accumulator_naive.v").read_text()
 
         # Rename module to candidate name if needed
-        verilog = re.sub(
-            r"\bmodule\s+\w+", "module pe_accumulator_candidate", verilog, count=1
-        )
+        verilog = ensure_top_module_named(verilog, "pe_accumulator_candidate")
 
         paradigm = (
             "AI-Assisted"
@@ -326,9 +357,7 @@ class GeminiDriver(BaseModelDriver):
             extract_verilog_block(content)
             or (RTL_DIR / "pe_accumulator_naive.v").read_text()
         )
-        verilog = re.sub(
-            r"\bmodule\s+\w+", "module pe_accumulator_candidate", verilog, count=1
-        )
+        verilog = ensure_top_module_named(verilog, "pe_accumulator_candidate")
         paradigm = (
             "AI-Assisted"
             if turn_number == 1
@@ -419,6 +448,10 @@ class OllamaDriver(BaseModelDriver):
                 "    input  wire [31:0] data_in,\n"
                 "    output wire [31:0] acc_out\n"
                 ");\n\n"
+                "CRITICAL HARDWARE CONTRACT:\n"
+                "- Reset is active-low: when (!rst_n) acc_reg <= 32'd0;\n"
+                "- Accumulate when valid_in is high: else if (valid_in) acc_reg <= acc_reg + data_in;\n"
+                "- Continuous assign output: assign acc_out = acc_reg;\n\n"
                 "Wrap your code in ```verilog ... ```. Keep explanation to 1 sentence."
             )
         else:
@@ -483,9 +516,7 @@ class OllamaDriver(BaseModelDriver):
             or (RTL_DIR / "pe_accumulator_naive.v").read_text()
         )
         # Ensure module name is correct
-        verilog = re.sub(
-            r"\bmodule\s+\w+", "module pe_accumulator_candidate", verilog, count=1
-        )
+        verilog = ensure_top_module_named(verilog, "pe_accumulator_candidate")
         # Sanitize 'output reg ... acc_out' when assign is used
         if "assign acc_out" in verilog and "output reg" in verilog:
             verilog = verilog.replace(
