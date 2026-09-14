@@ -24,7 +24,9 @@ from typing import Any, Iterable, Iterator, List
 from urllib.parse import unquote, urlsplit
 
 import typer
+from rich import box
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 try:
@@ -80,43 +82,142 @@ console = Console()
 
 app = typer.Typer(
     name="arch2",
-    help="Compiler-style build and audit driver for the Architecture 2.0 lecture.",
+    help="Architecture 2.0: Principles of AI-Native System and Chip Design CLI & Workbench.",
+    invoke_without_command=True,
+    rich_markup_mode="rich",
+)
+book_app = typer.Typer(
+    help="Synthesis lecture manuscript build, render, and audit tools.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 check_app = typer.Typer(
-    help="Run composed manuscript quality gates.", no_args_is_help=True
+    help="Run composed manuscript quality gates.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 validate_app = typer.Typer(
-    help="Validate source files without requiring a render.", no_args_is_help=True
+    help="Validate source files without requiring a render.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 migrate_app = typer.Typer(
     help="Create explicit migration drafts for versioned artifacts.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 verify_app = typer.Typer(
-    help="Verify rendered artifacts against manuscript sources.", no_args_is_help=True
+    help="Verify rendered artifacts against manuscript sources.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 layout_app = typer.Typer(
-    help="Scan PDF, LaTeX, and visual layout signals.", no_args_is_help=True
+    help="Scan PDF, LaTeX, and visual layout signals.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 review_app = typer.Typer(
-    help="Open the Arch2 local review/commenting bench.", no_args_is_help=True
+    help="Open the Arch2 local review/commenting bench.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 loop_app = typer.Typer(
-    help="Run self-improving manuscript review loops.", no_args_is_help=True
+    help="Run self-improving manuscript review loops.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 generate_app = typer.Typer(
     help="Generate derived assets, schemas, and backmatter appendices.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 lab_app = typer.Typer(
     help="Execute and inspect Grounded Micro-Loops Workbench labs.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 docker_app = typer.Typer(
     help="Manage Docker container environment and containerized EDA execution.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
+
+
+def print_arch2_welcome() -> None:
+    """Renders the high-tech silicon die ASCII art welcome banner and quickstart guide."""
+    width = min(console.width, 88)
+    banner = (
+        "[bold cyan]      █████╗ ██████╗  ██████╗██╗  ██╗    ██████╗     ██████╗ [/bold cyan]\n"
+        "[bold cyan]     ██╔══██╗██╔══██╗██╔════╝██║  ██║    ╚════██╗   ██╔═████╗[/bold cyan]\n"
+        "[bold bright_cyan]     ███████║██████╔╝██║     ███████║     █████╔╝   ██║██╔██║[/bold bright_cyan]\n"
+        "[bold bright_blue]     ██╔══██║██╔══██╗██║     ██╔══██║    ██╔═══╝    ████╔╝██║[/bold bright_blue]\n"
+        "[bold blue]     ██║  ██║██║  ██║╚██████╗██║  ██║    ███████╗██╗╚██████╔╝[/bold blue]\n"
+        "[dim blue]     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝    ╚══════╝╚═╝ ╚═════╝ [/dim blue]"
+    )
+
+    circuit_top = "[dim]  [CORE: 0] ══════════════[ CO-DESIGN CROSSBAR ]══════════════ [CORE: 1][/dim]"
+    circuit_bot = "[dim]  [SRAM L2] ═════════════[ REDUNDANT CSA DATAPATH ]════════════[RISC-V PE][/dim]"
+
+    text = (
+        f"{circuit_top}\n"
+        f"{banner}\n"
+        f"{circuit_bot}\n\n"
+        "  [bold white]ARCHITECTURE 2.0: PRINCIPLES OF AI-NATIVE SYSTEM AND CHIP DESIGN[/bold white]\n"
+        "  [dim cyan]Harvard Edge Computing Lab[/dim cyan] [dim]•[/dim] [dim white]Vijay Janapa Reddi[/dim white]\n"
+        "  [dim]Synthesis Lectures on Computer Architecture (Springer Nature)[/dim]"
+    )
+
+    console.print()
+    console.print(
+        Panel(
+            text,
+            box=box.ROUNDED,
+            border_style="bright_blue",
+            padding=(0, 1),
+            width=width,
+        )
+    )
+
+    t = Table(box=box.ROUNDED, width=width, header_style="bold cyan", show_lines=True)
+    t.add_column("Modality", justify="left", style="bold white", width=24)
+    t.add_column("CLI Command", justify="left", style="bold yellow", width=26)
+    t.add_column("Target Purpose / Audience", justify="left", style="dim white")
+
+    t.add_row(
+        "🎬 Interactive Tutorial",
+        "./arch2 tutorial --hero",
+        "Live 3-act screencast & workshop demo (500 MHz PE accumulator in SKY130)",
+    )
+    t.add_row(
+        "📈 Sensitivity Sweeps",
+        "./arch2 tutorial --explore",
+        "Empirical proof: O(N) ripple delay vs. O(1) carry-save invariant",
+    )
+    t.add_row(
+        "🔬 Grounded Workbench",
+        "./arch2 lab run all",
+        "Execute 4 physical micro-loops (SCALE-Sim, Yosys, RUDY, RISC-V GCC)",
+    )
+    t.add_row(
+        "🐳 Docker Testbed",
+        "./arch2 docker demo",
+        "Self-contained, zero-host-dependency containerized EDA execution",
+    )
+    t.add_row(
+        "📖 Monograph Authoring",
+        "./arch2 book build",
+        "Render manuscript (HTML, PDF, EPUB) and run compiler quality gates",
+    )
+    t.add_row(
+        "🩺 System Diagnostics",
+        "./arch2 doctor",
+        "Verify toolchain availability for workbench and manuscript build",
+    )
+
+    console.print(t)
+    console.print(
+        "[dim]Run [bold cyan]./arch2 --help[/bold cyan] for full options or [bold cyan]./arch2 book --help[/bold cyan] for manuscript authoring commands.[/dim]\n"
+    )
 
 
 class FindingFormat(str, Enum):
@@ -139,8 +240,9 @@ class FindingFormat(str, Enum):
 _finding_format = FindingFormat.table
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     output_format: FindingFormat = typer.Option(
         FindingFormat.table,
         "--format",
@@ -148,21 +250,43 @@ def main(
         help="Finding output format. Use json or ndjson for machine repair.",
     ),
 ) -> None:
-    """Compiler-style build and audit driver for the Architecture 2.0 lecture."""
+    """Architecture 2.0: Principles of AI-Native System and Chip Design CLI & Workbench."""
     global _finding_format
     _finding_format = output_format
 
+    if ctx.invoked_subcommand is None:
+        print_arch2_welcome()
+        raise typer.Exit(0)
 
-app.add_typer(check_app, name="check")
-app.add_typer(validate_app, name="validate")
-app.add_typer(generate_app, name="generate")
-app.add_typer(migrate_app, name="migrate")
-app.add_typer(verify_app, name="verify")
-app.add_typer(layout_app, name="layout")
-app.add_typer(review_app, name="review")
-app.add_typer(loop_app, name="loop")
-app.add_typer(lab_app, name="lab")
-app.add_typer(docker_app, name="docker")
+
+# Primary Top-Level Modalities
+app.add_typer(lab_app, name="lab", rich_help_panel="Interactive Workbench & Demos")
+app.add_typer(
+    docker_app, name="docker", rich_help_panel="Interactive Workbench & Demos"
+)
+app.add_typer(book_app, name="book", rich_help_panel="Synthesis Lecture Manuscript")
+
+# Sub-Typer Hierarchy under book_app
+book_app.add_typer(check_app, name="check", rich_help_panel="Audits & Quality Gates")
+book_app.add_typer(
+    validate_app, name="validate", rich_help_panel="Audits & Quality Gates"
+)
+book_app.add_typer(generate_app, name="generate", rich_help_panel="Asset Generation")
+book_app.add_typer(migrate_app, name="migrate", rich_help_panel="Asset Generation")
+book_app.add_typer(verify_app, name="verify", rich_help_panel="Verification & Proofs")
+book_app.add_typer(layout_app, name="layout", rich_help_panel="Layout & Typography")
+book_app.add_typer(review_app, name="review", rich_help_panel="Review Loops")
+book_app.add_typer(loop_app, name="loop", rich_help_panel="Review Loops")
+
+# Root-Level Backwards Compatibility (hidden from top-level help)
+app.add_typer(check_app, name="check", hidden=True)
+app.add_typer(validate_app, name="validate", hidden=True)
+app.add_typer(generate_app, name="generate", hidden=True)
+app.add_typer(migrate_app, name="migrate", hidden=True)
+app.add_typer(verify_app, name="verify", hidden=True)
+app.add_typer(layout_app, name="layout", hidden=True)
+app.add_typer(review_app, name="review", hidden=True)
+app.add_typer(loop_app, name="loop", hidden=True)
 
 
 @dataclass(frozen=True)
@@ -7918,7 +8042,8 @@ def _render_one(
     run_generated_asset_check()
 
 
-@app.command()
+@book_app.command("render", rich_help_panel="Build & Preview")
+@app.command("render", hidden=True)
 def render(
     layout: bool = typer.Option(
         True, "--layout/--no-layout", help="Scan the rendered PDF for layout issues."
@@ -7954,7 +8079,8 @@ def render(
     )
 
 
-@app.command()
+@book_app.command("build", rich_help_panel="Build & Preview")
+@app.command("build", hidden=True)
 def build(
     html: bool = typer.Option(False, "--html", help="Build the HTML site."),
     pdf: bool = typer.Option(False, "--pdf", help="Build the PDF."),
@@ -8008,7 +8134,8 @@ def build(
     )
 
 
-@app.command()
+@book_app.command("preview", rich_help_panel="Build & Preview")
+@app.command("preview", hidden=True)
 def preview(
     chapter: str = typer.Argument(
         ..., help="Chapter name (e.g. 01-moonshot) or path to preview."
@@ -8145,7 +8272,8 @@ def preview(
             shutil.move(backup_yml, quarto_yml)
 
 
-@app.command()
+@book_app.command("clean", rich_help_panel="Build & Preview")
+@app.command("clean", hidden=True)
 def clean(
     scratch_only: bool = typer.Option(
         False, "--scratch-only", help="Only remove LaTeX scratch files; keep _build."
@@ -8167,7 +8295,8 @@ def clean(
         console.print(f"[green]cleaned[/green] {removed} LaTeX scratch file(s)")
 
 
-@app.command()
+@book_app.command("serve", rich_help_panel="Build & Preview")
+@app.command("serve", hidden=True)
 def serve(
     port: int = typer.Option(8766, "--port", "-p", help="Port to serve on."),
     prebuild: bool = typer.Option(
@@ -8473,7 +8602,8 @@ def apply_fixable_findings(findings: Iterable[Finding]) -> tuple[int, list[str]]
     return applied, log
 
 
-@app.command("fix")
+@book_app.command("fix", rich_help_panel="Audits & Quality Gates")
+@app.command("fix", hidden=True)
 def fix_command(
     apply: bool = typer.Option(
         False, "--apply", help="Write the repairs. Without it, only report them."
@@ -9140,32 +9270,66 @@ def loop_run(
     )
 
 
-@app.command()
+@app.command("doctor", rich_help_panel="System Diagnostics")
+@book_app.command("doctor", rich_help_panel="System Diagnostics")
 def doctor() -> None:
-    """Show tool availability for the manuscript build."""
+    """Show tool availability for the manuscript build and EDA workbench."""
     checks = [
-        ("quarto", ["quarto", "--version"]),
-        ("epubcheck", ["epubcheck", "--version"]),
-        ("rsvg-convert", ["rsvg-convert", "--version"]),
-        ("pdftotext", ["pdftotext", "-v"]),
-        ("python", [sys.executable, "--version"]),
+        ("quarto", ["quarto", "--version"], "Manuscript typesetting engine"),
+        ("epubcheck", ["epubcheck", "--version"], "EPUB validator"),
+        ("rsvg-convert", ["rsvg-convert", "--version"], "SVG to PDF rasterizer"),
+        ("pdftotext", ["pdftotext", "-v"], "PDF text extractor for audits"),
+        ("python", [sys.executable, "--version"], "Python interpreter"),
+        ("docker", ["docker", "--version"], "Container runtime for zero-install EDA"),
+        ("yosys", ["yosys", "-V"], "Open-source RTL synthesis (optional; in docker)"),
+        (
+            "iverilog",
+            ["iverilog", "-V"],
+            "Verilog simulation & equivalence (optional; in docker)",
+        ),
+        (
+            "scalesim",
+            [sys.executable, "-c", "import scalesim; print(scalesim.__name__)"],
+            "Systolic accelerator simulator",
+        ),
+        (
+            "riscv-gcc",
+            ["riscv64-linux-gnu-gcc", "--version"],
+            "RISC-V cross-compiler (optional; in docker)",
+        ),
     ]
-    table = Table(title="arch2 doctor")
-    table.add_column("Tool")
-    table.add_column("Status")
-    table.add_column("Detail")
-    for name, cmd in checks:
-        if shutil.which(cmd[0]) is None:
-            table.add_row(name, "missing", "not found on PATH")
+    table = Table(
+        title="Architecture 2.0: System & Toolchain Diagnostics", box=box.ROUNDED
+    )
+    table.add_column("Subsystem / Tool", style="bold cyan")
+    table.add_column("Status", justify="center")
+    table.add_column("Role / Detail")
+    for name, cmd, role in checks:
+        if shutil.which(cmd[0]) is None and not (
+            name == "scalesim" and cmd[0] == sys.executable
+        ):
+            status = (
+                "[yellow]optional (use docker)[/yellow]"
+                if "optional" in role
+                else "[red]missing[/red]"
+            )
+            table.add_row(name, status, f"{role} (not found on host PATH)")
             continue
         proc = _run(cmd, capture=True)
-        status = "ok" if proc.returncode == 0 else "missing"
+        status = (
+            "[green]ok[/green]" if proc.returncode == 0 else "[yellow]missing[/yellow]"
+        )
         output = (proc.stdout or proc.stderr or "").strip()
         if name == "epubcheck" and not _has_required_epubcheck_version(output):
-            status = "wrong version"
+            status = "[yellow]wrong version[/yellow]"
         detail = output.splitlines()
-        table.add_row(name, status, detail[0] if detail else "")
-    table.add_row("PDF", "ok" if PDF_PATH.exists() else "missing", _relative(PDF_PATH))
+        first_line = detail[0] if detail else role
+        table.add_row(name, status, first_line[:60])
+    table.add_row(
+        "monograph PDF",
+        "[green]ok[/green]" if PDF_PATH.exists() else "[dim]missing[/dim]",
+        _relative(PDF_PATH),
+    )
     console.print(table)
 
 
@@ -9365,7 +9529,7 @@ def lab_demo(
 
 
 @lab_app.command("tutorial")
-@app.command("tutorial")
+@app.command("tutorial", rich_help_panel="Interactive Workbench & Demos")
 def lab_tutorial(
     hero: bool = typer.Option(
         False,
