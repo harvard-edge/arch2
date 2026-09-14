@@ -55,10 +55,10 @@ during the session:
 ```
 
 Use `marimo run` for a read-only classroom deployment. Lab 06, the primary
-simulator-backed activity, lives with its packaged example:
+simulator-backed activity, can be launched directly from notebooks:
 
 ```bash
-../.venv/bin/marimo edit examples/scale_proxy_mirage/lab.py
+../.venv/bin/marimo edit notebooks/lab_06_proxy_vs_evidence.py
 ```
 
 Every activity begins with retrieval and a submitted prediction. Evidence stays
@@ -150,9 +150,7 @@ From `labs/`, run:
 
 ```bash
 python -m pytest -q
-marimo check --strict \
-  examples/scale_proxy_mirage/lab.py \
-  notebooks/lab_*.py
+marimo check --strict notebooks/lab_*.py
 ```
 
 CI runs the suite under both supported Python versions, builds the wheel and
