@@ -126,14 +126,7 @@ Each experiment can therefore change both the candidate and the direction of the
 
 The memory example identifies a reason to investigate broader search, but a useful design must satisfy more than one local constraint. A concrete system challenge can expose how workload behavior, software choices, and physical limits interact throughout the exploration.
 
-## The Two-Track Framework and the Lighthouse Milestone {#sec-two-tier-architecture}
-
-To bridge the gap between grand ambition and concrete, reproducible engineering practice, this monograph establishes a *two-track framework* for AI-native chip and system design:
-
-1. **Track 2: The 2030 Moonshot Horizon (The Lighthouse Macro-Loop).** An aspirational system-level challenge targeting the autonomous synthesis of a complete heterogeneous system-on-chip from natural-language intent down to physical signoff within a 3\ W thermal design power (TDP) budget in a 3\ nm-class process.
-2. **Track 1: Grounded Micro-Loops (The Architect's Workbench).** Focused, reproducible, closed-loop iterations over one or two tightly coupled abstractions that run in seconds on standard workstations. These micro-loops ground the three operational layers (Layer 1 point assistance, Layer 2 closed-loop optimization within a frozen container, and Layer 3 AI-native design systems) in executable contracts, physical evidence, and verifiable code.
-
-### Track 2: The 2030 Moonshot Horizon {#sec-tier-2-macro-loop}
+## The Lighthouse XR System-on-Chip (SoC) Case Study
 
 This book uses the name *Lighthouse* for the running macro-loop challenge through which it develops and examines AI-native design workflows. The challenge is to develop a mobile extended-reality (XR) compute subsystem that executes perception and rendering workloads within a wearable device's power limits. Computation, memory, software, and physical implementation all affect whether it can do so. The shared problem gives each chapter a concrete setting in which to develop its ideas. This edition presents a prospective study; it does not report a completed Lighthouse implementation.
 
@@ -143,7 +136,7 @@ An engineering milestone can make progress visible even when its first attempts 
 \Needspace{7\baselineskip}
 ```
 
-> **The Lighthouse goal (Tier 2 Moonshot).** Demonstrate by 2030 that an AI-native design system can develop a compact system request into candidate implementations spanning software, microarchitecture, and physical design, quantify their power, performance, and area (PPA) trade-offs, and produce an implementation that meets the agreed system requirements and passes physical signoff.
+> **The Lighthouse goal.** Demonstrate by 2030 that an AI-native design system can develop a compact system request into candidate implementations spanning software, microarchitecture, and physical design, quantify their power, performance, and area (PPA) trade-offs, and produce an implementation that meets the agreed system requirements and passes physical signoff.
 
 The XR setting makes those trade-offs tangible. A frame delivered after its deadline can harm the experience even if average throughput is high, and a short performance burst does not establish sustained operation within a thermal limit. XRBench supplies a suite of mobile XR workloads for studying these dependencies [@KwonEtAl2023XRBench]; ILLIXR connects the broader XR experience to its computational components [@HuzaifaEtAl2021ILLIXR]. These dependencies make Lighthouse a useful test of coordination. A change that reduces memory traffic must still fit the software's execution schedule and the device's sustained power budget. The study can expose whether the design system follows those consequences across domains. Success would support the approach for the workloads, tools, and design choices examined; transfer to other architecture problems would remain a separate question.
 
@@ -185,38 +178,6 @@ These domains interact through concrete interfaces. If an accelerator uses the A
 [^fn-axi-backpressure-c01]: **AXI protocol handshakes**: On-chip AMBA AXI interconnects govern data transfers through paired `VALID` (producer) and `READY` (consumer) control signals across independent address, read, and write channels. Backpressure occurs when a consumer deasserts `READY`, forcing the producer to hold data stable; failing to handle backpressure in generated controllers causes data corruption, dropped packets, or system-level bus deadlocks.
 
 The eight domains establish the breadth of the Lighthouse problem. A capacity sweep can answer a useful question within an existing memory organization. The broader opportunity is to investigate whether a different organization, with matching data transfers and software, better satisfies the same system requirements. A single experiment need not search all eight domains at once. The architect must choose which uncertainty to investigate, fix enough of the surrounding system to interpret the answer, and leave the relevant design choices open. That decision turns the broad challenge into work that tools can execute.
-
-### Track 1: Grounded Micro-Loops (The Architect's Workbench) {#sec-tier-1-micro-loops}
-
-Closing an entire macro-loop across all eight domains simultaneously remains beyond the state of the art in automated design. Attempting to run unconstrained generative agents across the full system stack either collapses into ungrounded hallucinations or stalls on massive commercial electronic design automation (EDA) license costs and simulation runtimes.
-
-To make immediate, rigorous progress, architects decompose the macro-loop into *grounded micro-loops*: tight, verifiable design loops that operate across one or two coupled abstraction boundaries. The workbench accompanying this monograph provides four runnable micro-loops in `labs/`, each demonstrating the fundamental operational distinction among the three layers (Layer 1 point assistance, Layer 2 closed-loop optimization within a frozen container, and Layer 3 AI-native design systems) on the exact same design task:
-
-1. **Micro-Loop A: Systolic Array Search & The Memory Wall (`labs/01-microarchitectural-sweep/`).**
-   - *Scope:* Microarchitecture and memory traffic (evaluated via cycle-level simulation).
-   - *Layer 1 (Point Assistance):* Prompts a language model to draft systolic array configuration files.
-   - *Layer 2 (Bounded Closed-Loop Optimization):* Executes an automated parameter sweep over array aspect ratios ($16 \times 64$, $32 \times 32$, $64 \times 16$) under a fixed Output Stationary dataflow, discovering that every candidate hits an impassable dynamic random-access memory (DRAM) bandwidth saturation wall.
-   - *Layer 3 (AI-Native System Exploration):* Ingests simulation evidence showing memory stall cycles, diagnoses the root cause across abstraction boundaries, and reframes the microarchitectural dataflow from Output Stationary to Weight Stationary, slashing off-chip DRAM access by $2.73\times$ (from 0.88\ MB to 0.32\ MB) and breaking through the memory wall with a $2.73\times$ wall-clock speedup.
-
-2. **Micro-Loop B: RTL Synthesis & Timing Closure (`labs/02-rtl-timing/`).**
-   - *Scope:* RTL microarchitecture, logic synthesis, and static timing analysis.
-   - *Layer 1 (Point Assistance):* Generates Verilog code for a high-throughput processing element (PE) accumulator targeting a 500\ MHz clock (2.0\ ns period).
-   - *Layer 2 (Bounded Closed-Loop Optimization):* Tunes synthesis tool directives, retiming passes, and cell sizing on naive RTL, but fails timing (worst negative slack $\text{WNS} = -0.600\text{ ns}$ for naive ripple-carry, plateauing at $-0.072\text{ ns}$ after automated gate sizing) because conventional synthesis cannot break a recursive 32-bit carry-propagation feedback loop.
-   - *Layer 3 (AI-Native System Exploration):* Analyzes the failing timing path, refactors the underlying arithmetic representation from standard two's complement into redundant carry-save arithmetic (splitting sums and carries into independent registers), closes timing cleanly ($\text{WNS} = +1.450\text{ ns}$ with a 1-stage full adder critical path), and validates functional equivalence across a 1,000-vector simulation suite, with bounded model checking proving absence of arithmetic overflow across the accumulator state space.
-
-3. **Micro-Loop C: Physical Floorplanning & Routing Congestion (`labs/03-physical-floorplan/`).**
-   - *Scope:* Macro placement, routing channels, and design rule checking (DRC).
-   - *Layer 1 (Point Assistance):* Suggests macro coordinates based on natural language guidelines.
-   - *Layer 2 (Bounded Closed-Loop Optimization):* Optimizes macro placement using half-perimeter wirelength (HPWL) as a scalar objective, placing SRAM blocks in tight proximity to minimize wire length, only to create severe routing congestion (overflow $> 0$) and design rule violations in narrow channels.
-   - *Layer 3 (AI-Native System Exploration):* Ingests spatial routing congestion heatmaps as feedback, adjusts macro placement orientations, expands routing corridor channels, and re-allocates memory banking geometries to eliminate routing bottlenecks while preserving timing and wirelength Pareto efficiency.
-
-4. **Micro-Loop D: Hardware-Software Co-Design & Instruction Specialization (`labs/04-hw-sw-codesign/`).**
-   - *Scope:* Custom instruction set extensions, compiler scheduling, and silicon area limits.
-   - *Layer 1 (Point Assistance):* Suggests scalar custom instructions for an XR feature detection kernel.
-   - *Layer 2 (Bounded Closed-Loop Optimization):* Autotunes loop unrolling factors and compiler flags for a scalar custom opcode, hitting a performance ceiling due to register spills under a 15,000 gate-equivalent area limit.
-   - *Layer 3 (AI-Native System Exploration):* Co-synthesizes hardware and compiler representations simultaneously: pairs a 4-way single instruction, multiple data (SIMD) multiply-accumulate custom instruction with auto-increment addressing, while generating the corresponding compiler lowering passes to achieve a $5\times$ kernel speedup within the area budget.
-
-These four micro-loops provide an empirical testbed for the core question of the discipline: *Are we doing AI-native architecture here, or are we just doing point-tier drafting or bounded parameter tuning?* While Track 2 establishes the long-term moonshot destination, Track 1 provides the verifiable stepping stones that architects can execute, inspect, and extend today.
 
 ## Decomposing Intent into Executable Specifications {#sec-intent-vs-spec}
 
@@ -346,7 +307,7 @@ The starting point is the work an architect needs help with. The scaling limits 
 
 Carrying out that study requires a representation of the problem, a choice of methods, and access to useful feedback. Data and representations in @sec-data-representations-world-models determine which design choices and constraints a method can use. Prediction, generation, and optimization in @sec-methods-generation-prediction-optimization provide different ways to act on that information. The execution environments in @sec-architecture-environments-tool-interfaces connect those methods to engineering tools; verification and feedback in @sec-feedback-verification-trust determine what can be learned from the results. This sequence explains how the parts depend on one another, including why a promising method can fail when its data, tools, or checks are inadequate.
 
-The worked study in @sec-running-the-loop examines parts of this process through bounded comparisons, distinguishing the prospective Tier 2 Lighthouse macro-loop path from the executed Tier 1 micro-loops, making clear where the available evidence stops. The transfer analysis in @sec-loop-patterns-across-stack asks which lessons remain useful when the workload, toolchain, or design problem changes. System evaluation in @sec-evaluating-agentic-architect then tests the complete approach against alternatives, including the costs of obtaining and checking its results. A successful local example becomes a starting point for these comparisons, rather than sufficient evidence of general capability.
+The worked study in @sec-running-the-loop examines parts of this process through bounded comparisons, distinguishing the prospective Lighthouse path from the separate executed example and making clear where the available evidence stops. The transfer analysis in @sec-loop-patterns-across-stack asks which lessons remain useful when the workload, toolchain, or design problem changes. System evaluation in @sec-evaluating-agentic-architect then tests the complete approach against alternatives, including the costs of obtaining and checking its results. A successful local example becomes a starting point for these comparisons, rather than sufficient evidence of general capability.
 
 Technical evaluation still leaves decisions for people and institutions. The architect's responsibilities in @sec-what-architect-owns connect experimental results to decisions about what to build and when it is ready. The ecosystem discussion in @sec-bootstrapping-ecosystem examines the shared tools, benchmarks, and research practices needed to make this work repeatable beyond one team. The aim is to equip readers to reason about when AI earns a place in architecture design, when conventional methods are preferable, and when the evidence is insufficient to decide. Several difficulties introduced here remain open even with that broader account of the work.
 
@@ -371,7 +332,6 @@ Each chapter closes with open questions about the ideas it develops. For the int
 The memory-and-tiling example shows how a design question can lead from tuning an existing organization to developing a different one. An AI-native workflow must support the resulting hardware and software changes together and use evaluation to guide further work. Lighthouse turns that opportunity into a concrete challenge, connecting a compact request to requirements, experiments, and physical implementation. Its 2030 implementation milestone remains an ambition. Establishing the wider value of the approach requires showing which designs work and whether the process improves on credible alternatives.
 
 ::: {.callout-takeaways}
-- **Adopt a two-tier architecture.** Pursue the ambitious 2030 Tier 2 moonshot horizon through grounded, reproducible Tier 1 micro-loops that prove closed-loop adaptation across tight abstraction boundaries today.
 - **Match the workflow to the problem.** AI-assisted workflows help with tasks; AI-driven workflows automate search within an established formulation; AI-native workflows support coordinated architectural redesign. The broader workflow is useful when the design question requires it.
 - **Separate workflows from methods.** Prediction, generation, and optimization can contribute at every layer. Generating a new artifact alone does not establish an AI-native design capability.
 - **Make the experiment interpretable.** Specify what may change, preserve the inputs and configurations, and explain what each evaluation establishes about the design.
