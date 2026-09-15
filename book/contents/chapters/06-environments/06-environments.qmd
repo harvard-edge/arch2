@@ -197,54 +197,17 @@ Shared configuration history traces a result back to its originating candidate, 
 
 Throughput also depends on the configuration being evaluated. ZSim reports about 20\ MIPS (million instructions per second) per simulated core, with about $200\times$ slowdown for its detailed out-of-order model [@ZSim]. The FireSim paper reports a 1,024-node target cluster running at a simulated processor clock rate of 3.4\ MHz, less than $1{,}000\times$ slower than its 3.2\ GHz target [@KarandikarEtAl2018FireSim]. These are results for different modeled systems, not a direct performance comparison. Instructions per second and target cycles per second count different work; the reported slowdown factors also depend on their respective reference systems.
 
-@fig-ch06-simulation-spectrum pairs each execution path with a reporting unit and the conditions that comparisons must match. After selecting a tool that observes the required property, the environment can budget its work in those units. Preparing a compiled simulator or FPGA image also consumes time, so the execution plan must distinguish preparation cost from the cost of subsequent runs that reuse it.
+@tbl-ch06-simulation-spectrum pairs each execution path with a reporting unit and the conditions that comparisons must match. After selecting a tool that observes the required property, the environment can budget its work in those units. Preparing a compiled simulator or FPGA image also consumes time, so the execution plan must distinguish preparation cost from the cost of subsequent runs that reuse it.
 
-```{python}
-#| label: fig-ch06-simulation-spectrum
-#| fig-cap: |
-#|   **Throughput comparisons require a declared unit of work.**
-#|   Different execution paths count different work: model evaluations, instructions, target cycles, properties, or
-#|   physical flow stages. The final column identifies conditions needed before even two rates in the same row can
-#|   be compared. Row order implies no throughput or fidelity ranking. Author-constructed comparison guide, not a
-#|   measured benchmark.
-#| out-width: "100%"
-#| fig-alt: "Comparison guide pairing six execution paths with units for reporting work and the conditions that comparisons must match. Model evaluations, instructions, simulated or emulated target cycles, formal properties, and physical stages have distinct units; no shared numerical rate is shown."
-
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
-
-apply_style()
-
-rows = [
-    ["Analytical model", "Model evaluations / second", "Model, candidate size, host"],
-    ["ISA execution", "Instructions / second", "ISA, workload, host"],
-    ["Timing / RTL simulation", "Target cycles / host second", "Target model, workload, host"],
-    ["Hardware emulation", "Target cycles / host second", "Mapped target, workload, testbed"],
-    ["Formal verification", "Elapsed time / named property", "Property, model, bound, solver"],
-    ["Physical implementation", "Elapsed time / defined stage", "Design, libraries, stage settings"],
-]
-fig, ax = plt.subplots(figsize=(7.0, 3.25))
-fig.subplots_adjust(left=0.01, right=0.99, top=0.97, bottom=0.03)
-ax.axis("off")
-table = ax.table(
-    cellText=rows,
-    colLabels=["Execution path", "Unit of work or elapsed time", "Conditions to match"],
-    colWidths=[0.29, 0.35, 0.36],
-    cellLoc="left", colLoc="left", bbox=[0, 0, 1, 1],
-)
-table.auto_set_font_size(False)
-table.set_fontsize(7.0)
-for (row, col), cell in table.get_celld().items():
-    cell.set_edgecolor(COLORS["grid"])
-    cell.set_linewidth(0.5)
-    cell.PAD = 0.055
-    cell.get_text().set_color(COLORS["ink"])
-    if row == 0:
-        cell.set_facecolor(COLORS["note_fill"])
-        cell.get_text().set_weight("bold")
-    else:
-        cell.set_facecolor("white")
-```
+| **Execution path** | **Unit of work or elapsed time** | **Conditions to match** |
+| :--- | :--- | :--- |
+| Analytical model | Model evaluations / second | Model, candidate size, host |
+| ISA execution | Instructions / second | ISA, workload, host |
+| Timing / RTL simulation | Target cycles / host second | Target model, workload, host |
+| Hardware emulation | Target cycles / host second | Mapped target, workload, testbed |
+| Formal verification | Elapsed time / named property | Property, model, bound, solver |
+| Physical implementation | Elapsed time / defined stage | Design, libraries, stage settings |
+: **Throughput comparisons require a declared unit of work.** Different execution paths count different work: model evaluations, instructions, target cycles, properties, or physical flow stages. The final column identifies conditions needed before even two rates in the same row can be compared. Row order implies no throughput or fidelity ranking. Author-constructed comparison guide, not a measured benchmark. {#tbl-ch06-simulation-spectrum tbl-colwidths="[28,34,38]"}
 
 Frameworks provide different parts of this integration. ArchGym connects search algorithms to architecture simulators [@KrishnanEtAl2023ArchGym], while CHIA supports hardware-software co-design workflows that combine design tools, simulators, software builds, and model calls [@CuiEtAl2026CHIA]. Workflow engines such as Nextflow and Snakemake can manage execution dependencies [@DiTommasoEtAl2017Nextflow; @KosterEtAl2012Snakemake]. The study still has to specify which tool path answers each question, which artifacts pass between stages, and what conditions permit reuse. Once those paths are configured, the harness must manage their execution as requests queue, run, and return.
 
@@ -364,14 +327,14 @@ Idempotency prevents duplicate work, but it does not limit the number of distinc
 
 **The Hardware Trap:** A generator proposes candidates faster than the available simulators and licensed tools can evaluate them. Without admission limits, the queue keeps growing. By the time a simulation finishes, upstream specifications, compiler branches, or interface assumptions may have moved. The result still describes its recorded inputs, but may no longer answer the active design question.
 
-**The Architectural Antidote:** The execution harness must limit admitted work according to downstream capacity. The single-server model uses utilization $\rho = \lambda / \mu$; a toolchain needs limits for each stage's workers, licenses, and other shared resources. Queue limits reduce the risk that results return after their input assumptions have become stale; they cannot guarantee freshness when tool durations or upstream changes are unpredictable (@sec-law-congestion-collapse in @sec-appendix-b-laws-paradoxes).
+**The Architectural Antidote:** The execution harness must limit admitted work according to downstream capacity. The single-server model uses utilization $\rho = \lambda / \mu$; a toolchain needs limits for each stage's workers, licenses, and other shared resources. Furthermore, commercial EDA license servers do not allocate independent server slots; they manage pools of multi-feature tokens (such as compilation, runtime simulation, and waveform viewer tokens). Concurrent multi-stage pipelines can encounter token-exhaustion deadlocks when an upstream job holds a compilation license while waiting for a downstream simulation token held by another waiting job. Queue limits and hierarchical token reservations reduce the risk of deadlock and prevent results from returning after their input assumptions have become stale; they cannot guarantee freshness when tool durations or upstream changes are unpredictable (@sec-law-congestion-collapse in @sec-appendix-b-laws-paradoxes).
 :::
 
 ### Fault Containment and Execution Quarantines
 
 Suppose a synthesis run reaches its time limit and the harness requests cancellation. The launcher exits, but a worker it started is still writing a design database. Reusing that workspace for a retry could mix files from two attempts. Fault containment limits the effect of this unfinished work on other executions. It requires control of the processes and writable resources belonging to an attempt, together with a way to determine whether they are still active.
 
-On Linux, control groups (cgroups) can track a job's local processes together. The cgroup v2 `cgroup.kill` interface targets processes in a group and its descendants, while the group's status can indicate whether live processes remain.[^fn-process-containment-c06] The harness must arrange for the relevant workers to belong to the tracked groups and confirm that attached work has stopped before reclaiming its resources. Remote workers require corresponding control through their execution backend; terminating the local launcher does not establish that remote work has ended.
+On Linux, control groups (cgroups) can track a job's local processes together. The cgroup v2 `cgroup.kill` interface targets processes in a group and its descendants, while the group's status can indicate whether live processes remain.[^fn-process-containment-c06] Packaging commercial EDA flows into rootless Open Container Initiative (OCI) containers adds further isolation, but requires addressing specific enterprise constraints: FlexNet license daemons frequently demand host network access or MAC address visibility; shared high-throughput scratch filesystems require POSIX file locking across network mounts; and multi-threaded signoff engines require tuned shared-memory (`/dev/shm`) allocations. The harness must arrange for the relevant workers to belong to the tracked groups and confirm that attached work has stopped before reclaiming its resources. Remote workers require corresponding control through their execution backend; terminating the local launcher does not establish that remote work has ended.
 
 [^fn-process-containment-c06]: **Process containment**: Commercial EDA tools can spawn background daemons and child processes. If a parent script is killed, live orphaned workers may continue consuming memory and holding licenses. They differ from zombie processes, which have exited and await reaping. Linux `cgroups` (control groups) keep a job's processes in a tracked group so the harness can terminate them together and confirm exit before reclaiming resources.
 
