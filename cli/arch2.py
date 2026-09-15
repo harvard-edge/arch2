@@ -621,9 +621,6 @@ MARKDOWN_FIGURE_RE = re.compile(
     r"!\[[^\]]*\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)"
     r"\{#(?P<label>fig-[A-Za-z0-9_-]+)(?=[\s}])[^}]*\}"
 )
-MARKDOWN_FIGURE_ATTR_RE = re.compile(
-    r"!\[[^\]]*\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)\{(?P<attrs>[^}]*#(?P<label>fig-[A-Za-z0-9_-]+)[^}]*)\}"
-)
 EXECUTABLE_FIGURE_RE = re.compile(
     r"^\s*#\|\s*label:\s*(?P<label>fig-[A-Za-z0-9_-]+)\s*$",
     re.MULTILINE,
@@ -633,13 +630,11 @@ CHUNK_LABEL_RE = re.compile(
     rf"^\s*#\|\s*label:\s*(?P<label>(?:{CROSSREF_PREFIX_PATTERN})-[A-Za-z0-9_-]+)\s*$",
     re.MULTILINE,
 )
-CHUNK_FIG_ALT_RE = re.compile(r"^\s*#\|\s*fig-alt:\s*(?P<alt>.+?)\s*$")
 # Quarto expands @refs in prose but NOT inside alt text, so one written there
 # survives into the rendered alt attribute verbatim. That fails the build's
 # html-unresolved-reference check a full CI cycle later, and a screen reader
 # reads the raw label aloud. Catch it in the source instead.
 ALT_TEXT_REF_RE = re.compile(r"@(?:sec|fig|tbl|eq|lst|chap)-[A-Za-z0-9_-]+")
-CHUNK_FIG_POS_RE = re.compile(r"^\s*#\|\s*fig-pos:\s*(?P<pos>.+?)\s*$")
 CITE_RE = re.compile(r"(?<![\w@])@(?P<key>[A-Za-z0-9:_-]+)")
 DEFINITION_RE = re.compile(
     r"^\s*>\s*\*\*(?P<term>[^*\n.][^*\n]{1,90}?)\.\*\*", re.MULTILINE
@@ -1445,6 +1440,24 @@ def table_findings(path: Path) -> list[Finding]:
                 )
             )
 
+    for number, row in manuscript_source_lines(path):
+        stripped = row.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")) or re.fullmatch(
+            r"[|:\-\s]+", stripped
+        ):
+            continue
+        cells = re.split(r"(?<!\\)\|", stripped[1:-1])
+        if any(not cell.strip() for cell in cells):
+            findings.append(
+                Finding(
+                    "error",
+                    "table-empty-cell",
+                    f"{_relative(path)}:{number}",
+                    "table row has an empty cell; write N/A or None so every cell "
+                    "states something",
+                )
+            )
+
     for match in TABLE_ENV_RE.finditer(text):
         line = line_number(text, match.start())
         location = f"{_relative(path)}:{line}"
@@ -1563,6 +1576,16 @@ def structural_reference_findings(path: Path) -> list[Finding]:
                     "raw-structure-reference",
                     f"{_relative(path)}:{line_number_value}",
                     message,
+                )
+            )
+        if PAGE_NUMBER_REF_RE.search(line_prose_only):
+            findings.append(
+                Finding(
+                    "error",
+                    "page-number-reference",
+                    f"{_relative(path)}:{line_number_value}",
+                    "cross-reference by label, never by page number; Springer "
+                    "re-paginates the book and turns references into eBook links",
                 )
             )
 
@@ -1794,106 +1817,1629 @@ def figure_path_findings(path: Path) -> list[Finding]:
     return findings
 
 
-def figure_source_findings(path: Path) -> list[Finding]:
-    text = path.read_text(encoding="utf-8")
-    findings: list[Finding] = []
+@dataclass(frozen=True)
+class FigureImage:
+    """One reader-visible image in the manuscript source, with its alt text.
 
-    for match in MARKDOWN_FIGURE_ATTR_RE.finditer(text):
-        line = line_number(text, match.start())
-        attrs = match.group("attrs")
-        label = match.group("label")
-        location = f"{_relative(path)}:{line}"
-        if re.search(r"\bfig-pos\s*=", attrs):
+    ``kind`` is ``markdown`` for an ``![...](...)`` image and ``chunk`` for a
+    figure produced by an executable cell. ``alt_line`` is the line holding the
+    alt text. ``alt_source`` is that text exactly as written, when it sits on one
+    line, so a repair can name the span it rewrites.
+    """
+
+    path: Path
+    line: int
+    kind: str
+    label: str | None
+    target: str | None
+    caption: str
+    attrs: str
+    alt: str | None
+    alt_line: int
+    alt_source: str | None
+    fig_pos_line: int | None
+
+
+FENCE_OPEN_RE = re.compile(r"^\s*(?P<fence>`{3,}|~{3,})")
+CHUNK_OPTION_RE = re.compile(r"^\s*#\|(?P<body>.*)$")
+CHUNK_OPTION_KEY_RE = re.compile(r"^\s?(?P<key>[A-Za-z][\w-]*):\s*(?P<value>.*)$")
+IMAGE_TARGET_RE = re.compile(r"\((?P<target>[^()\s]+)(?:\s+\"[^\"]*\")?\)")
+ATTR_FIG_LABEL_RE = re.compile(r"#(?P<label>fig-[A-Za-z0-9_-]+)")
+ATTR_FIG_ALT_RE = re.compile(
+    r"\bfig-alt\s*=\s*\"(?P<alt>(?:[^\"\\]|\\.)*)\"", re.DOTALL
+)
+YAML_BLOCK_INDICATORS = {"|", ">", "|-", ">-", "|+", ">+"}
+
+
+def _source_fences(
+    lines: list[str],
+) -> tuple[set[int], list[tuple[int, list[tuple[int, str]]]]]:
+    """Return fenced line indexes (0-based) and each executable cell's option lines.
+
+    Option lines are ``(line number, text after #|)`` pairs. A fenced block that
+    is not an executable cell still counts as fenced, so an image written inside
+    a Markdown example is never mistaken for a book figure.
+    """
+    fenced: set[int] = set()
+    chunks: list[tuple[int, list[tuple[int, str]]]] = []
+    index = 0
+    while index < len(lines):
+        opener = FENCE_OPEN_RE.match(lines[index])
+        if not opener:
+            index += 1
+            continue
+        fence = opener.group("fence")
+        is_chunk = bool(CHUNK_START_RE.match(lines[index]))
+        start = index
+        options: list[tuple[int, str]] = []
+        index += 1
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if stripped.startswith(fence) and not stripped.strip(fence[0]):
+                break
+            option = CHUNK_OPTION_RE.match(lines[index]) if is_chunk else None
+            if option:
+                options.append((index + 1, option.group("body")))
+            index += 1
+        fenced.update(range(start, min(index, len(lines) - 1) + 1))
+        if is_chunk:
+            chunks.append((start + 1, options))
+        index += 1
+    return fenced, chunks
+
+
+def _chunk_options(
+    options: list[tuple[int, str]],
+) -> dict[str, tuple[str, int, str | None]]:
+    """Parse ``#|`` option lines into ``key -> (value, line, one-line source)``.
+
+    Handles quoted scalars and YAML block scalars (``fig-cap: |`` followed by
+    indented continuation lines). The source is ``None`` for a value spread over
+    several lines, which marks it as not repairable by a single-line span.
+    """
+    parsed: dict[str, tuple[str, int, str | None]] = {}
+    key: str | None = None
+    for line_no, body in options:
+        match = None if body.startswith("  ") else CHUNK_OPTION_KEY_RE.match(body)
+        if match:
+            key = match.group("key")
+            raw = match.group("value").strip()
+            if raw in YAML_BLOCK_INDICATORS:
+                parsed[key] = ("", line_no, None)
+                continue
+            value = source = raw
+            if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+                source = raw[1:-1]
+                value = (
+                    source.replace('\\"', '"')
+                    if raw[0] == '"'
+                    else source.replace("''", "'")
+                )
+            parsed[key] = (value, line_no, source)
+            continue
+        if key is not None and body.strip():
+            value, first_line, _ = parsed[key]
+            parsed[key] = (
+                f"{value} {body.strip()}".strip(),
+                first_line if value else line_no,
+                None,
+            )
+    return parsed
+
+
+def _bracket_end(text: str, start: int) -> int | None:
+    """Return the index just past the ``]`` that closes the ``[`` at ``start``."""
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        elif char == "\n" and text.startswith("\n", index + 1):
+            return None
+    return None
+
+
+def _attr_block_end(text: str, start: int) -> int | None:
+    """Return the index just past the ``}`` closing the attribute block at ``start``.
+
+    Quoted values may contain braces and escaped quotes, and the block may run
+    over several lines, which is how long ``fig-alt`` values are usually wrapped.
+    """
+    in_quote = False
+    index = start + 1
+    while index < len(text):
+        char = text[index]
+        if in_quote:
+            if char == "\\":
+                index += 2
+                continue
+            if char == '"':
+                in_quote = False
+        elif char == '"':
+            in_quote = True
+        elif char == "}":
+            return index + 1
+        elif char == "\n" and text.startswith("\n", index + 1):
+            return None
+        index += 1
+    return None
+
+
+def figure_image_records(path: Path) -> list[FigureImage]:
+    """Return every image and code-cell figure in one manuscript file.
+
+    Markdown images are found with a balanced-bracket walk, so a caption that
+    carries a citation such as ``[@Key]`` does not end the match early. That is
+    the defect this parser replaced: a regex that stopped at the first ``]``
+    silently skipped 20 of the book's 60 labeled Markdown figures.
+
+    For a labeled figure the bracket text is the caption and ``fig-alt`` is the
+    alt text. For an unlabeled image, Pandoc uses the bracket text as the alt
+    text when no ``fig-alt`` is given.
+    """
+    text = path.read_text(encoding="utf-8")
+    fenced, chunks = _source_fences(text.splitlines())
+    records: list[FigureImage] = []
+
+    for match in re.finditer(r"!\[", text):
+        start = match.start()
+        line = line_number(text, start)
+        if line - 1 in fenced:
+            continue
+        caption_end = _bracket_end(text, start + 1)
+        if caption_end is None:
+            continue
+        target = IMAGE_TARGET_RE.match(text, caption_end)
+        if not target:
+            continue
+        bracket = text[start + 2 : caption_end - 1]
+        attrs = ""
+        if text.startswith("{", target.end()):
+            attrs_end = _attr_block_end(text, target.end())
+            if attrs_end is not None:
+                attrs = text[target.end() + 1 : attrs_end - 1]
+        label_match = ATTR_FIG_LABEL_RE.search(attrs)
+        label = label_match.group("label") if label_match else None
+        alt_match = ATTR_FIG_ALT_RE.search(attrs)
+        if alt_match:
+            source = alt_match.group("alt")
+            alt: str | None = source.replace('\\"', '"')
+            alt_line = line_number(text, target.end() + 1 + alt_match.start("alt"))
+            alt_source = source if "\n" not in source else None
+        elif label is None and bracket.strip():
+            alt, alt_line, alt_source = bracket, line, None
+        else:
+            alt, alt_line, alt_source = None, line, None
+        records.append(
+            FigureImage(
+                path=path,
+                line=line,
+                kind="markdown",
+                label=label,
+                target=target.group("target"),
+                caption=bracket if label else "",
+                attrs=attrs,
+                alt=alt,
+                alt_line=alt_line,
+                alt_source=alt_source,
+                fig_pos_line=(
+                    line if label and re.search(r"\bfig-pos\s*=", attrs) else None
+                ),
+            )
+        )
+
+    for start_line, option_lines in chunks:
+        options = _chunk_options(option_lines)
+        label_value, label_line, _ = options.get("label", ("", start_line, None))
+        if not label_value.startswith("fig-"):
+            continue
+        alt_value = options.get("fig-alt")
+        fig_pos = options.get("fig-pos")
+        records.append(
+            FigureImage(
+                path=path,
+                line=label_line,
+                kind="chunk",
+                label=label_value,
+                target=None,
+                caption=options.get("fig-cap", ("", 0, None))[0],
+                attrs="",
+                alt=alt_value[0] or None if alt_value else None,
+                alt_line=alt_value[1] if alt_value else label_line,
+                alt_source=alt_value[2] if alt_value else None,
+                fig_pos_line=fig_pos[1] if fig_pos else None,
+            )
+        )
+
+    return sorted(records, key=lambda record: record.line)
+
+
+def figure_source_findings(path: Path) -> list[Finding]:
+    """Flag figure placement overrides in authored figure source.
+
+    Alt text was checked here too until 2026-09-14, through a regex that missed
+    every figure whose caption carried a citation. Alt text now has its own rule
+    set in ``alt_text_findings``; both use ``figure_image_records``.
+    """
+    findings: list[Finding] = []
+    for image in figure_image_records(path):
+        if image.kind == "markdown" and image.fig_pos_line is not None:
             findings.append(
                 Finding(
                     "error",
                     "figure-placement-override",
-                    location,
-                    f"figure '{label}' uses fig-pos; let Quarto/LaTeX place figures unless a rendered defect requires an override",
+                    f"{_relative(path)}:{image.fig_pos_line}",
+                    f"figure '{image.label}' uses fig-pos; let Quarto/LaTeX place figures unless a rendered defect requires an override",
                 )
             )
-        alt_match = re.search(r"\bfig-alt\s*=\s*\"([^\"]+)\"", attrs)
-        if not alt_match or len(alt_match.group(1).strip()) < 12:
+    _, chunks = _source_fences(path.read_text(encoding="utf-8").splitlines())
+    for _start, option_lines in chunks:
+        options = _chunk_options(option_lines)
+        label = options.get("label", ("", 0, None))[0]
+        if "fig-pos" in options and re.match(rf"(?:{CROSSREF_PREFIX_PATTERN})-", label):
             findings.append(
                 Finding(
                     "error",
-                    "figure-alt",
-                    location,
-                    f"figure '{label}' is missing meaningful fig-alt text",
+                    "figure-placement-override",
+                    f"{_relative(path)}:{options['fig-pos'][1]}",
+                    f"generated figure '{label}' uses fig-pos; let Quarto/LaTeX place figures unless a rendered defect requires an override",
                 )
             )
-        elif ALT_TEXT_REF_RE.search(alt_match.group(1)):
-            findings.append(
-                Finding(
-                    "error",
-                    "figure-alt-reference",
-                    location,
-                    f"figure '{label}' has a cross-reference marker in its fig-alt text; "
-                    "Quarto does not expand @refs there, so it reaches the rendered HTML "
-                    "verbatim and a screen reader announces the raw label. Describe the "
-                    "target in words instead",
-                )
-            )
+    return findings
 
+
+# Alt text: the Springer Nature accessibility contract.
+#
+# Springer Nature requires alt text for every figure, illustration, and table in
+# image form, under the EU Accessibility Act and WCAG. Its guide asks that alt
+# text name the image type, describe the image's purpose and key result, avoid
+# repeating the caption, use plain text with no markup, write symbols so they
+# read aloud, and end with a full stop. It is delivered two ways: as an Excel
+# file (`./arch2 generate alt-text`) and inside the PDF, where SNmono.cls's
+# \Description macro records each figure in DescriptionTexts.txt
+# (`./arch2 verify alt-text`).
+ALT_TEXT_MIN_CHARS = 12
+ALT_TEXT_MIN_WORDS = 5
+ALT_TEXT_MAX_WORDS = 150
+ALT_TEXT_CAPTION_ECHO_RATIO = 0.6
+ALT_TEXT_IMAGE_TYPE_RE = re.compile(
+    r"\b(?:diagrams?|flowcharts?|charts?|plots?|graphs?|timelines?|maps?|tables?|"
+    r"photographs?|photos?|illustrations?|schematics?|histograms?|heat ?maps?|"
+    r"matri(?:x|ces)|drawings?|screenshots?|infographics?|visuali[sz]ations?|"
+    r"micrographs?|renderings?|mock-?ups?|sketch(?:es)?|floor ?plans?)\b",
+    re.IGNORECASE,
+)
+ALT_TEXT_MARKUP_RE = re.compile(
+    r"\*\*|__|`|\$|\\[A-Za-z]|<[A-Za-z/!][^>]*>|\[@|\]\(|[{}]"
+    r"|(?<![\w*])\*[^*\s][^*]*\*(?![\w*])"
+)
+ALT_TEXT_SPOKEN_SYMBOLS = {
+    "%": "percent",
+    "&": "and",
+    "#": "number",
+    "_": "a spoken name, such as 'rho sub i'",
+    "^": "to the power of",
+    "~": "approximately",
+    "=": "equals",
+    "<": "less than",
+    ">": "greater than",
+    "×": "times",
+    "≈": "approximately",
+    "∼": "approximately",
+    "≤": "at most",
+    "≥": "at least",
+    "→": "to",
+    "←": "from",
+    "↔": "and",
+    "±": "plus or minus",
+    "∝": "proportional to",
+    "²": "squared",
+    "³": "cubed",
+    "µ": "micro",
+    "μ": "micro",
+}
+ALT_TEXT_MULTIPLIER_RE = re.compile(r"\b\d+(?:\.\d+)?x\b")
+ALT_TEXT_REDUNDANT_PREFIX_RE = re.compile(
+    r"^(?:an?\s+|the\s+)?(?:image|picture|graphic|figure)\s+"
+    r"(?:of|showing|depicting|that shows)\b",
+    re.IGNORECASE,
+)
+ALT_TEXT_PLACEHOLDER_RE = re.compile(
+    r"\b(?:TODO|TBD|FIXME|XXX|lorem ipsum|placeholder|alt text|insert (?:alt|description))\b",
+    re.IGNORECASE,
+)
+ALT_TEXT_SENTENCE_BREAK_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(])")
+# The PDF hook. SNmono.cls defines \Description; tex/springer-header.tex routes
+# the alt key Quarto writes on \includegraphics into it.
+SNMONO_DESCRIPTION_MACRO = r"\def\Description#1"
+ALT_TEXT_DESCRIPTION_HOOK = r"\define@key{Gin}{alt}{\archtwo@describe{#1}}"
+# LaTeX writes DescriptionTexts.txt beside the sources, and the build's scratch
+# cleanup deletes it with the other LaTeX byproducts, so every PDF build copies
+# it next to the Springer deliverables, where verify and generate read it.
+# Deliverables live in book/_springer, not _build: every Quarto render empties
+# its output directory, which deleted them on the next HTML build.
+LATEX_DESCRIPTION_TEXTS_PATH = BOOK_DIR / "DescriptionTexts.txt"
+DESCRIPTION_TEXTS_PATH = BOOK_DIR / "_springer" / "DescriptionTexts.txt"
+DESCRIPTION_ENTRY_RE = re.compile(
+    r"^(?P<index>\d+) \(Fig\. (?P<number>[^)]*)\) - (?P<text>.*)$"
+)
+ALT_TEXT_EXPORT_PATH = BOOK_DIR / "_springer" / "Architecture-2.0-alt-text.xlsx"
+
+
+def _alt_text_plain(text: str) -> str:
+    """Normalize alt or caption text for comparison: no markup, citations, or case."""
+    text = re.sub(r"\[@[^\]]*\]|@[\w:-]+", " ", text)
+    text = re.sub(r"\\text\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"[*_`$\\{}]", " ", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _alt_text_image_findings(image: FigureImage, seen: dict[str, str]) -> list[Finding]:
+    """Apply every source-level alt-text rule to one image."""
+    import difflib
+
+    subject = f"figure '{image.label}'" if image.label else f"image '{image.target}'"
+    alt = re.sub(r"\s+", " ", image.alt or "").strip()
+    if len(alt) < ALT_TEXT_MIN_CHARS:
+        return [
+            Finding(
+                "error",
+                "figure-alt",
+                f"{_relative(image.path)}:{image.line}",
+                f"{subject} is missing meaningful fig-alt text; Springer Nature "
+                "requires alt text for every figure and image, numbered or not",
+            )
+        ]
+
+    location = f"{_relative(image.path)}:{image.alt_line}"
+    findings: list[Finding] = []
+
+    def add(code: str, message: str, severity: str = "error", **repair: str) -> None:
+        findings.append(Finding(severity, code, location, message, **repair))
+
+    if ALT_TEXT_REF_RE.search(alt):
+        add(
+            "figure-alt-reference",
+            f"{subject} has a cross-reference marker in its fig-alt text; Quarto does "
+            "not expand @refs there, so it reaches the rendered HTML verbatim and a "
+            "screen reader announces the raw label. Describe the target in words instead",
+        )
+    if not alt.endswith((".", "?", "!")):
+        repair: dict[str, str] = {}
+        if image.alt_source and image.alt_source.strip():
+            repair = {
+                "span": image.alt_source,
+                "replacement": image.alt_source.rstrip() + ".",
+            }
+        add(
+            "alt-text-full-stop",
+            f"{subject} alt text must end with a full stop so a screen reader pauses "
+            "before the next content",
+            **repair,
+        )
+    markup = sorted({match.group(0) for match in ALT_TEXT_MARKUP_RE.finditer(alt)})
+    if markup:
+        add(
+            "alt-text-markup",
+            f"{subject} alt text contains markup ({', '.join(markup)}); alt text is "
+            "plain text, with no bold, italics, math, code, citations, or links",
+        )
+    symbols = [symbol for symbol in ALT_TEXT_SPOKEN_SYMBOLS if symbol in alt]
+    multipliers = sorted({m.group(0) for m in ALT_TEXT_MULTIPLIER_RE.finditer(alt)})
+    if symbols or multipliers:
+        spoken = [f"'{s}' as {ALT_TEXT_SPOKEN_SYMBOLS[s]}" for s in symbols]
+        spoken += [f"'{m}' as '{m[:-1]} times'" for m in multipliers]
+        add(
+            "alt-text-read-aloud",
+            f"{subject} alt text is read aloud, so write {', '.join(spoken)}; symbols "
+            "also break Springer's LaTeX description file",
+        )
+    first_sentence = ALT_TEXT_SENTENCE_BREAK_RE.split(alt, maxsplit=1)[0]
+    if not ALT_TEXT_IMAGE_TYPE_RE.search(first_sentence):
+        add(
+            "alt-text-image-type",
+            f"{subject} alt text must name the image type in its first sentence, for "
+            "example 'Line chart of ...', 'Flow diagram in which ...', or 'Photograph "
+            "of ...'",
+        )
+    if ALT_TEXT_REDUNDANT_PREFIX_RE.search(alt):
+        add(
+            "alt-text-redundant-prefix",
+            f"{subject} alt text opens with a generic 'image of' phrase; a screen reader "
+            "already announces an image, so name the specific type instead",
+        )
+    if ALT_TEXT_PLACEHOLDER_RE.search(alt):
+        add(
+            "alt-text-placeholder",
+            f"{subject} alt text is a placeholder, not a description",
+        )
+    words = len(alt.split())
+    if words < ALT_TEXT_MIN_WORDS:
+        add(
+            "alt-text-too-short",
+            f"{subject} alt text has {words} words; name the image type, what it shows, "
+            "and its key result",
+        )
+    elif words > ALT_TEXT_MAX_WORDS:
+        add(
+            "alt-text-too-long",
+            f"{subject} alt text has {words} words; Springer asks for brief alt text, so "
+            "keep the main pattern and move detail to the caption or prose",
+            severity="warning",
+        )
+    plain = _alt_text_plain(alt)
+    caption = _alt_text_plain(image.caption)
+    if caption and (
+        difflib.SequenceMatcher(None, plain, caption).ratio()
+        >= ALT_TEXT_CAPTION_ECHO_RATIO
+        or (len(plain) >= 40 and plain.rstrip(".") in caption)
+    ):
+        add(
+            "alt-text-echoes-caption",
+            f"{subject} alt text repeats its caption; the caption argues the takeaway "
+            "and the alt text describes what is depicted",
+        )
+    if plain in seen:
+        add(
+            "alt-text-duplicate",
+            f"{subject} alt text repeats the alt text of {seen[plain]}",
+        )
+    else:
+        seen[plain] = subject
+    return findings
+
+
+def alt_text_wiring_findings() -> list[Finding]:
+    """Check that the PDF build still carries alt text into Springer's description file."""
+    findings: list[Finding] = []
+    springer_class = BOOK_DIR / "SNmono.cls"
+    header = BOOK_DIR / "tex" / "springer-header.tex"
+    if (
+        not springer_class.exists()
+        or SNMONO_DESCRIPTION_MACRO not in springer_class.read_text(encoding="utf-8")
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "alt-text-pdf-hook",
+                _relative(springer_class),
+                "SNmono.cls no longer defines \\Description, so figure alt text cannot "
+                "reach Springer's DescriptionTexts.txt",
+            )
+        )
+    if not header.exists() or ALT_TEXT_DESCRIPTION_HOOK not in header.read_text(
+        encoding="utf-8"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "alt-text-pdf-hook",
+                _relative(header),
+                "tex/springer-header.tex no longer routes \\includegraphics[alt=...] to "
+                "\\Description, so the PDF would ship without Springer alt text",
+            )
+        )
+    return findings
+
+
+def table_image_findings(path: Path) -> list[Finding]:
+    """Flag a figure cell that draws a table as an image.
+
+    Springer Nature converts tables to XML and forbids submitting one as a
+    figure, because a table baked into pixels loses its structure for screen
+    readers. A code cell that calls matplotlib's ``table`` under a ``fig-`` label
+    is that defect. Converting it changes a figure into a table and its
+    cross-references, which is an authorial call, so this is a warning.
+    """
+    findings: list[Finding] = []
     in_chunk = False
-    chunk_label: str | None = None
-    chunk_label_line = 0
-    chunk_has_alt = False
-    for index, line in enumerate(text.splitlines(), start=1):
-        if not in_chunk and CHUNK_START_RE.match(line):
-            in_chunk = True
-            chunk_label = None
-            chunk_label_line = index
-            chunk_has_alt = False
-            continue
+    label: str | None = None
+    label_line = 0
+    draws_table = False
+    for index, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not in_chunk:
+            if CHUNK_START_RE.match(line):
+                in_chunk, label, label_line, draws_table = True, None, index, False
             continue
         if line.strip().startswith("```"):
-            if chunk_label and not chunk_has_alt:
+            if label and label.startswith("fig-") and draws_table:
                 findings.append(
                     Finding(
-                        "error",
-                        "figure-alt",
-                        f"{_relative(path)}:{chunk_label_line}",
-                        f"generated figure '{chunk_label}' is missing a fig-alt chunk option",
+                        "warning",
+                        "figure-renders-table",
+                        f"{_relative(path)}:{label_line}",
+                        f"figure '{label}' draws a table as an image; Springer Nature "
+                        "forbids submitting a table as a figure, so make it a Markdown "
+                        "table with a tbl- label",
                     )
                 )
             in_chunk = False
-            chunk_label = None
             continue
-        label_match = CHUNK_LABEL_RE.match(line)
+        label_match = re.match(r"^\s*#\|\s*label:\s*(?P<label>\S+)", line)
         if label_match:
-            chunk_label = label_match.group("label")
-            chunk_label_line = index
+            label, label_line = label_match.group("label"), index
+        if re.search(r"\.table\(", line):
+            draws_table = True
+    return findings
+
+
+def alt_text_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Check alt text on every manuscript image against Springer Nature's guide.
+
+    A full-book run (no ``paths``) also checks the PDF wiring and catches alt text
+    duplicated across chapters.
+    """
+    targets = paths if paths is not None else content_qmd_files()
+    findings: list[Finding] = []
+    seen: dict[str, str] = {}
+    for path in targets:
+        for image in figure_image_records(path):
+            findings.extend(_alt_text_image_findings(image, seen))
+        findings.extend(table_image_findings(path))
+    if paths is None:
+        findings.extend(alt_text_wiring_findings())
+    return findings
+
+
+def alt_text_book_images() -> list[FigureImage]:
+    """Return manuscript images in the order the book renders them.
+
+    ``index.qmd`` renders the preface through an include, so the preface's
+    figures sit at the index page's position, not at the end of the list.
+    """
+    config, config_findings = _load_quarto_config()
+    ordered = (
+        _manifest_qmd_entries(config)
+        if not config_findings
+        else sorted(path.resolve() for path in content_qmd_files())
+    )
+    index_page = (BOOK_DIR / "index.qmd").resolve()
+    preface = BOOK_PREFACE_SOURCE.resolve()
+    sequence: list[Path] = []
+    for entry in ordered:
+        if entry == preface:
             continue
-        alt_match = CHUNK_FIG_ALT_RE.match(line)
-        if alt_match and alt_match.group("alt").strip().strip('"'):
-            chunk_has_alt = True
-            if ALT_TEXT_REF_RE.search(alt_match.group("alt")):
-                findings.append(
-                    Finding(
-                        "error",
-                        "figure-alt-reference",
-                        f"{_relative(path)}:{index}",
-                        f"generated figure '{chunk_label or 'unlabeled'}' has a cross-reference "
-                        "marker in its fig-alt text; Quarto does not expand @refs there, so it "
-                        "reaches the rendered HTML verbatim and a screen reader announces the "
-                        "raw label. Describe the target in words instead",
-                    )
-                )
-            continue
-        pos_match = CHUNK_FIG_POS_RE.match(line)
-        if pos_match and chunk_label:
+        sequence.append(entry)
+        if entry == index_page and preface.exists():
+            sequence.append(preface)
+    images: list[FigureImage] = []
+    for path in sequence:
+        if path.exists():
+            images.extend(figure_image_records(path))
+    return images
+
+
+def parse_description_texts(data: bytes) -> list[tuple[int, str, str]]:
+    """Parse SNmono's DescriptionTexts.txt into ``(index, figure number, text)``.
+
+    TeX may write a byte it considers unprintable as ``^^xx``; decode those
+    before reading the file as UTF-8.
+    """
+    decoded = re.sub(
+        rb"\^\^([0-9a-f]{2})", lambda m: bytes([int(m.group(1), 16)]), data
+    )
+    entries: list[tuple[int, str, str]] = []
+    for line in decoded.decode("utf-8", errors="replace").splitlines():
+        match = DESCRIPTION_ENTRY_RE.match(line)
+        if match:
+            entries.append(
+                (int(match.group("index")), match.group("number"), match.group("text"))
+            )
+        elif entries and line:
+            index, number, text = entries[-1]
+            entries[-1] = (index, number, text + line)
+    return entries
+
+
+def _description_key(text: str) -> str:
+    """Reduce recorded or source alt text to letters and digits for comparison."""
+    text = re.sub(r"\\[A-Za-z]+\s?", "", text)
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def description_texts_findings(
+    path: Path = DESCRIPTION_TEXTS_PATH, expected: list[FigureImage] | None = None
+) -> list[Finding]:
+    """Reconcile the PDF build's DescriptionTexts.txt with the manuscript alt text."""
+    location = _relative(path)
+    if not path.exists():
+        return [
+            Finding(
+                "error",
+                "alt-text-pdf-missing",
+                location,
+                "DescriptionTexts.txt is missing; build the Springer PDF before "
+                "verifying that alt text reached it",
+            )
+        ]
+    entries = parse_description_texts(path.read_bytes())
+    images = (
+        expected
+        if expected is not None
+        else [image for image in alt_text_book_images() if image.label]
+    )
+    findings: list[Finding] = []
+    if len(entries) != len(images):
+        findings.append(
+            Finding(
+                "error",
+                "alt-text-pdf-count",
+                location,
+                f"the PDF recorded {len(entries)} figure descriptions but the manuscript "
+                f"has {len(images)} labeled figures; a figure lost its alt text on the "
+                "way to LaTeX, or was described twice",
+            )
+        )
+    numbers: set[str] = set()
+    for (_, number, text), image in zip(entries, images):
+        if _description_key(text) != _description_key(image.alt or ""):
             findings.append(
                 Finding(
                     "error",
-                    "figure-placement-override",
-                    f"{_relative(path)}:{index}",
-                    f"generated figure '{chunk_label}' uses fig-pos; let Quarto/LaTeX place figures unless a rendered defect requires an override",
+                    "alt-text-pdf-mismatch",
+                    f"{_relative(image.path)}:{image.alt_line}",
+                    f"Fig. {number} in DescriptionTexts.txt does not match the alt text "
+                    f"of figure '{image.label}'; the PDF recorded: {text[:120]}",
                 )
             )
-
+        escapes = sorted(set(re.findall(r"\\[A-Za-z]+|\\.", text)))
+        if escapes:
+            findings.append(
+                Finding(
+                    "error",
+                    "alt-text-pdf-escape",
+                    location,
+                    f"Fig. {number} in DescriptionTexts.txt carries LaTeX escapes "
+                    f"({', '.join(escapes)}); Springer reads this file as plain text, so "
+                    "teach \\archtwo@plaindescription in tex/springer-header.tex to undo them",
+                )
+            )
+        if number in numbers:
+            findings.append(
+                Finding(
+                    "error",
+                    "alt-text-pdf-duplicate",
+                    location,
+                    f"Fig. {number} is described more than once in DescriptionTexts.txt",
+                )
+            )
+        numbers.add(number)
     return findings
+
+
+def write_xlsx(path: Path, sheets: list[tuple[str, list[list[object]]]]) -> None:
+    """Write a minimal Office Open XML workbook using only the standard library.
+
+    Springer asks for the alt text as an Excel file. The shape needed here is
+    small and fixed (inline strings, a bold header row, wrapped text, one sheet
+    per chapter), so the writer stays dependency-free and runs anywhere the CLI
+    does. Timestamps are pinned so the same manuscript yields the same bytes.
+    """
+    import zipfile
+    from xml.sax.saxutils import escape, quoteattr
+
+    declaration = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+    def column(index: int) -> str:
+        name, index = "", index + 1
+        while index:
+            index, remainder = divmod(index - 1, 26)
+            name = chr(65 + remainder) + name
+        return name
+
+    def cell_text(value: object) -> str:
+        text = "" if value is None else str(value)
+        return escape(re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text))
+
+    names: list[str] = []
+    for raw_name, _rows in sheets:
+        base = re.sub(r"[\[\]:*?/\\]", "", raw_name)[:31] or "Sheet"
+        name, suffix = base, 2
+        while name in names:
+            name, suffix = f"{base[:27]} {suffix}", suffix + 1
+        names.append(name)
+
+    parts: dict[str, str] = {}
+    overrides: list[str] = []
+    sheet_entries: list[str] = []
+    workbook_rels: list[str] = []
+    for number, ((_, rows), name) in enumerate(zip(sheets, names), start=1):
+        widths: dict[int, int] = {}
+        body: list[str] = []
+        for row_index, row in enumerate(rows, start=1):
+            cells: list[str] = []
+            for col_index, value in enumerate(row):
+                ref = f"{column(col_index)}{row_index}"
+                style = 1 if row_index == 1 else 2
+                if (
+                    row_index > 1
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                ):
+                    cells.append(f'<c r="{ref}" s="{style}"><v>{value}</v></c>')
+                else:
+                    cells.append(
+                        f'<c r="{ref}" s="{style}" t="inlineStr"><is>'
+                        f'<t xml:space="preserve">{cell_text(value)}</t></is></c>'
+                    )
+                width = len("" if value is None else str(value)) + 2
+                widths[col_index] = min(max(widths.get(col_index, 8), width), 80)
+            body.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+        cols = "".join(
+            f'<col min="{i + 1}" max="{i + 1}" width="{w}" customWidth="1"/>'
+            for i, w in sorted(widths.items())
+        )
+        parts[f"xl/worksheets/sheet{number}.xml"] = (
+            f'{declaration}<worksheet xmlns="{main_ns}"><sheetViews>'
+            '<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" '
+            'activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+            f'{f"<cols>{cols}</cols>" if cols else ""}'
+            f'<sheetData>{"".join(body)}</sheetData></worksheet>'
+        )
+        overrides.append(
+            f'<Override PartName="/xl/worksheets/sheet{number}.xml" ContentType='
+            '"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        )
+        sheet_entries.append(
+            f'<sheet name={quoteattr(name)} sheetId="{number}" r:id="rId{number}"/>'
+        )
+        workbook_rels.append(
+            f'<Relationship Id="rId{number}" Type="{rel_ns}/worksheet" '
+            f'Target="worksheets/sheet{number}.xml"/>'
+        )
+    workbook_rels.append(
+        f'<Relationship Id="rId{len(sheets) + 1}" Type="{rel_ns}/styles" Target="styles.xml"/>'
+    )
+
+    parts["[Content_Types].xml"] = (
+        f'{declaration}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType='
+        '"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/styles.xml" ContentType='
+        '"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        f'{"".join(overrides)}</Types>'
+    )
+    parts["_rels/.rels"] = (
+        f'{declaration}<Relationships xmlns="{package_rel_ns}"><Relationship Id="rId1" '
+        f'Type="{rel_ns}/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+    )
+    parts["xl/workbook.xml"] = (
+        f'{declaration}<workbook xmlns="{main_ns}" xmlns:r="{rel_ns}">'
+        f'<sheets>{"".join(sheet_entries)}</sheets></workbook>'
+    )
+    parts[
+        "xl/_rels/workbook.xml.rels"
+    ] = f'{declaration}<Relationships xmlns="{package_rel_ns}">{"".join(workbook_rels)}</Relationships>'
+    parts["xl/styles.xml"] = (
+        f'{declaration}<styleSheet xmlns="{main_ns}">'
+        '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+        '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1">'
+        '<alignment wrapText="1" vertical="top"/></xf></cellXfs>'
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        "</styleSheet>"
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name in parts:
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, parts[name])
+
+
+def _alt_text_part(path: Path) -> tuple[str, str]:
+    """Return the sheet name and figure-number prefix for a manuscript file."""
+    name = path.parent.name
+    chapter = re.match(r"(\d{2})-", name)
+    if chapter and "chapters" in path.parts:
+        number = str(int(chapter.group(1)))
+        return f"Chapter {number}", number
+    appendix = re.match(r"apdx-([a-z])-", name)
+    if appendix:
+        letter = appendix.group(1).upper()
+        return f"Appendix {letter}", letter
+    return "Front matter", ""
+
+
+def alt_text_export_sheets(
+    images: list[FigureImage], recorded: list[tuple[int, str, str]] | None
+) -> list[tuple[str, list[list[object]]]]:
+    """Lay out the alt-text workbook: one sheet for every image, then one per part.
+
+    Figure numbers come from the PDF build's DescriptionTexts.txt when it
+    reconciles with the manuscript, and are otherwise derived from source order.
+    """
+    header: list[object] = [
+        "Chapter",
+        "Figure",
+        "Springer file name",
+        "Label",
+        "Source image",
+        "Caption headline",
+        "Alt text",
+        "Words",
+    ]
+    recorded_numbers = iter(number for _, number, _ in (recorded or []))
+    counters: dict[str, int] = {}
+    all_rows: list[list[object]] = [header]
+    by_part: dict[str, list[list[object]]] = {}
+    for image in images:
+        part, prefix = _alt_text_part(image.path)
+        if image.label:
+            counters[prefix] = counters.get(prefix, 0) + 1
+            number = next(recorded_numbers, None) if recorded else None
+            if number is None:
+                number = f"{prefix}.{counters[prefix]}" if prefix else "unnumbered"
+        else:
+            number = (
+                "unnumbered (chapter opening)"
+                if "cover-map" in (image.target or "")
+                else "unnumbered"
+            )
+        file_name = (
+            "fig" + number.replace(".", "_")
+            if re.fullmatch(r"[0-9A-Z]+\.\d+", number)
+            else ""
+        )
+        source = (
+            _relative(image.path.parent / image.target)
+            if image.target
+            else f"generated by a code cell in {_relative(image.path)}"
+        )
+        headline = re.match(r"\s*\*\*(.+?)\*\*", image.caption)
+        alt = re.sub(r"\s+", " ", image.alt or "").strip()
+        row: list[object] = [
+            part,
+            number,
+            file_name,
+            image.label or "",
+            source,
+            (
+                re.sub(
+                    r"\s+",
+                    " ",
+                    re.sub(r"\[@[^\]]*\]|[*_`$\\{}]", "", headline.group(1)),
+                ).strip()
+                if headline
+                else ""
+            ),
+            alt,
+            len(alt.split()),
+        ]
+        all_rows.append(row)
+        by_part.setdefault(part, [header]).append(row)
+    return [("All images", all_rows), *by_part.items()]
+
+
+def preserve_description_texts() -> None:
+    """Copy the LaTeX run's DescriptionTexts.txt beside the Springer deliverables.
+
+    An older copy is removed first, so a PDF build that produced no file leaves
+    nothing behind for ``verify alt-text`` to pass on by mistake.
+    """
+    DESCRIPTION_TEXTS_PATH.unlink(missing_ok=True)
+    if LATEX_DESCRIPTION_TEXTS_PATH.exists():
+        DESCRIPTION_TEXTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(LATEX_DESCRIPTION_TEXTS_PATH, DESCRIPTION_TEXTS_PATH)
+
+
+def run_alt_text_check() -> None:
+    _exit_on_findings(alt_text_findings(), title="alt text")
+
+
+def run_alt_text_render_check(path: Path = DESCRIPTION_TEXTS_PATH) -> None:
+    _exit_on_findings(
+        description_texts_findings(path), title="PDF alt text (DescriptionTexts.txt)"
+    )
+
+
+def run_alt_text_export(out: Path = ALT_TEXT_EXPORT_PATH) -> None:
+    findings = _filter_suppressed(alt_text_findings())
+    if any(finding.severity == "error" for finding in findings):
+        _exit_on_findings(findings, title="alt text")
+    recorded = None
+    if DESCRIPTION_TEXTS_PATH.exists() and not _filter_suppressed(
+        description_texts_findings()
+    ):
+        recorded = parse_description_texts(DESCRIPTION_TEXTS_PATH.read_bytes())
+    images = alt_text_book_images()
+    write_xlsx(out, alt_text_export_sheets(images, recorded))
+    source = (
+        "the PDF build"
+        if recorded
+        else "manuscript order; build the PDF and run ./arch2 verify alt-text to confirm"
+    )
+    console.print(
+        f"[green]generated[/green] {_relative(out)} ({len(images)} images; figure "
+        f"numbers from {source})"
+    )
+
+
+# Manuscript structure: headings, chapter closers, float order, unused images.
+#
+# Each rule guards a structural property that Springer's XML conversion relies
+# on or that house style already holds, and each was measured against the book
+# before it became an error (2026-09-14): 0 skipped heading levels and 0
+# punctuated headings, all 12 chapters closing with Open Questions then Summary,
+# 0 empty table cells, 0 page-number cross-references, and 2 figures first
+# mentioned after they appear (fixed in the same change). An unused image is a
+# warning, because deleting an asset is an authorial call.
+HEADING_LINE_RE = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<title>.*?)\s*$")
+HEADING_ATTRS_RE = re.compile(r"\s*\{[^}]*\}\s*$")
+FLOAT_ANCHOR_RE = re.compile(r"\{[^}]*#(?P<label>(?:fig|tbl)-[A-Za-z0-9_-]+)")
+CHUNK_FLOAT_LABEL_RE = re.compile(
+    r"^\s*#\|\s*label:\s*(?P<label>(?:fig|tbl)-[A-Za-z0-9_-]+)\s*$"
+)
+FLOAT_MENTION_RE = re.compile(r"(?<![#\w])@(?P<label>(?:fig|tbl)-[A-Za-z0-9_-]+)")
+CHAPTER_FILE_RE = re.compile(r"^\d{2}-[\w-]+\.qmd$")
+PAGE_NUMBER_REF_RE = re.compile(
+    r"\b(?:(?:see|on|at)\s+pages?\s+\d+|pp?\.\s*\d+)", re.IGNORECASE
+)
+IMAGE_ASSET_SUFFIXES = (".svg", ".png", ".jpg", ".jpeg", ".pdf")
+IMAGE_REFERENCE_SUFFIXES = (".qmd", ".py", ".yml", ".yaml", ".md", ".tex", ".lua")
+
+
+def _heading_lines(path: Path) -> list[tuple[int, int, str]]:
+    """Return ``(line, level, title)`` for headings outside front matter and fences."""
+    raw_lines = path.read_text(encoding="utf-8").splitlines()
+    front_matter_end = 0
+    if raw_lines and raw_lines[0].strip() == "---":
+        for number, line in enumerate(raw_lines[1:], start=2):
+            if line.strip() in {"---", "..."}:
+                front_matter_end = number
+                break
+    headings: list[tuple[int, int, str]] = []
+    for number, line in manuscript_source_lines(path):
+        if number <= front_matter_end:
+            continue
+        match = HEADING_LINE_RE.match(line)
+        if match:
+            title = HEADING_ATTRS_RE.sub("", match.group("title")).strip()
+            headings.append((number, len(match.group("hashes")), title))
+    return headings
+
+
+def heading_findings(path: Path) -> list[Finding]:
+    """Flag skipped heading levels and headings that end in punctuation.
+
+    Springer numbers the first three heading levels, forbids skipping a level,
+    and sets headings without end punctuation. A skipped level also breaks the
+    document outline that screen readers navigate by.
+    """
+    findings: list[Finding] = []
+    previous: int | None = None
+    for number, level, title in _heading_lines(path):
+        location = f"{_relative(path)}:{number}"
+        if previous is not None and level > previous + 1:
+            findings.append(
+                Finding(
+                    "error",
+                    "heading-level-skip",
+                    location,
+                    f'heading "{title}" jumps from level {previous} to level {level}; '
+                    "Springer forbids skipped heading levels",
+                )
+            )
+        if title and title[-1] in ".:;!?":
+            findings.append(
+                Finding(
+                    "error",
+                    "heading-end-punctuation",
+                    location,
+                    f'heading "{title}" ends with "{title[-1]}"; Springer headings '
+                    "carry no end punctuation",
+                )
+            )
+        previous = level
+    return findings
+
+
+def chapter_closer_findings(path: Path) -> list[Finding]:
+    """Check that a numbered chapter closes with Open Questions, then Summary.
+
+    The Common Pitfalls section was removed book-wide on 2026-09-14, so the
+    closer is exactly these two sections, in this order.
+    """
+    if "chapters" not in path.parts or not CHAPTER_FILE_RE.match(path.name):
+        return []
+    level_two = [
+        (number, title) for number, level, title in _heading_lines(path) if level == 2
+    ]
+    tail = [title for _, title in level_two[-2:]]
+    if len(tail) == 2 and tail[0] == "Open Questions" and tail[1].startswith("Summary"):
+        return []
+    found = " then ".join(f"'## {title}'" for title in tail) or "no level-two headings"
+    line = level_two[-1][0] if level_two else 1
+    return [
+        Finding(
+            "error",
+            "chapter-closer",
+            f"{_relative(path)}:{line}",
+            f"a chapter closes with '## Open Questions' followed by '## Summary'; found {found}",
+        )
+    ]
+
+
+def float_order_findings(path: Path) -> list[Finding]:
+    """Flag a figure or table whose first mention in the prose comes after it.
+
+    House style introduces every float before it appears and analyzes it after.
+    A float whose first mention trails it reaches the reader unexplained, and in
+    the PDF it can land pages ahead of the text that motivates it.
+    """
+    definitions: dict[str, int] = {}
+    for number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        chunk_label = CHUNK_FLOAT_LABEL_RE.match(line)
+        if chunk_label:
+            definitions.setdefault(chunk_label.group("label"), number)
+            continue
+        for match in FLOAT_ANCHOR_RE.finditer(line):
+            definitions.setdefault(match.group("label"), number)
+    first_mention: dict[str, int] = {}
+    for number, line in manuscript_source_lines(path):
+        for match in FLOAT_MENTION_RE.finditer(line):
+            first_mention.setdefault(match.group("label"), number)
+    findings: list[Finding] = []
+    for label, defined in definitions.items():
+        mentioned = first_mention.get(label)
+        if mentioned is not None and mentioned > defined:
+            findings.append(
+                Finding(
+                    "error",
+                    "float-mentioned-late",
+                    f"{_relative(path)}:{defined}",
+                    f"{label} appears at line {defined} but the prose first mentions it "
+                    f"at line {mentioned}; introduce a figure or table before it appears",
+                )
+            )
+    return findings
+
+
+def unused_image_findings(
+    images_root: Path | None = None, corpus: str | None = None
+) -> list[Finding]:
+    """Flag image files under the manuscript that nothing references.
+
+    An image counts as used when its file stem appears in any tracked manuscript,
+    script, or configuration file, which covers extensionless figure links, PNG
+    twins, and generator scripts that write the file.
+    """
+    root = images_root if images_root is not None else BOOK_DIR / "contents"
+    if corpus is None:
+        listing = _run(["git", "ls-files", "-z"], capture=True)
+        if listing.returncode != 0:
+            return []
+        texts = []
+        for name in listing.stdout.split("\0"):
+            candidate = ROOT / name
+            if name.endswith(IMAGE_REFERENCE_SUFFIXES) and candidate.is_file():
+                texts.append(candidate.read_text(encoding="utf-8", errors="ignore"))
+        corpus = "\n".join(texts)
+    findings: list[Finding] = []
+    for image in sorted(root.rglob("*")):
+        if (
+            not image.is_file()
+            or image.suffix.lower() not in IMAGE_ASSET_SUFFIXES
+            or "images" not in image.parts
+            or image.stem in corpus
+        ):
+            continue
+        findings.append(
+            Finding(
+                "warning",
+                "image-unreferenced",
+                _relative(image),
+                f"{image.name} is not referenced by any manuscript, script, or config "
+                "file; use it or delete it",
+            )
+        )
+    return findings
+
+
+def structure_findings(paths: list[Path] | None = None) -> list[Finding]:
+    """Run every source-level structure rule; a full-book run also checks images."""
+    targets = paths if paths is not None else content_qmd_files()
+    findings: list[Finding] = []
+    for path in targets:
+        findings.extend(heading_findings(path))
+        findings.extend(chapter_closer_findings(path))
+        findings.extend(float_order_findings(path))
+    if paths is None:
+        findings.extend(unused_image_findings())
+    return findings
+
+
+def run_structure_check() -> None:
+    _exit_on_findings(structure_findings(), title="manuscript structure")
+
+
+# Rendered PDF: fonts and document metadata.
+EPUB_ACCESSIBILITY_PROPERTIES = (
+    "schema:accessMode",
+    "schema:accessModeSufficient",
+    "schema:accessibilityFeature",
+    "schema:accessibilityHazard",
+    "schema:accessibilitySummary",
+)
+
+
+def _pdf_font_embedding(reader: Any) -> dict[str, bool]:
+    """Map every font in a PDF, including fonts inside embedded figures, to embedded."""
+    from pypdf.generic import IndirectObject
+
+    seen: set[tuple[str, int]] = set()
+    fonts: dict[str, bool] = {}
+
+    def identity(obj: Any) -> int:
+        return obj.idnum if isinstance(obj, IndirectObject) else id(obj)
+
+    def walk(resources: Any) -> None:
+        if resources is None:
+            return
+        resources = resources.get_object()
+        font_dict = resources.get("/Font")
+        for _name, font in font_dict.get_object().items() if font_dict else ():
+            if ("font", identity(font)) in seen:
+                continue
+            seen.add(("font", identity(font)))
+            obj = font.get_object()
+            subtype = obj.get("/Subtype")
+            descriptor = obj.get("/FontDescriptor")
+            if subtype == "/Type0" and obj.get("/DescendantFonts"):
+                descendant = obj["/DescendantFonts"].get_object()[0].get_object()
+                descriptor = descendant.get("/FontDescriptor")
+            embedded = subtype == "/Type3" or (
+                descriptor is not None
+                and any(
+                    key in descriptor.get_object()
+                    for key in ("/FontFile", "/FontFile2", "/FontFile3")
+                )
+            )
+            name = str(obj.get("/BaseFont") or "unnamed")
+            fonts[name] = fonts.get(name, True) and embedded
+        xobjects = resources.get("/XObject")
+        for _name, xobject in xobjects.get_object().items() if xobjects else ():
+            if ("xobject", identity(xobject)) in seen:
+                continue
+            seen.add(("xobject", identity(xobject)))
+            form = xobject.get_object()
+            if form.get("/Subtype") == "/Form":
+                walk(form.get("/Resources"))
+
+    for page in reader.pages:
+        walk(page.get("/Resources"))
+    return fonts
+
+
+def pdf_findings(pdf_path: Path = PDF_PATH) -> list[Finding]:
+    """Check that the rendered PDF embeds every font and declares title, author, and language.
+
+    Springer requires all fonts embedded. A figure exported without its fonts is
+    the usual way one goes missing, which is why fonts inside embedded figure
+    PDFs are walked too. Title, author, and document language are what an
+    assistive reader announces before the first page.
+    """
+    location = _relative(pdf_path)
+    if not pdf_path.exists():
+        return [
+            Finding("error", "missing-pdf", location, "rendered PDF does not exist")
+        ]
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return [
+            Finding(
+                "error",
+                "missing-pypdf",
+                "python",
+                "pypdf is required for PDF font and metadata checks",
+            )
+        ]
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
+    reader = PdfReader(str(pdf_path))
+    findings: list[Finding] = []
+    missing = sorted(
+        name for name, embedded in _pdf_font_embedding(reader).items() if not embedded
+    )
+    if missing:
+        findings.append(
+            Finding(
+                "error",
+                "pdf-font-not-embedded",
+                location,
+                f"{len(missing)} fonts are not embedded ({', '.join(missing[:6])}); "
+                "Springer requires every font embedded",
+            )
+        )
+    config, config_findings = _load_quarto_config()
+    book = (config.get("book") or {}) if not config_findings else {}
+    metadata = reader.metadata or {}
+    expected_title = str(book.get("title") or "").strip()
+    recorded_title = str(metadata.get("/Title") or "").strip()
+    if not recorded_title or (expected_title and recorded_title != expected_title):
+        findings.append(
+            Finding(
+                "error",
+                "pdf-metadata-title",
+                location,
+                f"PDF title metadata is '{recorded_title}', expected '{expected_title}' "
+                "from book/_quarto.yml",
+            )
+        )
+    author = book.get("author")
+    expected_author = author.strip() if isinstance(author, str) else ""
+    recorded_author = str(metadata.get("/Author") or "").strip()
+    if not recorded_author or (
+        expected_author and expected_author not in recorded_author
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "pdf-metadata-author",
+                location,
+                f"PDF author metadata is '{recorded_author}', expected '{expected_author}'",
+            )
+        )
+    if not reader.trailer["/Root"].get("/Lang"):
+        findings.append(
+            Finding(
+                "error",
+                "pdf-language",
+                location,
+                "PDF declares no document language, so a screen reader has to guess "
+                "pronunciation; set pdflang in tex/springer-header.tex",
+            )
+        )
+    return findings
+
+
+def run_pdf_check(pdf: Path = PDF_PATH) -> None:
+    _exit_on_findings(pdf_findings(pdf), title="PDF fonts and metadata")
+
+
+# Springer delivery readiness: everything the publisher needs that no single
+# build proves. `./arch2 check delivery` answers "are we deliverable" as a
+# command; it is expected to fail until the author-supplied pieces exist.
+SPRINGER_DELIVERY_CONFIG = BOOK_DIR / "config" / "springer-delivery.yml"
+PERMISSIONS_LEDGER_PATH = ROOT / "figures" / "permissions.yml"
+SPRINGER_TEXT_WIDTH_IN = 117 / 25.4
+SPRINGER_DPI_FLOORS = {"photo": 300, "combined": 600, "line-art": 1200}
+ABSTRACT_MAX_WORDS = 200
+KEYWORDS_MIN = 3
+KEYWORDS_MAX = 6
+LEDGER_ORIGINS = {"original", "adapted", "third-party"}
+
+
+def _numbered_chapter_files() -> list[Path]:
+    return [
+        path
+        for path in content_qmd_files()
+        if "chapters" in path.parts and CHAPTER_FILE_RE.match(path.name)
+    ]
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    import yaml
+
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def image_pixel_width(path: Path) -> int | None:
+    """Read a PNG or JPEG pixel width from its header, without an imaging library."""
+    data = path.read_bytes()
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+        return int.from_bytes(data[16:20], "big")
+    if data[:2] != b"\xff\xd8":
+        return None
+    index = 2
+    frame_markers = {
+        0xC0,
+        0xC1,
+        0xC2,
+        0xC3,
+        0xC5,
+        0xC6,
+        0xC7,
+        0xC9,
+        0xCA,
+        0xCB,
+        0xCD,
+        0xCE,
+        0xCF,
+    }
+    while index + 9 < len(data):
+        if data[index] != 0xFF:
+            index += 1
+            continue
+        marker = data[index + 1]
+        if marker == 0xFF:
+            index += 1
+            continue
+        if marker in frame_markers:
+            return int.from_bytes(data[index + 7 : index + 9], "big")
+        if marker == 0x01 or 0xD0 <= marker <= 0xD9:
+            index += 2
+            continue
+        index += 2 + int.from_bytes(data[index + 2 : index + 4], "big")
+    return None
+
+
+def springer_chapter_metadata_findings(
+    config_path: Path = SPRINGER_DELIVERY_CONFIG, chapters: list[Path] | None = None
+) -> list[Finding]:
+    """Check each chapter's Springer abstract and keywords.
+
+    SpringerLink publishes the abstract on an open page Google indexes, so it
+    must stand alone: at most 200 words, with no cross-references, citations, or
+    math. Each chapter also needs 3 to 6 keywords. The metadata lives in
+    book/config/springer-delivery.yml, keyed by chapter file stem, so it stays
+    delivery-only until the author decides whether abstracts render on the site.
+    """
+    chapter_paths = chapters if chapters is not None else _numbered_chapter_files()
+    location = _relative(config_path)
+    if not config_path.exists():
+        return [
+            Finding(
+                "error",
+                "delivery-chapter-metadata",
+                location,
+                f"no Springer chapter metadata; add an abstract (at most "
+                f"{ABSTRACT_MAX_WORDS} words) and {KEYWORDS_MIN} to {KEYWORDS_MAX} keywords "
+                f"for each of the {len(chapter_paths)} chapters under 'chapters: <file stem>:'",
+            )
+        ]
+    entries = _load_yaml_mapping(config_path).get("chapters") or {}
+    findings: list[Finding] = []
+    missing_abstract: list[str] = []
+    missing_keywords: list[str] = []
+    for chapter in chapter_paths:
+        entry = entries.get(chapter.stem) or {}
+        abstract = re.sub(r"\s+", " ", str(entry.get("abstract") or "")).strip()
+        if not abstract:
+            missing_abstract.append(chapter.stem)
+        elif len(abstract.split()) > ABSTRACT_MAX_WORDS:
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-abstract-length",
+                    location,
+                    f"{chapter.stem} abstract has {len(abstract.split())} words; Springer "
+                    f"allows {ABSTRACT_MAX_WORDS}",
+                )
+            )
+        elif re.search(r"@|\$", abstract):
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-abstract-standalone",
+                    location,
+                    f"{chapter.stem} abstract carries a cross-reference, citation, or math; "
+                    "the SpringerLink abstract page cannot resolve them",
+                )
+            )
+        keywords = entry.get("keywords")
+        if not isinstance(keywords, list) or not keywords:
+            missing_keywords.append(chapter.stem)
+        elif not KEYWORDS_MIN <= len(keywords) <= KEYWORDS_MAX:
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-keywords-count",
+                    location,
+                    f"{chapter.stem} has {len(keywords)} keywords; Springer asks for "
+                    f"{KEYWORDS_MIN} to {KEYWORDS_MAX}",
+                )
+            )
+    if missing_abstract:
+        findings.append(
+            Finding(
+                "error",
+                "delivery-abstract-missing",
+                location,
+                f"{len(missing_abstract)} chapters have no abstract: {', '.join(missing_abstract)}",
+            )
+        )
+    if missing_keywords:
+        findings.append(
+            Finding(
+                "error",
+                "delivery-keywords-missing",
+                location,
+                f"{len(missing_keywords)} chapters have no keywords: {', '.join(missing_keywords)}",
+            )
+        )
+    return findings
+
+
+def chapter_reference_list_findings(
+    chapters: list[Path] | None = None,
+) -> list[Finding]:
+    """Check that every chapter carries its own reference list, as Springer requires."""
+    chapter_paths = chapters if chapters is not None else _numbered_chapter_files()
+    missing = [
+        path.stem
+        for path in chapter_paths
+        if not re.search(
+            r"^:{3,}\s*\{#refs", path.read_text(encoding="utf-8"), re.MULTILINE
+        )
+    ]
+    if not missing:
+        return []
+    return [
+        Finding(
+            "error",
+            "delivery-chapter-references",
+            _relative(BOOK_DIR / "_quarto.yml"),
+            f"Springer requires a reference list at the end of each chapter; "
+            f"{len(missing)} of {len(chapter_paths)} chapters have none, so the delivery "
+            "build still needs a per-chapter bibliography transform",
+        )
+    ]
+
+
+def permissions_ledger_findings(
+    ledger_path: Path = PERMISSIONS_LEDGER_PATH, images: list[FigureImage] | None = None
+) -> list[Finding]:
+    """Check the per-figure permissions record Springer production starts from.
+
+    Each entry, keyed by figure label (or image file stem for an unlabeled image),
+    records ``origin`` (original, adapted, or third-party), ``license``,
+    ``permission`` (cleared once granted), ``source`` for anything not original,
+    and ``color_in_print`` for the color-essential-in-print list. Production does
+    not begin until every non-original item is cleared.
+    """
+    records = images if images is not None else alt_text_book_images()
+    keys = [image.label or Path(image.target or "").stem for image in records]
+    location = _relative(ledger_path)
+    if not ledger_path.exists():
+        return [
+            Finding(
+                "error",
+                "delivery-permissions",
+                location,
+                f"no permissions ledger; record origin, license, permission status, and "
+                f"color_in_print for each of the {len(keys)} figures and images",
+            )
+        ]
+    entries = _load_yaml_mapping(ledger_path).get("figures") or {}
+    findings: list[Finding] = []
+    missing = [key for key in keys if key not in entries]
+    if missing:
+        findings.append(
+            Finding(
+                "error",
+                "delivery-permissions",
+                location,
+                f"{len(missing)} figures have no ledger entry: {', '.join(missing[:8])}"
+                + (" ..." if len(missing) > 8 else ""),
+            )
+        )
+    for key in keys:
+        entry = entries.get(key)
+        if not isinstance(entry, dict):
+            continue
+        origin = entry.get("origin")
+        if origin not in LEDGER_ORIGINS:
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-permissions",
+                    location,
+                    f"{key} origin must be original, adapted, or third-party, not '{origin}'",
+                )
+            )
+        elif origin != "original" and (
+            entry.get("permission") != "cleared"
+            or not entry.get("source")
+            or not entry.get("license")
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-permissions-uncleared",
+                    location,
+                    f"{key} is {origin} material; it needs a source, a license, and "
+                    "permission: cleared before production can start",
+                )
+            )
+        if "color_in_print" not in entry:
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-color-in-print",
+                    location,
+                    f"{key} does not say whether color is essential in print",
+                )
+            )
+    return findings
+
+
+def artwork_resolution_findings(
+    images: list[FigureImage], ledger: dict[str, Any] | None = None
+) -> list[Finding]:
+    """Flag raster-only figures below Springer's resolution floors at full text width.
+
+    A figure with a vector PDF or SVG twin is delivered as vector art and skipped.
+    The floor is 1200 DPI for line art, 600 for combined art, and 300 for
+    photographs; set ``artwork: photo`` or ``artwork: combined`` in the
+    permissions ledger to apply the lower floors.
+    """
+    entries = (ledger or {}).get("figures") or {}
+    findings: list[Finding] = []
+    for image in images:
+        if image.kind != "markdown" or not image.target:
+            continue
+        source = image.path.parent / image.target
+        if (
+            source.suffix.lower() not in (".png", ".jpg", ".jpeg")
+            or not source.exists()
+        ):
+            continue
+        if source.with_suffix(".pdf").exists() or source.with_suffix(".svg").exists():
+            continue
+        width = image_pixel_width(source)
+        if width is None:
+            continue
+        entry = entries.get(image.label or source.stem) or {}
+        artwork = entry.get("artwork", "line-art")
+        floor = SPRINGER_DPI_FLOORS.get(artwork, SPRINGER_DPI_FLOORS["line-art"])
+        dpi = int(width / SPRINGER_TEXT_WIDTH_IN)
+        if dpi < floor:
+            findings.append(
+                Finding(
+                    "error",
+                    "delivery-artwork-resolution",
+                    f"{_relative(image.path)}:{image.line}",
+                    f"{source.name} is {dpi} DPI at full text width, below the {floor} DPI "
+                    f"floor for {artwork}; export it as vector PDF or EPS, or record its "
+                    "artwork type in the permissions ledger",
+                )
+            )
+    return findings
+
+
+def delivery_findings() -> list[Finding]:
+    """Collect every Springer delivery requirement into one readiness report."""
+    images = alt_text_book_images()
+    ledger = (
+        _load_yaml_mapping(PERMISSIONS_LEDGER_PATH)
+        if PERMISSIONS_LEDGER_PATH.exists()
+        else None
+    )
+    findings: list[Finding] = []
+    findings.extend(alt_text_findings())
+    findings.extend(springer_chapter_metadata_findings())
+    findings.extend(chapter_reference_list_findings())
+    findings.extend(permissions_ledger_findings(images=images))
+    findings.extend(artwork_resolution_findings(images, ledger))
+    findings.extend(pdf_findings(PDF_PATH))
+    findings.extend(description_texts_findings())
+    return findings
+
+
+def run_delivery_check() -> None:
+    _exit_on_findings(delivery_findings(), title="Springer delivery readiness")
 
 
 def manuscript_integrity_findings() -> list[Finding]:
@@ -1903,6 +3449,7 @@ def manuscript_integrity_findings() -> list[Finding]:
     findings.extend(suppression_hygiene_findings(all_paths))
     findings.extend(unreferenced_label_findings(all_paths, all_paths))
     findings.extend(svg_wellformed_findings())
+    findings.extend(alt_text_findings())
     for path in all_paths:
         findings.extend(xhtml_void_tag_findings(path))
         findings.extend(figure_path_findings(path))
@@ -2995,6 +4542,18 @@ def html_findings(html_path: Path = HTML_PATH) -> list[Finding]:
     html_files = sorted(html_path.parent.rglob("*.html"))
     for page_path in html_files:
         page_text = page_path.read_text(encoding="utf-8", errors="replace")
+        for image_tag in re.finditer(r"<img\b[^>]*>", page_text, re.IGNORECASE):
+            if not re.search(r"\balt\s*=", image_tag.group(0), re.IGNORECASE):
+                findings.append(
+                    Finding(
+                        "error",
+                        "html-image-alt",
+                        _relative(page_path),
+                        "HTML image has no alt attribute, so a screen reader announces "
+                        f"its file name: {image_tag.group(0)[:120]}",
+                    )
+                )
+                break
         if re.search(r"<img[^>]+src=[\"'][^\"']+\.pdf", page_text, re.I):
             findings.append(
                 Finding(
@@ -3022,6 +4581,29 @@ def html_findings(html_path: Path = HTML_PATH) -> list[Finding]:
                 )
                 break
     return findings
+
+
+ORCID_ICON_WITHOUT_ALT_RE = re.compile(
+    r'(<a\b[^>]*class="[^"]*quarto-title-author-orcid[^"]*"[^>]*>\s*<img\b)(?![^>]*\balt\s*=)'
+)
+
+
+def normalize_html_orcid_icons(html_root: Path = BUILD_DIR) -> int:
+    """Give Quarto's ORCID author badge an accessible name.
+
+    Quarto's title-block template links the author's ORCID record through a bare
+    ``<img>`` with no alt attribute, so a screen reader announces an unnamed link.
+    The template is Quarto's, not the book's, so the build repairs the rendered
+    page instead, and ``html_findings`` fails on any image still missing alt text.
+    """
+    changed = 0
+    for page_path in sorted(html_root.rglob("*.html")):
+        text = page_path.read_text(encoding="utf-8")
+        normalized, count = ORCID_ICON_WITHOUT_ALT_RE.subn(r'\1 alt="ORCID iD"', text)
+        if count:
+            page_path.write_text(normalized, encoding="utf-8")
+            changed += count
+    return changed
 
 
 def normalize_html_hub_links(html_root: Path = BUILD_DIR) -> int:
@@ -3131,6 +4713,28 @@ def epub_findings(epub_path: Path = EPUB_PATH) -> list[Finding]:
                                 "epub-language",
                                 f"{_relative(epub_path)}:{opf_names[0]}",
                                 "EPUB publication language cannot use a process locale such as C or POSIX",
+                            )
+                        )
+                    declared = {
+                        (element.get("property") or "").strip()
+                        for element in opf_root.iter()
+                        if element.tag.rsplit("}", 1)[-1] == "meta"
+                    }
+                    missing_accessibility = [
+                        name
+                        for name in EPUB_ACCESSIBILITY_PROPERTIES
+                        if name not in declared
+                    ]
+                    if missing_accessibility:
+                        findings.append(
+                            Finding(
+                                "error",
+                                "epub-accessibility-metadata",
+                                f"{_relative(epub_path)}:{opf_names[0]}",
+                                "EPUB lacks the accessibility metadata an accessible ebook "
+                                "declares under the EU Accessibility Act ("
+                                + ", ".join(missing_accessibility)
+                                + "); set it under format: epub in book/_quarto.yml",
                             )
                         )
             html_names = [name for name in names if name.endswith((".html", ".xhtml"))]
@@ -8101,6 +9705,11 @@ def _render_one(
             console.print(
                 f"[green]normalized[/green] {normalized_link_count} HTML hub links"
             )
+        orcid_icon_count = normalize_html_orcid_icons(BUILD_DIR)
+        if orcid_icon_count:
+            console.print(
+                f"[green]named[/green] {orcid_icon_count} ORCID author badges for screen readers"
+            )
         run_html_check(HTML_PATH)
         _exit_on_findings(
             html_unresolved_findings(BUILD_DIR), title="HTML rendered references"
@@ -8122,6 +9731,9 @@ def _render_one(
         run_epubcheck(EPUB_PATH)
     if "pdf" in fmts:
         run_figures_check(PDF_PATH)
+        preserve_description_texts()
+        run_alt_text_render_check()
+        run_pdf_check(PDF_PATH)
         _exit_on_findings(
             pdf_unresolved_findings(PDF_PATH), title="PDF rendered references"
         )
@@ -8440,6 +10052,13 @@ def validate_refs() -> None:
 def validate_captions() -> None:
     """Check figure captions against the 3-layer pedagogical standard."""
     run_caption_check()
+    run_structure_check()
+
+
+@validate_app.command("alt-text")
+def validate_alt_text() -> None:
+    """Check alt text on every figure and image against Springer Nature's guide."""
+    run_alt_text_check()
 
 
 @validate_app.command("card")
@@ -8540,6 +10159,38 @@ def verify_figures(
 ) -> None:
     """Check that authored figures are embedded in the rendered PDF."""
     run_figures_check(pdf)
+
+
+@verify_app.command("alt-text")
+def verify_alt_text(
+    descriptions: Path = typer.Option(
+        DESCRIPTION_TEXTS_PATH,
+        "--descriptions",
+        help="DescriptionTexts.txt written by the Springer PDF build.",
+    ),
+) -> None:
+    """Check that the PDF build recorded every figure's alt text for Springer."""
+    run_alt_text_render_check(descriptions)
+
+
+@verify_app.command("pdf")
+def verify_pdf(
+    pdf: Path = typer.Option(PDF_PATH, "--pdf", help="Rendered PDF to inspect."),
+) -> None:
+    """Check that the PDF embeds every font and declares title, author, and language."""
+    run_pdf_check(pdf)
+
+
+@validate_app.command("structure")
+def validate_structure() -> None:
+    """Check headings, chapter closers, figure and table order, and unused images."""
+    run_structure_check()
+
+
+@check_app.command("delivery")
+def check_delivery() -> None:
+    """Report everything Springer Nature still needs before delivery."""
+    run_delivery_check()
 
 
 @verify_app.command("html")
@@ -8741,6 +10392,7 @@ def source_repairable_findings() -> list[Finding]:
     findings.extend(prose_style_findings())
     findings.extend(abbreviations_findings())
     findings.extend(glossary_findings())
+    findings.extend(alt_text_findings())
     return findings
 
 
@@ -8748,6 +10400,16 @@ def source_repairable_findings() -> list[Finding]:
 def generate_glossary() -> None:
     """Generate the canonical Glossary appendix and Lua filter from CMOS_ABBREVIATIONS."""
     run_glossary_generation()
+
+
+@generate_app.command("alt-text")
+def generate_alt_text(
+    out: Path = typer.Option(
+        ALT_TEXT_EXPORT_PATH, "--out", help="Workbook to write for Springer Nature."
+    ),
+) -> None:
+    """Export every figure's alt text to the Excel workbook Springer Nature requires."""
+    run_alt_text_export(out)
 
 
 @check_app.command("abbreviations")
@@ -8780,6 +10442,7 @@ def check_precommit() -> None:
     run_footnote_check()
     run_prose_style_check()
     run_caption_check()
+    run_structure_check()
     run_abbreviations_check()
     run_glossary_check()
     run_concept_check()
@@ -8799,9 +10462,12 @@ def check_standard(
     run_footnote_check()
     run_prose_style_check()
     run_caption_check()
+    run_structure_check()
     run_abbreviations_check()
     run_glossary_check()
     run_figures_check()
+    run_alt_text_render_check()
+    run_pdf_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()
     run_citation_check(show_context=False)
@@ -8822,9 +10488,12 @@ def check_strict(
     run_footnote_check()
     run_prose_style_check()
     run_caption_check()
+    run_structure_check()
     run_abbreviations_check()
     run_glossary_check()
     run_figures_check()
+    run_alt_text_render_check()
+    run_pdf_check()
     run_rendered_unresolved_check()
     run_generated_asset_check()
     run_citation_check(show_context=False)
@@ -8860,6 +10529,8 @@ def check_all(
     run_refs_check()
     run_footnote_check()
     run_figures_check()
+    run_alt_text_render_check()
+    run_pdf_check()
     run_citation_check(show_context=False)
     _exit_on_findings(epub_findings(EPUB_PATH), title="EPUB package")
     run_epubcheck(EPUB_PATH)
