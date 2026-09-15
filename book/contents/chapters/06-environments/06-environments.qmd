@@ -51,11 +51,7 @@ A small script may perform both wrapping and coordination. An engineer running a
 
 Existing electronic design automation (EDA) frameworks provide useful building blocks. SiliconCompiler connects design data, tool settings, and process design kit (PDK) information through a shared schema and execution flow [@SiliconCompiler]. Hammer separates tool-specific steps, technology information, and project configuration through its plugin interfaces [@Hammer]. Such frameworks supply reusable hardware-flow knowledge; a study must still define which actions its methods can request and how returned results enter the design loop. General build and scheduling systems can support execution as well, provided the surrounding integration preserves the required design and tool information.
 
-Submission volume and reliable automated execution are different observations. The cumulative shuttle counts in @fig-api-driven-tapeouts come from an unverified transcription attributed to open-access programs; they do not establish how much design work was automated, what manual intervention remained, or whether the flows operated reliably. Evaluating those claims would require execution records and a consistent definition of automated work. For environment design, the practical issue is the work admitted concurrently and the resources it shares, which the host and network controls below must manage.
-
-![**Unverified cumulative submission counts across open-access shuttle runs.** The underlying transcription attributes counts to Efabless Open multi-project wafer (MPW) and Tiny Tapeout shuttles, reaching 1,827 cumulative submissions in September 2024 from 45 in December 2020. These are cumulative entries, not annual totals. Row-level source traceability is incomplete; the plot's designation of these entries as programmatic tapeouts is not independently established. The series does not measure automation quality or operational viability.](images/plot_ch6.png){#fig-api-driven-tapeouts width="80%" fig-alt="Line plot of unverified cumulative shuttle submission counts from 45 in December 2020 to 1,827 in September 2024. The original axis labels the entries programmatic tapeouts, a classification not established by the retained source data."}
-
-As these data illustrate, growth in submission counts highlights accelerating interest in automated fabrication channels, yet it does not demonstrate closed-loop autonomy. Without detailed execution records, raw submission tallies obscure how many designs required manual engineering fixes to reach signoff, how many runs failed silently, or how host constraints throttled throughput. Operational viability depends on disciplined execution environments that isolate, validate, and recover from tool errors at scale.
+Submission volume and reliable automated execution are fundamentally different concerns. Growing numbers of designs submitted to open-access multi-project wafer (MPW) and educational shuttles reflect broad community interest in scripted fabrication, but aggregate submission tallies do not demonstrate closed-loop autonomy. Without structured execution records, raw counts obscure how many designs required manual engineering fixes to achieve signoff, how many candidate runs timed out or failed silently, or how server resource exhaustion throttled throughput. Operational reliability requires disciplined execution environments that isolate, validate, and recover from tool errors at scale.
 
 ### Host and Network Boundaries
 
@@ -669,55 +665,8 @@ Six groups of information make the record useful:
 
 When an expected measurement or artifact is unavailable, the record should state that absence and its cause, if known. This lets later analysis distinguish a quantity that was not measured from one that could not be parsed or did not apply; none should silently become a zero.
 
-The excerpt in @lst-execution-record-schema illustrates a completed analysis that reports a timing violation. All identifiers, artifact references, metrics, and costs are invented teaching values; this is not an executed Lighthouse result. A generic licensed analysis tool is used so the example does not imply that a particular product produced every metric. Workload and activity references identify the inputs relevant to the power estimate, while the scope identifies what that estimate covers. The excerpt remains abbreviated: a complete record would also retain full input identities, host settings, per-job details, and applicable retry or checkpoint links.
+Joining inputs, execution status, signoff metrics, and resource costs into a unified record enables rigorous downstream evaluation. For example, when an EDA timing analysis finishes, a `COMPLETED` execution status and zero exit code describe only that the tool process exited cleanly; they do not indicate that physical timing closed. Evaluating timing health requires reporting both worst negative slack (WNS, identifying the single most critical path) and total negative slack (TNS, integrating the delay deficit across all failing endpoints), alongside failing endpoint counts and hold slack. An automated optimizer that evaluates WNS in isolation can easily sacrifice hold-time margins or mask catastrophic structural violations across hundreds of endpoints. Retaining explicit references to raw reports and multi-mode multi-corner (MCMM) views allows independent reviewers to audit which operating paths produced each metric. Similarly, recording activity profiles, power scopes, and execution costs (wall-clock time, memory footprint, and tool license-hours) ensures that candidate comparisons account for total exploration expenditure alongside physical performance.
 
-```{.yaml #lst-execution-record-schema lst-cap="**A completed analysis can report a timing violation.** This hypothetical excerpt joins inputs and conditions to execution status, reports, metrics, and costs. Values are invented; this is neither a complete schema nor an executed Lighthouse result."}
-study_id: "lighthouse-xr-soc-v1"
-evidence_status: "HYPOTHETICAL_TEACHING_EXAMPLE"
-request_id: "req-illustrative-0417"
-attempt_id: "att-8f3a91c2-7b1e"
-submission_token: "tok-lighthouse-0417"
-scheduler_jobs: ["slurm-4471902"]
-candidate_id: "cand-l2-3mib-npu16x16"
-configuration_id: "cfg-illustrative-0417"
-workload_id: "xr-workload-illustrative-v1"
-starting_state:
-  git_commit: "9a2f1b4c"
-  container_digest: "sha256:d4e7b1a8c9e..."
-  tool_version: "illustrative-licensed-analysis-tool-v1"
-  library_view: "illustrative-library-corner-v1"
-  netlist: "artifact-netlist-0417"
-  constraints: "artifact-constraints-0417"
-  activity: "artifact-activity-0417"
-  power_scope: "modeled XR subsystem"
-outcome:
-  admission_status: "ADMITTED"
-  status: "COMPLETED"
-  terminal_cause: "NORMAL_EXIT"
-  exit_code: 0
-  artifact_status: "REQUIRED_OUTPUTS_PRESENT"
-  parser_status: "PARSED"
-reports:
-  timing: "artifact-timing-report-0417"
-  area: "artifact-area-report-0417"
-  power: "artifact-power-report-0417"
-  raw_log: "artifact-log-0417"
-metrics:
-  worst_negative_slack_setup_ps: -124.0
-  total_negative_slack_setup_ps: -342.0
-  failing_endpoints_setup_count: 28
-  worst_negative_slack_hold_ps: 4.2
-  max_clock_skew_ps: 18.5
-  macro_area_mm2: 1.42
-  subsystem_power_w: 2.84
-costs:
-  wall_clock_seconds: 4128
-  cpu_hours: 18.2
-  peak_rss_gb: 14.8
-  license_token_hours: 1.15
-```
-
-The `COMPLETED` status and zero exit code describe execution, while the timing metrics record physical signoff health under the recorded constraints. Evaluating timing requires reporting both worst negative slack (WNS, identifying the single worst path) and total negative slack (TNS, integrating the delay deficit across all failing endpoints), alongside the failing endpoint count and hold slack. An automated agent that optimizes WNS in isolation can easily sacrifice hold-time margins or mask a catastrophic structural failure across thousands of endpoints. The raw report reference lets a reviewer inspect which paths and multi-mode multi-corner (MCMM) views produced that result. Similarly, the subsystem power value is an estimate under the identified activity and library assumptions; it does not establish that the complete system meets its power budget. The cost fields describe resources consumed by this attempt, independently of whether the candidate met its requirements.
 
 Records also support later attempts to reproduce the work. ACM artifact review guidelines distinguish *repeatability* (same team, same setup), *reproducibility* (different team, same setup), and *replicability* (different team, different setup) [@ACM2020ArtifactReview]. A record supplies information for these activities, but carrying them out also requires access to the artifacts and an executable procedure. The Popper convention similarly emphasizes preserving executable evaluation workflows [@JimenezEtAl2017PopperConvention].
 

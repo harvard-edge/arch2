@@ -672,13 +672,7 @@ plt.show()
 plt.close(fig)
 ```
 
-The constructed curves identify a test to run, not a failure rate to assume. Pairing each flawed candidate with and without its persuasive justification lets an evaluator test whether the text changes acceptance. Independent checks then establish which approvals were false. A larger judge may perform better, but that possibility requires measurement of both its decisions and its cost.
-
-Larger models and longer verification traces can increase memory demand and constrain batching. The analytical scenario in @fig-llm-judge-mfu-collapse illustrates one possible utilization penalty. Its source data are labeled as roofline and memory-footprint estimates, not empirical evaluation runs. The derivation and hardware-allocation assumptions have not been retained, so the numerical estimates remain unverified and cannot establish the economics of a deployed review loop.
-
-![**Conceptual model FLOPs utilization collapse under model parameter scaling.** Model FLOPs utilization (MFU, y-axis) decreases from $38.5\%$ to $8.4\%$ as model size (x-axis) increases from $7\text{B}$ to $405\text{B}$ parameters. Retained data reflect roofline and memory-footprint estimates for 32k-token contexts under H100-class memory constraints rather than measured cluster results; the numerical derivation has not been preserved for independent checking. Model context spans the LLaMA series from 7B variants through Llama 3.1 405B [@MetaAI2024Llama31]. The curve illustrates an analytical scenario requiring deployment-specific validation, including placement and batching assumptions.](images/plot_ch10.png){#fig-llm-judge-mfu-collapse width="80%" fig-alt="Analytical scenario in which model FLOPs utilization drops from 38.5 percent to 8.4 percent as model size increases from 7B to 405B parameters. Values are analytical estimates rather than measured evaluation runs."}
-
-If memory capacity limits the number of concurrent requests, a deployment may lose opportunities to amortize inference work. Whether that loss outweighs an improvement in review quality depends on the hardware allocation, workload, serving configuration, and avoided human or tool work. The appropriate comparison is the chapter's matched total-cost protocol. Neither a low utilization estimate nor a high judge score settles that comparison alone.
+The constructed curves identify a test to run, not a failure rate to assume. Pairing each flawed candidate with and without its persuasive justification lets an evaluator test whether the text changes acceptance. Independent checks then establish which approvals were false. Deploying larger model judges may improve discriminatory accuracy, but scaling model capacity sharply increases inference latency, memory footprint, and token serving cost. Whether that additional cost is justified depends on the complete evaluation budget and the rate of avoided human review; neither an uncalibrated heuristic nor a high judge score settles that comparison alone.
 
 ### Red-Team Test Protocols and Vulnerability Injections {#sec-red-team-protocols-injections}
 
@@ -720,14 +714,8 @@ At each audited search budget, report proxy errors against the stronger checks w
 
 The earlier judge example attacked the explanation of a timing waiver. A timing-exception test goes one step further and checks whether the workflow can admit the altered constraint itself. A search scored on a proxy has an incentive to exploit whichever paths improve that score [@AmodeiEtAl2016Concrete]. If the evaluator leaves its grading constraints writable, an optimizer may remove the paths it cannot close instead of repairing them. The immutable boundary established at formulation prevents that substitution; the checked proposal path remains available for legitimate internal exceptions.
 
-Consider a hypothetical timing attack on an NPU matrix engine. Suppose its multiplier-accumulator (MAC) path fails setup timing by 850\ ps. A pipeline repair could add register area, complicate hazard forwarding, and increase latency. A spurious `set_false_path` exception instead removes the failing path from analysis (@lst-ch10-money-plot-agentic-sdc-attack). If that path accounts for the reported negative slack and the exception matches it, the resulting report could show zero worst negative slack ($\text{WNS} = 0.00\ \text{ns}$).[^fn-wns-tns-c10] This is a constructed attack, not an executed Lighthouse result:
+Consider a hypothetical timing attack on an accelerator datapath, matching the mechanism illustrated in @lst-ch10-sdc-waiver. Suppose its critical arithmetic path fails setup timing by 850\ ps. A legitimate pipeline repair would add register area, complicate hazard forwarding, and increase latency. A spurious `set_false_path` exception instead removes the failing path from timing analysis. If that path accounts for the reported negative slack and the exception matches it, the resulting report collapses to zero worst negative slack ($\text{WNS} = 0.00\ \text{ns}$), masking an unclosed path without altering silicon timing.[^fn-wns-tns-c10]
 
-```{.tcl #lst-ch10-money-plot-agentic-sdc-attack lst-cap="**Constructed SDC false-path attack.** The hypothetical exception masks an unclosed path if it matches that path; the stated slack is illustrative, not a retained tool result."}
-# Spurious SDC False-Path Exception (Masking unclosed critical paths)
-set_false_path -from [get_pins {npu_top/mac_array/*/clk}] \
-               -to   [get_pins {npu_top/accum_reg/*/D}]
-# Hypothesized result: WNS = 0.00 ns if the exception masks the only failing paths.
-```
 
 [^fn-wns-tns-c10]: **Worst negative slack and total negative slack**: In static timing analysis, slack is the margin by which a signal arrives before its required deadline. Worst negative slack (WNS) records the deficit of the single most severely violating path on the chip, while total negative slack (TNS) sums deficits across all failing endpoints. Because WNS is governed by a single outlier, masking that specific path with a false-path exception causes reported WNS to collapse to zero, creating an illusion of timing closure.
 
