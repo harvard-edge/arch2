@@ -273,6 +273,12 @@ Results are arXiv preprints fetched live from the
     return card;
   }
 
+  function getApiKey() {
+    return urlParams.get("api_key") ||
+      (typeof localStorage !== "undefined" && localStorage.getItem("openalex_api_key")) ||
+      "";
+  }
+
   function requestUrl() {
     // Matching titles and abstracts gives far more on-topic results than
     // OpenAlex's default full-text search. Commas would split the filter
@@ -289,12 +295,18 @@ Results are arXiv preprints fetched live from the
     }
     var sort = sortSelect.value === "newest" ?
       "publication_date:desc" : "relevance_score:desc";
-    return API +
+    var url = API +
       "?filter=" + encodeURIComponent(filters.join(",")) +
       "&sort=" + encodeURIComponent(sort) +
       "&page=" + state.page +
       "&per-page=" + PAGE_SIZE +
-      "&select=" + encodeURIComponent(SELECT);
+      "&select=" + encodeURIComponent(SELECT) +
+      "&mailto=team@mlsysbook.ai";
+    var key = getApiKey();
+    if (key) {
+      url += "&api_key=" + encodeURIComponent(key);
+    }
+    return url;
   }
 
   function fetchPage(append) {
@@ -313,7 +325,15 @@ Results are arXiv preprints fetched live from the
     fetch(requestUrl(), { signal: state.controller.signal })
       .then(function (response) {
         if (response.status === 429) {
-          throw new Error("rate-limited");
+          return response.json().then(function (err) {
+            var msg = (err && (err.message || err.error)) || "rate-limited";
+            var errObj = new Error(msg);
+            errObj.isRateLimit = true;
+            throw errObj;
+          }).catch(function (e) {
+            if (e.isRateLimit) { throw e; }
+            throw new Error("rate-limited");
+          });
         }
         if (!response.ok) {
           throw new Error("the search API returned " + response.status);
@@ -342,9 +362,9 @@ Results are arXiv preprints fetched live from the
         if (error.name === "AbortError") {
           return;
         }
-        if (error.message === "rate-limited") {
-          setStatus("The search API is rate-limited right now. " +
-            "Wait a minute and try again.", true);
+        if (error.isRateLimit || error.message === "rate-limited") {
+          setStatus("The search API is temporarily rate-limited. " +
+            "Please wait a moment or supply a free OpenAlex API key via ?api_key=KEY.", true);
         } else {
           setStatus("Search failed (" + error.message +
             "). Check your connection and try again.", true);
@@ -538,7 +558,11 @@ Results are arXiv preprints fetched live from the
     var filters = "title_and_abstract.search:" + query.replace(/,/g, " ") +
       ",indexed_in:arxiv";
     var url = API + "?filter=" + encodeURIComponent(filters) +
-      "&group_by=publication_year&per-page=200";
+      "&group_by=publication_year&per-page=200&mailto=team@mlsysbook.ai";
+    var key = getApiKey();
+    if (key) {
+      url += "&api_key=" + encodeURIComponent(key);
+    }
     fetch(url, { signal: trend.controller.signal })
       .then(function (response) {
         if (!response.ok) {
