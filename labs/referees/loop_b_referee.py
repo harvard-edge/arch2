@@ -480,6 +480,17 @@ endmodule
         if "acc_out" not in clean_code:
             return False, "acc_out never driven", True, "CHEAT-B1"
 
+        # Check for vacuous valid_in bypass (CHEAT-B3): input declares valid_in but it is never gated
+        if re.search(r"\binput\b[^;]*\bvalid_in\b", clean_code) and not re.search(
+            r"\bif\s*\([^)]*\bvalid_in\b", clean_code
+        ):
+            return (
+                False,
+                "VACUOUS_VALID (Output mutated while valid_in=0)",
+                True,
+                "CHEAT-B3",
+            )
+
         # Check for genuine Carry-Save Accumulator:
         # Requires actual variable declarations and valid logic expressions, not just comments
         has_sum_reg = bool(re.search(r"\breg\s+(\[[^\]]+\]\s+)?sum_reg\b", clean_code))
