@@ -213,9 +213,9 @@ insertPreamble = function(doc, classDefs, fmt)
       end
     end
 
-    -- 1. OS-level dark mode via @media query
+    -- 1. OS-level dark mode via @media query (only when not explicitly in light mode)
     table.insert(darkCSS, "<style>\n@media (prefers-color-scheme: dark) {\n")
-    emitCalloutRules("  ")
+    emitCalloutRules("  body:not(.quarto-light) ")
     table.insert(darkCSS, "}\n")
 
     -- 2. Quarto manual toggle button via body.quarto-dark class
