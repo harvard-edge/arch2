@@ -9,7 +9,7 @@ format:
 ::: {.epigraph}
 > "The second irony is that the designer who tries to eliminate the operator still leaves the operator to do the tasks which the designer cannot think how to automate."
 >
-> — Lisanne Bainbridge, *Ironies of Automation* (1983) [@Bainbridge1983Ironies, p. 775]
+> — Lisanne Bainbridge, *Ironies of Automation* [@Bainbridge1983Ironies, p. 775]
 :::
 
 ::: {.callout-crux}
@@ -18,11 +18,11 @@ format:
 **Core thesis:** *Architectural ownership resides in framing problems, setting abstractions, judging cross-layer trade-offs, and governing commitment to silicon.*
 :::
 
-![](images/ch11-cover-map.svg){fig-alt="Chapter overview diagram in which substantial AI-native design work and architectural ownership remain distinct from a named commitment authority inside an accountable organization."}
-
 Even if an AI-native design system can generate alternative hardware and software organizations, implement them, and use evaluation to guide redesign, architectural ownership goes beyond the residual tasks automation missed. Architects frame system boundaries (@sec-intent-vs-spec), identify missing constraints, connect cross-layer results, and explain which trade-offs serve the product. Their contribution depends on retaining enough technical contact to challenge the formulation and diagnose failures, a concern familiar from earlier automation [@Bainbridge1983Ironies].
 
-This chapter develops that positive technical role and separates it from the decision to commit resources. The architect forms a system recommendation; the person authorized to advance the product decides whether its evidence and residual risk justify the next commitment. The distinction holds even when automated work is highly capable. Ownership continues through integration, tapeout, and deployment, where new workloads, changed software, or physical failures may require the recommendation and decision to be reopened.
+This chapter develops that positive technical role and separates it from the decision to commit resources (@fig-ch11-cover-map). The architect forms a system recommendation; the person authorized to advance the product decides whether its evidence and residual risk justify the next commitment. The distinction holds even when automated work is highly capable. Ownership continues through integration, tapeout, and deployment, where new workloads, changed software, or physical failures may require the recommendation and decision to be reopened.
+
+![**Distinguishing architectural ownership from commitment authority.** An AI-native design system can explore alternatives and verify candidate implementations, but architects own problem formulation, abstraction boundaries, and cross-layer trade-offs. The resulting system recommendation provides evidence for an authorized organizational decision maker rather than committing resources automatically.](images/ch11-cover-map.svg){#fig-ch11-cover-map width="100%" fig-alt="Chapter overview diagram in which substantial AI-native design work and architectural ownership remain distinct from a named commitment authority inside an accountable organization."}
 
 ## Delegating Without Losing Technical Contact {#sec-delegating-without-losing-contact}
 
@@ -190,9 +190,17 @@ Containment must address failure mechanisms that the original checks may not hav
 When an automated tool or external vendor presents aggregated vulnerability trends or safety scorecards without verifiable Common Vulnerabilities and Exposures (CVE) extraction queries and inspectable trace histories, the architect cannot accept them as evidence of containment. Aggregated dashboards demonstrate chart generation, not security assurance. Hardware signoff demands concrete, inspectable failure modes and verified formal containment boundaries rather than high-level category totals.
 
 
-In hardware design, containment controls can be permanent or reconfigurable. One-time-programmable e-fuses store configuration bits; supporting circuitry reads those bits to select the corresponding behavior.[^fn-efuses-c11] For example, an e-fuse array can retain memory-repair information that is loaded into redundancy registers when the chip powers on [@CostaBeerla2021EFuseRepair]. Firmware-managed chicken-bits use privileged control registers to select implemented fallback modes, such as disabling a speculative path or bounding throughput in instructions per cycle (IPC). Such a mode must remain part of the design's functional requirements through synthesis and implementation. Verification must exercise both its nominal and asserted states and check that optimization has preserved the required behavior. The following author-constructed Lighthouse teaching example distinguishes proposed control behavior from the mitigation that would still need to be demonstrated (@lst-ch11-chicken-bits). The names, behaviors, and values are illustrative rather than measured or deployed results:
+In hardware design, containment controls can be permanent or reconfigurable. One-time-programmable e-fuses store configuration bits; supporting circuitry reads those bits to select the corresponding behavior.[^fn-efuses-c11] For example, an e-fuse array can retain memory-repair information that is loaded into redundancy registers when the chip powers on [@CostaBeerla2021EFuseRepair]. Firmware-managed chicken-bits use privileged control registers to select implemented fallback modes, such as disabling a speculative path or bounding throughput in instructions per cycle (IPC). Such a mode must remain part of the design's functional requirements through synthesis and implementation. Verification must exercise both its nominal and asserted states and check that optimization has preserved the required behavior. The following author-constructed Lighthouse teaching example distinguishes proposed control behavior from the mitigation that would still need to be demonstrated (@lst-ch11-chicken-bits). The names, behaviors, and values are illustrative rather than measured or deployed results.
 
 [^fn-efuses-c11]: **One-time-programmable e-fuses and wafer sort**: Electrically programmable fuses (e-fuses) store permanent, one-time-programmable configuration data during wafer sort or package test; on-chip logic reads those bits at power-on to configure redundant memory columns or disable flawed execution units [@CostaBeerla2021EFuseRepair]. A programmed fuse selects behavior the physical hardware already implements, whereas a post-silicon microcode patch requires dedicated SRAM patch storage and reload infrastructure.
+
+A commitment record for a speculative microarchitectural optimization should state the performance cost of its proposed fallback. This teaching example represents that cost as a pre-silicon *derating penalty*:[^fn-derating-penalty-c11]
+
+$$
+\Delta_{\text{derate}} = \frac{T_{\text{derated}} - T_{\text{nominal}}}{T_{\text{nominal}}}
+$$
+
+In this constructed example, asserting `SLEW_RATE_LIMIT_NPU_BURSTS` is assumed to incur $\Delta_{\text{derate}} = +12\%$ latency on dense matrix operations. That assumed penalty defines one declared derated envelope for the example; it is not an empirical processor result. Before relying on the fallback, the commitment review must verify its behavior under the relevant failure mode and determine whether the 120\ FPS XR frame deadline and 3\ W TDP budget still hold under the declared envelope.
 
 ```{.yaml #lst-ch11-chicken-bits lst-cap="**Illustrative chicken-bit register schema.** Machine-readable register definitions and pre-silicon derating envelopes."}
 # Configuration register schema for post-silicon chicken-bit overrides
@@ -219,14 +227,6 @@ chicken_bits:
       derate_penalty: "+12% GEMM execution latency"
       verification_status: "Verified in Verilator; dynamic droop pending"
 ```
-
-A commitment record for a speculative microarchitectural optimization should state the performance cost of its proposed fallback. This teaching example represents that cost as a pre-silicon *derating penalty*:[^fn-derating-penalty-c11]
-
-$$
-\Delta_{\text{derate}} = \frac{T_{\text{derated}} - T_{\text{nominal}}}{T_{\text{nominal}}}
-$$
-
-In this constructed example, asserting `SLEW_RATE_LIMIT_NPU_BURSTS` is assumed to incur $\Delta_{\text{derate}} = +12\%$ latency on dense matrix operations. That assumed penalty defines one declared derated envelope for the example; it is not an empirical processor result. Before relying on the fallback, the commitment review must verify its behavior under the relevant failure mode and determine whether the 120\ FPS XR frame deadline and 3\ W TDP budget still hold under the declared envelope.
 
 Furthermore, introducing programmable fallback controls creates a combinatorial verification challenge. Implementing $N$ independent chicken-bits induces $2^N$ operational configurations, expanding the reachability graph beyond the capacity of flat formal verification. Fallback paths historically suffer higher bug escape rates because simulation testbenches naturally focus on nominal execution; when asserted in silicon, unexercised bypass logic can introduce catastrophic livelocks, priority inversions, or bus deadlocks. Architectural commitment must mandate hierarchical formal verification: inductive proofs of deadlock-freedom on designated safe fallback boot configurations combined with pairwise interface composition proofs across active bypasses. The review must also establish which controls can legally operate together rather than assuming that every chicken-bit can be asserted simultaneously.
 
