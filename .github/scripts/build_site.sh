@@ -97,6 +97,8 @@ if [[ -d _site/tools ]]; then
     s#href="\./data\.html"#href="../data.html"#g;
     s#href="\./start\.html"#href="../start.html"#g;
     s#href="\./readings\.html"#href="../readings.html"#g;
+    s#href="\./arxiv\.html"#href="../arxiv.html"#g;
+    s#href="\./workbench\.html"#href="../workbench.html"#g;
     s#href="\./workshops\.html"#href="../workshops.html"#g;
     s#href="\./submit\.html"#href="../submit.html"#g;
     s#href="\./submit-resource\.html"#href="../submit-resource.html"#g;
@@ -107,7 +109,7 @@ if [[ -d _site/tools ]]; then
   '
 
   if grep -R -n -E \
-    'href="\./(about|data|start|readings|workshops|submit|submit-resource|submit-workshop)\.html"' \
+    'href="\./(about|data|start|readings|arxiv|workbench|workshops|submit|submit-resource|submit-workshop)\.html"' \
     _site/tools; then
     echo "error: assembled tool pages retain root-relative navigation links" >&2
     exit 1
