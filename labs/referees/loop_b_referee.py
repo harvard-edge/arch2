@@ -453,6 +453,17 @@ endmodule
                     if "FAIL: MISMATCHES=" in out:
                         m = re.search(r"FAIL: MISMATCHES=(\d+)", out)
                         cnt = m.group(1) if m else "many"
+
+                        # Double-check if this mismatch is actually a known structural hack
+                        (
+                            an_pass,
+                            an_msg,
+                            an_hack,
+                            an_cheat,
+                        ) = self._analytical_equivalence_check(clean_code)
+                        if an_hack:
+                            return an_pass, an_msg, an_hack, an_cheat
+
                         return (
                             False,
                             f"{cnt} vector mismatches (functional or latency drift)",
