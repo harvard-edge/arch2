@@ -12,11 +12,13 @@ This workbench provides concrete, fully grounded, executable demonstrations that
 
 Every micro-loop in this workbench compares three operational paradigms on the exact same workload and technology constraints:
 
-| Operational Dimension | Level 1: AI-Assisted (Open-Loop) | Level 2: AI-Driven (Single-Layer Sweep) | Level 3: AI-Native (Cross-Layer Co-Adaptation) |
+| Operational Dimension | Level 1: AI-Assisted (Point Task) | Level 2: AI-Driven (Parameterized Sweep) | Level 3: AI-Native (Cross-Layer Co-Design) |
 | :--- | :--- | :--- | :--- |
-| **Control Model** | Human-in-the-loop prompt engineering | Automated optimizer / RL agent / sweep script | Closed-loop autonomous system engine |
-| **Search Space Scope** | Isolated point proposal (code snippet, geometry) | Parameter search within a fixed, single layer | Joint search across abstraction boundaries |
-| **Feedback Loop** | Open-loop (human inspects logs, diagnoses, re-prompts) | Closed-loop within an immutable formulation | Closed-loop governed by physical signoff evidence |
+| **Input Contract** | Human task query inside frozen architecture | Workload + PPA targets + Parameterized design space $\Theta$ | Workload intent + PPA limits + Correctness contract |
+| **Degrees of Freedom** | Localized syntax, snippet, or scalar prediction | Parameter vector $\theta \in \Theta$ (capacities, unroll knobs, coords) | Joint structural synthesis across abstraction layers |
+| **Fixed Boundary** | Entire system architecture, microarchitecture, interfaces | Structural topology, arithmetic representation, interfaces | External workload requirements and physical signoff gates |
+| **Control Model** | Human-in-the-loop prompt / tool interaction | Automated optimizer / RL agent / sweep script | Closed-loop autonomous system engine |
+| **Feedback Loop** | Open-loop (human inspects logs, diagnoses, repairs) | Closed-loop within an immutable formulation | Closed-loop governed by physical signoff evidence |
 | **Response to Bottlenecks**| Blind to downstream physics (fails silently) | Hits optimization plateau / physical wall | Reframes problem across architectural layers |
 | **Physical Signoff Rate** | **0% (0 / 4 Passed)** | **0% (0 / 4 Passed)** | **100% (4 / 4 Passed)** |
 
