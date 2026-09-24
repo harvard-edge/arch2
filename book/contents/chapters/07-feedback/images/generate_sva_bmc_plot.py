@@ -54,41 +54,50 @@ def generate_plot(output_dir: Path | None = None) -> str:
         cov_dma,
         color=COLORS["green"],
         linewidth=2.0,
-        label="DMA Ring Buffer Controller",
+        label="Shallow Control Logic (e.g., Ring Buffer)",
     )
     line2 = ax1.plot(
         depths,
         cov_barrier,
         color=COLORS["blue"],
         linewidth=2.0,
-        label="All-Reduce Barrier Synchronizer",
+        label="Hierarchical Protocol State Machine",
     )
     line3 = ax1.plot(
         depths,
         cov_arbiter,
         color=COLORS["orange"],
         linewidth=2.0,
-        label="Weight Buffer Arbiter",
+        label="Resource Arbiter with Credit Queues",
     )
     line4 = ax1.plot(
         depths,
         cov_systolic,
         color=COLORS["red"],
         linewidth=2.0,
-        label="Systolic Array Controller",
+        label="Complex Multi-Tile Controller",
     )
 
     # Highlight Formal Verification Wall (SAT Solver Timeout Region)
     ax1.axvspan(
-        45, 60, color=COLORS["red"], alpha=0.12, label="SAT Solver Timeout Region"
+        45, 60, color=COLORS["red"], alpha=0.12, label="SAT Solver Timeout Horizon"
     )
     ax1.axhline(100, color=COLORS["muted"], linestyle=":", linewidth=1.0, alpha=0.7)
 
-    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth (k)", fontsize=10.9)
-    ax1.set_ylabel("Formal State-Space Coverage (%)", fontsize=10.9)
+    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth ($k$)", fontsize=9.0)
+    ax1.set_ylabel("State-Space Coverage & Completeness", fontsize=9.0)
     ax1.set_xlim(1, 60)
-    ax1.set_ylim(0, 105)
-    ax1.tick_params(axis="both", labelsize=6.0, length=2.5, width=0.6, pad=2)
+    ax1.set_ylim(0, 108)
+    ax1.set_xticks([1, 20, 45, 58])
+    ax1.set_xticklabels(
+        ["$k=1$", "Shallow Bound", "Timeout Horizon", "Explosion Wall"], fontsize=6.8
+    )
+    ax1.set_yticks([0, 50, 100])
+    ax1.set_yticklabels(
+        ["Unverified", "Partial Invariant Bound", "Exhaustive Formal Proof"],
+        fontsize=6.8,
+    )
+    ax1.tick_params(axis="both", labelsize=6.8, length=2.5, width=0.6, pad=2)
     ax1.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
     # Secondary Axis for Solver Runtime
@@ -99,28 +108,30 @@ def generate_plot(output_dir: Path | None = None) -> str:
         color=COLORS["purple"],
         linewidth=1.6,
         linestyle="--",
-        label="SAT Solver Runtime (s)",
+        label="SAT Solver Execution Complexity",
     )
     ax2.set_yscale("log")
     ax2.set_ylabel(
-        "Solver Runtime per Property (seconds, log scale)",
-        fontsize=10.4,
+        "SAT / SMT Solver Complexity",
+        fontsize=8.8,
         color=COLORS["purple"],
     )
-    ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=5.8)
+    ax2.set_yticks([0.1, 10, 1000])
+    ax2.set_yticklabels(["Sub-second", "Tractable", "Solver Timeout"], fontsize=6.8)
+    ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=6.8)
     ax2.grid(False)
 
     # Annotations with clean background boxes in open whitespace
     ax1.annotate(
-        "100% Formal Proof\n(Full Coverage at k=32)",
-        xy=(32, 99.5),
-        xytext=(22, 88),
+        "Exhaustive Proof\n(Inductive Completeness)",
+        xy=(35, 99.5),
+        xytext=(38, 80),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["green"],
             lw=0.9,
         ),
-        fontsize=8.3,
+        fontsize=7.2,
         color=COLORS["green"],
         fontweight="bold",
         bbox=dict(
@@ -134,15 +145,15 @@ def generate_plot(output_dir: Path | None = None) -> str:
     )
 
     ax1.annotate(
-        "State Space Explosion\n(Timeout at k > 45)",
+        "State Space Explosion\n(Solver Timeout Barrier)",
         xy=(45, 62),
-        xytext=(48, 15),
+        xytext=(46, 18),
         arrowprops=dict(
             arrowstyle="->",
             color=COLORS["red"],
             lw=0.9,
         ),
-        fontsize=8.3,
+        fontsize=7.5,
         color=COLORS["red"],
         fontweight="bold",
         bbox=dict(
@@ -156,8 +167,8 @@ def generate_plot(output_dir: Path | None = None) -> str:
     )
 
     ax1.set_title(
-        "SystemVerilog Assertion Coverage vs. BMC Unroll Depth in Accelerator Units",
-        fontsize=12.0,
+        "Conceptual State-Space Coverage vs. BMC Unroll Depth in Hardware Units",
+        fontsize=9.8,
         pad=9,
         fontweight="bold",
     )

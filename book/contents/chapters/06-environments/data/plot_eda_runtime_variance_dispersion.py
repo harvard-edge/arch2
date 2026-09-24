@@ -133,7 +133,6 @@ def main():
     # PANEL A: The "Lucky Seed" Hazard (Area Deviation from Median)
     # -------------------------------------------------------------
     norm_area_data = []
-    np.random.seed(42)
 
     for i, d in enumerate(design_order):
         areas = data[d]["area"]
@@ -141,8 +140,8 @@ def main():
         pct_dev = [((a - med) / med) * 100.0 for a in areas]
         norm_area_data.append(pct_dev)
 
-        # Jittered scatter points
-        x_jitter = np.random.normal(i, 0.07, size=len(pct_dev))
+        # Deterministic scatter jitter
+        x_jitter = i + 0.12 * np.sin(np.arange(len(pct_dev)) * 2.39)
         ax1.scatter(
             x_jitter,
             pct_dev,
