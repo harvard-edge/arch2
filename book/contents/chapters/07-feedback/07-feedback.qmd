@@ -276,6 +276,89 @@ The verification loop must therefore audit the proxy itself. Evaluating its fitn
 
 The third column limits what the architect can infer from each diagnostic. Failure on one task need not make the surrogate useless for every other task, but another use still needs its own qualification. A proxy unreliable for fine ranking might support coarse screening only if its false-acceptance and false-rejection behavior is acceptable for that screen. Passing the observed checks also does not establish behavior outside their qualified scope.
 
+**Case study: scalar compression and masked write traffic.** The hazard of evaluating candidates through a reduced scalar proxy is demonstrated when a scoring metric compresses multi-dimensional behavior into a single figure of merit. In an empirical study evaluating systolic array aspect ratios under SCALE-Sim [@RajEtAl2025ScaleSimV3], both the $32 \times 32$ baseline and a candidate $16 \times 64$ array achieved an identical cycle count (13,917 cycles) and identical average compute utilization (41.2%), producing an exact tie under the declared scalar objective ($S = \text{total cycles}/\bar{U}_{\text{frac}} = 33,782.40$).
+
+However, examining secondary physical metrics omitted by the scalar proxy exposes a severe trade-off (@fig-proxy-mismatch). The $16 \times 64$ candidate reported 409,726 modeled DRAM-word writes compared to 204,863 for the $32 \times 32$ baseline, representing a 100% explosion in off-chip memory traffic. The baseline strictly dominates the candidate across these two physical dimensions: equal latency with half the memory traffic. A scalar evaluator blind to memory traffic treats the designs as equivalent, risking selecting an implementation that induces severe bus contention or thermal throttling at the system level.
+
+::: {.callout-law title="The Whac-a-Mole Regression Effect"}
+**The Caution:** Optimizing a single scalar metric can hide trade-offs in quantities the score omits. Those quantities need their own checks; improvement in one metric does not establish their acceptability or imply that they must regress.
+
+**The Hardware Trap:** Reading a tied score as interchangeable behavior hides the write-count difference. That omission becomes consequential if a later decision depends on the memory system, even though this run does not determine the physical consequence.
+
+**The Architectural Antidote:** Freeze every decision quantity that the scoped claim needs before execution, and keep modeled returns distinct from physical measurements. A future memory study must test contention, timing, and energy under its own bound configuration rather than reading those consequences out of the retained SCALE-Sim write counts (@sec-law-whac-a-mole in @sec-appendix-b-laws-paradoxes).
+:::
+
+```{python}
+#| echo: false
+#| label: fig-proxy-mismatch
+#| fig-cap: |
+#|   **Modeled traffic exposes model-local dominance masked by the scalar score.** Across retained SCALE-Sim total cycles (horizontal axis, lower is better) and modeled DRAM-word writes (vertical axis, lower is better), the 32 by 32 baseline and shared 16 by 64 candidate tie at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively. The baseline therefore dominates the candidate only across these two retained SCALE-Sim quantities. This post-run observation does not alter the frozen study outcome or establish physical traffic, contention, timing, or energy [@RajEtAl2025ScaleSimV3].
+#| out-width: "100%"
+#| fig-alt: "Scatter plot of evaluated systolic array shapes across retained SCALE-Sim total cycles and modeled DRAM-word writes, showing the 32 by 32 baseline and 16 by 64 candidate tied at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively."
+
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+import _python.plots as _ap
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+_root = Path(_ap.__file__).resolve().parents[2]
+result_path = _root / "data/studies/ai_systolic_array_study/recorded/reference/study_results.json"
+if not result_path.exists():
+    result_path = _root / "labs/examples/ai_systolic_array_study/recorded/reference/study_results.json"
+result = json.loads(result_path.read_text(encoding="utf-8"))
+arm_runs = [r for r in result["evaluations"] if r["arm"] in {"model", "conventional"}]
+
+fig, ax = plt.subplots(figsize=(5.6, 3.5))
+fig.subplots_adjust(left=0.18, right=0.95, top=0.95, bottom=0.15)
+
+ax.set_xlabel("SCALE-Sim total cycles (lower is better)", fontsize=6.5)
+ax.set_ylabel("Modeled DRAM-word writes (lower is better)", fontsize=6.5)
+
+seen = set()
+for r in arm_runs:
+    key = (r["workload_id"], r["array_rows"], r["array_cols"])
+    if key in seen:
+        continue
+    seen.add(key)
+
+    cid = r["candidate_id"]
+    cycles = r["metrics"]["total_cycles"]
+    dram_writes = r["metrics"]["dram_writes"]
+    label = cid.replace("model_baseline_", "").replace("ai_wide_", "").replace("ai_extreme_", "").replace("ai_compact_", "").replace("conventional_baseline_", "").replace("heuristic_", "")
+
+    if "32x32" in label:
+        ax.plot(cycles, dram_writes, marker="o", markersize=5, color=COLORS["blue"])
+        ax.text(cycles + 300, dram_writes - 12000, f"Baseline {label}", color=COLORS["ink"], fontsize=5.5, ha="left", va="top")
+    elif "16x64" in label:
+        ax.plot(cycles, dram_writes, marker="X", markersize=5, color=COLORS["red"])
+        ax.text(cycles + 300, dram_writes + 15000, f"Shared candidate\n{label}", color=COLORS["ink"], fontsize=5.5, ha="left", va="bottom")
+    else:
+        ax.plot(cycles, dram_writes, marker="s", markersize=4, color=COLORS["orange"], alpha=0.6)
+        ax.text(cycles + 300, dram_writes, label, color=COLORS["ink"], fontsize=5, ha="left", va="center", alpha=0.7)
+
+baseline_cycles = next(
+    r["metrics"]["total_cycles"]
+    for r in arm_runs
+    if r["workload_id"] == "original"
+    and r["array_rows"] == 32
+    and r["array_cols"] == 32
+)
+ax.axvline(x=baseline_cycles, color=COLORS["grid"], linestyle="--", linewidth=0.8, zorder=0)
+ax.set_xlim(12800, 27800)
+
+ax.tick_params(axis="both", labelsize=5.9, length=2.5, width=0.6, pad=2)
+ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(COLORS["ink"])
+ax.spines["bottom"].set_color(COLORS["ink"])
+
+plt.show()
+```
+
 ## Outcome, Mechanism, and Counterfactual Reasoning {#sec-outcome-mechanism-counterfactual}
 
 A proxy qualified for a particular use in @sec-proxy-mismatch-metric-gaming-and-calibration does not by itself explain why a candidate performs better. An observed top-line *outcome* and its proposed explanatory *mechanism* require separate judgments (@tbl-outcome-mechanism). When an automated optimizer modifies a microarchitectural feature, recording an improvement in top-line latency or throughput does not prove that the intended mechanism produced the gain. For instance, a cache resizing candidate might post improved frame rendering times not because larger static random-access memory (SRAM) capacity reduced conflict misses, but because incidental compiler instruction alignment masked a memory bus serialization stall. Establishing architectural causality requires counterfactual testing through controlled contrast experiments that hold confounding compiler, memory, and operating variables fixed while probing the isolated mechanism.
@@ -458,4 +541,4 @@ The qualified status determines the eligible next action. A counterexample can j
 - **Strict separation of infrastructure error from design failure.** License preemption, cluster timeouts, and environment crashes route to environment repair rather than recording false hardware limit violations.
 :::
 
-With returns qualified, routed, and retained, @sec-running-the-loop follows two worked records through the lifecycle, including one whose intended execution never occurred, and shows what an architect can report from each.
+With returns qualified, routed, and retained, @sec-loop-patterns-across-stack examines how these verification boundaries, execution harnesses, and learning mechanisms compose across the hardware-software stack.

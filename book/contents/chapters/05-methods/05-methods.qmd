@@ -406,7 +406,102 @@ Chip-Chat demonstrates interactive RTL generation in which language models draft
 
 Multi-agent debate supplies another organizational idea [@DuEtAl2024MultiagentDebate]. In an illustrative hardware workflow, separate agents could draft RTL, inspect lint and clock-domain crossing (CDC) reports, write tests, and propose formal properties. These distinct assignments make responsibilities visible, but they do not prevent the agents from sharing a specification error. Independence has to come from the checking mechanism: separately derived properties, reference behavior, or tool observations capable of exposing the disputed assumption. A second agent's agreement alone does not establish it.
 
-Generation, tree search, and agent coordination provide ways to construct and revise candidates. The checks determine which artifacts satisfy the required properties. Even if construction reliably produces valid candidates, the study may have too many alternatives to evaluate. It then needs a search policy that directs where to allocate the remaining tool budget.
+**Generative failure modes: prompt disconnects and unverified rationales.** When generative models propose hardware configurations, their textual explanations often sound plausible while masking two distinct architectural failure modes: an objective-prompt disconnect and a refuted causal rationale.
+
+The first failure mode occurs when prompt phrasing fails to express the downstream evaluation criteria. In a controlled systolic array study evaluating alternative processing element (PE) geometries for matrix multiplication under equal simulator budgets, an LLM was prompted to propose rectangular array dimensions under an overall budget ceiling of 1,024 PEs. Without an explicit multi-objective Pareto formulation that rewarded area efficiency, the model generated an area-saving candidate of $32 \times 16$ (512 PEs), halving the available compute capacity. Because the downstream scoring metric ($S = \text{total cycles}/\bar{U}_{\text{frac}}$) evaluated execution cycles and utilization without awarding credit for reduced silicon footprint, the candidate incurred 25,277 cycles and ranked dead last (@fig-ai-study-result a). When generative constructors operate without Pareto-aware objective alignment, they risk emitting configurations that are actively penalized by downstream evaluators.
+
+The second failure mode is causal misattribution. In the same study, the model accompanied its $16 \times 64$ proposal with a confident microarchitectural narrative: it claimed that a wide array outperformed a tall $64 \times 16$ array because the general matrix multiply (GEMM) matrix dimensions ($M \times K \times N$) favored wider spatial accumulation, hypothesizing that transposing the matrix dimensions ($M$ and $N$ swapped) would invert relative performance. An empirical mechanism probe was dispatched to test this directional claim directly by running both geometries on the transposed workload (@fig-ai-study-result b). The probe refuted the model's hypothesis: swapping $M$ and $N$ narrowed the performance delta slightly (23.5k versus 25.5k cycles) but failed to invert the relative ranking. Rather than demonstrating an architectural inversion, the probe showed that changing the aspect ratio altered multiple spatial folding and memory-traffic factors under the simulator's stationary mapping.
+
+```{python}
+#| echo: false
+#| label: fig-ai-study-result
+#| fig-cap: |
+#|   **Separating candidate scoring from directional mechanism validation.** (a) Comparison of local architectural scores (thousands; lower is better) across model-proposed (M, blue) and fixed-heuristic (H, green) arms under equal four-event simulation budgets, where the 32 by 32 baseline and 16 by 64 shape tie at 33.8k. (b) Tracking of the mechanism probe, showing that the 16 by 64 array remains ahead of the 64 by 16 shape across both original and transposed ($M$ and $N$ swapped) workloads (23.5k vs 25.5k), directly refuting the predicted performance reversal. Values derive from retained SCALE-Sim simulator logs [@RajEtAl2025ScaleSimV3] rather than physical silicon measurements.
+#| out-width: "100%"
+#| fig-alt: "Two-panel chart of the study result. (a) Horizontal bar chart of candidate scores with the 32 by 32 baseline and 16 by 64 tied at 33.8k in both model and heuristic arms. (b) Paired-line plot of the mechanism probe with 16 by 64 outperforming 64 by 16 across original and transposed workloads, refuting the predicted reversal."
+
+import json
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import _python.plots as _ap
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+_root = Path(_ap.__file__).resolve().parents[2]
+result_path = _root / "data/studies/ai_systolic_array_study/recorded/reference/study_results.json"
+if not result_path.exists():
+    result_path = _root / "labs/examples/ai_systolic_array_study/recorded/reference/study_results.json"
+result = json.loads(result_path.read_text(encoding="utf-8"))
+
+arm_runs = [r for r in result["evaluations"] if r["arm"] in {"model", "conventional"}]
+probe_runs = [r for r in result["evaluations"] if r["arm"] == "mechanism_probe"]
+
+shape_labels = {
+    "model_baseline_32x32": "M  32×32 baseline",
+    "ai_wide_16x64": "M  16×64",
+    "ai_extreme_8x128": "M  8×128",
+    "ai_compact_32x16": "M  32×16",
+    "conventional_baseline_32x32": "H  32×32 baseline",
+    "heuristic_16x64": "H  16×64",
+    "heuristic_8x128": "H  8×128",
+    "heuristic_64x16": "H  64×16",
+}
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(5.6, 2.65), gridspec_kw={"width_ratios": [1.35, 1]})
+fig.subplots_adjust(left=0.22, right=0.985, top=0.82, bottom=0.22, wspace=0.42)
+
+labels = [shape_labels[r["candidate_id"]] for r in arm_runs]
+scores = [r["decision_score"] / 1000 for r in arm_runs]
+colors = [COLORS["blue"] if r["arm"] == "model" else COLORS["green"] for r in arm_runs]
+y = list(range(len(arm_runs)))
+ax1.barh(y, scores, color=colors, height=0.66)
+ax1.set_yticks(y, labels)
+ax1.invert_yaxis()
+ax1.set_xlabel("local score (thousands; lower is better)\nM = model proposals; H = fixed heuristic", fontsize=6.5)
+ax1.set_title("Equal simulator-event allocation", fontsize=7, pad=5)
+for yi, score in zip(y, scores):
+    ax1.text(score + 0.8, yi, f"{score:.1f}", va="center", fontsize=5.5, color=COLORS["ink"])
+ax1.set_xlim(0, max(scores) * 1.18)
+
+probe = {}
+for run in probe_runs:
+    workload = "transposed" if "transposed" in run["candidate_id"] else "original"
+    shape = f'{run["array_rows"]}×{run["array_cols"]}'
+    probe[(shape, workload)] = run["decision_score"] / 1000
+
+x = [0, 1]
+for shape, color, marker in [("16×64", COLORS["blue"], "o"), ("64×16", COLORS["orange"], "s")]:
+    values = [probe[(shape, "original")], probe[(shape, "transposed")]]
+    ax2.plot(x, values, marker=marker, markersize=4.2, linewidth=1.5, color=color, label=shape)
+    for xi, value in zip(x, values):
+        # Place 64x16 above marker, and 16x64 below marker at x=1 to avoid collision
+        y_offset = 1.3 if (shape == "64×16" or xi == 0) else -2.2
+        va_align = "bottom" if y_offset > 0 else "top"
+        ax2.text(xi, value + y_offset, f"{value:.1f}", ha="center", va=va_align, fontsize=5.5, color=color)
+
+ax2.set_xticks(x, ["original", "M/N swapped"])
+ax2.get_xticklabels()[1].set_ha("right")
+ax2.set_ylabel("local score (thousands)", fontsize=6.5)
+ax2.set_title("Mechanism probe: no reversal", fontsize=7, pad=5)
+ax2.set_ylim(18, 61)
+ax2.legend(frameon=False, fontsize=6, loc="upper right")
+
+for ax in (ax1, ax2):
+    ax.tick_params(axis="both", labelsize=5.9, length=2.5, width=0.6, pad=2)
+    ax.grid(axis="x" if ax is ax1 else "y", color=COLORS["grid"], linewidth=0.55, zorder=0)
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color(COLORS["ink"])
+    ax.spines["bottom"].set_color(COLORS["ink"])
+
+plt.show()
+```
+
+The tied scoring between the baseline $32 \times 32$ and $16 \times 64$ candidates (at 33.8k) demonstrates that an agentic tie under an evaluation score must never be accepted as validation of the model's directional explanation. The proposal ranking and the mechanism probe answer different questions; an architectural loop must isolate causal claims with targeted diagnostic checks rather than relying on generative rationale.
+
+Generation, tree search, and agent coordination provide ways to construct and revise candidates. The checks determine which artifacts satisfy the required properties and whether proposed mechanisms hold up under empirical testing. Even if construction reliably produces valid candidates, the study may have too many alternatives to evaluate. It then needs a search policy that directs where to allocate the remaining tool budget.
 
 ## Search Tactics and Budget Allocation {#sec-search-tactics-budget-allocation}
 
@@ -840,7 +935,7 @@ The proposed limits in @tbl-lighthouse-approach-decision make that comparison sp
 
 The budget row deserves particular attention. Comparing three capacities leaves little room within four runs for failures, repeated baselines, or additional workload observations. A run count alone does not establish the uncertainty of a frame-time difference. If the planned observations cannot distinguish a candidate's improvement from the uncertainty in the comparison, the study must remain inconclusive or obtain a revised budget. Exhausting the budget does not make the lowest observed frame time a reliable winner.
 
-This is the fixed design path introduced in @sec-architecture-20-ontology. Results select among supplied capacities rather than generate a revised organization. That scope is sufficient for the question being asked. The later worked study examines the physical definitions and tool setup still needed to execute this plan (@sec-running-the-loop).
+This is the fixed design path introduced in @sec-architecture-20-ontology. Results select among supplied capacities rather than generate a revised organization. That scope is sufficient for the question being asked. Section @sec-architecture-environments-tool-interfaces examines the physical definitions and tool setup needed to execute such plans, while @sec-what-architect-owns explains why halting before dispatch preserves engineering integrity when prerequisites remain incomplete.
 
 Total cost also extends beyond the evaluations themselves (@tbl-method-role-limits). Configuring gem5, establishing the cache and power models, obtaining applicable licenses, and reviewing results all consume resources. Adding a surrogate would require data collection and qualification on top of that work. For the current three-candidate comparison, the plan identifies no expected saving that warrants those additions. Across broader studies, estimating when such additions will repay their cost remains an open methods question.
 

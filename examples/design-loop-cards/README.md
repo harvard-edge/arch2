@@ -65,5 +65,5 @@ the [simulator-backed Architecture 2.0 labs](https://github.com/harvard-edge/arc
 to generate evidence, inspect raw outputs, preserve failed runs and rejected
 alternatives, and submit a replayable run archive for review.
 
-The synthetic fixture, simulator-backed lab, and Chapter 8 study have different
-jobs. Neither synthetic fixture replaces the empirical Chapter 8 study.
+The synthetic fixture, simulator-backed lab, and executed systolic array study have different
+jobs. Neither synthetic fixture replaces the empirical executed systolic array study.

@@ -1137,6 +1137,8 @@ def render(chapter: Chapter) -> str:
 def main() -> None:
     for chapter in CHAPTERS:
         target = chapter.target
+        if not target.parent.exists():
+            continue
         if target.exists() and any(
             marker in target.read_text(encoding="utf-8")
             for marker in ("<<<<<<<", "=======", ">>>>>>>")
