@@ -134,14 +134,17 @@ def test_start_path_keeps_fixtures_labs_and_lighthouse_distinct() -> None:
     assert "Practice with executed evidence" in start
     assert "https://github.com/harvard-edge/arch2/tree/main/labs" in start
     assert "does not replace empirical lab work" in start
-    assert "/book/contents/chapters/08-loop/" in start
+    assert (
+        "https://github.com/harvard-edge/arch2/tree/main/labs/01-microarchitectural-sweep"
+        in start
+    )
     assert "None substitutes for another." in start
 
     examples_readme = (VALID_CARD_DIR / "README.md").read_text(encoding="utf-8")
     assert "synthetic packets teach the schema" in examples_readme
     assert "https://github.com/harvard-edge/arch2/tree/main/labs" in examples_readme
     assert "do not replace empirical lab work" in examples_readme
-    assert "Chapter 8 study" in examples_readme
+    assert "executed systolic array study" in examples_readme
 
 
 def test_start_path_separates_profiles_from_evidence_and_commitment() -> None:

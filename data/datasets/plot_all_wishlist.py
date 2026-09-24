@@ -28,7 +28,10 @@ CHAPTER_DIR = {
 
 
 def chapter_png(n):
-    d = REPO_ROOT / "book" / "contents" / "chapters" / CHAPTER_DIR[n] / "images"
+    if n == 8:
+        d = REPO_ROOT / "data" / "studies" / "archived_ch08" / "images"
+    else:
+        d = REPO_ROOT / "book" / "contents" / "chapters" / CHAPTER_DIR[n] / "images"
     d.mkdir(parents=True, exist_ok=True)
     return d / f"plot_ch{n}.png"
 
