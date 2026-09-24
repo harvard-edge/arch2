@@ -1,182 +1,335 @@
 """
-Physical Signoff Verification Funnel Plot Script (Chapter 7)
+Architectural Workflow: Multi-Fidelity Synthesis & Verification Signoff Funnel (Chapter 7)
+-----------------------------------------------------------------------------------------
+Visualizes the hierarchical multi-fidelity screening pipeline that protects scarce
+downstream compute and commercial EDA licenses during automated architectural search.
 
-CONSTRUCTED ILLUSTRATION. NOT A MEASUREMENT.
+Key Architectural Elements:
+1. Five progressive screening tiers with increasing physical fidelity and execution latency.
+2. Two closed-loop recovery pathways:
+   - Early structural/functional rejections route back to Generative Agent Revision.
+   - Late physical/timing near-misses route to Localized ECO Optimization.
+3. Clean architectural taxonomy with ZERO synthetic numbers or invented percentages.
 
-The per-stage pass rates in this figure are constructed to make compounding
-attrition inspectable. They are not measured, and they are not calibrated to
-any paper. The published caption says so to the reader, and this header must
-agree with it.
-
-This docstring previously attributed each of the five rates to a specific named
-paper, including a Gate 5 rate said to come from an OpenROAD 7nm ASAP7 run.
-Nothing in the dataset records which paper any rate came from, no derivation
-from any of those papers is retained, and the caption tells the reader the
-rates are invented. The two statements could not both be true, so the
-attribution is removed rather than the caption.
-
-VerilogEval and RTLLM report syntax and functional failures under their
-respective evaluation protocols. They do not establish physical-signoff yields
-or support the constructed rates in this figure.
-
-Dataset: book/contents/chapters/07-feedback/data/fig-synthesis-verification-funnel.csv
-Output Figure:   book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.svg
+Exports SVG, PDF, and 300 DPI PNG to:
+- book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.{png,svg,pdf}
+- book/images/fig-synthesis-verification-funnel.{png,svg,pdf}
 """
 
-import csv
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.patches as patches
 
-# Connect parent repo path to import book._python.plots
 REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import (
-    COLORS,
-    apply_style,
-    clean_spines,
-    save_figure_bundle,
-)
+from book._python.plots import COLORS, apply_style, save_figure_bundle
 
 apply_style()
 
 
 def main():
     chapter_dir = Path(__file__).resolve().parents[1]
-    csv_file = chapter_dir / "data" / "fig-synthesis-verification-funnel.csv"
     out_plot_ch = chapter_dir / "images" / "fig-synthesis-verification-funnel"
     out_plot_global = (
         REPO_ROOT / "book" / "images" / "fig-synthesis-verification-funnel"
     )
 
-    stages = []
-    candidates = []
-    stage_pass_rates = []
-    cumulative_yield = []
+    fig, ax = plt.subplots(figsize=(8.4, 4.6))
+    fig.subplots_adjust(left=0.04, right=0.96, top=0.95, bottom=0.06)
 
-    with open(csv_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(l for l in f if not l.startswith("#"))
-        for row in reader:
-            stages.append(f"Stage {row['Gate']}:\n{row['Stage'].split(' (')[0]}")
-            candidates.append(int(row["PassingCandidates"]))
-            stage_pass_rates.append(float(row["PassRatePercentage"]))
-            cumulative_yield.append(float(row["CumulativeYieldPercentage"]))
+    ax.set_xlim(0, 100)
+    ax.set_ylim(-6, 104)
+    ax.axis("off")
 
-    all_stages = ["Initial\nProposals"] + [f"Stage {i+1}" for i in range(5)]
-    all_counts = [100000] + candidates
-    all_yield = [100.0] + cumulative_yield
-
-    fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.25, 1.0]}
+    # Title
+    ax.text(
+        50,
+        101,
+        "Multi-Fidelity Verification & Physical Signoff Funnel",
+        ha="center",
+        va="center",
+        fontsize=9.2,
+        fontweight="bold",
+        color=COLORS["ink"],
     )
-    fig.subplots_adjust(wspace=0.42, bottom=0.18, top=0.90)
 
-    # --- Panel A: Candidate Attrition (Log Scale Bar Chart + Yield Line) ---
-    x = np.arange(len(all_stages))
-    colors_bars = [
-        COLORS["ink"],
-        COLORS["workload"],
-        COLORS["evidence"],
-        COLORS["methods"],
-        COLORS["designspace"],
-        COLORS["constraints"],
+    # 5 Tiers Data
+    tiers = [
+        {
+            "name": "Stage 1: Syntactic & AST Parsing",
+            "tools": "Tree-Sitter / Verilator / Slang",
+            "checks": "Syntax valid, elaborated module hierarchy, port types",
+            "latency": "Milliseconds (free / open-source)",
+            "y": 78,
+            "width": 64,
+            "color": COLORS["blue"],
+        },
+        {
+            "name": "Stage 2: Interface Schema & Interconnect",
+            "tools": "Static Schema Linters / Protocol Checkers",
+            "checks": "AXI / TLM handshakes, port widths, clock domain tags",
+            "latency": "Seconds (low compute overhead)",
+            "y": 62,
+            "width": 54,
+            "color": COLORS["green"],
+        },
+        {
+            "name": "Stage 3: Functional & Assertion Verification",
+            "tools": "SystemVerilog Assertions (SVA) / BMC / Sim",
+            "checks": "Temporal invariants, state-machine deadlocks, coverage",
+            "latency": "Minutes (simulation pool / SAT solver)",
+            "y": 46,
+            "width": 44,
+            "color": COLORS["orange"],
+        },
+        {
+            "name": "Stage 4: Static Timing Analysis (STA)",
+            "tools": "OpenSTA / Synopsys PrimeTime / Cadence Tempus",
+            "checks": "Multi-corner setup & hold slack, WNS/TNS, max transition",
+            "latency": "Tens of minutes (licensed STA seat)",
+            "y": 30,
+            "width": 34,
+            "color": COLORS["purple"],
+        },
+        {
+            "name": "Stage 5: Physical DRC / LVS Signoff",
+            "tools": "OpenROAD / Cadence Innovus / Synopsys ICC2",
+            "checks": "Design rule clean (DRC), layout vs. schematic (LVS)",
+            "latency": "Hours to days (full signoff toolchain)",
+            "y": 14,
+            "width": 24,
+            "color": COLORS["red"],
+        },
     ]
 
-    bars = ax1.bar(
-        x,
-        all_counts,
-        bottom=1,
-        color=colors_bars,
-        edgecolor=COLORS["note_edge"],
-        linewidth=0.6,
-        width=0.52,
-        zorder=3,
-    )
-    ax1.set_yscale("log")
-    ax1.set_ylim(1, 400000)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(all_stages, fontsize=9.3, color=COLORS["ink"])
-    ax1.set_ylabel(
-        "Passing Candidate Count (Log Scale)", fontsize=10.9, color=COLORS["ink"]
-    )
-    ax1.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
-    clean_spines(ax1, keep=("bottom", "left"))
+    # Draw funneled tiers
+    for i, t in enumerate(tiers):
+        y = t["y"]
+        w = t["width"]
+        x = 42 - w / 2
 
-    # Secondary Axis for Cumulative Yield Line
-    ax1_sub = ax1.twinx()
-    ax1_sub.plot(
-        x,
-        all_yield,
-        color=COLORS["constraints_ink"],
-        marker="o",
-        linewidth=1.5,
-        markersize=3.5,
-        zorder=5,
-    )
-    ax1_sub.set_yscale("log")
-    ax1_sub.set_ylim(0.01, 200)
-    ax1_sub.set_ylabel(
-        "Cumulative Yield (% Log Scale)",
-        fontsize=10.4,
-        color=COLORS["constraints_ink"],
-        labelpad=8,
-    )
-    ax1_sub.tick_params(axis="y", colors=COLORS["constraints_ink"], labelsize=5.8)
-    clean_spines(ax1_sub, keep=("right",))
+        # Main tier box
+        rect = patches.FancyBboxPatch(
+            (x, y - 5.5),
+            w,
+            11,
+            boxstyle="round,pad=0.6,rounding_size=1.2",
+            facecolor="white",
+            edgecolor=t["color"],
+            linewidth=1.6,
+            zorder=3,
+        )
+        ax.add_patch(rect)
 
-    for bar, count in zip(bars, all_counts):
-        ax1.text(
-            bar.get_x() + bar.get_width() / 2,
-            count * 1.45,
-            f"{count:,}",
-            ha="center",
-            va="bottom",
-            fontsize=8.0,
+        # Stage header & description
+        ax.text(
+            x + 1.8,
+            y + 2.2,
+            t["name"],
+            ha="left",
+            va="center",
+            fontsize=6.8,
             fontweight="bold",
+            color=t["color"],
+            zorder=4,
+        )
+        ax.text(
+            x + 1.8,
+            y - 0.4,
+            f"Checks: {t['checks']}",
+            ha="left",
+            va="center",
+            fontsize=5.2,
             color=COLORS["ink"],
+            zorder=4,
+        )
+        ax.text(
+            x + 1.8,
+            y - 2.8,
+            f"Engines: {t['tools']}  •  Cost: {t['latency']}",
+            ha="left",
+            va="center",
+            fontsize=4.7,
+            fontstyle="italic",
+            color=COLORS["muted"],
+            zorder=4,
         )
 
-    # --- Panel B: Stage-Specific Conditional Pass Rates ---
-    x_stages = np.arange(len(stages))
-    bars2 = ax2.bar(
-        x_stages,
-        stage_pass_rates,
-        color=colors_bars[1:],
-        edgecolor=COLORS["note_edge"],
-        linewidth=0.6,
-        width=0.52,
-        zorder=3,
-    )
+        # Connecting downward funnel arrow to next stage
+        if i < len(tiers) - 1:
+            next_y = tiers[i + 1]["y"]
+            ax.annotate(
+                "",
+                xy=(42, next_y + 5.5),
+                xytext=(42, y - 5.5),
+                arrowprops=dict(
+                    arrowstyle="->",
+                    color=COLORS["ink"],
+                    lw=1.2,
+                    shrinkA=1,
+                    shrinkB=1,
+                ),
+                zorder=2,
+            )
 
-    ax2.set_ylim(0, 105)
-    ax2.set_xticks(x_stages)
-    ax2.set_xticklabels(
-        [f"Stage {i+1}" for i in range(5)], fontsize=9.3, color=COLORS["ink"]
-    )
-    ax2.set_ylabel(
-        "Conditional Stage Pass Rate (%)", fontsize=10.9, color=COLORS["ink"]
-    )
-    ax2.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
-    clean_spines(ax2, keep=("bottom", "left"))
-
-    for bar, rate in zip(bars2, stage_pass_rates):
-        ax2.text(
-            bar.get_x() + bar.get_width() / 2,
-            rate + 2.5,
-            f"{rate:.1f}%",
-            ha="center",
-            va="bottom",
-            fontsize=8.8,
-            fontweight="bold",
+    # Top Input: Generative Candidate Proposals
+    ax.annotate(
+        "",
+        xy=(42, 83.5),
+        xytext=(42, 91.5),
+        arrowprops=dict(
+            arrowstyle="->",
             color=COLORS["ink"],
-        )
+            lw=1.4,
+            shrinkA=1,
+            shrinkB=1,
+        ),
+        zorder=2,
+    )
+    ax.text(
+        42,
+        92.8,
+        "Generative Proposals (Candidate Pool $N_0$)",
+        ha="center",
+        va="center",
+        fontsize=6.5,
+        fontweight="bold",
+        color=COLORS["ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="#F6F8FA",
+            edgecolor=COLORS["grid"],
+            lw=0.8,
+        ),
+    )
+
+    # Bottom Output: Tapeout-Ready Silicon
+    ax.annotate(
+        "",
+        xy=(42, 0.5),
+        xytext=(42, 8.5),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["green"],
+            lw=1.5,
+            shrinkA=1,
+            shrinkB=1,
+        ),
+        zorder=2,
+    )
+    ax.text(
+        42,
+        -1.2,
+        "Tapeout-Qualified Clean Implementation (GDSII / OASIS)",
+        ha="center",
+        va="center",
+        fontsize=6.5,
+        fontweight="bold",
+        color=COLORS["green"],
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="#E7F5EC",
+            edgecolor=COLORS["green"],
+            lw=0.8,
+        ),
+    )
+
+    # Left Column: Invalidation & Generative Revision Feedback Loop
+    ax.annotate(
+        "",
+        xy=(8, 88),
+        xytext=(8, 46),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["red"],
+            lw=1.2,
+            linestyle="--",
+        ),
+    )
+    # Lines from stages 1, 2, 3 to rejection line
+    for st_idx in [0, 1, 2]:
+        sy = tiers[st_idx]["y"]
+        sx = 42 - tiers[st_idx]["width"] / 2
+        ax.plot([sx, 8], [sy, sy], color=COLORS["red"], lw=1.0, linestyle="--")
+
+    # Connect top of rejection line to Generative Proposals
+    ax.plot([8, 22], [88, 88], color=COLORS["red"], lw=1.0, linestyle="--")
+    ax.text(
+        8,
+        92,
+        "Structural & Functional Failures\nRoute to Generative Prompt / AST Repair",
+        ha="center",
+        va="bottom",
+        fontsize=5.2,
+        fontweight="bold",
+        color=COLORS["red"],
+    )
+
+    # Right Column: Near-Miss Physical ECO Loop & Signoff Economics
+    ax.annotate(
+        "",
+        xy=(76, 36),
+        xytext=(76, 14),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["purple"],
+            lw=1.2,
+            linestyle="-.",
+        ),
+    )
+    ax.plot([54, 76], [14, 14], color=COLORS["purple"], lw=1.0, linestyle="-.")
+    ax.plot([59, 76], [30, 30], color=COLORS["purple"], lw=1.0, linestyle="-.")
+    ax.text(
+        76,
+        40,
+        "Near-Miss Timing & DRC Failures\nRoute to Localized ECO Optimization\n(Buffer insertion, gate sizing, wire widening)",
+        ha="left",
+        va="center",
+        fontsize=5.2,
+        fontweight="bold",
+        color=COLORS["purple"],
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="#FBF0DE",
+            edgecolor=COLORS["orange"],
+            lw=0.6,
+        ),
+    )
+
+    # Right side architectural principles card
+    ax.text(
+        76,
+        72,
+        "Signoff Funnel Economics:\n"
+        "• Hierarchical Multi-Fidelity:\n"
+        "  Fast AST & schema checks prune non-viable\n"
+        "  candidates before licensed tools run.\n"
+        "• License Capacity Protection:\n"
+        "  Commercial STA & PnR tools are strictly\n"
+        "  rate-limited by license pool seats.\n"
+        "• Separation of Concerns:\n"
+        "  Architectural search proposes candidate RTL;\n"
+        "  ECO closures repair physical margins without\n"
+        "  restarting the generative loop.",
+        ha="left",
+        va="center",
+        fontsize=5.0,
+        color=COLORS["ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.4",
+            facecolor="#F6F8FA",
+            edgecolor=COLORS["grid"],
+            lw=0.7,
+        ),
+    )
 
     save_figure_bundle(fig, out_plot_ch)
     save_figure_bundle(fig, out_plot_global)
-    print(f"Verification Funnel plot saved to '{out_plot_ch}' and '{out_plot_global}'")
+    print(f"Generated clean workflow funnel: {out_plot_ch}")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
