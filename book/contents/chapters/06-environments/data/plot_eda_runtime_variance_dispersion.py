@@ -210,8 +210,8 @@ def main():
     )
 
     ax1.set_title(
-        "A: Area QoR Dispersion Across Logic Synthesis Pass Schedules",
-        fontsize=11.2,
+        "(a) Logic Synthesis Pass Dispersion",
+        fontsize=8.0,
         fontweight="bold",
         pad=6,
         color=COLORS["ink"],
@@ -300,8 +300,8 @@ def main():
     )
 
     ax2.set_title(
-        "B: Tool Resource Footprint & Execution Jitter (150 Runs)",
-        fontsize=11.2,
+        "(b) Host Resource Footprint and Jitter",
+        fontsize=8.0,
         fontweight="bold",
         pad=6,
         color=COLORS["ink"],
