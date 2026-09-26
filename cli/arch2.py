@@ -6907,6 +6907,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"Advanced\ Matrix\ Extensions",
         True,
     ),
+    "ALU": (
+        "arithmetic logic unit",
+        False,
+        "an",
+        "hardware",
+        "A combinational digital circuit within a processor that performs arithmetic and bitwise logic operations on integer binary numbers.",
+        r"arithmetic\ logic\ unit",
+        True,
+    ),
     "ASIC": (
         "application-specific integrated circuit",
         False,
@@ -6996,6 +7005,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         "A reconfigurable integrated circuit containing programmable logic blocks and routing channels configured post-fabrication.",
         r"field-programmable gate array",
         False,
+    ),
+    "FMA": (
+        "fused multiply-accumulate",
+        False,
+        "an",
+        "hardware",
+        "A hardware floating-point execution unit that computes the product of two numbers and adds an accumulator in a single step with a single rounding stage.",
+        r"fused\ multiply\-accumulate",
+        True,
     ),
     "GDDR5": (
         "Graphics Double Data Rate 5",

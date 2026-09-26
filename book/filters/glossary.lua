@@ -5,6 +5,7 @@
 local acronyms = {
   ["ABI"] = "application binary interface: The binary-level conventions that allow compiled software components to work together, including calling conventions, data layout, and object-file interfaces.",
   ["AIG"] = "and-inverter graph: A directed acyclic graph representation of a combinational logic circuit composed entirely of two-input AND nodes and logical inverters.",
+  ["ALU"] = "arithmetic logic unit: A combinational digital circuit within a processor that performs arithmetic and bitwise logic operations on integer binary numbers.",
   ["AMBA"] = "Advanced Microcontroller Bus Architecture: An open-standard on-chip interconnect specification governing the connection and management of functional blocks in SoC designs.",
   ["AMX"] = "Advanced Matrix Extensions: A proprietary matrix acceleration instruction set extension developed by Intel for high-throughput tensor arithmetic.",
   ["API"] = "application programming interface: A set of defined rules and protocols that allows different software applications to communicate with each other.",
@@ -46,6 +47,7 @@ local acronyms = {
   ["FEC"] = "formal equivalence checking: A mathematical verification technique that checks whether two design models satisfy a specified behavioral equivalence relation under stated assumptions.",
   ["FIFO"] = "first-in, first-out: A queue data structure or buffer hardware where the earliest stored data elements are retrieved first.",
   ["FIRRTL"] = "Flexible Intermediate Representation for RTL: An intermediate representation designed for hardware digital design and compiler passes in the Chisel and CIRCT ecosystems.",
+  ["FMA"] = "fused multiply-accumulate: A hardware floating-point execution unit that computes the product of two numbers and adds an accumulator in a single step with a single rounding stage.",
   ["FP8"] = "8-bit floating-point: A family of low-precision floating-point formats, including E4M3 and E5M2, used for deep learning training and inference.",
   ["FPGA"] = "field-programmable gate array: A reconfigurable integrated circuit containing programmable logic blocks and routing channels configured post-fabrication.",
   ["FPS"] = "frames per second: A unit of frame rate expressing how many frames are produced, processed, or displayed per second.",
