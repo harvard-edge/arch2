@@ -359,6 +359,9 @@ class DevelopmentalAuditor:
                         "build",
                         "earlier",
                         "before",
+                        "when",
+                        "with ",
+                        "as ",
                     ]
                 )
                 if not has_bridge and not any(
@@ -480,10 +483,14 @@ class DevelopmentalAuditor:
                     )
 
         # 6. Mechanical Prose Style & Anti-Hype
+        in_code_block = False
         for lineno_offset, line in enumerate(section.raw_lines):
             line_num = section.start_line + lineno_offset
-            # Skip code blocks
-            if line.strip().startswith("```") or line.strip().startswith("#|"):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block or stripped.startswith("#|"):
                 continue
 
             # Em-dash check (exempt blockquote epigraph signature attribution lines)
@@ -498,9 +505,14 @@ class DevelopmentalAuditor:
                     )
                 )
 
+            # Clean line of cross-references, code, and links before scanning
+            clean_prose = re.sub(r"@(?:fig|sec|tbl|eq)-[a-zA-Z0-9_-]+", "", line)
+            clean_prose = re.sub(r"`[^`]+`", "", clean_prose)
+            clean_prose = re.sub(r"\[.*?\]\(.*?\)", "", clean_prose)
+
             # Forbidden hype words
             for hw_pattern in FORBIDDEN_HYPE_WORDS:
-                match = re.search(hw_pattern, line, re.IGNORECASE)
+                match = re.search(hw_pattern, clean_prose, re.IGNORECASE)
                 if match:
                     findings.append(
                         AuditFinding(
