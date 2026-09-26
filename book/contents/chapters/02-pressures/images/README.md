@@ -19,6 +19,9 @@ Active hand-authored figures:
 Generated figures with scripts (moved from chapters 7 and 9; datasets in
 `data/datasets/`):
 
+- `fig-microprocessor-trends`: 50-year microprocessor scaling joined with the
+  14-year AI accelerator frontier; `generate_fig_microprocessor_trends.py` reads
+  `chapter1-micro-trend.csv` and `chapter2-ai-accelerator-scaling-frontier.csv`.
 - `fig-ch09-logca-phase-diagram`: LogCA break-even frontiers across interconnect
   regimes; `generate_ch09_logca_phase_diagram.py` reads
   `chapter9-interconnect-logca-specs.csv`.
@@ -32,8 +35,6 @@ Generated figures with scripts (moved from chapters 7 and 9; datasets in
 
 Executable Quarto figures in the chapter:
 
-- `fig-microprocessor-trends`: frontier microprocessor trends and the end of
-  frequency scaling.
 - `fig-ch02-accelerator-scaling-frontier`: 14-year AI accelerator scaling vectors,
   memory bandwidth, TDP, and arithmetic ratio collapse (2012-2026).
 - `fig-accelerator-landscape`: the public AI-accelerator power/performance
