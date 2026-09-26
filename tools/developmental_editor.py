@@ -362,6 +362,9 @@ class DevelopmentalAuditor:
                         "when",
                         "with ",
                         "as ",
+                        "because",
+                        "since",
+                        "given ",
                     ]
                 )
                 if not has_bridge and not any(
@@ -557,47 +560,77 @@ class DevelopmentalAuditor:
 
     @staticmethod
     def _get_first_prose_paragraph(lines: list[str]) -> Optional[str]:
+        in_code = False
         for line in lines[1:]:  # skip heading line
             s = line.strip()
+            if s.startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
             if (
                 s
                 and not s.startswith("#")
                 and not s.startswith(":::")
-                and not s.startswith("```")
                 and not s.startswith("!")
                 and not s.startswith("|")
+                and not s.startswith("\\")
+                and not s.startswith("$$")
+                and not s.startswith("$")
+                and not s.startswith("[^")
             ):
                 return s
         return None
 
     @staticmethod
     def _get_last_prose_paragraph(lines: list[str]) -> Optional[str]:
-        for line in reversed(lines):
+        code_mask = []
+        c = False
+        for l in lines:
+            if l.strip().startswith("```"):
+                c = not c
+                code_mask.append(True)
+            else:
+                code_mask.append(c)
+
+        for line, is_code in zip(reversed(lines), reversed(code_mask)):
+            if is_code:
+                continue
             s = line.strip()
             if (
                 s
                 and not s.startswith("#")
                 and not s.startswith(":::")
-                and not s.startswith("```")
                 and not s.startswith("!")
                 and not s.startswith("|")
                 and not s.startswith("[^")
+                and not s.startswith("\\")
+                and not s.startswith("$$")
+                and not s.startswith("$")
             ):
                 return s
         return None
 
     @staticmethod
     def _get_next_prose_paragraph(lines: list[str]) -> Optional[str]:
+        in_code = False
         for line in lines:
             s = line.strip()
+            if s.startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
             if (
                 s
                 and not s.startswith("#")
                 and not s.startswith(":::")
-                and not s.startswith("```")
                 and not s.startswith("!")
                 and not s.startswith("|")
                 and not s.startswith("[^")
+                and not s.startswith("\\")
+                and not s.startswith("$$")
+                and not s.startswith("$")
             ):
                 return s
         return None
