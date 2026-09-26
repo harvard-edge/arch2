@@ -11053,6 +11053,45 @@ def loop_run(
     )
 
 
+@loop_app.command("section")
+def loop_section(
+    action: str = typer.Argument(
+        "guide", help="Action: guide, list, audit, packet, inspect, apply."
+    ),
+    chapter: str
+    | None = typer.Option(
+        None, "--chapter", "-c", help="Chapter number or slug (e.g. 02, pressures)."
+    ),
+    sec: int
+    | None = typer.Option(
+        None, "--sec", "-s", help="Section index for audit, inspect, packet, or apply."
+    ),
+    replacement: Path
+    | None = typer.Option(
+        None, "--file", "-f", help="Replacement file for apply action."
+    ),
+    out: Path
+    | None = typer.Option(None, "--out", "-o", help="Output path for packet export."),
+) -> None:
+    """Run section-by-section developmental editor analysis and walkthrough."""
+    cmd = [sys.executable, str(ROOT / "tools" / "developmental_editor.py"), action]
+    if chapter:
+        cmd.append(chapter)
+    if sec is not None:
+        if action == "audit":
+            cmd.extend(["--sec", str(sec)])
+        elif action in ("inspect", "packet"):
+            cmd.append(str(sec))
+        elif action == "apply":
+            cmd.append(str(sec))
+            if replacement:
+                cmd.append(str(replacement))
+    if out and action == "packet":
+        cmd.extend(["--out", str(out)])
+    proc = subprocess.run(cmd, cwd=ROOT)
+    raise typer.Exit(proc.returncode)
+
+
 @app.command("doctor", rich_help_panel="System Diagnostics")
 @book_app.command("doctor", rich_help_panel="System Diagnostics")
 def doctor() -> None:
