@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-DECKS := architecture-2.0 workshop-slides
+DECKS := architecture-2.0 workshop-slides catalog
 LATEXMK := latexmk
 
 .PHONY: all clean
