@@ -18,7 +18,7 @@ format:
 **Core thesis:** *Compounding pressures across physical scaling, specialization, software co-evolution, and verification demand new abstractions, but assistance succeeds only where evaluation costs can be amortized.*
 :::
 
-The promise of AI in computer architecture is not an abstract algorithmic luxury; it is born from an urgent engineering crisis. For decades, architects rode the compounding physical dividends of Dennard scaling and Moore's Law: shrinking transistor dimensions reliably boosted switching speeds while keeping power density flat. Today, that physical dividend is exhausted. Gate oxide thicknesses have hit quantum tunneling limits, supply voltages have stalled, wire resistance chokes global clock distribution, and dark silicon forces substantial fractions of a die to remain unpowered to prevent thermal runaway. The architectural frontier has consequently shifted from general-purpose scaling to aggressive, domain-specific specialization: heterogeneous accelerator arrays, deep memory hierarchies, and co-designed software runtimes. But specialization fractures the design space into thousands of tightly coupled, non-linear trade-offs that human engineering intuition cannot manually navigate.
+The promise of AI in computer architecture is not an abstract algorithmic luxury; it is born from an urgent engineering crisis. For decades, architects rode the compounding physical dividends of Dennard scaling and Moore's Law: shrinking transistor dimensions reliably boosted switching speeds while keeping power density flat. Today, that combined dividend has largely run out. Subthreshold leakage has stalled supply-voltage scaling, wire resistance limits how far a signal can travel in one cycle, and power budgets leave substantial fractions of a die unable to switch at full frequency at the same time, a condition known as dark silicon. The architectural frontier has consequently shifted from general-purpose scaling to aggressive, domain-specific specialization: heterogeneous accelerator arrays, deep memory hierarchies, and co-designed software runtimes. Specialization also multiplies the coupled, nonlinear trade-offs a team must evaluate, and the number of alternatives worth comparing can grow faster than the tools and engineers available to compare them.
 
 This chapter dissects the physical, microarchitectural, and economic forces driving this architectural crisis. It traces the causal chain from quantum tunneling and interconnect resistance-capacitance (RC) bottlenecks to dark silicon, accelerator offload overheads, and the combinatorial explosion of hardware–software verification. Through concrete engineering analyses, it distinguishes vast design spaces from computationally tractable evaluation loops, demonstrating why machine-assisted exploration succeeds only when targeted at the exact bottleneck delaying an architectural decision (@fig-ch02-cover-map).
 
@@ -80,13 +80,13 @@ The classical balance broke down in the mid-2000s as supply voltage became harde
 
 [^fn-subthreshold-slope-c02]: **Subthreshold slope and the thermodynamic leakage limit**: A field-effect transistor does not switch off instantaneously below its threshold voltage ($V_{\text{th}}$); instead, drain current decreases exponentially with gate voltage. The steepness of this turn-off is governed by the subthreshold swing $S = \ln(10) \cdot (k_B T / q) \cdot (1 + C_{\text{dep}} / C_{\text{ox}})$, which has a fundamental thermodynamic lower bound of approximately $60\ \text{mV/decade}$ at room temperature ($300\ \text{K}$). Reducing $V_{\text{th}}$ by $180\ \text{mV}$ increases off-state standby leakage current by three orders of magnitude ($10^3$), creating unmanageable static dissipation that prevents continuous voltage scaling.
 
-Fifty years of microprocessor scaling data from Karl Rupp's CPU frontier (1971–2021), joined with a fourteen-year frontier of twenty-three primary-cited AI accelerators (2012–2024), map this architectural evolution across three eras (@fig-microprocessor-trends). In the *device-scaling era* (1971–2005), single-thread performance and clock frequency climbed across four orders of magnitude in lockstep with transistor density. At the 2005 Dennard boundary, clock frequency stalls near $3\text{--}5\ \text{GHz}$ and single-thread performance gains flatten from roughly 50% annually to single digits [@HennessyPatterson2017QuantitativeApproach]. This stagnation ushered in the *parallelism era* (2005–2016), where architects turned to multicore integration, driving hardware thread counts past one hundred and pushing peak CPU package dissipation toward $300\ \text{W}$. A third inflection around 2016 marks the *specialization era*, where general-purpose CPU metrics plateaued and the primary scaling frontier migrated to domain-specific accelerators.
+Fifty years of microprocessor scaling data from Karl Rupp's CPU frontier (1971–2021), joined with a 2012–2024 frontier compiled from twenty-three accelerators including GPUs, map this architectural evolution across three eras (@fig-microprocessor-trends). In the *device-scaling era* (1971–2005), single-thread performance, clock frequency, and transistor density all climbed by orders of magnitude, though at different rates. Around the 2005 Dennard boundary, clock frequency stalls near $3\text{--}5\ \text{GHz}$, and single-thread performance growth falls from about 52% per year (1986–2003) to about 23% per year, then to single digits by the late 2010s [@HennessyPatterson2017QuantitativeApproach]. This slowdown ushered in the *parallelism era* (2005–2016), where architects turned to multicore integration. Hardware thread counts reached 96 by 2016 and 128 by 2020, while peak CPU package power rose from about $200\ \text{W}$ in the mid-2010s to about $290\ \text{W}$ by 2021. A third inflection around 2016 marks the *specialization era*. CPU clock frequency and power flattened while CPU transistor counts kept rising, and the steepest scaling frontier migrated to domain-specific accelerators.
 
-![**Frequency stalls while transistor budgets and accelerator power frontiers surge.** Fifty years of microprocessor scaling data from Karl Rupp's CPU frontier (1971–2021) joined with a fourteen-year frontier of twenty-three primary-cited AI accelerators (2012–2024). At the 2005 Dennard boundary, clock frequency stalls near $3\text{--}5\ \text{GHz}$ and single-thread performance flattens, while the specialization turn (2016) shifts scaling to domain-specific accelerators, where packaged transistors reach 208 billion (4 trillion in Cerebras wafer-scale) and accelerator thermal design power (TDP) escalates to $1{,}000\ \text{W}$ [@DennardEtAl1974Scaling; @EsmaeilzadehEtAl2011DarkSilicon; @Rupp2022MicroprocessorTrendData].](images/fig-microprocessor-trends){#fig-microprocessor-trends width="100%" fig-alt="Log-scale line chart from 1971 to 2026 showing CPU and accelerator scaling across the device-scaling, parallelism, and specialization eras. CPU clock frequency and single-thread performance plateau after 2005, while accelerator transistors and TDP surge steeply through 2024."}
+![**Frequency stalls while transistor budgets and accelerator power frontiers surge.** Karl Rupp's CPU frontier (1971–2021) joined with a 2012–2024 running-maximum frontier of accelerators, including GPUs, with published specifications. After 2005, clock frequency stalls near $3\text{--}5\ \text{GHz}$ and single-thread growth slows, while packaged accelerator transistor counts reach 208 billion (4 trillion in Cerebras wafer-scale parts) and accelerator thermal design power (TDP) reaches $1{,}000\ \text{W}$ [@Rupp2022MicroprocessorTrendData; @FoleyDanskin2017Pascal; @ChoquetteEtAl2018Volta; @JouppiEtAl2021TenLessons; @ChoquetteEtAl2021Ampere; @Choquette2023Hopper; @AMD2025CDNA3; @NVIDIA2024B100].](images/fig-microprocessor-trends){#fig-microprocessor-trends width="100%" fig-alt="Log-scale line chart from 1971 to 2026 showing CPU and accelerator scaling across the device-scaling, parallelism, and specialization eras. CPU clock frequency flattens after 2005 and single-thread performance growth slows, while accelerator transistor counts and TDP rise steeply through 2024."}
 
 These diverging curves in @fig-microprocessor-trends illustrate the structural end of automatic frequency scaling and the resulting pivot to specialized architectures [@Sutter2005FreeLunch]. When supply voltage scaling stalled around 2005, power constraints capped the fraction of transistors that could switch simultaneously at peak frequency, creating the *dark silicon* wall [@EsmaeilzadehEtAl2011DarkSilicon].[^fn-dark-silicon-c02] In the parallelism era, duplicating cores extracted concurrency from parallel workloads, but serial bottlenecks and thermal limits bounded the return on general-purpose multicore expansion.
 
-The specialization era visible after 2016 resolves that dilemma not by halting device scaling, but by reallocating silicon budgets to specialized datapaths. While CPU clock frequency remains capped near $3\text{--}5\ \text{GHz}$ and CPU power plateaus below $300\ \text{W}$, the accelerator frontier branches upward. Packaged accelerator transistor budgets climb from 15.3 billion in the NVIDIA Tesla P100 (2016) to 208 billion in the dual-die Blackwell B200 (2024), while Cerebras extends integration to 4 trillion transistors on an entire wafer. Concurrently, accelerator TDP escalates from $300\ \text{W}$ to $1{,}000\ \text{W}$ per package. Specialization succeeds in this regime because regular matrix and tensor operations amortize instruction handling across massive arithmetic arrays, enabling continuous throughput gains even as individual gates switch no faster than they did twenty years earlier.
+The specialization era visible after 2016 resolves that dilemma not by halting device scaling, but by reallocating silicon budgets to specialized datapaths. While CPU clock frequency remains capped near $3\text{--}5\ \text{GHz}$ and CPU power plateaus below $300\ \text{W}$, the accelerator frontier branches upward. Packaged accelerator transistor budgets climb from 15.3 billion in the NVIDIA Tesla P100 (2016) to 208 billion in the dual-die Blackwell B200 (2024), while Cerebras extends integration to 4 trillion transistors on a single wafer-scale die. Concurrently, accelerator TDP escalates from $300\ \text{W}$ to $1{,}000\ \text{W}$ per package. Specialization succeeds in this regime because regular matrix and tensor operations amortize instruction handling across massive arithmetic arrays, enabling continued throughput gains even though clock rates are no higher than they were twenty years earlier.
 
 [^fn-dark-silicon-c02]: **Dark silicon**: Silicon that cannot all operate concurrently at full performance within the available power and thermal budget. Power gating, clock gating, and reduced operating rates are among the ways a design manages that limit.
 
@@ -148,9 +148,9 @@ This drive for specialization has spawned a wide diversity of designs, a period 
 #| label: fig-accelerator-landscape
 #| fig-cap: |
 #|   **AI accelerators span seven orders of magnitude in operating power.** Each point represents a
-#|   publicly announced accelerator from the MIT Lincoln Laboratory survey on a log-log scale of peak
-#|   power ($1\ \text{mW}\text{ to }70\ \text{kW}$) versus peak performance ($3\ \text{GOps/s}\text{ to }10^8\ \text{GOps/s}$)
-#|   [@ReutherEtAl2025LAICS]. Colors denote form factors (chip, card, or system), filled versus hollow markers
+#|   publicly announced accelerator from the MIT Lincoln Laboratory survey, plotted as peak performance against
+#|   peak power on log-log axes; the 180 parts span about $1\ \text{mW}$ to $23\ \text{kW}$ and
+#|   $6\ \text{GOps/s}$ to $3.5 \times 10^7\ \text{GOps/s}$ [@ReutherEtAl2025LAICS]. Colors denote form factors (chip, card, or system), filled versus hollow markers
 #|   distinguish training from inference parts, and dashed diagonals trace constant energy-efficiency contours
 #|   from $100\ \text{GOps/W}\text{ to }100\ \text{TOPS/W}$. The resulting design space forms a dense, heterogeneous cloud
 #|   rather than clustering around a single operating point.
@@ -303,9 +303,9 @@ Under the displayed assumptions, low startup cost and high total link bandwidth 
 **The lesson.** Local compute acceleration ($A$) cannot overcome unamortized startup ($o$) and transfer ($d g/B$) costs, especially when competing against an optimized, vectorized host core. Compiler layer fusion and kernel batching are required to increase payload size $g$ comfortably above the true break-even threshold.
 :::
 
-The interconnect and invocation path set the transfer and startup costs. The compiler and runtime help determine the payload size, data reuse, and overlap that the workload achieves. This dynamic exposes why Layer 2 (AI-Driven) parameter search repeatedly stalls when confronting system composition. In a Layer 2 workflow, the microarchitectural container $\Theta$ and system bus interfaces remain frozen. An automated optimizer sweeps parametric dials $\theta$ across systolic array dimensions, buffer capacities, or unroll factors against simulation feedback. Yet because interface protocols, host-driver invocation paths, and runtime scheduling remain immutable, parameter tuning cannot alter launch overhead $o$ or link bandwidth $B$. When a workload falls below the operational intensity threshold $\mathrm{OI}^*$ in @eq-logca-breakeven-g, sweeping parameters inside a rigid container yields zero net speedup.
+The interconnect and invocation path set the transfer and startup costs. The compiler and runtime help determine the payload size, data reuse, and overlap that the workload achieves. The offload bound also shows where the operational layers defined in @sec-three-operational-layers reach their limits. A Layer 2 search that tunes array dimensions, buffer capacities, or unroll factors inside a frozen container can change $A$ and, through reuse, the transferred data $d$. It cannot change the invocation path that sets $o$ or the link that sets $B$, because those belong to interfaces the container holds fixed. For a workload whose operational intensity sits well below $\mathrm{OI}^*$ in @eq-logca-breakeven-g, such a sweep can at best move the threshold slightly, since $\mathrm{OI}^*$ approaches $1/(B \cdot C_h)$ however large $A$ becomes.
 
-Escaping this offload wall requires a Layer 3 (AI-Native) cross-layer co-design approach. Rather than preserving an immutable interface boundary, a Layer 3 workflow co-synthesizes compiler kernel fusion, streaming queue protocols, and custom instruction extensions simultaneously. Dissolving the structural container allows the design system to eliminate driver dispatch latencies and restructure data layouts across on-chip memories, pushing payload granularity $g$ comfortably above the break-even threshold $g^*$. The offload bound will therefore return as a software question after we consider how the hardware is composed.
+Moving the interface is a different kind of change. Kernel fusion, user-space submission queues, persistent kernels, and custom instruction extensions each alter $o$, $d$, or the payload $g$, and conventional hardware–software co-design teams make exactly these changes today. An AI-native design system (Layer 3) would be permitted to propose such interface changes alongside the hardware parameters, but whether it can do so better or more cheaply than a conventional team remains to be demonstrated. The offload bound will therefore return as a software question after we consider how the hardware is composed.
 
 ### Packaging and Chiplet Composition Risks
 
@@ -313,7 +313,7 @@ Specialized intellectual property (IP) blocks rarely ship in isolation. Teams in
 
 [^fn-shoreline-bandwidth-c02]: **Shoreline bandwidth density**: The communication bandwidth available per unit of die edge, often expressed per millimeter. In a side-by-side chiplet arrangement, interface placement, connection pitch, and signaling rate constrain the bandwidth that can cross the available edge.
 
-Composition also introduces blocks whose implementation the system architect cannot inspect fully. Arm has supplied processor IP as fixed hard macros [@Arm2013CortexA15HardMacro], and Intel distributes encrypted RTL [@Intel2024EncryptedRTLIP]. Integration then relies on documented behavior, supplied models, and checks at the accessible interfaces. Incomplete reset, clock-domain crossing, or coherence assumptions can make two individually qualified blocks fail together [@Arm2020AXI]. Shared network-on-chip (NoC) traffic adds another interaction: adequate average bandwidth can coexist with contention that misses a deadline. Partitioning must also provide test access, since finding a defective die before assembly avoids spending a package on it [@IEEE2020Std1838].[^fn-kgd-yield-c02]
+Composition also introduces blocks whose implementation the system architect cannot inspect fully. Arm has supplied processor IP as fixed hard macros [@Arm2013CortexA15HardMacro], and Intel distributes encrypted RTL [@Intel2024EncryptedRTLIP]. Integration then relies on documented behavior, supplied models, and checks at the accessible interfaces. An interface specification such as Arm's Advanced eXtensible Interface (AXI) defines handshake and transaction-ordering rules at the boundary [@Arm2020AXI], but reset, clock-domain crossing, or coherence assumptions that fall outside that contract can still make two individually qualified blocks fail together. Shared network-on-chip (NoC) traffic adds another interaction: adequate average bandwidth can coexist with contention that misses a deadline. Partitioning must also provide test access, since finding a defective die before assembly avoids spending a package on it [@IEEE2020Std1838].[^fn-kgd-yield-c02]
 
 [^fn-kgd-yield-c02]: **The known-good die (KGD) compound yield penalty**: In a multi-chiplet package comprising $N$ discrete dies, the overall package yield obeys a multiplicative compound law, $Y_{\text{package}} = Y_{\text{assembly}} \cdot \prod_{i=1}^N Y_{\text{die}, i}$. If eight chiplets with an untested wafer yield of 90% ($Y_{\text{die}} = 0.90$) are assembled into a single package with 98% assembly yield, final package yield drops to $0.98 \times (0.90)^8 \approx 42\%$, discarding nearly 60% of all finished products. The known-good die (KGD) methodology uses rigorous at-speed probe testing prior to dicing and bonding to guarantee that each bare chiplet is fully qualified, preventing defective silicon from consuming expensive advanced packaging interposers.
 
@@ -325,9 +325,9 @@ Automated exploration must account for those constraints. Missing rules waste ev
 
 ### Wafer-Scale Communication Trade-offs {#sec-wafer-scale-communication-tradeoffs}
 
-Wafer-scale integration explores a different balance between local communication and physical scale. The Cerebras Wafer-Scale Engine (WSE) distributes computation and SRAM across an entire unbroken silicon wafer (@fig-cerebras-wse-scale). Keeping more computation and storage on the wafer can reduce transfers over board-level links, but power delivery, communication distance, and defect tolerance constrain how much of that hardware can be used [@ReutherEtAl2025LAICS; @PalEtAl2019WaferscaleGPU].
+Wafer-scale integration explores a different balance between local communication and physical scale. The Cerebras Wafer-Scale Engine (WSE) distributes computation and SRAM across a single die cut as the largest square a $300\ \text{mm}$ wafer holds (@fig-cerebras-wse-scale). Keeping more computation and storage on the wafer can reduce transfers over board-level links, but power delivery, communication distance, and defect tolerance constrain how much of that hardware can be used [@ReutherEtAl2025LAICS; @PalEtAl2019WaferscaleGPU].
 
-![**Wafer-scale integration contrasts physical scale against reticle-limited dies.** The Cerebras Wafer-Scale Engine spans an entire $300\text{ mm}$ silicon wafer, integrating hundreds of thousands of AI-optimized cores and tens of gigabytes of on-chip SRAM across unbroken cross-reticle interconnects. While keeping computation and communication on-wafer avoids board-level serdes bottlenecks, it requires specialized solutions for power delivery, active heat dissipation, and hardware redundancy to bypass manufacturing defects.](images/cerebras_wse_scale.jpg){#fig-cerebras-wse-scale width="80%" fig-alt="Photograph comparing the physical dimensions of a 300-millimeter Cerebras Wafer-Scale Engine against a standard individual packaged semiconductor die."}
+![**Wafer-scale integration contrasts physical scale against reticle-limited dies.** The Cerebras Wafer-Scale Engine occupies the largest square that fits on a $300\text{ mm}$ silicon wafer (about $46{,}000\text{ mm}^2$), integrating hundreds of thousands of AI-optimized cores and tens of gigabytes of on-chip SRAM across unbroken cross-reticle interconnects. While keeping computation and communication on-wafer avoids board-level serdes bottlenecks, it requires specialized solutions for power delivery, active heat dissipation, and hardware redundancy to bypass manufacturing defects.](images/cerebras_wse_scale.jpg){#fig-cerebras-wse-scale width="80%" fig-alt="Photograph comparing the physical dimensions of a Cerebras Wafer-Scale Engine cut from a 300-millimeter wafer against a standard individual packaged semiconductor die."}
 
 The WSE's internal SRAM bandwidth describes a different memory boundary from the HBM bandwidth in @fig-ch02-accelerator-scaling-frontier and should not be read as a directly interchangeable specification. Bringing more memory onto the wafer changes which transfers remain local; the benefit depends on how the workload maps onto the distributed storage and compute. In a wafer-scale GPU case study, physical constraints reduced usable capacity from a nominal 100 GPU modules to 40 [@PalEtAl2019WaferscaleGPU]. The example shows why available silicon area is not equivalent to usable compute. Placement, routing around defects, and software scheduling determine the communication that the workload actually experiences. Across these packaging choices, the same question persists: can the software use the proposed organization well enough to justify its costs? Answering it requires an executable software path.
 
@@ -359,7 +359,7 @@ An executable software path bridges high-level programmer intent and physical ha
 
 The break-even bound in @eq-logca-breakeven-g makes the stakes of that interface precise. In the nonoverlapped model, acceleration pays only when operation granularity $g$ exceeds $g^*$ and operational intensity stays above $\mathrm{OI}^*$. The compiler and runtime influence both. Fusing operations can create offload payloads large enough to amortize $o$; eliminating intermediate tensor allocations in off-chip memory can shrink the transferred data per work unit $d$. These choices move a kernel along the phase diagram in @fig-ch09-logca-phase-diagram.
 
-Loop scheduling and instruction selection also determine how effectively a lowered kernel uses the target's register file and avoids pipeline stalls. In scalable vector architectures such as RISC-V Vector (RVV), compilers choose the active vector length and register grouping ($LMUL$, the register group multiplier) to trade loop control overhead against register pressure. Setting $LMUL=8$ amortizes instruction issue by operating on wide register groups, handling up to $\text{VLMAX} = LMUL \cdot \text{VLEN} / SEW$ elements per iteration (where $\text{VLEN}$ is the hardware vector register length in bits and $SEW$ is the standard element width). However, grouping 32 physical vector registers into eight-register bundles leaves room for only four active vector operands. In a fused kernel with multiple live intermediate tensors, this high register pressure causes register spilling to memory, collapsing operational intensity. Smaller groupings such as $LMUL=1$ or $LMUL=2$ retain 32 or 16 independent operands, reducing memory spills at the expense of executing more loop iterations.
+Loop scheduling and instruction selection also determine how effectively a lowered kernel uses the target's register file and avoids pipeline stalls. In scalable vector architectures such as RISC-V Vector (RVV), compilers choose the active vector length and register grouping ($LMUL$, the register group multiplier) to trade loop control overhead against register pressure. Setting $LMUL=8$ amortizes instruction issue by operating on wide register groups, handling up to $\text{VLMAX} = LMUL \cdot \text{VLEN} / SEW$ elements per iteration (where $\text{VLEN}$ is the hardware vector register length in bits and $SEW$ is the selected element width in bits). However, grouping 32 physical vector registers into eight-register bundles leaves room for only four active vector operands. In a fused kernel with multiple live intermediate tensors, this high register pressure causes register spilling to memory, collapsing operational intensity. Smaller groupings such as $LMUL=1$ or $LMUL=2$ retain 32 or 16 independent operands, reducing memory spills at the expense of executing more loop iterations.
 
 This trade-off exposes a tension that peak vector width cannot settle. A larger register group processes more elements per instruction, but can force extra memory traffic when too many values remain live. Evaluating such a choice requires executable code on the relevant hardware or model, with the intended numerics, memory ordering, and application binary interface (ABI) preserved. Autotuners such as AutoTVM search compiler schedules [@ChenEtAl2018AutoTVM]; a joint hardware–software study also changes the machine those schedules target. Each proposed pair needs a comparable evaluation before its apparent advantage can guide a hardware decision.
 
@@ -371,7 +371,7 @@ Software and workloads can change during hardware development. An architectural 
 
 Several parts of the target can shift during this interval, including key-value (KV) cache management,[^fn-kv-cache-fragmentation-c02] compiler scheduling, and serving batch size. Numerical formats introduce a further choice: supporting 8-bit floating-point (FP8), 4-bit integer (INT4), or block-scale formats changes the arithmetic and data paths needed in hardware.[^fn-block-scale-formats-c02] Software may adopt a new format after the design has fixed which operations it implements directly.
 
-[^fn-kv-cache-fragmentation-c02]: **KV cache scaling and memory fragmentation**: In autoregressive Transformer generation, attention keys and values for previously generated tokens are cached in memory to avoid redundant recomputation. Because sequence lengths grow dynamically by one token at each generation step, classical memory allocators that reserve contiguous buffers for a worst-case sequence length (such as 8,192 or 128,000 tokens) cause severe internal and external memory fragmentation, often stranding 60% to 80% of GPU DRAM capacity. Systems such as vLLM introduce paged virtual memory architectures (PagedAttention) to allocate non-contiguous physical blocks dynamically as tokens are generated.
+[^fn-kv-cache-fragmentation-c02]: **KV cache scaling and memory fragmentation**: In autoregressive Transformer generation, attention keys and values for previously generated tokens are cached in memory to avoid redundant recomputation. Because sequence lengths grow dynamically by one token at each generation step, allocators that reserve contiguous buffers for a worst-case sequence length (such as 8,192 or 128,000 tokens) cause internal and external fragmentation. @KwonEtAl2023PagedAttention measured that such systems left only 20% to 38% of the memory reserved for KV cache holding actual token state, wasting 60% to 80% of that KV-cache allocation. Their vLLM system introduces paged allocation (PagedAttention) to assign non-contiguous physical blocks dynamically as tokens are generated.
 
 [^fn-block-scale-formats-c02]: **Block-scale formats**: Low-precision number formats amortize shared exponent or scale metadata across a block of elements rather than storing independent metadata for every element [@RouhaniEtAl2023Microscaling]. Committing to one in silicon fixes datapath choices even as formats and workloads continue to evolve, requiring careful judgment of whether the choice will remain useful over time.
 
@@ -487,147 +487,94 @@ fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.12)
 #| echo: false
 toy_design_candidates = 5 * 4 * 6 * 4 * 3 * 3
 toy_candidate_evaluations = toy_design_candidates * 3
+
+# Announcement intervals for @fig-silicon-cadence, computed from
+# data/datasets/chapter2-silicon-announcement-dates.csv (first public announcements).
+import csv as _csv
+import datetime as _dt
+from pathlib import Path as _Path
+import _python.plots as _ap_cadence
+
+_cad_rows = list(_csv.DictReader(
+    l for l in open(_Path(_ap_cadence.__file__).resolve().parents[2] / "data" / "datasets" / "chapter2-silicon-announcement-dates.csv", encoding="utf-8")
+    if not l.startswith("#")))
+for _r in _cad_rows:
+    _r["date"] = _dt.date.fromisoformat(_r["announcement_date"])
+cadence_families = {}
+for _r in _cad_rows:
+    cadence_families.setdefault(_r["family"], []).append(_r)
+for _fam in cadence_families.values():
+    _fam.sort(key=lambda r: r["date"])
+cadence_gaps = {
+    # calendar-month difference between announcement months
+    fam: [(b["date"].year - a["date"].year) * 12 + b["date"].month - a["date"].month for a, b in zip(rs, rs[1:])]
+    for fam, rs in cadence_families.items()
+}
+apple_gaps_mo = cadence_gaps["Apple Mobile SoC"]
+nvidia_gaps_mo = cadence_gaps["NVIDIA Data-Center GPU"]
 ```
 
-Relating software change to hardware development requires more than a model's publication date. Public product announcements provide one visible timeline (@fig-silicon-cadence): the selected Apple SoCs have announcement intervals of 7–19 months, while the selected NVIDIA accelerators have intervals of 22–24 months. These markers locate products in time but do not reveal the internal design durations or the dates when their architecture decisions became fixed.
+Relating software change to hardware development requires more than a model's publication date. Public product announcements provide one visible timeline (@fig-silicon-cadence). Measured between first announcements, the selected Apple SoCs arrive `{python} min(apple_gaps_mo)`–`{python} max(apple_gaps_mo)` months apart. The NVIDIA A100, H100, and B200 arrive `{python} min(nvidia_gaps_mo[:2])`–`{python} max(nvidia_gaps_mo[:2])` months apart, but NVIDIA first announced Rubin only `{python} nvidia_gaps_mo[2]` months after B200, roughly two years before it planned to ship. These markers locate products in time but do not reveal the internal design durations or the dates when their architecture decisions became fixed.
 
 ```{python}
 #| label: fig-silicon-cadence
 #| fig-cap: |
-#|   **Public product announcements provide announcement-interval markers, not design-cycle measurements.** Points mark announcement dates for the Apple M1 through M4 [@Apple2020M1; @Apple2022M2; @Apple2023M3; @Apple2024M4] and the NVIDIA A100, H100, and B200 [@NVIDIA2020A100; @NVIDIA2022H100; @NVIDIA2024B100]; the Rubin date reflects NVIDIA's January 2026 CES announcement [@NVIDIA2026Rubin]. The resulting intervals describe this public sample only. They do not establish internal design schedules, software-adaptation windows, or the duration of frozen architecture decisions.
+#|   **Public product announcements provide announcement-interval markers, not design-cycle measurements.** Points mark first public announcement dates for the Apple M1 through M4 [@Apple2020M1; @Apple2022M2; @Apple2023M3; @Apple2024M4] and the NVIDIA A100, H100, B200, and Rubin [@NVIDIA2020A100; @NVIDIA2022H100; @NVIDIA2024B100; @DataCenterDynamics2024RubinComputex]. Rubin was first announced at Computex in June 2024, so its interval reflects roadmap disclosure rather than product readiness. The intervals describe this public sample only. They do not establish internal design schedules, software-adaptation windows, or the duration of frozen architecture decisions.
 #| out-width: "100%"
-#| fig-alt: "Timeline plot comparing public announcement intervals for Apple M-series chips, ranging from 7 to 19 months in this sample, and NVIDIA data-center accelerators, ranging from 22 to 24 months."
+#| fig-alt: "Timeline plot of first public announcement dates for Apple M1 through M4 and NVIDIA A100, H100, B200, and Rubin, with the interval in months marked between consecutive parts. Apple intervals range from 7 to 19 months. NVIDIA intervals are about 22 and 24 months, followed by about 3 months from B200 to Rubin."
 
 import matplotlib.pyplot as plt
 from _python.plots import COLORS, apply_style
 
 apply_style()
 
-# Provenance: release dates are public product-announcement dates for the named parts.
-# They are transcribed from vendor announcements rather than measured, and the gaps below are
-# arithmetic on those dates. No claim is made about internal design schedules, which are not public.
+# Provenance: cadence_families and cadence_gaps are computed in the hidden chunk above from
+# data/datasets/chapter2-silicon-announcement-dates.csv (first public announcement of each part).
+# Positions are months relative to the M1 announcement; interval labels are computed, not typed.
+_origin = cadence_families["Apple Mobile SoC"][0]["date"]
+
+
+def _months(d):
+    return (d - _origin).days / 30.44
+
 
 fig, ax = plt.subplots(figsize=(6.4, 3.2))
 fig.subplots_adjust(left=0.18, right=0.95, top=0.86, bottom=0.18)
 
-apple_months = [0, 19, 35, 42]
-apple_labels = ["M1\nNov 2020", "M2\nJun 2022", "M3\nOct 2023", "M4\nMay 2024"]
-apple_gaps = [19, 16, 7]
-
-gpu_months = [-6, 16, 40, 62]
-gpu_labels = [
-    "A100\nMay 2020",
-    "H100\nMar 2022",
-    "B200\nMar 2024",
-    "Rubin\nJan 2026",
+lanes = [
+    ("Apple Mobile SoC", 1.0, COLORS["workload"], "Apple Mobile SoC\n(Consumer)"),
+    ("NVIDIA Data-Center GPU", -0.5, COLORS["designspace"], "NVIDIA Data-Center\n(Enterprise AI)"),
 ]
-gpu_gaps = [22, 24, 22]
+all_x = [_months(r["date"]) for fam in cadence_families.values() for r in fam]
+x_lo, x_hi = min(all_x) - 6, max(all_x) + 6
+for fam, y, edge, _ in lanes:
+    parts = cadence_families[fam]
+    xs = [_months(r["date"]) for r in parts]
+    ax.plot([x_lo, x_hi], [y, y], color=COLORS["grid"], linewidth=1.5, zorder=1)
+    ax.scatter(xs, [y] * len(xs), facecolor=COLORS["note_fill"], edgecolor=edge, s=80, linewidth=1.8, zorder=3)
+    for i, (x, r) in enumerate(zip(xs, parts)):
+        # Split labels apart when two announcements fall within a few months of each other.
+        ha = "center"
+        if i + 1 < len(xs) and xs[i + 1] - x < 6:
+            ha = "right"
+        elif i > 0 and x - xs[i - 1] < 6:
+            ha = "left"
+        ax.text(x, y + 0.18, f"{r['part']}\n{r['date'].strftime('%b %Y')}", ha=ha, va="bottom",
+                fontweight="bold", color=COLORS["ink"], fontsize=5.8)
+    for a, b, gap in zip(xs, xs[1:], cadence_gaps[fam]):
+        if b - a > 5:
+            ax.annotate("", xy=(b - 0.8, y - 0.12), xytext=(a + 0.8, y - 0.12),
+                        arrowprops=dict(arrowstyle="<->", color=COLORS["magenta"], linewidth=1.2))
+        ax.text((a + b) / 2, y - 0.25, f"{gap} mo", ha="center", va="top",
+                color=COLORS["decision_ink"], fontweight="bold", fontsize=5.8)
 
-ax.plot([-10, 68], [1.0, 1.0], color=COLORS["grid"], linewidth=1.5, zorder=1)
-ax.scatter(
-    apple_months,
-    [1.0] * len(apple_months),
-    facecolor=COLORS["note_fill"],
-    edgecolor=COLORS["workload"],
-    s=80,
-    linewidth=1.8,
-    zorder=3,
-)
-
-for m, l in zip(apple_months, apple_labels):
-    ax.text(
-        m,
-        1.18,
-        l,
-        ha="center",
-        va="bottom",
-        fontweight="bold",
-        color=COLORS["ink"],
-        fontsize=5.8,
-    )
-for i in range(len(apple_months) - 1):
-    mid = (apple_months[i] + apple_months[i + 1]) / 2
-    ax.annotate(
-        "",
-        xy=(apple_months[i + 1] - 0.8, 0.88),
-        xytext=(apple_months[i] + 0.8, 0.88),
-        arrowprops=dict(
-            arrowstyle="<->",
-            color=COLORS["magenta"],
-            linewidth=1.2,
-        ),
-    )
-    ax.text(
-        mid,
-        0.75,
-        f"{apple_gaps[i]} mo",
-        ha="center",
-        va="top",
-        color=COLORS["decision_ink"],
-        fontweight="bold",
-        fontsize=5.8,
-    )
-
-ax.plot([-10, 68], [-0.5, -0.5], color=COLORS["grid"], linewidth=1.5, zorder=1)
-ax.scatter(
-    gpu_months,
-    [-0.5] * len(gpu_months),
-    facecolor=COLORS["note_fill"],
-    edgecolor=COLORS["designspace"],
-    s=80,
-    linewidth=1.8,
-    zorder=3,
-)
-
-for m, l in zip(gpu_months, gpu_labels):
-    ax.text(
-        m,
-        -0.32,
-        l,
-        ha="center",
-        va="bottom",
-        fontweight="bold",
-        color=COLORS["ink"],
-        fontsize=5.8,
-    )
-for i in range(len(gpu_months) - 1):
-    mid = (gpu_months[i] + gpu_months[i + 1]) / 2
-    ax.annotate(
-        "",
-        xy=(gpu_months[i + 1] - 0.8, -0.62),
-        xytext=(gpu_months[i] + 0.8, -0.62),
-        arrowprops=dict(
-            arrowstyle="<->",
-            color=COLORS["magenta"],
-            linewidth=1.2,
-        ),
-    )
-    ax.text(
-        mid,
-        -0.75,
-        f"{gpu_gaps[i]} mo",
-        ha="center",
-        va="top",
-        color=COLORS["decision_ink"],
-        fontweight="bold",
-        fontsize=5.8,
-    )
-
-ax.set_yticks([1.0, -0.5])
-ax.set_yticklabels(
-    ["Apple Mobile SoC\n(Consumer)", "NVIDIA Data-Center\n(Enterprise AI)"],
-    fontsize=6.5,
-    fontweight="bold",
-    color=COLORS["ink"],
-)
+ax.set_yticks([y for _, y, _, _ in lanes])
+ax.set_yticklabels([lab for _, _, _, lab in lanes], fontsize=6.5, fontweight="bold", color=COLORS["ink"])
 ax.set_ylim(-1.1, 1.6)
-ax.set_xlim(-12, 68)
-
-ax.set_xlabel(
-    "Timeline (months relative to Nov 2020)", fontsize=6.5, color=COLORS["ink"]
-)
+ax.set_xlim(x_lo - 2, x_hi)
+ax.set_xlabel(f"Months relative to the M1 announcement ({_origin.strftime('%b %Y')})", fontsize=6.5, color=COLORS["ink"])
 ax.tick_params(axis="x", labelsize=5.8)
-
+ax.tick_params(axis="y", length=0)
 ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
 for spine in ["top", "right", "left", "bottom"]:
     ax.spines[spine].set_visible(False)
@@ -794,21 +741,42 @@ Data movement provides a useful quantitative example. The 45\ nm reference value
 #| out-width: "100%"
 #| fig-alt: "Log-scale plot comparing arithmetic and memory-access energy, showing a 32-bit integer add at 0.1 picojoules, static random-access memory (SRAM) accesses from 10 to 100 picojoules, and an off-chip DRAM access range from 1.3 to 2.6 nanojoules."
 
+import csv
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import _python.plots as _ap
 from _python.plots import COLORS, apply_style, draw_range_rows, row_axis, top_log_axis
 
-# Source dataset: data/datasets/chapter2-horowitz-energy.csv
+# Source dataset: data/datasets/chapter2-horowitz-energy.csv (Horowitz, ISSCC 2014, 45 nm).
+# Values are read from the CSV; ratios to the 32-bit integer add are computed here.
+_root = Path(_ap.__file__).resolve().parents[2]
+with open(_root / "data" / "datasets" / "chapter2-horowitz-energy.csv", encoding="utf-8") as fh:
+    src = [r for r in csv.DictReader(l for l in fh if not l.startswith("#"))]
 
-rows = [
-    {"display_label": "32b integer add", "display_note": "baseline arithmetic", "energy_low_pj": 0.1, "energy_high_pj": 0.1, "right_label": "1$\\times$", "color": COLORS["blue"]},
-    {"display_label": "32b floating-point add", "display_note": "local arithmetic", "energy_low_pj": 0.9, "energy_high_pj": 0.9, "right_label": "9$\\times$", "color": COLORS["blue"]},
-    {"display_label": "32b integer multiply", "display_note": "local arithmetic", "energy_low_pj": 3.0, "energy_high_pj": 3.0, "right_label": "30$\\times$", "color": COLORS["blue"]},
-    {"display_label": "32b floating-point multiply", "display_note": "local arithmetic", "energy_low_pj": 4.0, "energy_high_pj": 4.0, "right_label": "40$\\times$", "color": COLORS["blue"]},
-    {"display_label": "8 KB static random-access memory (SRAM) access", "display_note": "64b cache access", "energy_low_pj": 10, "energy_high_pj": 10, "right_label": "100$\\times$", "color": COLORS["green"]},
-    {"display_label": "32 KB static random-access memory (SRAM) access", "display_note": "64b cache access", "energy_low_pj": 20, "energy_high_pj": 20, "right_label": "200$\\times$", "color": COLORS["green"]},
-    {"display_label": "1 MB static random-access memory (SRAM) access", "display_note": "on-chip memory access", "energy_low_pj": 100, "energy_high_pj": 100, "right_label": "1000$\\times$", "color": COLORS["orange"]},
-    {"display_label": "off-chip DRAM access", "display_note": "off-chip memory access", "energy_low_pj": 1300, "energy_high_pj": 2600, "right_label": "13k–26k$\\times$", "color": COLORS["red"]},
-]
+baseline = float(src[0]["energy_low_pj"])
+
+
+def _fmt_ratio(value):
+    ratio = value / baseline
+    return f"{ratio / 1000:.0f}k" if ratio >= 1000 and value >= 1000 else f"{ratio:.0f}"
+
+
+rows = []
+for r in src:
+    low, high = float(r["energy_low_pj"]), float(r["energy_high_pj"])
+    op, width = r["operation_or_access"], r["width_or_capacity"]
+    if "SRAM" in op:
+        capacity = width.replace(" 64 bit", "")
+        label, note = f"{capacity} SRAM access", "64b access"
+        color = COLORS["orange"] if high >= 100 else COLORS["green"]
+    elif "DRAM" in op:
+        label, note, color = "off-chip DRAM access", "64b access", COLORS["red"]
+    else:
+        label, note, color = f"{width.replace(' bit', 'b')} {op}", "local arithmetic", COLORS["blue"]
+    right = f"{_fmt_ratio(low)}$\\times$" if low == high else f"{_fmt_ratio(low)}–{_fmt_ratio(high)}$\\times$"
+    rows.append({"display_label": label, "display_note": note, "energy_low_pj": low,
+                 "energy_high_pj": high, "right_label": right, "color": color})
 
 apply_style()
 fig, ax = plt.subplots(figsize=(4.9, 3.2))
@@ -849,13 +817,13 @@ Vector execution illustrates this policy interaction concretely. Adding 512-bit 
 
 During timing signoff, engineering teams evaluate multiple analysis views that pair operating modes with specific process corners using static timing signoff tools such as Cadence Tempus [@Cadence2021Tempus].[^fn-pvt-corners-c02] A design can clear one view while failing another. Because physical-design tools rely on heuristic optimization, a single failed closure attempt rarely indicates whether the candidate or a flawed tool setup caused the failure. Comparing constraints, seeds, and repeated outcomes separates true design flaws from tool artifacts.[^fn-eda-tool-noise-c02]
 
-[^fn-pvt-corners-c02]: **Multi-mode multi-corner (MMMC) timing closure**: Physical signoff tools must verify that a circuit functions reliably across wide operational extremes of process, voltage, and temperature (PVT). Critical paths are evaluated against competing extremes: "slow" corners (such as slow-slow transistor fab variation, lowest operating voltage, and maximum operating temperature) test for setup-time violations, while "fast" corners (fast-fast silicon, maximum supply voltage, and sub-zero temperatures) test for hold-time violations where signals race ahead of clock edges. In advanced sub-5nm and 3nm gate-all-around nanosheet nodes, signoff complexity expands further to incorporate a backside power delivery network (BSPDN), device self-heating, and statistical on-chip variation. A candidate design that simulates comfortably within cycle limits at nominal conditions may fail tapeout signoff due to hold violations or local electromigration under extreme PVT and thermal corners.
+[^fn-pvt-corners-c02]: **Multi-mode multi-corner (MMMC) timing closure**: Physical signoff tools must verify that a circuit functions reliably across wide operational extremes of process, voltage, and temperature (PVT). Critical paths are evaluated against competing extremes: "slow" corners (such as slow-slow transistor fab variation, lowest operating voltage, and maximum operating temperature) test for setup-time violations, while "fast" corners (fast-fast silicon, maximum supply voltage, and sub-zero temperatures) test for hold-time violations where signals race ahead of clock edges. At 3\ nm-class gate-all-around nanosheet nodes, signoff must also account for device self-heating and statistical on-chip variation, and the first nodes with a backside power delivery network (BSPDN), such as Intel 18A and TSMC A16, add its effects as well. A candidate design that simulates comfortably within cycle limits at nominal conditions may fail tapeout signoff due to hold violations or local electromigration under extreme PVT and thermal corners.
 
-[^fn-eda-tool-noise-c02]: **EDA tool non-determinism and noise floors**: Physical synthesis, placement, and detailed routing rely on stochastic heuristics, including simulated annealing, force-directed relaxation, and multi-threaded maze routing. Minor variations in netlist declaration order or random seed initialization routinely induce a 5% to 10% variance in worst negative slack (WNS) and total wirelength on identical RTL. In automated AI exploration loops, agents can easily mistake an artifact of tool noise for an architectural breakthrough, or discard a superior microarchitecture because the placer hit an unfavorable local minimum. Bounded multi-seed calibration is necessary to separate true architectural merit from tool noise.
+[^fn-eda-tool-noise-c02]: **EDA tool non-determinism and noise floors**: Physical synthesis, placement, and detailed routing rely on stochastic heuristics, including simulated annealing, force-directed relaxation, and multi-threaded maze routing. Minor variations in netlist declaration order or random seed initialization can shift worst negative slack (WNS) and total wirelength on identical RTL. The size of that spread depends on the tool, design, and flow, so it must be measured for the flow in use rather than assumed. In automated AI exploration loops, agents can easily mistake an artifact of tool noise for an architectural breakthrough, or discard a superior microarchitecture because the placer hit an unfavorable local minimum. Bounded multi-seed calibration is necessary to separate true architectural merit from tool noise.
 
 Design-rule checks (DRCs) introduce further physical constraints. Routing must satisfy restricted design rules, including minimum wire and via spacing [@KahngEtAl2011VLSIPhysicalDesign]. Moving a single macro can spawn numerous violations, and repairing one can alter neighboring routes and expose fresh errors. If an automated flow cannot interpret these markers, it shifts a repetitive cleanup and rerouting burden onto implementation engineers.
 
-This physical friction highlights the boundary where Layer 2 parameter optimization breaks down. When an automated Layer 2 optimizer sweeps macro floorplan coordinates $\theta$ inside an immutable die perimeter, it typically evaluates candidates against fast surrogate models or wirelength approximations. These surrogates capture average wirelength but remain blind to local pin density saturation, routing channel blockages, and multi-corner timing closure. When placed macros crowd memory interfaces into dense clusters, physical routers exhaust available metal tracks, producing severe timing closure violations and thousands of design-rule faults. Because a Layer 2 optimizer lacks the authority to reshape pipeline registers, re-partition functional blocks, or alter interface contracts, it stalls at this physical congestion wall. Human implementation engineers must then intervene to perform manual timing repair and rerouting, absorbing the physical closure debt that surrogate models ignored.
+An illustrative scenario shows where a Layer 2 optimizer can run into this friction. Suppose it sweeps macro floorplan coordinates $\theta$ inside a fixed die outline and scores each candidate with a fast wirelength estimate or learned surrogate. Such proxies can track average wirelength while missing local pin density, routing channel blockages, and multi-corner timing. If the favored placements crowd memory interfaces into dense clusters, the router may run short of tracks and return timing violations and design-rule markers that the proxy never predicted. Within the container, the optimizer cannot reshape pipeline registers, re-partition blocks, or change interface contracts, so the repair falls to implementation engineers unless the proxy is recalibrated or the search is allowed to move those boundaries. How often this happens depends on the design, the proxy, and the flow; the scenario identifies a failure to check for, not a measured rate.
 
 Interpreting a later physical failure requires the exact design and assumptions that produced it. The retained RTL, parameters, constraints, and implementation outputs let an architect distinguish a design problem from a mismatched input. Electronic design automation (EDA) tools also consume representations beyond RTL, including Library Exchange Format / Design Exchange Format (LEF/DEF) and Liberty timing files.[^fn-lef-def-c02] The execution mechanics are developed in @sec-architecture-environments-tool-interfaces; here the consequence is that preparing and preserving compatible inputs is part of evaluation work.
 
@@ -897,7 +865,7 @@ Simulation and formal methods provide different kinds of assurance. Simulation e
 
 The semiconductor industry has grappled with this verification pressure for over a quarter of a century. As far back as 2001, the International Technology Roadmap for Semiconductors Design chapter declared verification "a bottleneck that has now reached crisis proportions" [@ITRS2001Design]. Today, the Semiconductor Research Corporation's MAPT roadmap explicitly warns of a widening verification gap looming across future technology transitions [@SemiconductorResearchCorporation2023MAPT]. While this history makes verification an indispensable constraint to check whenever someone proposes generating architectural candidates faster, it does not imply that verification will be the limiting constraint in every design program.
 
-Staffing surveys give one view of the work involved. In the 2022 Wilson Research Group study, mean peak staffing for IC and ASIC projects had grown by 146% for verification engineers and 50% for design engineers relative to 2007 (@fig-verification-demand-scissors) [@Foster2022WilsonVerificationStudy]. These are relative changes in surveyed staffing, not measurements of the time needed to verify an additional candidate.
+Staffing surveys give one view of the work involved. In the 2022 Wilson Research Group study, demand for verification engineers on IC and ASIC projects grew at about 6.2% per year from 2007 to 2022, against about 2.7% per year for design engineers [@Foster2022WilsonVerificationStudy]. Compounded over fifteen years, that is roughly two and a half times the 2007 verification staffing against one and a half times the design staffing (@fig-verification-demand-scissors). These are relative changes in surveyed staffing, not measurements of the time needed to verify an additional candidate.
 
 ```{python}
 #| label: fig-verification-demand-scissors
@@ -911,21 +879,26 @@ Staffing surveys give one view of the work involved. In the 2022 Wilson Research
 #| out-width: "100%"
 #| fig-alt: "Two-line chart indexing engineer demand to 2007, with verification-engineer demand rising to about 2.5 times its 2007 level by 2022 while design-engineer demand reaches about 1.5 times, opening a widening gap between the lines."
 
+import csv
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import _python.plots as _ap
 from _python.plots import COLORS, apply_style
 
 apply_style()
 
 # Mean peak engineers per IC/ASIC project, Wilson Research Group / Siemens EDA
-# functional-verification studies (Foster's published summaries). 2007-2020
-# values have printed data labels; 2022 values are chart-read, constrained by
-# the study's stated callouts of +50% design and +146% verification demand
-# growth since 2007 (2.7% vs 6.2% CAGR).
-# Source data: data/datasets/chapter2-wilson-verification-staffing.csv
-
-years = [2007, 2012, 2016, 2020, 2022]
-design = [7.8, 8.5, 10.5, 10.3, 11.7]
-verif = [4.8, 8.4, 11.6, 11.4, 11.8]
+# functional-verification studies (Foster's published summaries).
+# Source data: data/datasets/chapter2-wilson-verification-staffing.csv. Rows with
+# evidence_type == chart_read_constrained are drawn hollow; growth labels are computed.
+_root = Path(_ap.__file__).resolve().parents[2]
+with open(_root / "data" / "datasets" / "chapter2-wilson-verification-staffing.csv", encoding="utf-8") as fh:
+    staff = [r for r in csv.DictReader(fh) if r["year"].isdigit()]
+years = [int(r["year"]) for r in staff]
+design = [float(r["design_engineers_mean_peak"]) for r in staff]
+verif = [float(r["verification_engineers_mean_peak"]) for r in staff]
+printed = [r["evidence_type"] == "printed_data_label" for r in staff]
 
 design_idx = [v / design[0] for v in design]
 verif_idx = [v / verif[0] for v in verif]
@@ -935,26 +908,25 @@ fig.subplots_adjust(left=0.12, right=0.80, top=0.93, bottom=0.19)
 
 ax.plot(years, verif_idx, color=COLORS["green"], linewidth=1.6, zorder=2)
 ax.plot(years, design_idx, color=COLORS["blue"], linewidth=1.6, zorder=2)
-ax.scatter(years[:-1], verif_idx[:-1], s=22, color=COLORS["green"], zorder=3)
-ax.scatter(years[:-1], design_idx[:-1], s=20, marker="s", color=COLORS["blue"], zorder=3)
+for x, v, d, solid in zip(years, verif_idx, design_idx, printed):
+    if solid:
+        ax.scatter([x], [v], s=22, color=COLORS["green"], zorder=3)
+        ax.scatter([x], [d], s=20, marker="s", color=COLORS["blue"], zorder=3)
+    else:
+        ax.scatter([x], [v], s=26, facecolors="white", edgecolors=COLORS["green"], linewidths=1.1, zorder=3)
+        ax.scatter([x], [d], s=24, marker="s", facecolors="white", edgecolors=COLORS["blue"], linewidths=1.1, zorder=3)
 
-# 2022 values are chart-read approximations: draw them hollow
-ax.scatter([years[-1]], [verif_idx[-1]], s=26, facecolors="white",
-           edgecolors=COLORS["green"], linewidths=1.1, zorder=3)
-ax.scatter([years[-1]], [design_idx[-1]], s=24, marker="s", facecolors="white",
-           edgecolors=COLORS["blue"], linewidths=1.1, zorder=3)
+ax.text(years[-1] + 0.6, verif_idx[-1], f"verification\nengineers (+{(verif_idx[-1] - 1) * 100:.0f}%)",
+        va="center", fontsize=6.0, color=COLORS["green"], clip_on=False)
+ax.text(years[-1] + 0.6, design_idx[-1], f"design\nengineers (+{(design_idx[-1] - 1) * 100:.0f}%)",
+        va="center", fontsize=6.0, color=COLORS["blue"], clip_on=False)
 
-ax.text(2022.6, verif_idx[-1], "verification\nengineers (+146%)", va="center",
-        fontsize=6.0, color=COLORS["green"], clip_on=False)
-ax.text(2022.6, design_idx[-1], "design\nengineers (+50%)", va="center",
-        fontsize=6.0, color=COLORS["blue"], clip_on=False)
-
-ax.set_xlim(2006, 2023)
+ax.set_xlim(years[0] - 1, years[-1] + 1)
 ax.set_ylim(0.9, 2.7)
-ax.set_xticks([2007, 2012, 2016, 2020, 2022])
+ax.set_xticks(years)
 ax.set_yticks([1.0, 1.5, 2.0, 2.5])
 ax.set_yticklabels(["1.0$\\times$", "1.5$\\times$", "2.0$\\times$", "2.5$\\times$"])
-ax.set_ylabel("mean peak demand vs. 2007", fontsize=7)
+ax.set_ylabel(f"mean peak demand vs. {years[0]}", fontsize=7)
 ax.tick_params(axis="both", labelsize=6.5, length=2.5, width=0.6, pad=2)
 ax.grid(axis="y", color=COLORS["grid"], linewidth=0.6)
 
@@ -969,9 +941,9 @@ plt.close(fig)
 
 The indexed lines in @fig-verification-demand-scissors show why verification capacity deserves explicit attention in a design plan. They do not identify the cause of the growth or determine the bottleneck in a particular project. The next comparison asks a different question: what do the surveys report about first-silicon outcomes alongside that effort?
 
-Longitudinal industry survey data place these results in perspective (@fig-ch07-wilson-verification-scissors a): between 2002 and 2024, mean verification time rose to 58% of total project schedules while first-silicon success dropped to 14% [@Foster2025WilsonVerification2024]. Because surveyed populations and design complexities shift between study years, these trends do not establish that added verification caused worse outcomes. Instead, they demonstrate that massive verification investments coexist with persistent silicon respins driven by functional logic defects, analog mixed-signal integration, and clock-domain crossings (@fig-ch07-wilson-verification-scissors b).
+Longitudinal industry survey data place these results in perspective (@fig-ch07-wilson-verification-scissors a). Across the Collett International surveys of 2002 and 2004 and the Wilson Research Group studies from 2007 to 2024, the mean share of project time spent in verification rose to 58% while first-silicon success fell to 14% in the 2024 study [@Foster2025WilsonVerification2024]. Because the survey organizations, populations, and design complexities shift between study years, these trends do not establish that added verification caused worse outcomes. They do show that large verification investments coexist with persistent silicon respins driven by functional logic defects, analog mixed-signal integration, and clock-domain crossings (@fig-ch07-wilson-verification-scissors b).
 
-![**Verification effort expands while first-silicon success rates fall.** (a) Longitudinal survey trends (2002 to 2024) show verification climbing to 58% of project time while first-silicon success declines to 14%. (b) Reported respin causes in 2024, led by functional logic flaws and analog mixed-signal integration [@Foster2022WilsonVerificationStudy; @Foster2025WilsonVerification2024]. Population-level trends do not isolate causality within individual projects.](images/fig-ch07-wilson-verification-scissors){#fig-ch07-wilson-verification-scissors width="90%" fig-alt="Two-panel survey chart for 2002 to 2024. Verification time rises overall to 58 percent and first-silicon success falls overall to 14 percent, with intermediate fluctuations. The verification-to-design staffing ratio reaches 1.16 in 2024. The second panel shows five reported respin causes, led by logic or functional flaws and analog or mixed-signal issues."}
+![**Verification effort expands while first-silicon success rates fall.** (a) Survey trends from Collett International (2002 and 2004, hollow markers) and the Wilson Research Group (2007 to 2024) show verification reaching 58% of project time while first-silicon success declines to 14%. (b) Reported respin causes in 2024, led by functional logic flaws and analog mixed-signal integration [@Foster2022WilsonVerificationStudy; @Foster2025WilsonVerification2024]. Population-level trends do not isolate causality within individual projects.](images/fig-ch07-wilson-verification-scissors){#fig-ch07-wilson-verification-scissors width="90%" fig-alt="Two-panel survey chart for 2002 to 2024. Verification time rises overall to 58 percent and first-silicon success falls overall to 14 percent, with intermediate fluctuations. The verification-to-design staffing ratio reaches 1.16 in 2024. The second panel shows five reported respin causes, led by logic or functional flaws and analog or mixed-signal issues."}
 
 The reported causes span logic, analog integration, clock-domain crossings, timing, and hardware–firmware behavior (@fig-ch07-wilson-verification-scissors b). Clock-domain crossings, for example, require attention to metastability as well as the logical sequence seen by a testbench.[^fn-metastability-c02] More random stimulus alone may poorly exercise a rare interaction; directed tests, suitable constraints, assertions, and formal analysis can target what is missing. The useful question is which failure mechanisms the current checks can detect.
 
@@ -981,7 +953,7 @@ Escaped defects also differ in how they can be repaired. Some permit a firmware 
 
 A new candidate may need new verification work before its performance matters. Published RTL-generation benchmarks include failures at parsing, interface compliance, and functional testing [@VerilogEval; @RTLLM; @WangEtAl2025OpenRTLSet]. Those tests do not establish timing closure or system correctness, but they show why a plausible description is only a starting point. The cost and latency of producing and checking a candidate depend on its scope, the reused verification infrastructure, and the required assurance; there is no fixed generation-to-verification ratio across abstraction levels.
 
-This dynamic explains why Layer 1 (AI-Assisted) point assistance fails to resolve the industry verification crisis. In a Layer 1 workflow, generative models operate as open-loop assistants within a frozen context, drafting isolated leaf RTL modules or testbenches while human architects specify over 90% of the surrounding pipeline and interfaces. Generative assistance accelerates typing speed, yet typing code was never the primary development bottleneck. With verification engineer staffing growing nearly three times faster than design staffing (+146% versus +50% in @fig-verification-demand-scissors) and verification consuming 58% of total project schedules (@fig-ch07-wilson-verification-scissors), accelerating unverified RTL generation merely inflates downstream verification debt. Human engineers must absorb a heavy manual integration tax in connecting mismatched ports, resolving clock-domain crossing hazards, fixing lint violations, and debugging corner-case deadlocks.
+The same data bound what Layer 1 point assistance can be expected to deliver on its own. A generator that drafts an isolated leaf module or testbench inside a human-specified pipeline speeds up one part of implementation. The surveys place much of the effort elsewhere: verification staffing grew at more than twice the annual rate of design staffing (@fig-verification-demand-scissors), and verification occupies more than half of reported project time (@fig-ch07-wilson-verification-scissors). The cost estimate discussed in @sec-design-cost-pressure points the same way, assigning most of a leading-node budget to software, verification, and IP qualification. Faster drafting therefore helps only if the drafted modules do not add more integration and checking work than they save, such as reconnecting mismatched ports, resolving clock-domain crossings, clearing lint violations, and debugging corner-case deadlocks. Whether they do is a measurement a team can make, not a conclusion to assume in either direction.
 
 Crucially, attempting to resolve this bottleneck by using generative models to synthesize both RTL implementations and their verification testbenches creates an insidious *co-generation trap*. When an AI generator produces both the circuit under test and the assertion suite or test harness from the same specification prompt, both artifacts inherit the same generative priors and semantic blindspots. A subtle misunderstanding of an edge-case bus protocol or arithmetic overflow condition will be faithfully mirrored in both the hardware logic and the checking harness, resulting in passing test runs that mask catastrophic functional escapes. Rigorous automated verification therefore demands an independent, immutable verification oracle (such as formal SystemVerilog assertions derived from architectural contracts, golden reference transaction models, or mutated test suites) that the generative agent is prohibited from modifying.
 
@@ -997,75 +969,51 @@ Verification effort belongs in the architectural comparison when alternatives di
 
 The implementation and verification work described above consumes a finite development budget. Much of that work is non-recurring engineering (NRE): an investment in the design, software, and qualification that precedes production. Its scale matters both when choosing an architecture and when deciding how many alternatives to develop in detail.
 
-Public estimates illustrate the size of this investment (@fig-design-cost-by-node). The Semiconductor Industry Association reports about \$30M for a 65\ nm design in 2006 and more than \$540M for a 5\ nm design in 2020 [@SemiconductorIndustryAssociation2026ChipDesign]. Arm's 2023 prospectus, citing International Business Strategies (IBS), gives estimates of \$249M at 7\ nm and \$725M at 2\ nm [@ArmHoldings2023Prospectus]. While project budgets vary with die size, IP reuse, and accounting boundaries, these published industry series reflect a steep escalation across nodes. For instance, the \$300M 7\ nm estimate from McKinsey differs from IBS's \$249M due to differing assumptions on embedded software and derivative reuse, yet both capture the same economic reality: leading-edge design costs increasingly dwarf raw manufacturing capital expenditure.
+Public estimates illustrate the size of this investment (@fig-design-cost-by-node). The most widely quoted series come from International Business Strategies (IBS). A 2018 IBS series put IC design cost at \$51.3M for a 28\ nm planar device, \$297.8M at 7\ nm, and \$542.2M at 5\ nm [@LaPedus2018BigTrouble3nm], and the Semiconductor Industry Association quotes the same order of magnitude, more than \$540M for a 5\ nm design in 2020 [@SemiconductorIndustryAssociation2026ChipDesign]. Arm's 2023 prospectus, citing a July 2022 IBS estimate, gives \$249M at 7\ nm and \$725M at 2\ nm [@ArmHoldings2023Prospectus]. The two vintages disagree at 7\ nm, which is a reminder that each estimate rests on its own assumptions about die size, IP reuse, and what counts as design cost. Project budgets vary widely around any of these figures, but every published series shows development cost rising steeply toward the leading edge.
 
 ```{python}
 #| label: fig-design-cost-by-node
 #| fig-cap: |
-#|   **Leading-node design estimates illustrate substantial development investment.** The bars combine
-#|   public estimates from SIA, McKinsey, and IBS, with sources identified beside each bar
-#|   [@SemiconductorIndustryAssociation2026ChipDesign; @BauerEtAl2020SemiconductorDesignManufacturing; @ArmHoldings2023Prospectus].
-#|   Scope and accounting differ across sources; these values are neither universal project prices nor a controlled node-scaling experiment.
+#|   **Leading-node design-cost estimates rise steeply, and they depend on the estimate's vintage.** Each bar is an
+#|   International Business Strategies (IBS) estimate, labeled with the year of the IBS series it comes from
+#|   [@LaPedus2018BigTrouble3nm; @ArmHoldings2023Prospectus]. The two vintages differ at 7\ nm (\$298M versus \$249M),
+#|   so the bars are published estimates under different assumptions, not a controlled node-scaling series or universal project prices.
 #| out-width: "100%"
-#| fig-alt: "Horizontal bar chart of selected chip design-cost estimates: 30 million dollars at 65 nanometers, 175 million at 10 nanometers, 300 million at 7 nanometers, 540 million at 5 nanometers, and 725 million at 2 nanometers. Each bar names its source; the estimates have different accounting boundaries."
+#| fig-alt: "Horizontal bar chart of IC design-cost estimates by process node. The 2018 estimates are 51 million dollars at 28 nanometers, 298 million at 7 nanometers, and 542 million at 5 nanometers. The 2022 estimates, drawn hatched, are 249 million at 7 nanometers and 725 million at 2 nanometers."
+
+import csv
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import _python.plots as _ap
 from _python.plots import COLORS, apply_style
 
 apply_style()
 
-# Sourced constants: data/datasets/chapter2-leading-node-design-cost.csv
-nodes = ["65 nm\n(2006)", "10 nm", "7 nm", "5 nm\n(2020)", "2 nm\n(estimate)"]
-costs = [30, 175, 300, 540, 725]
-sources = [
-    "SIA",
-    "McKinsey",
-    "McKinsey",
-    "SIA & McKinsey",
-    "IBS (Arm prospectus)",
-]
+# Source data: data/datasets/chapter2-leading-node-design-cost.csv (rows with plotted == yes).
+_root = Path(_ap.__file__).resolve().parents[2]
+with open(_root / "data" / "datasets" / "chapter2-leading-node-design-cost.csv", encoding="utf-8") as fh:
+    rows = [r for r in csv.DictReader(l for l in fh if not l.startswith("#")) if r["plotted"] == "yes"]
+# Largest node first; within a node, older vintage first.
+rows.sort(key=lambda r: (-float(r["node_nm"]), r["estimate_vintage"]))
 
 fig, ax = plt.subplots(figsize=(6.4, 2.9))
-positions = range(len(nodes))
+positions = list(range(len(rows)))
+for pos, r in zip(positions, rows):
+    cost = float(r["cost_musd"])
+    newer = r["estimate_vintage"].endswith("2022")
+    ax.barh(pos, cost, height=0.58, color=COLORS["note_fill"], edgecolor=COLORS["constraints"],
+            linewidth=1.4, hatch="////" if newer else None, zorder=3)
+    ax.text(cost + 12, pos, f"${cost:,.0f}M", va="center", ha="left", fontsize=7,
+            fontweight="bold", color=COLORS["constraints_ink"], zorder=4)
+    ax.text(cost + 100, pos, r["estimate_vintage"], va="center", ha="left", fontsize=6,
+            color=COLORS["muted"], zorder=4)
 
-ax.barh(
-    positions,
-    costs,
-    height=0.58,
-    color=COLORS["note_fill"],
-    edgecolor=COLORS["constraints"],
-    linewidth=1.4,
-    zorder=3,
-)
-
-for pos, cost, source in zip(positions, costs, sources):
-    ax.text(
-        cost + 12,
-        pos,
-        f"${cost}M",
-        va="center",
-        ha="left",
-        fontsize=7,
-        fontweight="bold",
-        color=COLORS["constraints_ink"],
-        zorder=4,
-    )
-    ax.text(
-        cost + 100,
-        pos,
-        source,
-        va="center",
-        ha="left",
-        fontsize=6,
-        color=COLORS["muted"],
-        zorder=4,
-    )
-
-ax.set_yticks(list(positions))
-ax.set_yticklabels(nodes, fontsize=7, color=COLORS["ink"])
+ax.set_yticks(positions)
+ax.set_yticklabels([f"{float(r['node_nm']):g} nm" for r in rows], fontsize=7, color=COLORS["ink"])
 ax.invert_yaxis()
-ax.set_xlim(0, 1150)
-ax.set_xlabel("Reported cost to design one new chip (US$M)", fontsize=7, color=COLORS["ink"])
+ax.set_xlim(0, 1000)
+ax.set_xlabel("Estimated IC design cost (US$M)", fontsize=7, color=COLORS["ink"])
 ax.tick_params(axis="x", labelsize=6.5)
 ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
 for spine in ["top", "right", "left"]:
@@ -1076,11 +1024,7 @@ plt.close(fig)
 
 The composition of a design budget helps identify where assistance could matter. In the IBS 2\ nm estimate cited by Arm, software development, verification, and IP qualification together account for 71% of the total [@ArmHoldings2023Prospectus]. This is a cost allocation for that estimate, not the fraction of every project's critical path. It nevertheless shows why faster RTL drafting alone cannot be assumed to remove most development expense.
 
-This economic distribution defines the financial boundaries of the three operational layers. Layer 1 point assistance concentrates almost entirely on initial RTL drafting, targeting an isolated fraction of the 29% logic and physical design allocation. Because open-loop generation shifts labor into manual review and downstream debugging, Layer 1 yields negligible net reductions in total non-recurring engineering (NRE) expense.
-
-Layer 2 parameter search operates primarily inside pre-verified, qualified IP containers. Sweeping parametric dials $\theta$ across cache sizes or buffer depths preserves existing interface verification collaterals and avoids invalidating qualified IP macros. While this discipline protects against runaway verification expense, it confines architectural returns to narrow parametric margins, leaving the broader 71% software and verification burden largely untouched.
-
-Layer 3 specification-driven co-design attacks the dominant 71% allocation directly. Generating hardware microarchitecture, compiler lowering paths, and formal verification collaterals jointly from a high-level intent specification allows Layer 3 to automate the cross-layer integration work that currently inflates leading-node budgets. Making custom silicon economically viable at lower shipment volumes requires attacking this software, verification, and qualification majority rather than polishing the initial drafting of leaf RTL.
+The same allocation suggests a hypothesis about where each operational layer could reduce cost, which only measurements of real programs can test. The prospectus does not itemize the remaining 29%, so that share cannot be read as the cost of RTL drafting or physical design alone. Point assistance (Layer 1) that drafts leaf RTL acts on part of that remainder, so its effect on total NRE depends on whether the drafted code adds more review, integration, and verification work than it saves. Parameter search inside a qualified container (Layer 2) can preserve existing interface verification and qualified IP, which limits its verification cost but also limits the design changes it can reach. An AI-native design system (Layer 3) would target the 71% share only if it could generate verification collateral, compiler support, and qualification evidence that reviewers accept at lower total cost than conventional practice; no published program has yet shown that it can.
 
 Production volume determines how that upfront investment contributes to each shipped unit. A simple accounting model makes the relationship explicit:
 
@@ -1106,17 +1050,13 @@ The MAESTRO anchor in @tbl-design-loop-scale-anchors helps make that diagnosis c
 
 This diagnosis includes wasted work as well as slow work. A simulator run against the wrong workload occupies a slot without resolving the pending question, even if it completes successfully. Correcting the inputs can improve useful throughput without making the simulator itself faster.
 
-This possibility extends the classic *design productivity gap* identified in the 2001 ITRS roadmap [@ITRS2001Design] and reiterated in the Semiconductor Research Corporation (SRC) and Semiconductor Industry Association Decadal Plan [@SRCSIA2021DecadalPlan]. Earlier abstraction shifts made larger designs tractable through RTL synthesis and IP reuse. Where candidate construction becomes cheaper, the corresponding challenge is whether simulation, verification, and review can absorb the additional work.
+This possibility extends the classic *design productivity gap*, charted in the 1997 National Technology Roadmap for Semiconductors [@SemiconductorIndustryAssociation1997NTRS], restated in the 2001 ITRS [@ITRS2001Design], and reiterated in the Semiconductor Research Corporation (SRC) and Semiconductor Industry Association Decadal Plan [@SRCSIA2021DecadalPlan]. Earlier abstraction shifts made larger designs tractable through RTL synthesis and IP reuse. Where candidate construction becomes cheaper, the corresponding challenge is whether simulation, verification, and review can absorb the additional work.
 
 Not every constraint appears as a queue. A study may be waiting for a missing trace or supplier constraint, or its available organizations may all fail the target. In the latter case, faster evaluation of the same alternatives will not produce a feasible design. The architect may need to reconsider the organization, or the requirements, before scheduling more runs.
 
 When the rate of candidate generation outpaces the throughput of physical evaluation and expert review, unvetted proposals accumulate in a widening *scissors gap* (@fig-scissors-gap). Beyond the crossover point where generation velocity exceeds downstream checking capacity, adding more generative throughput merely swells the backlog of unresolved proposals. This backlog is not an inevitable penalty of automated generation; admitting fewer candidates, filtering through hierarchical screening tiers, or scaling verification throughput can rebalance the loop.
 
-The scissors gap captures the structural breakdown between operational layers. Layer 1 point assistance operates primarily on the upper blade of the scissors diagram. Open-loop prompting lowers the marginal cost of drafting syntactic RTL toward zero, flooding engineering pipelines with unvetted candidates. Because downstream human verification and review capacity remain fixed, the unreviewed backlog expands rapidly.
-
-Layer 2 optimization attempts to close this gap by automating the parameter loop against fast simulation surrogates. It eliminates human triage for parameter selection, yet it creates a secondary accumulation point at the physical signoff boundary when candidates trigger routing congestion, dynamic IR-drop spikes, or timing closure failures.
-
-Layer 3 closes the scissors gap structurally. Rather than generating ungrounded proposals that await manual qualification, Layer 3 couples candidate exploration directly to authoritative physical and formal signoff oracles, including static timing analysis, design-rule checking, formal equivalence proofs, and clock-domain crossing checks. Surviving proposals satisfy tapeout-grade constraints autonomously, eliminating the unvetted backlog.
+The operational layers can push on either blade. Layer 1 point assistance mainly lowers the cost of drafting candidates, which widens the gap unless review and verification capacity grow with it. Layer 2 optimization automates selection within a container against fast surrogates, which removes some human triage but can move the accumulation to the physical checks when candidates fail on routing congestion, dynamic IR drop, or timing closure. An AI-native design system (Layer 3) is intended to couple exploration to stronger checks such as static timing analysis, design-rule checking, formal equivalence, and clock-domain crossing analysis, so that fewer unvetted proposals reach human review. Whether it narrows the gap depends on how much checking capacity it consumes and how often its surviving proposals still fail later review; that is a claim to measure, not a property the layer confers.
 
 ![**Unchecked candidate generation outpaces physical evaluation and review capacity.** Conceptual schematic illustrating candidate generation velocity outpacing physical evaluation and expert review throughput as architectural scope expands. Beyond the crossover point, unverified proposals accumulate into a widening *scissors gap* of unresolved candidates that have been generated but never evaluated rigorously enough to accept or reject. Accelerating proposal generation without scaling evaluation capacity expands this unvetted backlog.](images/fig-scissors-gap){#fig-scissors-gap width="80%" fig-alt="Conceptual scissors diagram in which tool and reviewer capacity initially exceeds candidate volume before crossing at a central fulcrum. Diverging upper and lower blades open beyond the crossover, where candidate generation accelerates faster than physical evaluation capacity, opening a widening scissors gap of unsettled work."}
 
@@ -1159,13 +1099,7 @@ The rows in @tbl-ai-contributions-by-bound pair possible assistance with the eng
 | Tool operation or triage consumes attention | Configure tools, launch runs, classify failures, compare reports, and route uncertain cases. | Repeated tool operation and initial result triage. | Clean tool state, reproducible commands, declared tool results, and expert review where required. |
 : **Match assistance to the limiting work and retain the necessary checks.** Each row identifies a possible saving and the evidence needed to use its output in a design decision. {#tbl-ai-contributions-by-bound tbl-colwidths="[22,28,24,26]"}
 
-These roles do not determine the workflow by themselves. In the framing established in @sec-moonshot, the boundary between human specification, automated exploration, and physical verification organizes assistance into three distinct operational layers.
-
-In Layer 1 (AI-Assisted), assistance provides localized point generation within a frozen human context. Human architects specify over 90% of the design, including workload bounds, interface protocols, pipeline topologies, and subsystem dimensions. Generative models draft isolated leaf RTL modules or testbench fragments. Because this interaction is open-loop, human engineers absorb a heavy manual integration tax in wiring ports, resolving clock-domain crossings, and repairing timing violations, leaving the verification bottleneck unresolved.
-
-In Layer 2 (AI-Driven), automated parameter search operates within an immutable structural container $\Theta$. Interface protocols and pipeline topologies remain locked, but architects expose explicit parametric degrees of freedom $\theta \in \Theta$ across cache capacities, buffer depths, and macro floorplan coordinates. An automated loop sweeps this space against cycle simulators and fast surrogate models. However, when memory pin bandwidth saturates or routing congestion spikes, Layer 2 stalls at a structural ceiling because the optimizer lacks the authority to alter bus protocols or restructure software runtimes.
-
-In Layer 3 (AI-Native), specification-driven cross-layer co-design realizes the Architecture 2.0 Moonshot. Human architects specify only high-level workload intent and an immutable formal verification contract, stripping away structural templates. The design system explores across abstraction boundaries, jointly synthesizing compiler schedules, custom instruction set extensions, redundant carry-save arithmetic datapaths, and streaming memory queues. Crucially, exploration is governed directly by authoritative physical and formal signoff oracles, including static timing analysis, design-rule checking, layout-versus-schematic verification, formal property checking, and dynamic IR-drop analysis, replacing human cognitive conventions with hard silicon reality. Prediction, generation, and optimization can contribute to all three; the distinction is how the design work is organized and which choices it can revisit.
+These roles do not determine the workflow by themselves. The operational layers defined in @sec-three-operational-layers organize them by how much of the design the automated work may change. Applied to the limits in @tbl-ai-contributions-by-bound, point assistance (Layer 1) fits rows where one artifact is missing and the surrounding design is settled; its result still passes through the integration and verification work described above. Search inside a fixed container (Layer 2) fits rows where the choice space exceeds the budget but the interfaces are right, and it stops being useful when the limiting effect sits in an interface it cannot move, as with the offload overhead $o$ or a congested memory interface. An AI-native design system (Layer 3) would be the candidate response when the existing formulation itself excludes the useful organizations, with its exploration held to static timing, design-rule, formal, and power-integrity checks rather than to proxies. Prediction, generation, and optimization can contribute to all three; the distinction is how the design work is organized and which choices it can revisit.
 
 The cost of assistance also belongs in the comparison. A surrogate may require data from expensive evaluations; generated candidates require checking; and tool-using systems consume compute, licenses, and review time. These investments may be worthwhile, but their omission can turn displaced work into an apparent saving.
 
@@ -1178,9 +1112,9 @@ Evaluation standards must also support rejecting AI assistance entirely. An esta
 ::: {.callout-lighthouse title="No single method carries the Lighthouse moonshot"}
 **Context.** Lighthouse begins with an XRBench-class mobile workload, a 64-bit RISC-V basis, a 3\ W target, and a 3\ nm-class process. It leaves workload instances, memory organization, compiler support, and implementation choices to be developed into a study. The earlier cache and offload examples show why those choices must be considered together across the operational layers.
 
-**Application.** A Layer 1 approach might prompt a generative model to draft an isolated vector arithmetic leaf cell or scratchpad controller, leaving human engineers to manually wire buses, resolve clock-domain crossings, and debug race conditions. A Layer 2 approach might lock the 64-bit pipeline container and sweep cache capacities and unroll factors against a cycle simulator, yet it stalls when off-chip memory traffic breaches the 3\ W thermal envelope and dense macro placement induces severe routing congestion.
+**Application.** A Layer 1 approach might ask a generator to draft an isolated vector arithmetic leaf cell or scratchpad controller, leaving engineers to connect buses, resolve clock-domain crossings, and debug races. A Layer 2 approach might fix the 64-bit pipeline and sweep cache capacities and unroll factors against a cycle simulator; it would stall if off-chip memory traffic pushed the design past the 3\ W envelope or dense macro placement congested routing, because neither fix lies inside the container.
 
-A Layer 3 AI-native design system dissolves the fixed processor template. Taking only the high-level XRBench intent and formal signoff assertions as inputs, the system co-designs a specialized streaming tensor datapath, custom carry-save arithmetic, tiled scratchpad memories, and matched compiler loop schedules. Joint exploration navigates the thermal boundary under the direct authority of static timing and dynamic IR-drop signoff oracles.
+A Layer 3 AI-native design system, if one could be built for this problem, would be permitted to set the processor template aside. From the XRBench intent and formal signoff assertions, it could propose a streaming tensor datapath, custom arithmetic, tiled scratchpad memories, and matched compiler loop schedules, and it would have to test them against the thermal limit with static timing and dynamic IR-drop analysis rather than proxies. No such system has yet carried this prompt through to a checked result.
 
 **Outcome.** Deploying an AI-native design system requires proving both that the candidate satisfies all verified silicon constraints and that the workflow reduces total engineering cost. Merely chaining a generator to an EDA tool or outputting a novel design description does not establish an architectural advantage.
 :::
