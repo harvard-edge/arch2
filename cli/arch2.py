@@ -8271,7 +8271,6 @@ IGNORED_PROSE_ACRONYMS: set[str] = {
     "SCALE-Sim",
     "RV64GCV",
     "RVV",
-    "OAI",
     "MAPT",
     "Partha",
     "LInc",

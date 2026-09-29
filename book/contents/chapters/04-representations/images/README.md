@@ -12,6 +12,10 @@ Image-backed figures currently used by the chapter:
   conditions that produced it.
 - `fig-ch04-ast-complexity-cliff`: measured module syntax size and internal
   hierarchy, generated from `data/studies/02-ast-complexity-cliff/`.
+- `fig-hardware-representation-dilation` (label `fig-ch04-spatial-semantic-dilation`):
+  measured declaration-to-use distance in token order and in the syntax tree,
+  drawn by `data/studies/09-representation-dilation/plot_representation_dilation.py`
+  from `../data/fig-hardware-representation-dilation.csv`.
 
 Moved to Chapter 5 with their owning method material:
 
@@ -36,6 +40,9 @@ Removed 2026-09-29: the orphaned `fig-architecture-data-scarcity` figure, its da
 and its generators, and `fig-ch01-money-plot-data-gap-funnel.png`. None was referenced
 by the chapter and none was verified.
 
-Removed 2026-09-29: `fig-hardware-representation-dilation` (definition-use token
-distance). Its token counts and syntax-node counts could not be re-derived from the
-pinned source files with a real parser, so the figure was not verifiable.
+Removed 2026-09-29: the first `fig-hardware-representation-dilation` (definition-use
+token distance). Its token counts and syntax-node counts could not be re-derived from
+the pinned source files with a real parser, so the figure was not verifiable. Rebuilt
+the same day from a new, reproducible pyslang measurement of the same 344 files
+(`data/studies/09-representation-dilation/`); no value from the deleted dataset was
+reused.

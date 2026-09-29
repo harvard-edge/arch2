@@ -448,7 +448,112 @@ Even within a single leaf module, lexical text order obscures the physical and l
 
 [^fn-space-vs-time-c04]: **Computational time versus physical silicon space**: In software programming, lines of source code represent sequential instructions scheduled across time by an operating system and hardware instruction pointer. In hardware description languages, source code describes physical electronic circuitry operating concurrently across two-dimensional silicon die space. Every multiplexer, register, and arithmetic unit that survives synthesis occupies silicon area and leaks power whenever it is powered, whether or not a given execution uses its results, unless the design gates its clock or power.
 
-In a graph that links each definition directly to its uses, those definition-use pairs sit one or two hops apart by construction, which is what makes the graph form attractive for representing connectivity. A sequence model completing a control signal, such as an AXI `tready` handshake or a bus credit counter, must instead relate text spans that can lie far apart in a large module. Whether that distance limits a particular model depends on its context length and training. Structured intermediate representations such as CIRCT dialects encode definition-use connectivity directly through SSA operands. Whether that structure yields higher generation success or faster closure is an empirical question that requires comparisons at matched compute.
+```{python}
+#| echo: false
+# Inline values for @fig-ch04-spatial-semantic-dilation, read from the CSV the
+# figure plots:
+#   book/contents/chapters/04-representations/data/fig-hardware-representation-dilation.csv
+# written by data/studies/09-representation-dilation/measure_representation_dilation.py
+# (pyslang parse of pinned public repositories; one row per source file).
+import csv as _csv4d
+import re as _re4d
+import statistics as _st4d
+from pathlib import Path as _Path4d
+
+import numpy as _np4d
+import _python.plots as _ap4d
+
+_root4d = _Path4d(_ap4d.__file__).resolve().parents[2]
+_path4d = (
+    _root4d / "book" / "contents" / "chapters" / "04-representations"
+    / "data" / "fig-hardware-representation-dilation.csv"
+)
+
+
+class _Raw4d:
+    """Render inline without quotes, so Quarto emits the text unescaped."""
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return self.text
+
+
+with open(_path4d, encoding="utf-8") as _fh:
+    _lines4d = _fh.read().splitlines()
+_rows4d = list(_csv4d.DictReader(l for l in _lines4d if not l.startswith("#")))
+_meas4d = [r for r in _rows4d if r["status"] == "measured"]
+_ver4d = _re4d.search(r"pyslang (\S+?)\.\s", "\n".join(_lines4d[:3])).group(1)
+
+
+def _fit4d(rows, key="mean_token_distance", reps=10_000, seed=20260929):
+    """Log-log OLS slope with a percentile bootstrap over files (as the study)."""
+    rows = [r for r in rows if r[key] != ""]
+    x = _np4d.log10([float(r["tokens"]) for r in rows])
+    y = _np4d.log10([float(r[key]) for r in rows])
+    slope = _np4d.polyfit(x, y, 1)[0]
+    rng = _np4d.random.default_rng(seed)
+    boots = [_np4d.polyfit(x[i], y[i], 1)[0] for i in (rng.integers(0, x.size, x.size) for _ in range(reps))]
+    lo, hi = _np4d.percentile(boots, [2.5, 97.5])
+    return slope, lo, hi
+
+
+def _f2(v):
+    return _Raw4d(f"{v:.2f}")
+
+
+def _median4d(corpus, key="mean_token_distance"):
+    return _st4d.median(float(r[key]) for r in _meas4d if r["corpus"] == corpus)
+
+
+_all4d = _fit4d(_meas4d)
+_bench4d = _fit4d([r for r in _meas4d if r["group"] == "benchmark"])
+_prod4d = _fit4d([r for r in _meas4d if r["group"] == "production"])
+_tree4d = _fit4d(_meas4d, "mean_tree_distance")
+_big4d = max(_meas4d, key=lambda r: int(r["tokens"]))
+_rest4d = [r for r in _meas4d if r is not _big4d]
+_rest_slope4d = _np4d.polyfit(
+    _np4d.log10([float(r["tokens"]) for r in _rest4d]),
+    _np4d.log10([float(r["mean_token_distance"]) for r in _rest4d]),
+    1,
+)[0]
+_trees4d = [float(r["mean_tree_distance"]) for r in _meas4d if r["mean_tree_distance"]]
+_bound4d = sum(int(r["name_refs_bound"]) for r in _meas4d)
+_refs4d = sum(int(r["name_refs"]) for r in _meas4d)
+
+dil_files = len(_rows4d)
+dil_measured = len(_meas4d)
+dil_excluded = dil_files - dil_measured
+dil_pairs = _Raw4d(f"{sum(int(r['def_use_pairs']) for r in _meas4d):,}")
+dil_pyslang = _Raw4d(_ver4d)
+dil_slope, dil_slope_lo, dil_slope_hi = (_f2(v) for v in _all4d)
+dil_bench_slope, dil_bench_lo, dil_bench_hi = (_f2(v) for v in _bench4d)
+dil_prod_slope, dil_prod_lo, dil_prod_hi = (_f2(v) for v in _prod4d)
+dil_rest_slope = _f2(_rest_slope4d)
+dil_min_tokens = min(int(r["tokens"]) for r in _meas4d)
+dil_tree_slope = _f2(_tree4d[0])
+dil_tree_median = round(_st4d.median(_trees4d))
+dil_tree_min = round(min(_trees4d))
+dil_tree_max = round(max(_trees4d))
+dil_norm_pct = round(100 * _st4d.median(float(r["mean_normalized_distance"]) for r in _meas4d))
+dil_ve = round(_median4d("VerilogEval"))
+dil_rtllm = round(_median4d("RTLLM"))
+dil_ibex = round(_median4d("Ibex"))
+dil_pico = _Raw4d(f"{round(_median4d('PicoRV32')):,}")
+dil_big_name = _Raw4d(_Path4d(_big4d["source_path"]).stem)
+dil_big_tokens = _Raw4d(f"{int(_big4d['tokens']):,}")
+dil_big_mean = _Raw4d(f"{round(float(_big4d['mean_token_distance'])):,}")
+dil_bound_pct = round(100 * _bound4d / _refs4d)
+```
+
+That separation can be measured. A parse with pyslang, the Python binding of the slang SystemVerilog compiler [@Slang], covers `{python} dil_files` source files at pinned commits, drawn from the benchmark reference RTL of VerilogEval and RTLLM, the BaseJump STL hardware library, and the SERV, Ibex, and PicoRV32 RISC-V cores [@VerilogEval; @RTLLM; @Taylor2018BaseJumpSTL; @Kindgren2018SERV; @LowRISCIbex; @Wolf2015PicoRV32]. The slang name lookup binds every reference to a net, variable, or subroutine argument to the declaration it resolves to. Each declaration-use pair is then measured twice (@fig-ch04-spatial-semantic-dilation). Token distance counts the lexical tokens between the declared name and the use, excluding comments, whitespace, and preprocessor directives. Tree distance counts the edges on the path between the same two nodes in pyslang's concrete syntax tree. Two Ibex package files declare no module and are excluded, leaving `{python} dil_measured` files and `{python} dil_pairs` pairs. Binding reaches only code that slang elaborates. It covers `{python} dil_bound_pct` percent of the syntactic references to declared signals, and most of the unbound remainder sits in generate branches that default parameter values leave inactive.
+
+![**In token order, a declaration's distance to its uses grows almost in proportion to file length, while in the syntax tree it barely changes.** (a) Mean declaration-to-use distance in tokens for `{python} dil_measured` files from two benchmark suites and four production-oriented repositories; the log-log slope is `{python} dil_slope` (95% bootstrap interval `{python} dil_slope_lo` to `{python} dil_slope_hi`). (b) Mean syntax-tree path for the same pairs, against the single edge a def-use graph gives every pair by construction. Parsed with pyslang `{python} dil_pyslang` at pinned commits [@Slang; @VerilogEval; @RTLLM]](images/fig-hardware-representation-dilation){#fig-ch04-spatial-semantic-dilation width="100%" fig-alt="Two-panel log-log scatter chart of declaration-to-use distance against file length in tokens for several hundred hardware source files from six corpora, each drawn with its own marker shape, hollow for benchmark files and filled for production files. (a) Mean distance in tokens rises along a fitted line that tracks file length, from the smallest benchmark files to the largest generated library file. (b) Mean path length in syntax-tree edges for the same files stays in a narrow, nearly flat band across the whole range, above a dashed line at one edge marking the def-use graph."}
+
+Token distance tracks file length almost one for one. The fitted log-log slope across all files is `{python} dil_slope` (95% bootstrap interval `{python} dil_slope_lo` to `{python} dil_slope_hi`), and the relationship holds within each population rather than arising from mixing small benchmarks with large production files. The slope is `{python} dil_bench_slope` (`{python} dil_bench_lo` to `{python} dil_bench_hi`) for the benchmark files and `{python} dil_prod_slope` (`{python} dil_prod_lo` to `{python} dil_prod_hi`) for the production-oriented files. The median file's mean distance is about `{python} dil_ve` tokens in VerilogEval and `{python} dil_rtllm` in RTLLM, about `{python} dil_ibex` in Ibex, and about `{python} dil_pico` in the single PicoRV32 file. The largest value, about `{python} dil_big_mean` tokens, comes from `{python} dil_big_name`, a machine-generated BaseJump table of `{python} dil_big_tokens` tokens; without it the slope is `{python} dil_rest_slope`. A slope near one means the distance is a roughly constant share of the file. Divided by file length, the mean distance has a median of `{python} dil_norm_pct` percent across files, which is what one would expect if declarations are grouped near the top of a module and uses spread through its body. Token order therefore places no bound on how far apart related text can be; the separation grows with the module.
+
+The same pairs look very different in the syntax tree. Per-file means lie between `{python} dil_tree_min` and `{python} dil_tree_max` edges, with a median of about `{python} dil_tree_median`, and barely change as file length runs from `{python} dil_min_tokens` to `{python} dil_big_tokens` tokens (log-log slope `{python} dil_tree_slope`). The path climbs from a use through its enclosing statement and block to the module and back down to the declaration, so its length follows nesting depth rather than the amount of intervening text. A graph that links each definition directly to its uses goes further and places every pair one edge apart. That number is a property of the representation, not a measurement, and it is what makes the graph form attractive for representing connectivity. A sequence model completing a control signal, such as an AXI `tready` handshake or a bus credit counter, must instead relate text spans whose separation grows with the module. Whether that distance limits a particular model depends on its context length and training, and these measurements do not test that question. Structured intermediate representations such as CIRCT dialects encode definition-use connectivity directly through SSA operands. Whether that structure yields higher generation success or faster closure is an empirical question that requires comparisons at matched compute.
 
 Representation structure can affect turnaround, but it does not determine compiler complexity by itself. Module boundaries and retained analyses may let a compiler avoid repeating work on unchanged parts of a design. Whether a pass can do so depends on its dependencies and invalidation rules, including relationships that cross module boundaries. A comparison of compilation or high-level synthesis (HLS) time therefore needs measurements on the chosen toolchain rather than a scaling guarantee inferred from the representation class.
 

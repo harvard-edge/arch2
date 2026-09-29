@@ -264,15 +264,77 @@ Containment mechanisms (hardware feature-disable fuses, firmware fallbacks, ther
 
 ### Capital Allocation and Physical Qualification
 
-Advancing a candidate architecture from software simulation to physical silicon commits NRE capital for upfront mask costs and physical signoff.[^fn-mask-nre-c11] Faster candidate generation compresses front-end architecture exploration and initial logic synthesis, but it does not reduce the physical reticle mask charge for the selected process node, nor does it eliminate post-silicon containment and derating costs. As automated tools accelerate front-end drafting, more of the financial and functional risk concentrates at the physical tapeout boundary. Published processor errata show where defects that survived pre-silicon verification were later documented. Intel and AMD publish a specification update or revision guide for each processor family that itemizes the errata found after release.
+```{python}
+#| echo: false
+# Errata study: every number in this section is read from the committed data in
+# data/studies/01-silicon-errata-archaeology/ (errata_classified.csv, sources.csv,
+# audit_metrics.json). Reproduce with the commands in that folder's README.
+import csv
+import json
+from pathlib import Path
+
+import _python.plots as _ap
+
+_errata_dir = Path(_ap.__file__).resolve().parents[2] / "data/studies/01-silicon-errata-archaeology"
+_errata = list(csv.DictReader((_errata_dir / "errata_classified.csv").open(encoding="utf-8")))
+_sources = list(csv.DictReader(
+    line for line in (_errata_dir / "sources.csv").open(encoding="utf-8") if not line.startswith("#")
+))
+_audit = json.loads((_errata_dir / "audit_metrics.json").read_text(encoding="utf-8"))
+_words = "zero one two three four five six seven eight nine ten eleven twelve".split()
+
+
+def _pct(x):
+    return f"{100 * x:.0f}"
+
+
+def _ci(pair):
+    return f"{100 * pair[0]:.0f} to {100 * pair[1]:.0f}"
+
+
+errata_n = f"{len(_errata):,}"
+families_n = len(_sources)
+intel_families = sum(r["vendor"] == "Intel" for r in _sources)
+amd_families = families_n - intel_families
+unclassified_n = sum(r["subsystem"] == "Unclassified" for r in _errata)
+audited_n = _audit["audited"]
+agree_pct = _pct(_audit["agreement_weighted"])
+agree_ci = _ci(_audit["agreement_weighted_ci95"])
+failed_w = _words[len(_audit["failed_classes"])].capitalize()
+rule_classes_w = _words[_audit["rule_classes"]]
+_sh = _audit["shares"]
+_mem = _sh["Memory controller, coherence fabric, and I/O"]
+_core = _sh["Core execution, caches, and TLBs"]
+_dbg = _sh["Debug, performance monitoring, and trace"]
+mem_rule = f"{100 * _mem['rule_share']:.1f}"
+mem_adj, mem_ci = _pct(_mem["adjusted_share"]), _ci(_mem["adjusted_ci95"])
+core_adj, core_ci = _pct(_core["adjusted_share"]), _ci(_core["adjusted_ci95"])
+dbg_adj, dbg_ci = _pct(_dbg["adjusted_share"]), _ci(_dbg["adjusted_ci95"])
+arith_n = _words[_audit["arithmetic_datapath_audited"]]
+arith_pct = f"{100 * _audit['arithmetic_datapath_share']:.0f}"
+arith_ci = _ci(_audit["arithmetic_datapath_share_ci95"])
+unique_titles = f"{_audit['unique_titles']:,}"
+unique_mem = _pct(_audit["unique_title_shares"]["Memory controller, coherence fabric, and I/O"])
+no_fix_pct = _pct(_audit["status_counts"]["No Fix"] / len(_errata))
+```
+
+Advancing a candidate architecture from software simulation to physical silicon commits NRE capital for upfront mask costs and physical signoff.[^fn-mask-nre-c11] Faster candidate generation compresses front-end architecture exploration and initial logic synthesis, but it does not reduce the physical reticle mask charge for the selected process node, nor does it eliminate post-silicon containment and derating costs. As automated tools accelerate front-end drafting, more of the financial and functional risk concentrates at the physical tapeout boundary. Published processor errata show where defects that survived pre-silicon verification were later documented. Intel and AMD publish a specification update or revision guide for each processor family that itemizes the errata found after release. We mined the current documents for `{python} families_n` families, `{python} intel_families` from Intel and `{python} amd_families` from AMD [@Intel2022XeonE5v4SpecUpdate; @Intel2020XeonScalableSpecUpdate; @Intel2023XeonScalableGen2SpecUpdate; @Intel2026XeonScalableGen3SpecUpdate; @Intel2026XeonScalableGen4SpecUpdate; @Intel2026XeonScalableGen5SpecUpdate; @Intel2025Core8th9thGenSpecUpdate; @Intel2026Core10thGenSpecUpdate; @Intel2026Core11thGenTigerLakeSpecUpdate; @Intel2023Core11thGenRocketLakeSpecUpdate; @Intel2026Core12thGenSpecUpdate; @Intel2026Core13th14thGenSpecUpdate; @Intel2026CoreUltraSpecUpdate; @Intel2026CoreUltra200VSpecUpdate; @Intel2026CoreUltraSeries2SpecUpdate; @AMD2023Family17h00hRevisionGuide; @AMD2026Family17h30hRevisionGuide; @AMD2025Family19h10hRevisionGuide; @AMD2025Family1Ah00hRevisionGuide]. Together they itemize `{python} errata_n` errata, and in every document the entries recovered from the detailed errata section match the document's own summary table, erratum for erratum.
 
 [^fn-mask-nre-c11]: **Mask tooling non-recurring engineering and physical signoff**: A reticle mask set is an upfront capital expenditure, with one photomask for each patterned layer, paid before any production wafer is processed. Faster automated exploration does not reduce this charge for a chosen node, and a respin that changes many layers pays much of it again, along with months of fabrication delay.
 
-Two cautions bound any reading of these lists. A published erratum is a defect the vendor chose to document for customers, not a complete census of escapes, and assigning each erratum to a subsystem takes judgment that a simple keyword rule does not reliably supply. Where escapes should be expected depends in part on verification state spaces. Arithmetic units have compact specifications against which equivalence checking, formal proof, and dense random testing are well established, although the Pentium division flaw shows that they are not immune [@Edelman1997PentiumDivision]. Memory subsystems and platform interconnects cross asynchronous clock domains, arbitrate shared buses, and admit many cache-coherence interleavings, and those multi-agent state spaces resist exhaustive checking. Whether published errata in fact concentrate in those subsystems is a measurement this book has not made, so the argument that follows rests on the difference in state spaces rather than on a count.
+Assigning each erratum to a subsystem is the step that takes judgment, so the assignment here comes from a committed rule set that was then audited. The rules match whole words and phrases in an erratum's title, fall back to its problem statement when the title matches nothing, and have no default class, so `{python} unclassified_n` errata that match no rule stay unclassified. A model-assisted reading of a seeded, stratified random sample of `{python} audited_n` errata then labeled each one from its full text. The rules agree with that reading for an estimated `{python} agree_pct`% of all errata (95% interval `{python} agree_ci`%). `{python} failed_w` of the `{python} rule_classes_w` rule classes fell short of the precision the audit required. Caches and translation lookaside buffers (TLBs), coherence fabrics, and security features were merged with the classes they were most often confused with. The machine-check reporting class and the graphics and accelerator class were dropped from the reported shares, and their errata are counted with the unclassified ones (@fig-errata-subsystem-shares).
 
-Specification updates also record a disposition for each erratum, such as a workaround in firmware, microcode, or the operating system, a fix in a later stepping, or no planned fix. A workaround that disables or serializes a mechanism carries a performance cost, which is the derating penalty a commitment record must state.
+![**Published CPU errata spread across subsystems instead of concentrating in memory and interconnect.** Shares of `{python} errata_n` errata from the specification updates and revision guides of `{python} families_n` Intel and AMD CPU families, grouped by committed keyword rules into six reported classes. Bars give the rule-assigned share; dots and whiskers give the share adjusted by a model-assisted audit of a stratified sample of `{python} audited_n` errata, with 95% intervals. The hatched bar holds errata that no rule matched and two classes that failed the audit.](images/fig-errata-subsystem-shares){#fig-errata-subsystem-shares width="100%" fig-alt="Horizontal bar chart of published CPU errata shares for six subsystem classes and a hatched bar for errata not resolved to a class. Memory, coherence, and I/O, debug and performance monitoring, and core execution with caches and TLBs have bars of similar length, virtualization and security is somewhat shorter, and power and interrupts are the shortest. Each bar carries a dot with an interval marking an audit-adjusted estimate that overlaps the bars of neighboring classes."}
 
-That difference bears on front-end productivity claims across the operational layers. Layer 1 assistance that drafts isolated leaf blocks, such as an arithmetic unit, works where specifications are compact and checking is mature, so faster leaf generation may leave much of the escape risk untouched. Layer 2 optimization tunes parameters within fixed containers and cannot by itself re-architect a bus protocol or remove an asynchronous timing race. A Layer 3 system, if one is built, would generate memory hierarchies, cache controllers, and interconnect fabrics, placing it directly in the subsystems whose state spaces are hardest to check exhaustively. Without contract verification and physical containment matched to that scope, faster cross-layer generation could raise the rate at which boundary defects reach tapeout. Front-end generation speed does not compress reticle mask charges or remove post-silicon derating costs, so verification accountability would have to rest on physical signoff checks and verified chicken-bit fallbacks rather than on manual code review alone.
+The largest reported class, memory controllers, coherence fabrics, and I/O links, holds `{python} mem_rule`% of the errata by rule and an estimated `{python} mem_adj`% after the audit (95% interval `{python} mem_ci`%). That is not the concentration an argument from verification state spaces would predict. Core execution, caches, and TLBs hold a comparable audit-adjusted share of `{python} core_adj`% (`{python} core_ci`%), and the logic that observes execution, meaning performance counters, trace, and debug exceptions, holds another `{python} dbg_adj`% (`{python} dbg_ci`%). Arithmetic datapaths are the one place the data match the expectation. Only `{python} arith_n` of the `{python} audited_n` audited errata describe a floating-point, integer, or vector unit that computes or schedules incorrectly, an estimated `{python} arith_pct`% of all errata (`{python} arith_ci`%). What the documents show in place of a concentration is dispersion across control and integration logic: virtualization and isolation features, power-state transitions, reset and interrupt flows, protocol compliance on I/O links, and the counters that watch all of them. Several of the audited errata sit where two such features meet. A VM entry that clears the trace-enable bit can emit a spurious trace packet [@Intel2020XeonScalableSpecUpdate], and after a C6 exit the processor can dispatch a queued interrupt before an earlier one of the same priority completes [@Intel2022XeonE5v4SpecUpdate].
+
+Three cautions bound this reading. A published erratum is a defect the vendor chose to document for customers, not a complete census of escapes. The documents also overlap, because a defect in shared logic appears in every family that inherits it; counting each distinct title once leaves `{python} unique_titles` errata and puts the memory, coherence, and I/O share at `{python} unique_mem`%. And the audit labels come from a model-assisted reading of the documents' own text rather than from an independent human expert, so they bound how far the rules depart from one careful reading without establishing ground truth.
+
+The state-space argument therefore survives only in part. Arithmetic units have compact specifications against which equivalence checking, formal proof, and dense random testing are well established, although the Pentium division flaw shows that they are not immune [@Edelman1997PentiumDivision], and published arithmetic errata are rare. Memory subsystems and platform interconnects cross asynchronous clock domains, arbitrate shared buses, and admit many cache-coherence interleavings, yet in these documents they account for no more escapes than the core pipeline around them. One reading consistent with these counts, though not established by them, is that escapes follow the breadth of specified behavior, meaning logic whose correct response depends on many architectural modes, power states, and feature interactions at once, wherever on the die it sits.
+
+Specification updates also record a disposition for each erratum, such as a workaround in firmware, microcode, or the operating system, a fix in a later stepping, or no planned fix. In these documents `{python} no_fix_pct`% of errata carry no planned fix, so the usual end state of an escape is a permanent workaround rather than a corrected part. A workaround that disables or serializes a mechanism carries a performance cost, which is the derating penalty a commitment record must state.
+
+That dispersion bears on front-end productivity claims across the operational layers. Layer 1 assistance that drafts isolated leaf blocks, such as an arithmetic unit, works where specifications are compact, checking is mature, and published errata are rarest, so faster leaf generation leaves nearly all of the documented escape risk untouched. Layer 2 optimization tunes parameters within fixed containers and cannot by itself re-architect a power-state sequence or a bus protocol. A Layer 3 system, if one is built, would generate the control and integration logic across which these errata are spread, including interconnect fabrics, power-state sequencing, virtualization support, and the counters and trace that observe them. Without contract verification and physical containment matched to that scope, faster cross-layer generation could raise the rate at which such defects reach tapeout. Front-end generation speed does not compress reticle mask charges or remove post-silicon derating costs, so verification accountability would have to rest on physical signoff checks and verified chicken-bit fallbacks rather than on manual code review alone.
 
 The workflow comparison and the product decision therefore need separate accounts. For the evidence test in @sec-moonshot, added verification work may be justified by a better architecture result, offset by savings elsewhere, or large enough to erase the claimed advantage. A matched comparison of the complete approaches must resolve that question within the assessed scope. A simulator-level study can support such a comparison without delivering a silicon-ready design.
 
