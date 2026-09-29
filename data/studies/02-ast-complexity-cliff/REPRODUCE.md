@@ -8,7 +8,7 @@ in by hand.
 It replaces `hardware_ast_complexity_gap.csv`, which claimed 175x. That file was
 never measured; its per-module values were literal tables inside its own
 generator, and the upstream commits in its header were hand-typed placeholders.
-It is retained, marked, at `data/synthetic/SYNTHETIC-hardware_ast_complexity_gap.csv`.
+It and its generator were deleted on 29 September 2026.
 
 ## What you need
 

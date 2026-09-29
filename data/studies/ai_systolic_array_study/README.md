@@ -1,6 +1,6 @@
 # Recorded AI-Assisted SCALE-Sim Study
 
-This example supplies the empirical study in Chapter 8. It records one model
+This example supplies the executed study used in Chapters 5 and 7. It records one model
 interaction, compares it with a weak fixed aspect-ratio heuristic at the same
 simulator-call budget, evaluates every candidate with SCALE-Sim 3.0.0, tests
 the proposed directional prediction, and stops at an evidence-bounded

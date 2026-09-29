@@ -22,7 +22,7 @@ Architectural engineering never begins from a vacuum; every new chip program inh
 
 This chapter establishes a rigorous protocol for architectural transferability (@fig-ch09-cover-map). It operationalizes the governing rule that engineering teams must transfer components rather than unverified conclusions. Through an admission gate and four structured evaluation stages, an engineering team partitions prior work into inspectable transfer units (representations, harnesses, surrogate models, physical constraints), traces the exact slice of dependencies broken by distribution shift, and requalifies each component against target-grounded checks before allowing it to steer a new tapeout decision.
 
-![**Reusable architectural components transfer across designs while empirical conclusions remain bounded to source evidence.** Reusable units from a source study record (data, representations, methods, tool interfaces, and configurations) are isolated and assigned explicit target actions (carry, update, replace, or retire). Target-grounded checks validate new design decisions while the original conclusion remains attached to its source conditions.](images/ch09-cover-map.svg){#fig-ch09-cover-map width="100%" fig-alt="Chapter overview diagram in which a source record meets a changed condition, after which units are carried, updated, replaced, or retired and target claims are checked anew."}
+![**Reusable architectural components transfer across designs while empirical conclusions remain bounded to source evidence.** Reusable units from a source study record (data, representations, methods, tool interfaces, and configurations) are isolated and assigned explicit target actions (carry, update, replace, or retire). Target-grounded checks validate new design decisions while the original conclusion remains attached to its source conditions. The diagram is schematic and carries no measured values.](images/ch09-cover-map.svg){#fig-ch09-cover-map width="100%" fig-alt="Chapter overview diagram in which a source record meets a changed condition, after which units are carried, updated, replaced, or retired and target claims are checked anew."}
 
 The transfer pipeline decouples what moves from what stays behind. While a source study record packages artifacts, data, methods, and verified claims into an integrated whole, applying that record to a new target exposes each component to environmental shift. Rather than accepting or rejecting prior work in bulk, the workflow categorizes target changes into distribution shifts, interface adaptations, or new design problems. Constituent units are routed to explicit actions (carrying forward stable interfaces, updating tool wrappers, retraining surrogates, or retiring brittle heuristics), while downstream target checks requalify only the affected dependencies before committing to a fresh architectural decision.
 
@@ -45,7 +45,7 @@ The transfer test proposed here begins with an admission check and then runs fou
 3. **Assign target actions.** Designate each unit to be carried forward, updated, retrained, recalibrated, replaced, or retired.
 4. **Enforce target checks and test the transfer benefit.** Requalify affected units against target references and compare decision quality and total cost with a matched target-only baseline, including the cost of adaptation and requalification.
 
-![**Transfer testing partitions prior engineering records without porting unverified source conclusions.** An initial admission gate evaluates decision compatibility, followed by four stages that isolate affected dependencies, assign unit actions (carry, update, replace, or retire), and enforce target checks on changed interfaces. Unaffected components carry forward while dependent claims are selectively reopened for target validation.](images/fig-transfer-test-flow){#fig-transfer-test-flow width="80%" fig-alt="Flow diagram of transfer testing, beginning at the source record, whose artifacts, methods, checks, and supported conclusion feed four stage boxes: transfer units separating data, methods, checks, and dependencies; changed dependencies tracing each material change to dependent claims and interfaces; target actions to carry, update, replace, or retire each unit; and target checks on affected units and every interface with a changed neighbor. The flow ends in a target decision box where a new comparison over target measurements supports a new conclusion. A supporting band states that components may move while the source conclusion stays attached to its source conditions and limits."}
+![**Transfer testing partitions prior engineering records without porting unverified source conclusions.** An initial admission gate evaluates decision compatibility, followed by four stages that isolate affected dependencies, assign unit actions (carry, update, replace, or retire), and enforce target checks on changed interfaces. Unaffected components carry forward while dependent claims are selectively reopened for target validation. The diagram is schematic and carries no measured values.](images/fig-transfer-test-flow){#fig-transfer-test-flow width="80%" fig-alt="Flow diagram of transfer testing, beginning at the source record, whose artifacts, methods, checks, and supported conclusion feed four stage boxes: transfer units separating data, methods, checks, and dependencies; changed dependencies tracing each material change to dependent claims and interfaces; target actions to carry, update, replace, or retire each unit; and target checks on affected units and every interface with a changed neighbor. The flow ends in a target decision box where a new comparison over target measurements supports a new conclusion. A supporting band states that components may move while the source conclusion stays attached to its source conditions and limits."}
 
 This staging enforces a strict separation between reusable mechanisms and target claims. When the admission check confirms that the underlying design question remains compatible, the workflow avoids wholesale invalidation by isolating only the affected dependency slice. A change in a single neighbor, such as an updated compiler lowering pass or a tighter thermal budget, does not compromise unaffected RTL modules; instead, it triggers selective reopening of dependent performance claims and imposes mandatory integration checks along the modified interface boundary. Requalification then establishes fresh empirical support on the target before any candidate enters the final commitment comparison.
 
@@ -140,6 +140,35 @@ The actions apply differently to each unit type. Retraining changes a learned co
 
 Machine-learning work on distribution shift and hidden dependencies [@WangEtAl2019NegativeTransfer; @QuinoneroCandelaEtAl2009DatasetShift; @SculleyEtAl2015Hidden] motivates checking interactions as well as individual components. A subsystem optimized in isolation can impose new costs on the system it joins. In hardware, those costs may appear in global interconnect and clock distribution, outside the boundary of the block-level report.
 
+```{python}
+#| echo: false
+
+# Guard for @tbl-integration-overhead: the table cells must match the retained
+# SCALE-Sim returns in data/studies/ai_systolic_array_study/recorded/reference/study_results.json.
+import json
+from pathlib import Path
+
+import _python.plots as _ap
+
+_root = Path(_ap.__file__).resolve().parents[2]
+_study = json.loads(
+    (
+        _root / "data" / "studies" / "ai_systolic_array_study" / "recorded"
+        / "reference" / "study_results.json"
+    ).read_text(encoding="utf-8")
+)
+_metrics = {e["candidate_id"]: e["metrics"] for e in _study["evaluations"]}
+_base = _metrics["conventional_baseline_32x32"]
+_wide = _metrics["ai_wide_16x64"]
+assert _base["total_cycles"] == _wide["total_cycles"] == 13917
+assert round(_base["avg_layer_util_pct"], 1) == round(_wide["avg_layer_util_pct"], 1) == 41.2
+assert (_base["sram_accesses"], _wide["sram_accesses"]) == (491520, 593920)
+assert round(100 * (_wide["sram_accesses"] / _base["sram_accesses"] - 1), 1) == 20.8
+assert _base["dram_reads"] == _wide["dram_reads"] == 129024
+assert (_base["dram_writes"], _wide["dram_writes"]) == (204863, 409726)
+assert round(_wide["dram_writes"] / _base["dram_writes"], 1) == 2.0
+```
+
 ::: {.callout-failure-mode title="Container optimization can hide system cost"}
 **The trap.** In a Layer 2 parameter search, an automated exploration engine optimizes parameters $\theta \in \Theta$ within a fixed structural container against a local proxy metric, and a local win or tie is read as a system-level result.
 
@@ -233,6 +262,7 @@ The measurement boundary also determines which physical conclusions a check can 
 
 **The lesson.** A containment mechanism helps only if it reaches the mechanism that fails. A proposed workaround must be checked against the physical failure class it claims to contain; when the defect lies in circuitry that no configuration or firmware path can observe or bypass, only revised silicon corrects it.
 :::
+
 ## Version Dependencies and Interface Contracts {#sec-version-dependencies-contracts}
 
 Software turnover, the last row of @tbl-ch9-source-target, can change a result even when the hardware remains fixed. The offload economics that @sec-design-loop-no-longer-scales works out with the LogCA model[^fn-logca-rem-c09] relate an accelerator's break-even point to communication latency, host overhead, workload granularity, host computation, and acceleration. The host runtime and compiler determine where a workload sits relative to that point, by fusing operations into payloads large enough to amortize invocation overhead and by eliminating the off-chip intermediate allocations that pull operational intensity below the link's balance point. A transferred offload result therefore carries a compiler version inside it. Move the kernel to a target whose compiler fuses less, and the same accelerator can land on the wrong side of break-even with no hardware change at all. An isolated kernel speedup becomes a transferred result only when compiler-generated code executes on the target under a pinned toolchain, with numerics, memory-ordering semantics, ABIs, and device contracts preserved, which is why the software path is a transfer unit in its own right (@tbl-ch9-transfer-map).

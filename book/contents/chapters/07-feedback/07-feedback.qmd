@@ -74,11 +74,11 @@ Automated verification is a structural need rather than a convenience. A design 
 
 [^fn-verification-scissors-c07]: **Verification scissors**: This book's name for the divergence in which verification takes more than half of project time, with a median reported range of 50 to 60 percent, while first-silicon success falls, to 14 percent of the chip projects in the 2024 study [@Foster2025WilsonVerification2024].
 
-Multi-fidelity screening organizes verification across progressive tiers of physical fidelity, execution latency, and license expenditure (@fig-synthesis-verification-funnel). Early millisecond-scale linting, interface compliance, and assertion checks eliminate non-viable candidates before invoking expensive, licensed static timing analysis and physical verification. The pipeline decouples two distinct recovery pathways: early syntactic, protocol, and functional rejections route directly back to the generative agent for prompt revision or abstract syntax tree (AST) repair, whereas late physical implementation closure relies on localized engineering change order (ECO) iterations (such as buffer insertion, gate sizing, and pin swapping) to repair near-miss physical timing violations without discarding the candidate and restarting the generative loop.
+Multi-fidelity screening organizes verification across progressive tiers of physical fidelity, execution latency, and license expenditure (@fig-synthesis-verification-funnel). Fast parsing, linting, interface compliance, and assertion checks eliminate non-viable candidates before invoking costlier static timing analysis and physical verification, which in commercial flows also consume license seats. The pipeline decouples two distinct recovery pathways: early syntactic, protocol, and functional rejections route directly back to the generative agent for prompt revision or abstract syntax tree (AST) repair, whereas late physical implementation closure relies on localized engineering change order (ECO) iterations (such as buffer insertion, gate sizing, and pin swapping) to repair near-miss physical timing violations without discarding the candidate and restarting the generative loop.
 
 The information content of the returned signal changes across the verification funnel, which shapes what each operational layer can do with it. Fast surrogate models and cycle simulators at the wide top of the funnel return scalar power, performance, and area (PPA) proxies. These scalar metrics guide numerical parameter optimization in Layer 2 workflows, steering parameter sweeps $\theta \in \Theta$ across cache sizes or pipeline depths. However, scalar scores discard spatial and structural error context. In contrast, authoritative signoff oracles at the narrow bottom of the funnel (such as static timing analyzers, power-integrity solvers, and design rule checkers) deliver rich, multi-objective physical traces. These detailed traces identify failing timing paths, spatial current crowding, and layout design rule check (DRC) coordinates. A Layer 3 AI-native design system would need to consume these structured traces directly rather than collapse them into a scalar cost. Whether such traces can reliably guide cross-layer architectural changes, rather than only localized repairs, remains an open research question.
 
-![**Multi-fidelity verification filters generative proposals across progressive fidelity tiers.** Schematic workflow organizing checks from millisecond-scale open-source linters through licensed static timing and physical signoff. Closed-loop recovery decouples early structural and functional repairs (routed back to generative prompt revision) from late physical timing near-misses (routed to localized engineering change orders).](images/fig-synthesis-verification-funnel){#fig-synthesis-verification-funnel width="100%" fig-alt="Flowchart of a five-tier multi-fidelity verification signoff funnel from generative candidate proposals down to a signoff-clean GDSII or OASIS implementation, showing feedback loops for generative repair versus localized ECO optimization."}
+![**Multi-fidelity verification filters generative proposals across progressive fidelity tiers.** Schematic workflow ordering checks from fast parsers and linters through static timing and physical signoff; stage costs are relative rankings, and the named engines are examples, not measurements. Closed-loop recovery decouples early structural and functional repairs (routed back to generative prompt revision) from late physical timing near-misses (routed to localized engineering change orders).](images/fig-synthesis-verification-funnel){#fig-synthesis-verification-funnel width="100%" fig-alt="Flowchart of a five-tier multi-fidelity verification signoff funnel from generative candidate proposals down to a signoff-clean GDSII or OASIS implementation, showing feedback loops for generative repair versus localized ECO optimization."}
 
 Rejecting a malformed proposal at parsing avoids spending resources on the later checks. Early filtering can therefore make a larger proposal stream affordable, provided the filter itself is suitable for the candidates it screens. To choose an order, consider what each check can reject, how long it takes, which artifacts it requires, and how much later work a justified rejection avoids. A cheap check belongs early when its result can support that rejection; passing it leaves the obligations addressed by later checks open. Every empirical observation entering the search loop also needs admission criteria before it is compared with anything.
 
@@ -222,11 +222,75 @@ Using the same large language model (LLM) family to generate RTL and its testben
 
 [^fn-red-teaming-c07]: **The ML safety parallel**: Reward hacking occurs when an optimizer obtains a high score through behavior the intended task should not reward [@AmodeiEtAl2016Concrete]. The hardware analogue is a candidate exploiting a proxy or testbench omission. Generating a testbench alongside the RTL can reproduce that omission; adversarial tests instead challenge the agreement by asking whether the harness detects deliberately introduced faults. This analogy motivates a check of the evaluator, not a claim that the two research problems have identical causes.
 
-Published verification records show why checker diversity matters (@fig-ch07-defect-discovery-modalities). The OpenHW Group reports that 47 RTL issues in its CV32E40P RISC-V core were identified and resolved between the start of verification in February 2020 and RTL freeze, and it records the method that found each one [@OpenHW2026CV32E40PManual]. Simulation found 18 of them: 10 through directed self-checking tests, 6 through step-and-compare against an instruction-set simulator, and only 2 through constrained-random stimulus. Formal verification and human inspection found 13 each, lint found 2, and one has no recorded source. Methods other than simulation therefore account for 28 of the 47 issues ($59.6\%$). These are counts from one core's campaign. The record does not report the effort, compute, or ordering behind each method, so the counts do not rank the methods by efficiency; they show that no single method would have found everything.
+```{python}
+#| echo: false
+# Inline values for the CV32E40P and mutation-analysis paragraphs and
+# @fig-ch07-defect-discovery-modalities, read from the same transcribed
+# datasets the figure plots:
+#   data/datasets/chapter7-defect-discovery-modalities.csv
+#     (OpenHW CV32E40P User Manual, Verification, Tables 9 and 10)
+#   data/datasets/chapter7-herdt-mutation-compliance.csv
+#     (Herdt et al., ASP-DAC 2021, Table 1)
+import csv as _csv7
+import re as _re7
+from pathlib import Path as _Path7
+import _python.plots as _ap7
 
-Mutation analysis asks the complementary question about the checks themselves. @HerdtEtAl2021MutationCompliance seeded 2,455 single mutations across nine mutation classes into a reference RISC-V instruction-set simulator. The official compliance suite killed 2,263 of them ($92.2\%$). A specification-based suite of about 8,900 further tests killed 91 of the 192 survivors, and symbolic execution generated 101 targeted tests that killed the remainder. The survivors were not trivial. They included shift instructions that used unmasked upper bits of the shift-amount register and jumps that wrote the destination register even when a misaligned target should have trapped without side effects. A suite that every conforming simulator passes can still fail to distinguish faulty ones.
+_root7 = _Path7(_ap7.__file__).resolve().parents[2]
 
-![**Different checks find different defects, and a passing suite can leave detectable faults alive.** (a) Method that found each of the 47 RTL issues resolved before CV32E40P RTL freeze; non-simulation methods account for 28 [@OpenHW2026CV32E40PManual]. (b) Mutants seeded into a reference RISC-V instruction-set simulator, with each suite run on the previous suite's survivors; the official compliance tests leave 192 of 2,455 alive [@HerdtEtAl2021MutationCompliance].](images/fig-ch07-defect-discovery-modalities){#fig-ch07-defect-discovery-modalities width="100%" fig-alt="Two-panel bar chart. The left panel counts the 47 CV32E40P RTL issues by the method that found them, with formal verification and inspection at 13 each, directed simulation 10, step-and-compare 6, constrained-random simulation 2, lint 2, and one unknown. The right panel shows three test suites applied in turn to seeded simulator mutants, killing 2,263 of 2,455, then 91 of 192, then all remaining 101."}
+
+class _Raw7:
+    """Render inline without quotes, so Quarto emits the text unescaped."""
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return self.text
+
+
+def _rows7(name):
+    with open(_root7 / "data" / "datasets" / name, encoding="utf-8") as fh:
+        return list(_csv7.DictReader(l for l in fh if not l.startswith("#")))
+
+
+_mod7 = {r["modality"]: int(r["issues_found"]) for r in _rows7("chapter7-defect-discovery-modalities.csv")}
+_grp7 = {}
+for _r in _rows7("chapter7-defect-discovery-modalities.csv"):
+    _grp7[_r["method_group"]] = _grp7.get(_r["method_group"], 0) + int(_r["issues_found"])
+cv_total = sum(_mod7.values())
+cv_sim = _grp7["simulation"]
+cv_nonsim = _grp7["non-simulation"]
+cv_directed = _mod7["Simulation: directed, self-checking test"]
+cv_step = _mod7["Simulation: step-and-compare with ISS"]
+cv_random = _mod7["Simulation: constrained-random"]
+cv_formal = _mod7["Formal verification"]
+cv_inspect = _mod7["Inspection (human review)"]
+cv_lint = _mod7["Lint"]
+cv_nonsim_pct = round(100 * cv_nonsim / cv_total, 1)
+# The prose states these relations in words ("13 each", "one has no recorded source").
+assert cv_formal == cv_inspect
+assert _grp7["unknown"] == 1
+
+_mut7 = {int(r["stage_order"]): r for r in _rows7("chapter7-herdt-mutation-compliance.csv")}
+mut_seeded = _Raw7(f"{int(_mut7[1]['mutants_entering']):,}")
+mut_official_killed = _Raw7(f"{int(_mut7[1]['mutants_killed']):,}")
+mut_official_pct = round(100 * int(_mut7[1]["mutants_killed"]) / int(_mut7[1]["mutants_entering"]), 1)
+mut_survivors = int(_mut7[1]["mutants_surviving"])
+_spec_n7 = int(_re7.search(r"\d+", _mut7[2]["tests_description"]).group())
+mut_spec_tests = _Raw7(f"{_spec_n7:,}")
+mut_spec_killed = int(_mut7[2]["mutants_killed"])
+mut_symbolic_tests = int(_mut7[3]["mutants_killed"])
+# The prose says symbolic execution "killed the remainder".
+assert int(_mut7[3]["mutants_surviving"]) == 0
+assert int(_mut7[2]["mutants_entering"]) == mut_survivors
+```
+
+Published verification records show why checker diversity matters (@fig-ch07-defect-discovery-modalities). The OpenHW Group reports that `{python} cv_total` RTL issues in its CV32E40P RISC-V core were identified and resolved between the start of verification in February 2020 and RTL freeze, and it records the method that found each one [@OpenHW2026CV32E40PManual]. Simulation found `{python} cv_sim` of them: `{python} cv_directed` through directed self-checking tests, `{python} cv_step` through step-and-compare against an instruction-set simulator, and only `{python} cv_random` through constrained-random stimulus. Formal verification and human inspection found `{python} cv_formal` each, lint found `{python} cv_lint`, and one has no recorded source. Methods other than simulation therefore account for `{python} cv_nonsim` of the `{python} cv_total` issues ($`{python} cv_nonsim_pct`\%$). These are counts from one core's campaign. The record does not report the effort, compute, or ordering behind each method, so the counts do not rank the methods by efficiency; they show that no single method would have found everything.
+
+Mutation analysis asks the complementary question about the checks themselves. @HerdtEtAl2021MutationCompliance seeded `{python} mut_seeded` single mutations across nine mutation classes into a reference RISC-V instruction-set simulator. The official compliance suite killed `{python} mut_official_killed` of them ($`{python} mut_official_pct`\%$). A specification-based suite of about `{python} mut_spec_tests` further tests killed `{python} mut_spec_killed` of the `{python} mut_survivors` survivors, and symbolic execution generated `{python} mut_symbolic_tests` targeted tests that killed the remainder. The survivors were not trivial. They included shift instructions that used unmasked upper bits of the shift-amount register and jumps that wrote the destination register even when a misaligned target should have trapped without side effects. A suite that every conforming simulator passes can still fail to distinguish faulty ones.
+
+![**Different checks find different defects, and a passing suite can leave detectable faults alive.** (a) Method that found each of the `{python} cv_total` RTL issues resolved before CV32E40P RTL freeze; non-simulation methods account for `{python} cv_nonsim` [@OpenHW2026CV32E40PManual]. (b) Mutants seeded into a reference RISC-V instruction-set simulator, with each suite run on the previous suite's survivors; the official compliance tests leave `{python} mut_survivors` of `{python} mut_seeded` alive [@HerdtEtAl2021MutationCompliance].](images/fig-ch07-defect-discovery-modalities){#fig-ch07-defect-discovery-modalities width="100%" fig-alt="Two-panel bar chart. The left panel counts the 47 CV32E40P RTL issues by the method that found them, with formal verification and inspection at 13 each, directed simulation 10, step-and-compare 6, constrained-random simulation 2, lint 2, and one unknown. The right panel shows three test suites applied in turn to seeded simulator mutants, killing 2,263 of 2,455, then 91 of 192, then all remaining 101."}
 
 One proposed use of automation is mutation-directed property generation. Rather than mutating flattened post-synthesis gate netlists (where logic minimization and technology mapping destroy high-level signal semantics and create synthetic nets), mutations are injected at the source RTL abstract syntax tree (AST) level (such as modifying conditional branches, operator polarities, or state transitions). Non-equivalent mutants are identified within a bounded formal equivalence budget, and the simulation suite runs against them. For a surviving mutant, the environment returns the mutation details and source context to a model that proposes an SVA property or a directed testbench sequence. The suite must then run again to establish whether the new check detects the fault while accepting the correct design. Killing the retained mutants supports a claim about detection of that tested fault set. It does not establish that all corner cases have been found, that the original specification is complete, or that the generator and checker have no shared omissions.
 
@@ -288,9 +352,39 @@ The verification loop must therefore audit the proxy itself. Evaluating its fitn
 
 The third column limits what the architect can infer from each diagnostic. Failure on one task need not make the surrogate useless for every other task, but another use still needs its own qualification. A proxy unreliable for fine ranking might support coarse screening only if its false-acceptance and false-rejection behavior is acceptable for that screen. Passing the observed checks also does not establish behavior outside their qualified scope.
 
-**Case study: scalar compression and masked write traffic.** A scoring metric that compresses multi-dimensional behavior into a single figure of merit can hide differences the decision may need. In the book's retained study of systolic array aspect ratios under SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3], the $32 \times 32$ baseline and a $16 \times 64$ candidate returned an identical cycle count (13,917 cycles) and identical average layer utilization (41.2%), an exact tie under the preregistered scalar score ($S = \text{total cycles}/\bar{U}_{\text{frac}} = 33,782.40$).
+```{python}
+#| echo: false
+# Inline values for the systolic-array case study and @fig-proxy-mismatch, read
+# from the retained study record the figure plots:
+#   data/studies/ai_systolic_array_study/recorded/reference/study_results.json
+import json as _json7
 
-A quantity the score omits separates them (@fig-proxy-mismatch). The $16 \times 64$ candidate reported 409,726 modeled DRAM-word writes against 204,863 for the baseline, twice as many. Across these two retained SCALE-Sim quantities the baseline dominates the candidate, with equal cycles and half the modeled writes. A scalar evaluator that omits write traffic treats the two designs as interchangeable. Whether the extra writes would matter physically, through bus contention, energy, or thermal limits, is a question this run cannot answer, because SCALE-Sim write counts are modeled quantities rather than measured traffic.
+_study7 = _json7.loads(
+    (_root7 / "data" / "studies" / "ai_systolic_array_study" / "recorded" / "reference" / "study_results.json").read_text(encoding="utf-8")
+)
+
+
+def _eval7(cid):
+    return next(e for e in _study7["evaluations"] if e["candidate_id"] == cid)["metrics"]
+
+
+_base7 = _eval7("model_baseline_32x32")
+_wide7 = _eval7("ai_wide_16x64")
+assert _base7["total_cycles"] == _wide7["total_cycles"]
+assert _base7["avg_layer_util_pct"] == _wide7["avg_layer_util_pct"]
+# The prose states the write ratio in words ("twice as many", "half").
+assert _wide7["dram_writes"] == 2 * _base7["dram_writes"]
+sa_cycles = _Raw7(f"{_base7['total_cycles']:,}")
+sa_util_pct = _Raw7(f"{_base7['avg_layer_util_pct']:.1f}")
+sa_score = _Raw7(f"{_study7['architecture_outcome_claim']['baseline_score']:,.2f}")
+assert abs(_study7["architecture_outcome_claim"]["baseline_score"] - _base7["total_cycles"] / (_base7["avg_layer_util_pct"] / 100)) < 1e-6
+sa_writes_base = _Raw7(f"{_base7['dram_writes']:,}")
+sa_writes_wide = _Raw7(f"{_wide7['dram_writes']:,}")
+```
+
+**Case study: scalar compression and masked write traffic.** A scoring metric that compresses multi-dimensional behavior into a single figure of merit can hide differences the decision may need. In the book's retained study of systolic array aspect ratios under SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3], the $32 \times 32$ baseline and a $16 \times 64$ candidate returned an identical cycle count (`{python} sa_cycles` cycles) and identical average layer utilization (`{python} sa_util_pct`%), an exact tie under the preregistered scalar score ($S = \text{total cycles}/\bar{U}_{\text{frac}} = `{python} sa_score`$). The prompt copy retained with that study does not match the hash recorded before its model call, so the model's exact input cannot be verified, although every SCALE-Sim input and output used here is retained intact.
+
+A quantity the score omits separates them (@fig-proxy-mismatch). The $16 \times 64$ candidate reported `{python} sa_writes_wide` modeled DRAM-word writes against `{python} sa_writes_base` for the baseline, twice as many. Across these two retained SCALE-Sim quantities the baseline dominates the candidate, with equal cycles and half the modeled writes. A scalar evaluator that omits write traffic treats the two designs as interchangeable. Whether the extra writes would matter physically, through bus contention, energy, or thermal limits, is a question this run cannot answer, because SCALE-Sim write counts are modeled quantities rather than measured traffic.
 
 The study itself did not fall into this trap. It recommended retaining the $32 \times 32$ baseline because no candidate beat it by the preregistered 1\ percent margin, and the write difference was noticed only after the run. The hazard is prospective. A Layer 2 search that sweeps aspect ratios $\theta \in \Theta$ inside a fixed template and ranks them by this score would have no basis for preferring the baseline over the candidate, and a tie-breaking rule could as easily select the design with twice the modeled writes. The remedy is to declare every decision-relevant quantity, here write traffic alongside cycles, as an objective or constraint before the search runs, so that it can shape exploration rather than surface afterward.
 
@@ -306,7 +400,7 @@ The study itself did not fall into this trap. It recommended retaining the $32 \
 #| echo: false
 #| label: fig-proxy-mismatch
 #| fig-cap: |
-#|   **Modeled traffic exposes model-local dominance masked by the scalar score.** Across retained SCALE-Sim total cycles (horizontal axis, lower is better) and modeled DRAM-word writes (vertical axis, lower is better), the 32 by 32 baseline and shared 16 by 64 candidate tie at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively. The baseline therefore dominates the candidate only across these two retained SCALE-Sim quantities. This post-run observation does not alter the frozen study outcome or establish physical traffic, contention, timing, or energy [@RajEtAl2025ScaleSimV3].
+#|   **Modeled traffic exposes model-local dominance masked by the scalar score.** Across retained SCALE-Sim total cycles (horizontal axis, lower is better) and modeled DRAM-word writes (vertical axis, lower is better), the 32 by 32 baseline and shared 16 by 64 candidate tie at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively. The baseline therefore dominates the candidate only across these two retained SCALE-Sim quantities. This post-run observation does not alter the frozen study outcome or establish physical traffic, contention, timing, or energy [@RajEtAl2025ScaleSimV3]. The retained prompt copy does not match the hash recorded before the model call, so the model's exact input cannot be verified; the plotted simulator returns are unaffected.
 #| out-width: "100%"
 #| fig-alt: "Scatter plot of evaluated systolic array shapes across retained SCALE-Sim total cycles and modeled DRAM-word writes, showing the 32 by 32 baseline and 16 by 64 candidate tied at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively."
 
@@ -398,6 +492,7 @@ These are trade-off hypotheses rather than measured results. The telemetry also 
 Qualifying individual results leaves a further question: do those results cover the requirements of the design? Assurance engineering structures this argument by linking high-level performance and correctness claims to supporting checks and explicit assumptions [@Kelly2004GSN]. For each requirement, identify the relevant checks, the conditions under which their results apply, and any remaining gap.
 
 A successful check supports only the obligations it addresses. A check that could falsify a claim is useful even when passing it cannot establish the claim in full. Across physical limits, functional contracts, and quality-of-service bounds, the task is to determine how the checks fit together and where further evidence is needed. The following subsections develop that argument through requirement mapping, check fidelity, and shared blind spots.
+
 ### Mapping Requirements to Verification Toolchains {#sec-mapping-requirements-toolchains}
 
 A complex compute subsystem needs checks matched to each physical requirement. Static timing engines such as Cadence Tempus check setup and hold timing across specified modes and corners [@Cadence2021Tempus]. Power-integrity analysis such as RedHawk-SC addresses voltage drop and electromigration limits,[^fn-em-c07] while physical verification such as Calibre checks layout against the applicable rule deck. The limiting conditions differ by property; a corner that stresses setup timing need not be the limiting corner for hold timing or leakage, and dynamic IR-drop also depends on switching activity. The verification plan must therefore name the relevant PVT conditions, activity assumptions, extraction models, and rules for each check. A pass covers those declared conditions; a nominal point estimate or a functional testbench does not establish physical feasibility across them.

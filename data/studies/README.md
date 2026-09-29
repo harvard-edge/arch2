@@ -22,59 +22,61 @@ the only provenance record. Anything not listed in it has no recorded source.
 An empty `row_provenance: []` means values in that file cannot be traced to a source
 one row at a time. That is a warning, not a formality.
 
-## Status, audited 2026-09-09
+## Status, audited 2026-09-29
 
-| # | Study | Class | Status | Open defects |
-| --- | --- | --- | --- | ---: |
-| 01 | Silicon errata archaeology | mined | defective | 5 |
-| 02 | RTL source complexity | measured | **verified** | 0 |
-| 03 | Fixed-silicon software dividend | transcribed | defective | 3 |
-| 04 | Open silicon democratization | transcribed | defective | 3 |
-| 05 | Hardware CVE mitigation tax | transcribed | defective | 2 |
-| 06 | Placement seed dispersion | measured | defective | 2 |
-| 07 | Design cost and R&D wall | mined | defective | 4 |
-| 08 | Testbench mutation vacuity | — | **withdrawn** | RNG-generated |
+| # | Study | Class | Status | How it was checked |
+| --- | --- | --- | --- | --- |
+| 02 | RTL source complexity | measured | **verified** | All headline ratios recomputed from the CSV; 279 of 1,513 rows (every VerilogEval and CV32E40P module) re-parsed with pyslang 11.0.0 at the pinned commits and matched exactly |
+| 06 | Placement seed dispersion | measured | **verified** | All 20 raw ORFS JSON files hash-match the CSV; 0.84% area and 3.83% slack spreads recomputed from them |
+| 08 | Executed VerilogEval mutation pilot | measured | **verified** | 25 baselines and 22 mutants re-run with Icarus and Yosys and matched exactly; 328 of 338 recomputed from the CSV |
 
-Study 02 is the only clean one. Study 06's measured pilot and Study 07's SEC
-financials are sound data underneath broken figures; the defects there are packaging
-and plotting, not measurement.
+Studies 01 (silicon errata), 03 (MLPerf software dividend), 04 (Tiny Tapeout
+democratization), 05 (hardware CVE mitigation tax) and 07 (foundry cost and R&D)
+were deleted on 29 September 2026, with their datasets, figures, plot scripts,
+and the scrapers that produced them. Each was checked value by value against its
+primary sources:
+
+- **01.** The erratum IDs and titles were largely extracted correctly, but the
+  subsystem classifier misassigned about half of a 40-row sample, the `<1.8%`
+  ALU headline appeared nowhere in the data, and the stepping-decay panel was
+  literal constants.
+- **03.** The scraper held hand-typed literals and fetched nothing. 22 of 31
+  checkable MLPerf rows disagreed with the MLCommons logs (the 3.82x headline is
+  1.9x in the logs), and none of the 26 recorded commit SHAs existed.
+- **04.** The commit hashes resolved to nothing, the 1981 cost endpoint had no
+  source, and the affiliation shares were typed into the scraper.
+- **05.** The cumulative 22.0% tax was a constant with no composition rule, two
+  CVE IDs belonged to unrelated products, and four penalties contradicted their
+  cited papers.
+- **07.** 70 of 189 SEC accession numbers pointed at other filings, forecasts
+  carried real accession numbers, and the node-cost table had no openable source
+  for wafer price, density or cost per transistor.
+
+Study 08's earlier RNG-generated vacuity and judge-bias data was deleted on the
+same date; only the executed pilot remains in that folder.
 
 ## The manuscript is not affected
 
-Verified 2026-09-09. No withdrawn or defective dataset is referenced anywhere in
-`book/contents/`. This is structural rather than lucky:
+No study in this directory is read by `book/contents/`. The studies feed the
+public data page (`www/data.qmd`); the book's figures read `data/datasets/` and
+chapter-local data.
 
-```
-data/studies/          -> www/data.qmd          (the website)
-data/datasets/  -> book/contents/*.qmd   (the manuscript)
-```
+## Four ways a number got past a reader
 
-The studies feed the public data page. The book's figures read a different set of
-`chapterNN-*.csv` datasets. **That second population has not been audited.**
+These are the defect shapes the audits found, in the order they are hard to catch.
 
-## The four ways a number gets past a reader
+1. **Generated values with real tool metadata.** A dataset header named
+   JasperGold, SymbiYosys and Verilator; the values came from `rng.gauss()`.
+2. **A "scraper" that scrapes nothing.** A script named `mine_*` or `scrape_*`
+   that contains the data as literals looks like a pipeline and is a table.
+3. **A headline that exists only as an annotation string.** `<1.8%` and `82x`
+   were matplotlib text, contradicted by the data beneath them.
+4. **Fabricated identifiers.** Commit hashes that resolve to nothing, accession
+   numbers that belong to other filers, and CVE IDs assigned to other products.
 
-Every defect found in this audit is one of these. They are listed in the order they
-are hard to catch.
+## Validators
 
-1. **Generated values with real tool metadata.** A dataset header names JasperGold,
-   SymbiYosys and Verilator; the values came from `rng.gauss()`. Three datasets were
-   withdrawn for this in September 2026.
-2. **A real dataset under a hardcoded figure.** The script opens the CSV, then plots
-   literal arrays. Studies 01, 03, 05 and 07 all do this. The data is fine and the
-   picture is asserted.
-3. **A headline that exists only as an annotation string.** `<1.8%` and `82x` are
-   matplotlib text, not measurements. Both are contradicted by the data beneath them.
-4. **Fabricated identifiers.** 27 commit hashes in Study 04 that resolve to nothing,
-   and a forecast row in Study 07 carrying a real SEC accession number.
-
-A fifth, weaker signal worth checking for: numbers that are internally consistent but
-externally false. Study 01's containment figures sum to exactly 100% and disagree
-with the data in every term.
-
-## Why the existing validators pass all of this
-
-`validate_provenance.py` never scans `data/studies/`, and treats a script mentioning
-a CSV filename as proof the file was used. `validate_figure_provenance.py` accepts
-any script containing a `.csv` string literal, and only reads `book/contents/`, never
-`www/data.qmd`. Both report zero violations today.
+`python3 data/validate_provenance.py` scans `data/datasets/` and `data/studies/`,
+fails on any RNG-based generator, and fails on any file under
+`www/data/observatory/` that no page or notebook reads.
+`python3 data/validate_figure_provenance.py` checks the book's figures.

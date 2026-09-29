@@ -9,11 +9,11 @@ Key Architectural Elements:
 2. Two closed-loop recovery pathways:
    - Early structural/functional rejections route back to Generative Agent Revision.
    - Late physical/timing near-misses route to Localized ECO Optimization.
-3. Clean architectural taxonomy with ZERO synthetic numbers or invented percentages.
+3. Conceptual schematic: no numbers, percentages, or runtimes. Stage costs are
+   ordinal labels only (lowest to highest), and the engines are examples.
 
 Exports SVG, PDF, and 300 DPI PNG to:
 - book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.{png,svg,pdf}
-- book/images/fig-synthesis-verification-funnel.{png,svg,pdf}
 """
 
 import sys
@@ -33,9 +33,6 @@ apply_style()
 def main():
     chapter_dir = Path(__file__).resolve().parents[1]
     out_plot_ch = chapter_dir / "images" / "fig-synthesis-verification-funnel"
-    out_plot_global = (
-        REPO_ROOT / "book" / "images" / "fig-synthesis-verification-funnel"
-    )
 
     fig, ax = plt.subplots(figsize=(6.0, 4.4))
     fig.subplots_adjust(left=0.04, right=0.96, top=0.95, bottom=0.06)
@@ -50,7 +47,7 @@ def main():
             "name": "Stage 1: Syntactic & AST Parsing",
             "tools": "Tree-Sitter / Verilator / Slang",
             "checks": "Syntax valid, elaborated module hierarchy, port types",
-            "latency": "Milliseconds (free / open-source)",
+            "latency": "lowest",
             "y": 78,
             "width": 62,
             "color": COLORS["blue"],
@@ -59,16 +56,16 @@ def main():
             "name": "Stage 2: Interface Schema & Interconnect",
             "tools": "Static Schema Linters / Protocol Checkers",
             "checks": "AXI / TLM handshakes, port widths, clock domain tags",
-            "latency": "Seconds (low compute overhead)",
+            "latency": "low",
             "y": 62,
             "width": 58,
             "color": COLORS["green"],
         },
         {
             "name": "Stage 3: Functional & Assertion Verification",
-            "tools": "SystemVerilog Assertions (SVA) / BMC / Sim",
+            "tools": "SVA checkers / BMC / simulators",
             "checks": "Temporal invariants, state-machine deadlocks, coverage",
-            "latency": "Minutes (simulation / SAT)",
+            "latency": "moderate to high",
             "y": 46,
             "width": 54,
             "color": COLORS["orange"],
@@ -77,7 +74,7 @@ def main():
             "name": "Stage 4: Static Timing Analysis (STA)",
             "tools": "OpenSTA / PrimeTime / Tempus",
             "checks": "Multi-corner setup & hold slack, WNS/TNS",
-            "latency": "Minutes to hours (licensed)",
+            "latency": "high",
             "y": 30,
             "width": 50,
             "color": COLORS["purple"],
@@ -86,7 +83,7 @@ def main():
             "name": "Stage 5: Physical DRC / LVS Signoff",
             "tools": "Calibre / KLayout / Netgen",
             "checks": "Design rules (DRC), layout vs. schematic (LVS)",
-            "latency": "Hours+",
+            "latency": "highest",
             "y": 14,
             "width": 46,
             "color": COLORS["red"],
@@ -137,7 +134,7 @@ def main():
         ax.text(
             x + 1.8,
             y - 2.8,
-            f"Engines: {t['tools']}  •  Cost: {t['latency']}",
+            f"Example engines: {t['tools']}  •  Relative cost: {t['latency']}",
             ha="left",
             va="center",
             fontsize=4.7,
@@ -226,25 +223,27 @@ def main():
     )
 
     # Left Column: Invalidation & Generative Revision Feedback Loop
-    ax.annotate(
-        "",
-        xy=(8, 88),
-        xytext=(8, 46),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["red"],
-            lw=1.2,
-            linestyle="--",
-        ),
-    )
+    ax.plot([8, 8], [46, 88], color=COLORS["red"], lw=1.2, linestyle="--")
     # Lines from stages 1, 2, 3 to rejection line
     for st_idx in [0, 1, 2]:
         sy = tiers[st_idx]["y"]
         sx = 42 - tiers[st_idx]["width"] / 2
         ax.plot([sx, 8], [sy, sy], color=COLORS["red"], lw=1.0, linestyle="--")
 
-    # Connect top of rejection line to Generative Proposals
-    ax.plot([8, 22], [88, 88], color=COLORS["red"], lw=1.0, linestyle="--")
+    # Connect top of rejection line back into the proposal stream
+    ax.annotate(
+        "",
+        xy=(41.4, 88),
+        xytext=(8, 88),
+        arrowprops=dict(
+            arrowstyle="->",
+            color=COLORS["red"],
+            lw=1.0,
+            linestyle="--",
+            shrinkA=0,
+            shrinkB=0,
+        ),
+    )
     ax.text(
         8,
         92,

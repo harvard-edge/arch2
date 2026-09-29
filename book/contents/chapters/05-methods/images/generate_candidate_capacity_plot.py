@@ -19,18 +19,24 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     """Generate analytical plot contrasting candidate generation arrival rate (g) with downstream tool stage utilization (rho_i)."""
     apply_style()
 
-    # Candidate arrival rates g (proposals per day)
+    # Constructed parameters from the chapter's illustrative capacity table
+    # (tbl-candidate-check-capacity): parallel slots c_i, mean runtime t_i in
+    # hours, and conditional advance fraction p_i. Nothing here is measured.
+    stages = [
+        {"slots": 1, "hours": 1.0 / 60.0, "advance": 0.25},  # structural screen
+        {"slots": 4, "hours": 8.0, "advance": 0.10},  # cycle-level simulation
+        {"slots": 1, "hours": 24.0, "advance": 0.50},  # implementation screen
+    ]
+    capacity = [st["slots"] * 24.0 / st["hours"] for st in stages]  # mu_i per day
+    reach = [1.0]  # fraction of proposals arriving at stage i
+    for st in stages[:-1]:
+        reach.append(reach[-1] * st["advance"])
+    g_max = min(mu / r for mu, r in zip(capacity, reach))
+    g_op = 32.0
+    rho3_op = g_op * reach[2] / capacity[2]
+
     g = np.linspace(0, 50, 250)
-
-    # Stage capacities and advance fractions from the chapter's illustrative capacity table
-    # Stage 1: Structural screen (1 slot, 1 min => 1440/day, p1 = 0.25)
-    rho_1 = (g * 1.0) / 1440.0
-
-    # Stage 2: Cycle-level simulation (4 slots, 8 hrs => 12/day, p2 = 0.10)
-    rho_2 = (g * 0.25) / 12.0
-
-    # Stage 3: Physical implementation screen (1 slot, 24 hrs => 1/day, p3 = 0.50)
-    rho_3 = (g * 0.025) / 1.0
+    rho_1, rho_2, rho_3 = (g * r / mu for mu, r in zip(capacity, reach))
 
     fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.13, right=0.95, top=0.86, bottom=0.19)
@@ -40,10 +46,10 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         g,
         1.0,
         1.3,
-        where=(g >= 40.0),
+        where=(g >= g_max),
         color=COLORS["red"],
         alpha=0.10,
-        label="Unstable Queue Backlog (ρ3 > 1.0)",
+        label="Implementation overload (ρ3 > 1)",
         zorder=1,
     )
 
@@ -53,7 +59,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         rho_1,
         color=COLORS["workload"],
         linewidth=1.8,
-        label="Stage 1: Structural Screen (μ1 = 1440/day)",
+        label=f"Structural screen (μ1 = {capacity[0]:,.0f}/day)",
         zorder=3,
     )
     ax.plot(
@@ -62,7 +68,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         color=COLORS["methods"],
         linewidth=1.8,
         linestyle="--",
-        label="Stage 2: Cycle Simulation (μ2 = 12/day)",
+        label=f"Cycle-level simulation (μ2 = {capacity[1]:.0f}/day)",
         zorder=3,
     )
     ax.plot(
@@ -70,7 +76,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         rho_3,
         color=COLORS["constraints"],
         linewidth=2.2,
-        label="Stage 3: Physical Implementation (μ3 = 1/day)",
+        label=f"Implementation screen (μ3 = {capacity[2]:.0f}/day)",
         zorder=4,
     )
 
@@ -85,8 +91,8 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
 
     # Highlight the illustrative operating point (g = 32 candidates/day)
     ax.scatter(
-        [32.0],
-        [0.80],
+        [g_op],
+        [rho3_op],
         color=COLORS["constraints"],
         edgecolor="white",
         s=55,
@@ -94,8 +100,8 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
         zorder=5,
     )
     ax.annotate(
-        "Illustrative Operating Point\n(g = 32 candidates/day, ρ3 = 80%)",
-        xy=(32.0, 0.80),
+        f"Illustrative operating point\n(g = {g_op:.0f} proposals/day, ρ3 = {rho3_op:.0%})",
+        xy=(g_op, rho3_op),
         xytext=(22.0, 0.28),
         arrowprops=dict(
             arrowstyle="->",
@@ -116,15 +122,15 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
 
     # Annotate critical generation rate limit (g_max = 40 candidates/day)
     ax.axvline(
-        40.0,
+        g_max,
         color=COLORS["constraints_ink"],
         linestyle="--",
         linewidth=1.0,
         zorder=2,
     )
     ax.annotate(
-        "Full-Utilization Boundary\ng_max = 40 proposals/day",
-        xy=(40.0, 1.0),
+        f"Full-utilization boundary\ng_max = {g_max:.0f} proposals/day",
+        xy=(g_max, 1.0),
         xytext=(26.5, 1.15),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints_ink"], lw=0.9),
         fontsize=9.9,
@@ -134,7 +140,7 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
     )
 
     ax.set_xlabel(
-        "Candidate generation arrival rate g (proposals / day)",
+        "Proposal rate g (proposals/day)",
         fontsize=10.4,
         color=COLORS["ink"],
     )
@@ -149,9 +155,10 @@ def generate_candidate_capacity_plot(output_dir: Path) -> None:
 
     # Percentage tick labels on y-axis
     yticks = [0.0, 0.25, 0.50, 0.75, 1.0, 1.25]
-    ytick_labels = ["0%", "25%", "50%", "75%", "100% (Limit)", "125%"]
+    ytick_labels = ["0%", "25%", "50%", "75%", "100%", "125%"]
     ax.set_yticks(yticks)
     ax.set_yticklabels(ytick_labels, fontsize=9.3)
+    ax.tick_params(axis="x", labelsize=9.3)
 
     ax.legend(
         frameon=False,

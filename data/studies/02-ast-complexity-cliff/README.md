@@ -20,8 +20,8 @@ and SHA-256 of the source it came from.
 > **Note on an earlier version.** This study previously reported a 175x gap from
 > `hardware_ast_complexity_gap.csv`. That file was never measured. Its per-module
 > values were literal tables inside its own generator, and the upstream commits
-> in its header were hand-typed placeholders. It is retained, marked, at
-> `data/synthetic/SYNTHETIC-hardware_ast_complexity_gap.csv`. The direction of
+> in its header were hand-typed placeholders. It and its generator were deleted
+> on 29 September 2026. The direction of
 > the original claim survives; the magnitude did not.
 
 ---

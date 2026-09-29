@@ -1,9 +1,7 @@
 # Executed VerilogEval mutation pilot
 
-This candidate preserves the original
-`testbench_vacuity_and_judge_calibration.csv`, README, plot script, and figure
-assets unchanged. It provides an independently named executed pilot for review
-before any manuscript integration.
+This pilot is the only data in this folder. The earlier RNG-generated
+study that shared the folder was deleted on 29 September 2026.
 
 ## Evidence status
 

@@ -1,29 +1,20 @@
 """
-Empirical EDA Runtime Variance and QoR Dispersion Plot Script (Chapter 6)
+EDA recipe-sensitivity plot (Chapter 6): mapped area across ABC pass sequences.
 
-Literature Calibration & Empirical Provenance:
----------------------------------------------
-1. Benchmark Platform: logic synthesis on Nangate 45nm OpenCellLibrary (typical corner).
-2. Toolchain: Yosys 0.67+post (git sha1 b8e7da6f40ae8f552c116bf6c359b07c6533e159) with Berkeley ABC integration.
-3. Hardware Designs (6 production-grade blocks):
-   - picorv32 (RISC-V RV32IMC CPU Core, YosysHQ)
-   - dynamic_node (OpenPiton 2D Mesh NoC Dynamic Router, Princeton)
-   - aes_cipher_top (128-bit Pipelined Cryptographic Core, OpenROAD suite)
-   - sha256_core (NIST FIPS 180-4 Cryptographic Hash Engine, Secworks)
-   - alu_32bit (32-bit multi-function ALU; the dataset's "Lighthouse SoC" label is
-     unverified, since the Lighthouse design is prospective and has no RTL)
-   - gcd (Hardware Coprocessor, OpenROAD suite)
-4. Execution: 150 total runs, 25 distinct ABC pass sequences per design. Each
-   (design, pass sequence) pair runs once, so the data measure recipe sensitivity,
-   not run-to-run nondeterminism at a fixed recipe. The generating harness is not
-   retained (see the CSV header). All annotations below are computed from the CSV.
-5. Metrics Captured: Chip Area (um^2), Combinational/Sequential Area breakdown, Total Cell Count, Wire Count, Peak RSS Memory (MB), Wall-Clock Time (s), CPU User/System Time (s).
+Provenance
+----------
+1. Platform: logic synthesis on the Nangate45 OpenCellLibrary (typical corner).
+2. Toolchain: Yosys 0.67+post (git sha1 b8e7da6f40ae8f552c116bf6c359b07c6533e159) with ABC.
+3. Designs (five open blocks, pinned in reproduce_eda_recipe_area.py):
+   picorv32 (YosysHQ), dynamic_node (OpenPiton router, ORFS), aes_cipher_top (ORFS),
+   sha256_core (secworks), gcd (ORFS).
+4. 125 runs: 25 ABC pass sequences per design, each (design, sequence) pair once, so
+   the data measure recipe sensitivity, not run-to-run nondeterminism.
+5. Every plotted area is re-derived exactly by reproduce_eda_recipe_area.py. Runtime and
+   memory columns were removed from the dataset because no retained log supports them.
 
 Dataset: book/contents/chapters/06-environments/data/fig-eda-runtime-variance-dispersion.csv
-                 data/datasets/chapter6-eda-runtime-variance-qor-dispersion.csv
-Output Figure:   book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.svg
-                 book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.png
-                 book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.pdf
+Output:  book/contents/chapters/06-environments/images/fig-eda-runtime-variance-dispersion.{svg,png,pdf}
 """
 
 import csv
@@ -66,9 +57,6 @@ def main():
             "domain": "",
             "desc": "",
             "area": [],
-            "mem": [],
-            "time": [],
-            "cells": [],
         }
     )
 
@@ -79,16 +67,12 @@ def main():
             data[d]["domain"] = row["DesignDomain"]
             data[d]["desc"] = row["DesignDescription"]
             data[d]["area"].append(float(row["ChipArea_um2"]))
-            data[d]["mem"].append(float(row["PeakMemory_MB"]))
-            data[d]["time"].append(float(row["WallClockTime_s"]))
-            data[d]["cells"].append(int(row["TotalCellCount"]))
 
     design_order = [
         "picorv32",
         "dynamic_node",
         "aes_cipher_top",
         "sha256_core",
-        "alu_32bit",
         "gcd",
     ]
     display_names = [
@@ -96,7 +80,6 @@ def main():
         "NoC\nrouter",
         "AES-\n128",
         "SHA-\n256",
-        "32-bit\nALU",
         "GCD",
     ]
 
@@ -105,7 +88,6 @@ def main():
         "dynamic_node": "NoC router",
         "aes_cipher_top": "AES-128",
         "sha256_core": "SHA-256",
-        "alu_32bit": "32-bit ALU",
         "gcd": "GCD",
     }
 
@@ -114,17 +96,14 @@ def main():
         COLORS["purple"],  # NoC Router -> violet
         COLORS["green"],  # AES -> green
         COLORS["amber"],  # SHA256 -> amber
-        COLORS["red"],  # ALU -> red
         COLORS["magenta"],  # GCD -> magenta
     ]
 
-    markers = ["o", "s", "^", "D", "v", "P"]
+    markers = ["o", "s", "^", "D", "P"]
 
     apply_style()
-    fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.0, 3.3), gridspec_kw={"width_ratios": [1.1, 1.0]}
-    )
-    fig.subplots_adjust(left=0.09, right=0.98, top=0.88, bottom=0.2, wspace=0.34)
+    fig, ax1 = plt.subplots(figsize=(4.8, 3.0))
+    fig.subplots_adjust(left=0.14, right=0.98, top=0.88, bottom=0.2)
 
     # Panel A: mapped area relative to each design's median, across pass sequences
     norm_area_data = []
@@ -192,55 +171,14 @@ def main():
     )
     ax1.set_ylim(bottom - 1.5, top + 6.8)
     ax1.set_title(
-        "(a) Area across ABC pass sequences",
+        "Mapped area across 25 ABC pass sequences",
         fontsize=8.8,
         fontweight="bold",
         pad=5,
         color=COLORS["ink"],
     )
 
-    # Panel B: wall-clock time vs peak memory for the same runs
-    for i, d in enumerate(design_order):
-        ax2.scatter(
-            data[d]["time"],
-            data[d]["mem"],
-            marker=markers[i],
-            color=palette[i],
-            alpha=0.75,
-            s=15,
-            edgecolors=COLORS["ink"],
-            linewidth=0.4,
-            label=domain_labels[d],
-            zorder=3,
-        )
-
-    ax2.set_xlabel("Wall-clock synthesis time (s)", fontsize=8.6)
-    ax2.set_ylabel("Peak process memory (MB)", fontsize=8.6)
-    all_t = [t for d in design_order for t in data[d]["time"]]
-    all_m = [m for d in design_order for m in data[d]["mem"]]
-    ax2.set_xlim(0.0, max(all_t) * 1.08)
-    ax2.set_ylim(min(all_m) - 8.0, max(all_m) + 14.0)
-    ax2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-    ax2.legend(
-        loc="lower right",
-        frameon=True,
-        facecolor="white",
-        edgecolor=COLORS["grid"],
-        fontsize=7.0,
-        borderpad=0.4,
-        labelspacing=0.3,
-        handletextpad=0.3,
-        markerscale=1.1,
-    )
-    ax2.set_title(
-        "(b) Runtime and memory, same runs",
-        fontsize=8.8,
-        fontweight="bold",
-        pad=5,
-        color=COLORS["ink"],
-    )
-
-    for ax in [ax1, ax2]:
+    for ax in [ax1]:
         for spine in ["top", "right"]:
             ax.spines[spine].set_visible(False)
         ax.spines["left"].set_color(COLORS["ink"])

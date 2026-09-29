@@ -59,7 +59,7 @@ def _(mo):
         **The published claim:** across 20 OpenROAD placement runs that differ
         only in the global-placement random seed, area moves by **0.84%** and
         setup slack by **3.83%**. Slack is the more seed-sensitive quantity by
-        roughly a factor of five.
+        about four and a half times.
 
         This notebook is different in shape from study 02. That one parses a
         corpus; this one is a **controlled experiment**, so the interesting
@@ -190,19 +190,19 @@ def _(mo):
 def _(mo, rows, statistics):
     def _spread(col):
         vals = [float(r[col]) for r in rows]
-        mean = statistics.fmean(vals)
-        return (max(vals) - min(vals)) / abs(mean) * 100, min(vals), max(vals), mean
+        median = statistics.median(vals)
+        return (max(vals) - min(vals)) / abs(median) * 100, min(vals), max(vals), median
 
-    area_pct, area_lo, area_hi, area_mean = _spread("detailedplace_instance_area_um2")
-    wns_pct, wns_lo, wns_hi, wns_mean = _spread("detailedplace_setup_wns_ns")
+    area_pct, area_lo, area_hi, area_median = _spread("detailedplace_instance_area_um2")
+    wns_pct, wns_lo, wns_hi, wns_median = _spread("detailedplace_setup_wns_ns")
     ratio = wns_pct / area_pct
 
     mo.md(
         f"""
-        | Metric | Min | Max | Mean | Spread (range / mean) |
+        | Metric | Min | Max | Median | Spread (range / median) |
         | --- | ---: | ---: | ---: | ---: |
-        | Instance area (um2) | {area_lo:,.2f} | {area_hi:,.2f} | {area_mean:,.2f} | **{area_pct:.2f}%** |
-        | Setup WNS (ns) | {wns_lo:.6f} | {wns_hi:.6f} | {wns_mean:.6f} | **{wns_pct:.2f}%** |
+        | Instance area (um2) | {area_lo:,.2f} | {area_hi:,.2f} | {area_median:,.2f} | **{area_pct:.2f}%** |
+        | Setup WNS (ns) | {wns_lo:.6f} | {wns_hi:.6f} | {wns_median:.6f} | **{wns_pct:.2f}%** |
 
         Timing is **{ratio:.1f}x** more seed-sensitive than area.
 
@@ -215,12 +215,12 @@ def _(mo, rows, statistics):
     return (
         area_hi,
         area_lo,
-        area_mean,
+        area_median,
         area_pct,
         ratio,
         wns_hi,
         wns_lo,
-        wns_mean,
+        wns_median,
         wns_pct,
     )
 
