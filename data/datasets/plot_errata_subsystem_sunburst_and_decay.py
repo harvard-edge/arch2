@@ -314,193 +314,48 @@ def generate_errata_decay_and_sunburst_plots():
     print(f"Generated Figure 1:\n  {out_svg1}\n  {out_pdf1}\n  {out_png1}")
 
     # -------------------------------------------------------------------------
-    # Plot Figure 2: Canonical 3-Panel Chapter 11 Money Plot (fig-hardware-errata-lifecycle)
+    # Plot Figure 2: Chapter 11 figure (fig-hardware-errata-lifecycle)
     # -------------------------------------------------------------------------
-    fig2, (p1, p2, p3) = plt.subplots(
-        1, 3, figsize=(8.6, 3.5), gridspec_kw={"width_ratios": [1.1, 0.95, 0.95]}
+    # Single panel, every value computed from granular_processor_errata_taxonomy.csv.
+    # Earlier versions carried a mitigation-pathway panel read from the
+    # longitudinal summary (whose per-family counts do not match the itemized
+    # taxonomy) and a mask-cost / derating panel built from in-script literals
+    # with no source. Both were removed in the 2026-09 accuracy pass.
+    # Subsystem labels come from the scraper's keyword heuristic and have not
+    # been audited by hand; the caption says so.
+    fig2, ax = plt.subplots(figsize=(4.8, 2.6))
+    labels2 = [x[0] for x in sorted_subsystems]
+    counts2 = [x[1] for x in sorted_subsystems]
+    pcts2 = [100.0 * c / total_n for c in counts2]
+    is_exec = [lab.startswith("Execution Units") for lab in labels2]
+    colors2 = [COLORS["red"] if e else COLORS["blue"] for e in is_exec]
+    y2 = np.arange(len(labels2))
+    bars2 = ax.barh(y2, pcts2, color=colors2, height=0.62, zorder=3)
+    for b, e in zip(bars2, is_exec):
+        if e:
+            b.set_hatch("////")
+            b.set_edgecolor("white")
+    ax.set_yticks(y2)
+    ax.set_yticklabels(labels2, fontsize=5.8, color=COLORS["ink"])
+    ax.invert_yaxis()
+    ax.set_xlim(0, max(pcts2) * 1.25)
+    ax.set_xlabel(
+        f"Share of published errata (%, N = {total_n:,}, 19 Intel and AMD CPU families)",
+        fontsize=6.2,
     )
-    fig2.subplots_adjust(wspace=0.42, left=0.07, right=0.95, top=0.86, bottom=0.18)
-
-    # -------------------------------------------------------------
-    # Panel A: Longitudinal Mitigation Pathways across 19 Processors
-    # -------------------------------------------------------------
-    y_idx = np.arange(len(procs))
-    short_procs = [
-        "BDW-EP ('16)",
-        "SKX ('17)",
-        "CLX ('19)",
-        "ICX ('21)",
-        "SPR ('23)",
-        "EMR ('23)",
-        "CFL ('17)",
-        "ICL-U ('19)",
-        "RKL ('21)",
-        "TGL ('20)",
-        "ADL ('21)",
-        "RPL ('22)",
-        "MTL ('23)",
-        "LNL ('24)",
-        "ARL ('24)",
-        "Zen 1 ('17)",
-        "Zen 2 ('19)",
-        "Zen 4 ('22)",
-        "Zen 5 ('24)",
-    ]
-
-    p1.barh(
-        y_idx,
-        ucode_pcts,
-        color=COLORS["purple"],
-        label="Microcode Patch",
-        alpha=0.88,
-        height=0.62,
-    )
-    p1.barh(
-        y_idx,
-        soft_pcts,
-        left=ucode_pcts,
-        color=COLORS["blue"],
-        label="Software/OS",
-        alpha=0.88,
-        height=0.62,
-    )
-    p1.barh(
-        y_idx,
-        waiver_pcts,
-        left=np.array(ucode_pcts) + np.array(soft_pcts),
-        color=COLORS["muted"],
-        label="Doc Waiver (No Fix)",
-        alpha=0.55,
-        height=0.62,
-    )
-
-    p1.set_yticks(y_idx)
-    p1.set_yticklabels(short_procs, fontsize=4.8, color=COLORS["ink"])
-    p1.invert_yaxis()
-    p1.set_xlim(0, 100)
-    p1.set_xlabel("Mitigation Share (%)", fontsize=6.2)
-    p1.set_title(
-        "A. Mitigation Pathways (19 CPUs)", fontsize=6.8, fontweight="bold", pad=6
-    )
-    p1.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-    p1.legend(
-        loc="lower right",
-        fontsize=4.2,
-        framealpha=0.92,
-        facecolor="white",
-        edgecolor=COLORS["grid"],
-        borderpad=0.2,
-    )
-
-    # -------------------------------------------------------------
-    # Panel B: Defect Concentration by Subsystem
-    # -------------------------------------------------------------
-    top_subsystems = sorted_subsystems[:6]
-    other_sum = sum(x[1] for x in sorted_subsystems[6:])
-    b_names = [
-        "Memory Hierarchy",
-        "Platform IO / PCIe",
-        "Virtualization / MMU",
-        "Debug / Trace / PMU",
-        "Execution Units / ALU",
-        "Power / DVFS / Thermal",
-        "Other Seams (NoC/Sec)",
-    ]
-    b_counts = [x[1] for x in top_subsystems] + [other_sum]
-    b_pcts = [(c / total_n) * 100 for c in b_counts]
-
-    b_colors = [
-        COLORS["blue"],
-        COLORS["purple"],
-        COLORS["magenta"],
-        COLORS["muted"],
-        COLORS["red"],
-        COLORS["orange"],
-        COLORS["green"],
-    ]
-    y_b = np.arange(len(b_names))
-    p2.barh(y_b, b_pcts, color=b_colors, alpha=0.88, height=0.58, zorder=3)
-    p2.set_yticks(y_b)
-    p2.set_yticklabels(b_names, fontsize=4.9, color=COLORS["ink"])
-    p2.invert_yaxis()
-    p2.set_xlim(0, 38)
-    p2.set_xlabel(f"Escape Distribution (%, N={total_n:,})", fontsize=6.2)
-    p2.set_title("B. Defect Concentration", fontsize=6.8, fontweight="bold", pad=6)
-    p2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-    for bar, pct in zip(p2.patches, b_pcts):
-        p2.text(
-            pct + 0.6,
-            bar.get_y() + bar.get_height() / 2,
-            f"{pct:.1f}%",
+    ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax.grid(False, axis="y")
+    for b, c, p in zip(bars2, counts2, pcts2):
+        ax.text(
+            p + 0.5,
+            b.get_y() + b.get_height() / 2,
+            f"{c} ({p:.1f}%)",
             va="center",
             ha="left",
-            fontsize=4.7,
-            fontweight="bold",
+            fontsize=5.2,
             color=COLORS["ink"],
         )
 
-    # -------------------------------------------------------------
-    # Panel C: Mask Set Cost vs Chicken-Bit Derating Penalty
-    # -------------------------------------------------------------
-    nodes = ["14nm", "10nm", "7nm", "5nm", "3nm", "2nm"]
-    x_nodes = np.arange(len(nodes))
-    mask_costs = [35.0, 52.0, 85.0, 120.0, 180.0, 240.0]  # $M USD
-    derate_penalties = [4.2, 6.5, 9.8, 14.5, 18.2, 22.5]  # % Delta derate
-
-    p3_twin = p3.twinx()
-    line_mask = p3.plot(
-        x_nodes,
-        mask_costs,
-        marker="s",
-        color=COLORS["red"],
-        linewidth=1.8,
-        markersize=4.2,
-        label="Mask Set Cost ($M)",
-        zorder=4,
-    )
-    line_derate = p3_twin.plot(
-        x_nodes,
-        derate_penalties,
-        marker="^",
-        color=COLORS["orange"],
-        linewidth=1.8,
-        linestyle="--",
-        markersize=4.5,
-        label=r"Derate Penalty $\Delta_{\rm derate}$ (%)",
-        zorder=5,
-    )
-
-    p3.set_xticks(x_nodes)
-    p3.set_xticklabels(nodes, fontsize=5.3, color=COLORS["ink"])
-    p3.set_ylabel(
-        "Reticle Mask Set Cost ($M USD)", fontsize=6.2, color=COLORS["constraints_ink"]
-    )
-    p3_twin.set_ylabel(
-        r"Derating Penalty $\Delta_{\rm derate}$ (%)",
-        fontsize=6.2,
-        color=COLORS["methods_ink"],
-    )
-    p3.set_ylim(0, 280)
-    p3_twin.set_ylim(0, 28)
-    p3.set_title("C. Mask Cost vs Derating", fontsize=6.8, fontweight="bold", pad=6)
-    p3.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-    # Combined Legend for Panel C
-    l1, lab1 = p3.get_legend_handles_labels()
-    l2, lab2 = p3_twin.get_legend_handles_labels()
-    p3.legend(
-        l1 + l2,
-        lab1 + lab2,
-        loc="upper left",
-        fontsize=4.2,
-        framealpha=0.92,
-        facecolor="white",
-        edgecolor=COLORS["grid"],
-        borderpad=0.2,
-    )
-
-    # Save Figure 2 to Chapter 11 and Source data
     ch11_dir = REPO_ROOT / "book" / "contents" / "chapters" / "11-ownership" / "images"
     ch11_dir.mkdir(parents=True, exist_ok=True)
     out_svg2 = ch11_dir / "fig-hardware-errata-lifecycle.svg"

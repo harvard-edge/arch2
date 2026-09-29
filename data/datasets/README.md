@@ -186,7 +186,7 @@ data/datasets/
   - `book/contents/chapters/04-representations/images/fig-ch04-ast-complexity-cliff.{svg,pdf,png}`
 * **Primary Sources (full 40-character commits, verified after checkout):**
   1. *AI benchmark reference RTL:* `VerilogEval` (Liu et al., 2023, NVlabs/verilog-eval, `c498220d0a52248f8e3fdffe279075215bde2da6`), `RTLLM` (Lu et al., 2024, hkust-zhiyao/RTLLM, `51ed553d0ffd32797a1a0a13e051656bf302c81f`).
-  2. *Production-oriented open RTL:* `OpenTitan` (lowRISC/opentitan, `e3f3234aa3772760cdf40e79a8ae4471b6b02213`), `CV32E40P` (openhwgroup/cv32e40p, `6033d2b1be3295ec774d17ac4cf226faacfdeb08`), `VeeR EL2` (chipsalliance/Cores-SweRV, `d04b1c7ae675a63dc4307cacfd10547ec937b928`), `BlackParrot` (black-parrot/black-parrot, `f91010f654a5dfd00f83dbe25dbda482218d540b`).
+  2. *Production-oriented open RTL:* `OpenTitan` (lowRISC/opentitan, `e3f3234aa3772760cdf40e79a8ae4471b6b02213`), `CV32E40P` (openhwgroup/cv32e40p, `6033d2b1be3295ec774d17ac4cf226faacfdeb08`), `VeeR EH1` (chipsalliance/Cores-SweRV, `d04b1c7ae675a63dc4307cacfd10547ec937b928`), `BlackParrot` (black-parrot/black-parrot, `f91010f654a5dfd00f83dbe25dbda482218d540b`).
 * **Key Empirical Metrics Tracked:**
   - *Source-complexity gap:* $6.70\times$ module-weighted median concrete syntax nodes (median $168$ for benchmark reference RTL vs. $1{,}125$ for production-oriented RTL) and $6.19\times$ on clean lines of code ($16$ vs. $99$).
   - *Sensitivity, both reported:* $4.77\times$ restricted to files parsed without diagnostics, and $4.27\times$ weighting each repository equally rather than each module. The pooled figure is not offered as a universal ratio.

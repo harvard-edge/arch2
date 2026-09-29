@@ -1,3 +1,9 @@
+import sys as _sys
+
+_sys.exit(
+    "WITHDRAWN 2026-09-28: this script draws figures from unsourced or invented values "
+    "and would overwrite corrected book figures. Use data/datasets/plot_errata_subsystem_sunburst_and_decay.py instead."
+)
 import sys
 from pathlib import Path
 

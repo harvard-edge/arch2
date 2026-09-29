@@ -94,7 +94,7 @@ CORPUS_REGISTRY = {
         "type": "Production Silicon IP & SoC",
         "url": "https://github.com/chipsalliance/Cores-SweRV",
         "commit": "7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c",
-        "reference": "CHIPS Alliance, 'VeeR EL2 / EH2 Dual-Issue RISC-V Embedded Processor Core', Commercial Western Digital SSD Controllers",
+        "reference": "CHIPS Alliance, 'VeeR EH1 / EH2 Dual-Issue RISC-V Embedded Processor Core', Commercial Western Digital SSD Controllers",
         "target_audience": "High-reliability dual-issue embedded storage controllers in volume production silicon",
         "scope": "Dual-issue superscalar RISC-V core pipeline, IFU, DEC, EXU, LSU, DCCM/ICCM memories",
     },

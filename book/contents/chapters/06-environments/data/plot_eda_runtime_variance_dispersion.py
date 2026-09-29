@@ -3,16 +3,20 @@ Empirical EDA Runtime Variance and QoR Dispersion Plot Script (Chapter 6)
 
 Literature Calibration & Empirical Provenance:
 ---------------------------------------------
-1. Benchmark Platform: Genuine logic synthesis on Nangate 45nm OpenCellLibrary (typical corner).
+1. Benchmark Platform: logic synthesis on Nangate 45nm OpenCellLibrary (typical corner).
 2. Toolchain: Yosys 0.67+post (git sha1 b8e7da6f40ae8f552c116bf6c359b07c6533e159) with Berkeley ABC integration.
 3. Hardware Designs (6 production-grade blocks):
    - picorv32 (RISC-V RV32IMC CPU Core, YosysHQ)
    - dynamic_node (OpenPiton 2D Mesh NoC Dynamic Router, Princeton)
    - aes_cipher_top (128-bit Pipelined Cryptographic Core, OpenROAD suite)
    - sha256_core (NIST FIPS 180-4 Cryptographic Hash Engine, Secworks)
-   - alu_32bit (Lighthouse XR SoC 32-bit Multi-Function ALU / Execution Unit)
+   - alu_32bit (32-bit multi-function ALU; the dataset's "Lighthouse SoC" label is
+     unverified, since the Lighthouse design is prospective and has no RTL)
    - gcd (Hardware Coprocessor, OpenROAD suite)
-4. Empirical Execution: 150 total runs (25 randomized pass schedules/seeds per architecture).
+4. Execution: 150 total runs, 25 distinct ABC pass sequences per design. Each
+   (design, pass sequence) pair runs once, so the data measure recipe sensitivity,
+   not run-to-run nondeterminism at a fixed recipe. The generating harness is not
+   retained (see the CSV header). All annotations below are computed from the CSV.
 5. Metrics Captured: Chip Area (um^2), Combinational/Sequential Area breakdown, Total Cell Count, Wire Count, Peak RSS Memory (MB), Wall-Clock Time (s), CPU User/System Time (s).
 
 Dataset: book/contents/chapters/06-environments/data/fig-eda-runtime-variance-dispersion.csv
@@ -55,15 +59,6 @@ def main():
     out_svg = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.svg"
     out_png = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.png"
     out_pdf = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.pdf"
-    out_global_svg = (
-        REPO_ROOT / "book" / "images" / "fig-eda-runtime-variance-dispersion.svg"
-    )
-    out_global_pdf = (
-        REPO_ROOT / "book" / "images" / "fig-eda-runtime-variance-dispersion.pdf"
-    )
-    out_global_png = (
-        REPO_ROOT / "book" / "images" / "fig-eda-runtime-variance-dispersion.png"
-    )
 
     # Load dataset
     data = defaultdict(
@@ -97,21 +92,21 @@ def main():
         "gcd",
     ]
     display_names = [
-        "picorv32\n(CPU)",
-        "dynamic_node\n(NoC)",
-        "aes_cipher\n(Crypto)",
-        "sha256\n(Hash)",
-        "alu_32bit\n(ALU)",
-        "gcd\n(Accel)",
+        "Pico-\nRV32",
+        "NoC\nrouter",
+        "AES-\n128",
+        "SHA-\n256",
+        "32-bit\nALU",
+        "GCD",
     ]
 
     domain_labels = {
-        "picorv32": "RISC-V CPU Core",
-        "dynamic_node": "2D NoC Router",
-        "aes_cipher_top": "AES-128 Crypto",
-        "sha256_core": "SHA-256 Hash",
-        "alu_32bit": "32-bit ALU / Branch",
-        "gcd": "GCD Accelerator",
+        "picorv32": "PicoRV32 core",
+        "dynamic_node": "NoC router",
+        "aes_cipher_top": "AES-128",
+        "sha256_core": "SHA-256",
+        "alu_32bit": "32-bit ALU",
+        "gcd": "GCD",
     }
 
     palette = [
@@ -123,206 +118,138 @@ def main():
         COLORS["magenta"],  # GCD -> magenta
     ]
 
+    markers = ["o", "s", "^", "D", "v", "P"]
+
     apply_style()
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(8.0, 3.5), gridspec_kw={"width_ratios": [1.12, 1.0]}
+        1, 2, figsize=(7.0, 3.3), gridspec_kw={"width_ratios": [1.1, 1.0]}
     )
-    fig.subplots_adjust(left=0.08, right=0.96, top=0.88, bottom=0.17, wspace=0.32)
+    fig.subplots_adjust(left=0.09, right=0.98, top=0.88, bottom=0.2, wspace=0.34)
 
-    # -------------------------------------------------------------
-    # PANEL A: The "Lucky Seed" Hazard (Area Deviation from Median)
-    # -------------------------------------------------------------
+    # Panel A: mapped area relative to each design's median, across pass sequences
     norm_area_data = []
-
     for i, d in enumerate(design_order):
         areas = data[d]["area"]
         med = statistics.median(areas)
         pct_dev = [((a - med) / med) * 100.0 for a in areas]
         norm_area_data.append(pct_dev)
-
-        # Deterministic scatter jitter
         x_jitter = i + 0.12 * np.sin(np.arange(len(pct_dev)) * 2.39)
         ax1.scatter(
             x_jitter,
             pct_dev,
+            marker=markers[i],
             color=palette[i],
-            alpha=0.70,
-            s=18,
+            alpha=0.75,
+            s=13,
             edgecolors=COLORS["ink"],
-            linewidth=0.4,
+            linewidth=0.35,
             zorder=3,
         )
 
-    # Boxplots
-    bp = ax1.boxplot(
+    ax1.boxplot(
         norm_area_data,
         positions=np.arange(len(design_order)),
-        widths=0.40,
+        widths=0.42,
         patch_artist=True,
         showfliers=False,
         zorder=4,
-        boxprops=dict(facecolor="none", edgecolor=COLORS["ink"], linewidth=0.85),
-        medianprops=dict(color=COLORS["ink"], linewidth=1.4),
-        whiskerprops=dict(color=COLORS["ink"], linewidth=0.75, linestyle="--"),
-        capprops=dict(color=COLORS["ink"], linewidth=0.75),
+        boxprops=dict(facecolor="none", edgecolor=COLORS["ink"], linewidth=0.8),
+        medianprops=dict(color=COLORS["ink"], linewidth=1.3),
+        whiskerprops=dict(color=COLORS["ink"], linewidth=0.7, linestyle="--"),
+        capprops=dict(color=COLORS["ink"], linewidth=0.7),
     )
 
-    ax1.axhline(0, color=COLORS["muted"], linestyle=":", linewidth=0.75, zorder=1)
+    ax1.axhline(0, color=COLORS["muted"], linestyle=":", linewidth=0.7, zorder=1)
     ax1.set_xticks(np.arange(len(design_order)))
-    ax1.set_xticklabels(
-        display_names, fontsize=9.3, fontweight="bold", color=COLORS["ink"]
-    )
-    ax1.set_ylabel(
-        "Silicon Area Dispersion vs. Median (%)", fontsize=10.6, color=COLORS["ink"]
-    )
-    ax1.set_ylim(-10.5, 12.0)
+    ax1.set_xticklabels(display_names, fontsize=7.6, color=COLORS["ink"])
+    ax1.set_ylabel("Mapped area vs. design median (%)", fontsize=8.6)
+    ax1.set_yticks([-5, 0, 5, 10])
     ax1.grid(True, axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
 
-    # Annotations on Panel A
-    ax1.annotate(
-        '"Lucky Seed" Hazard\n(-6.3% area on GCD without RTL delta)',
-        xy=(5.0, -6.28),
-        xytext=(1.8, -9.2),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["evidence_ink"],
-            lw=0.75,
-            connectionstyle="arc3,rad=-0.15",
-        ),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["evidence_ink"],
+    # Spread (max - min) as a percentage of the median, computed from the data
+    top = max(max(v) for v in norm_area_data)
+    bottom = min(min(v) for v in norm_area_data)
+    for i, v in enumerate(norm_area_data):
+        spread = max(v) - min(v)
+        ax1.text(
+            i,
+            top + 1.6,
+            f"{spread:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=7.4,
+            color=COLORS["ink"],
+            zorder=5,
+        )
+    ax1.text(
+        -0.45,
+        top + 4.2,
+        "Spread across 25 recipes (% of median)",
+        ha="left",
+        va="bottom",
+        fontsize=7.2,
+        color=COLORS["muted"],
     )
-
-    ax1.annotate(
-        "Stochastic Dispersion Risk\n(+8.7% area penalty on SHA256)",
-        xy=(3.0, 4.14),
-        xytext=(0.6, 7.8),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["constraints_ink"],
-            lw=0.75,
-            connectionstyle="arc3,rad=0.15",
-        ),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["constraints_ink"],
-    )
-
+    ax1.set_ylim(bottom - 1.5, top + 6.8)
     ax1.set_title(
-        "(a) Logic Synthesis Pass Dispersion",
-        fontsize=8.0,
+        "(a) Area across ABC pass sequences",
+        fontsize=8.8,
         fontweight="bold",
-        pad=6,
+        pad=5,
         color=COLORS["ink"],
     )
 
-    # -------------------------------------------------------------
-    # PANEL B: Resource Volatility & Jitter (Peak Memory vs Runtime)
-    # -------------------------------------------------------------
+    # Panel B: wall-clock time vs peak memory for the same runs
     for i, d in enumerate(design_order):
-        times = data[d]["time"]
-        mems = data[d]["mem"]
         ax2.scatter(
-            times,
-            mems,
+            data[d]["time"],
+            data[d]["mem"],
+            marker=markers[i],
             color=palette[i],
             alpha=0.75,
-            s=22,
+            s=15,
             edgecolors=COLORS["ink"],
-            linewidth=0.5,
+            linewidth=0.4,
             label=domain_labels[d],
             zorder=3,
         )
 
-        # Plot centroid
-        t_mean = statistics.mean(times)
-        m_mean = statistics.mean(mems)
-        ax2.scatter(
-            [t_mean],
-            [m_mean],
-            marker="+",
-            s=52,
-            color=palette[i],
-            linewidth=1.4,
-            zorder=4,
-        )
-
-    ax2.set_xlabel(
-        "Wall-Clock Synthesis Runtime (seconds)", fontsize=10.6, color=COLORS["ink"]
-    )
-    ax2.set_ylabel("Peak Process Memory / RSS (MB)", fontsize=10.6, color=COLORS["ink"])
-    ax2.set_xlim(0.0, 7.4)
-    ax2.set_ylim(20.0, 135.0)
+    ax2.set_xlabel("Wall-clock synthesis time (s)", fontsize=8.6)
+    ax2.set_ylabel("Peak process memory (MB)", fontsize=8.6)
+    all_t = [t for d in design_order for t in data[d]["time"]]
+    all_m = [m for d in design_order for m in data[d]["mem"]]
+    ax2.set_xlim(0.0, max(all_t) * 1.08)
+    ax2.set_ylim(min(all_m) - 8.0, max(all_m) + 14.0)
     ax2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-    # Annotate Memory & Time Jitter
-    ax2.annotate(
-        "AES-128 Memory Volatility\n(96-116 MB RSS; 4.7-6.1s wall time)",
-        xy=(5.7, 115.8),
-        xytext=(1.8, 122.0),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["ink"],
-            lw=0.75,
-            connectionstyle="arc3,rad=-0.12",
-        ),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["ink"],
-    )
-
-    ax2.annotate(
-        "PicoRV32 Runtime Jitter\n(3.4s - 5.2s execution span)",
-        xy=(3.8, 92.0),
-        xytext=(0.4, 76.0),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["workload_ink"],
-            lw=0.75,
-            connectionstyle="arc3,rad=0.15",
-        ),
-        fontsize=8.5,
-        fontweight="bold",
-        color=COLORS["workload_ink"],
-    )
-
     ax2.legend(
         loc="lower right",
         frameon=True,
-        facecolor=COLORS["note_fill"],
-        edgecolor=COLORS["note_edge"],
-        fontsize=8.0,
-        title="Hardware Architecture",
-        title_fontsize=8.6,
+        facecolor="white",
+        edgecolor=COLORS["grid"],
+        fontsize=7.0,
         borderpad=0.4,
         labelspacing=0.3,
+        handletextpad=0.3,
+        markerscale=1.1,
     )
-
     ax2.set_title(
-        "(b) Host Resource Footprint and Jitter",
-        fontsize=8.0,
+        "(b) Runtime and memory, same runs",
+        fontsize=8.8,
         fontweight="bold",
-        pad=6,
+        pad=5,
         color=COLORS["ink"],
     )
 
-    # Clean spines
     for ax in [ax1, ax2]:
         for spine in ["top", "right"]:
             ax.spines[spine].set_visible(False)
         ax.spines["left"].set_color(COLORS["ink"])
         ax.spines["bottom"].set_color(COLORS["ink"])
-        ax.tick_params(axis="both", labelsize=5.8, length=2.5, width=0.6, pad=2)
+        ax.tick_params(axis="both", labelsize=7.4, length=2.5, width=0.6, pad=2)
 
     plt.savefig(out_svg, format="svg", bbox_inches="tight")
     plt.savefig(out_png, format="png", dpi=300, bbox_inches="tight")
     plt.savefig(out_pdf, format="pdf", bbox_inches="tight")
-    if out_global_svg.parent.exists():
-        plt.savefig(out_global_svg, format="svg", bbox_inches="tight")
-        plt.savefig(out_global_png, format="png", dpi=300, bbox_inches="tight")
-        plt.savefig(out_global_pdf, format="pdf", bbox_inches="tight")
-        _declare_font_stack(out_global_svg)
     _declare_font_stack(out_svg)
     print(f"Generated {out_svg}, {out_png}, and {out_pdf}")
 

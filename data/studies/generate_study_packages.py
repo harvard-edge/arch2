@@ -125,7 +125,7 @@ STUDIES = [
         "plot_scripts": ["plot_ast_complexity_measured.py"],
         "figure_bases": ["fig_ast_complexity_measured"],
         "scraper": "mine_hardware_ast_complexity_real.py",
-        "summary": "Measures the source-complexity and internal-hierarchy difference between the reference RTL shipped with AI hardware generation benchmarks (VerilogEval, RTLLM) and production-oriented open RTL (OpenTitan, CV32E40P, VeeR EL2, BlackParrot), by parsing 1,513 module declarations with pyslang 11.0.0 from six pinned commits.",
+        "summary": "Measures the source-complexity and internal-hierarchy difference between the reference RTL shipped with AI hardware generation benchmarks (VerilogEval, RTLLM) and production-oriented open RTL (OpenTitan, CV32E40P, VeeR EH1, BlackParrot), by parsing 1,513 module declarations with pyslang 11.0.0 from six pinned commits.",
         "core_question": "How large is the gap between the reference RTL that AI hardware benchmarks evaluate and production-oriented open silicon RTL?",
         "findings": [
             "**A 6.7x source-complexity gap:** benchmark reference modules carry a module-weighted median of 168 concrete syntax nodes (16 clean LoC) against 1,125 nodes (99 clean LoC) for production-oriented RTL, across 217 and 1,296 parsed modules respectively.",

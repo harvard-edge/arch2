@@ -1,8 +1,11 @@
-"""Generate SVA Formal State-Space Coverage vs BMC Depth plot for Ch07.
+"""Generate the conceptual BMC-depth schematic for Chapter 7.
 
-This script models formal verification state-space coverage and solver runtime
-scaling during Bounded Model Checking (BMC) across hardware execution units
-in machine learning accelerators.
+CONCEPTUAL SCHEMATIC, NOT DATA. Every curve below is a hand-chosen logistic
+or exponential shape used only to show qualitative behavior: shallow control
+logic can reach a depth at which a separate completeness or induction argument
+closes the proof, while complex controllers exhaust the solver budget first.
+The axes carry qualitative labels only and no measured depth, runtime, or
+coverage value is implied.
 """
 
 from __future__ import annotations
@@ -10,197 +13,146 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Add repository root to sys.path
 repo_root = Path(__file__).resolve().parents[4]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-import numpy as np
-import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+from _python.plots import COLORS, apply_style  # noqa: E402
 
 
 def generate_plot(output_dir: Path | None = None) -> str:
-    """Generate and save the SVA formal coverage vs BMC depth plot."""
     apply_style()
-    fig, ax1 = plt.subplots()
-    fig.subplots_adjust(left=0.12, right=0.86, top=0.88, bottom=0.18)
+    fig, ax1 = plt.subplots(figsize=(5.2, 2.9))
+    fig.subplots_adjust(left=0.2, right=0.72, top=0.95, bottom=0.17)
 
-    # BMC unroll depth array
-    depths = np.arange(1, 61, 1)
+    k = np.linspace(1, 60, 240)
+    curves = [
+        (
+            "Shallow control logic\n(e.g., DMA ring buffer)",
+            100 / (1 + np.exp(-0.22 * (k - 12))),
+            COLORS["green"],
+            "-",
+        ),
+        (
+            "Hierarchical protocol FSM",
+            100 / (1 + np.exp(-0.16 * (k - 20))),
+            COLORS["blue"],
+            (0, (6, 2)),
+        ),
+        (
+            "Credit-queue arbiter",
+            82 / (1 + np.exp(-0.13 * (k - 24))),
+            COLORS["orange"],
+            (0, (4, 1.5, 1, 1.5)),
+        ),
+        (
+            "Multi-tile controller",
+            62 / (1 + np.exp(-0.10 * (k - 28))),
+            COLORS["red"],
+            (0, (1.2, 1.4)),
+        ),
+    ]
+    label_y = [106, 92, 80, 61]
+    for (label, y, color, ls), ly in zip(curves, label_y):
+        ax1.plot(k, y, color=color, linewidth=1.6, linestyle=ls, zorder=3)
+        ax1.text(
+            61.2,
+            ly,
+            label,
+            color=COLORS["ink"],
+            fontsize=5.3,
+            ha="left",
+            va="center",
+            clip_on=False,
+        )
 
-    # 1. DMA Ring Buffer Controller (Fast formal convergence)
-    cov_dma = 100.0 / (1.0 + np.exp(-0.22 * (depths - 12)))
-    cov_dma = np.clip(cov_dma, 5.0, 100.0)
-
-    # 2. All-Reduce Ring Barrier Synchronizer (Moderate convergence)
-    cov_barrier = 100.0 / (1.0 + np.exp(-0.16 * (depths - 20)))
-    cov_barrier = np.clip(cov_barrier, 3.0, 100.0)
-
-    # 3. Weight Buffer Arbiter (Hits SAT solver timeout around depth 48)
-    cov_arbiter = 92.0 / (1.0 + np.exp(-0.13 * (depths - 24)))
-    cov_arbiter = np.clip(cov_arbiter, 2.0, 92.0)
-
-    # 4. Systolic Array Controller (Complex state machine, state space explosion)
-    cov_systolic = 78.0 / (1.0 + np.exp(-0.10 * (depths - 28)))
-    cov_systolic = np.clip(cov_systolic, 1.0, 78.0)
-
-    # Solver Runtime (seconds, exponential explosion on twin axis)
-    runtime_sec = 0.05 * np.exp(0.21 * depths)
-
-    # Plot Coverage Curves on Primary Axis
-    line1 = ax1.plot(
-        depths,
-        cov_dma,
-        color=COLORS["green"],
-        linewidth=2.0,
-        label="Shallow Control Logic (e.g., Ring Buffer)",
+    ax1.axvspan(45, 60, color=COLORS["red"], alpha=0.10, zorder=0)
+    ax1.text(
+        52.5,
+        6,
+        "solver budget\nexhausted",
+        ha="center",
+        va="bottom",
+        fontsize=5.2,
+        color=COLORS["constraints_ink"],
+        zorder=5,
     )
-    line2 = ax1.plot(
-        depths,
-        cov_barrier,
-        color=COLORS["blue"],
-        linewidth=2.0,
-        label="Hierarchical Protocol State Machine",
-    )
-    line3 = ax1.plot(
-        depths,
-        cov_arbiter,
-        color=COLORS["orange"],
-        linewidth=2.0,
-        label="Resource Arbiter with Credit Queues",
-    )
-    line4 = ax1.plot(
-        depths,
-        cov_systolic,
-        color=COLORS["red"],
-        linewidth=2.0,
-        label="Complex Multi-Tile Controller",
-    )
+    ax1.axhline(100, color=COLORS["muted"], linestyle=":", linewidth=0.8)
 
-    # Highlight Formal Verification Wall (SAT Solver Timeout Region)
-    ax1.axvspan(
-        45, 60, color=COLORS["red"], alpha=0.12, label="SAT Solver Timeout Horizon"
-    )
-    ax1.axhline(100, color=COLORS["muted"], linestyle=":", linewidth=1.0, alpha=0.7)
-
-    ax1.set_xlabel("Bounded Model Checking (BMC) Unroll Depth ($k$)", fontsize=9.0)
-    ax1.set_ylabel("State-Space Coverage & Completeness", fontsize=9.0)
+    ax1.set_xlabel("BMC unroll depth $k$ (no scale implied)")
     ax1.set_xlim(1, 60)
-    ax1.set_ylim(0, 108)
-    ax1.set_xticks([1, 20, 45, 58])
-    ax1.set_xticklabels(
-        ["$k=1$", "Shallow Bound", "Timeout Horizon", "Explosion Wall"], fontsize=6.8
-    )
+    ax1.set_ylim(0, 112)
+    ax1.set_xticks([1, 60])
+    ax1.set_xticklabels(["shallow", "deep"])
     ax1.set_yticks([0, 50, 100])
     ax1.set_yticklabels(
-        ["Unverified", "Partial Invariant Bound", "Exhaustive Formal Proof"],
-        fontsize=6.8,
+        ["nothing\nchecked", "bounded\nclaim only", "completeness\nthreshold reached"],
+        fontsize=5.4,
     )
-    ax1.tick_params(axis="both", labelsize=6.8, length=2.5, width=0.6, pad=2)
     ax1.grid(True, color=COLORS["grid"], linewidth=0.45, zorder=0)
 
-    # Secondary Axis for Solver Runtime
-    ax2 = ax1.twinx()
-    line_rt = ax2.plot(
-        depths,
-        runtime_sec,
-        color=COLORS["purple"],
-        linewidth=1.6,
-        linestyle="--",
-        label="SAT Solver Execution Complexity",
-    )
-    ax2.set_yscale("log")
-    ax2.set_ylabel(
-        "SAT / SMT Solver Complexity",
-        fontsize=8.8,
-        color=COLORS["purple"],
-    )
-    ax2.set_yticks([0.1, 10, 1000])
-    ax2.set_yticklabels(["Sub-second", "Tractable", "Solver Timeout"], fontsize=6.8)
-    ax2.tick_params(axis="y", labelcolor=COLORS["purple"], labelsize=6.8)
-    ax2.grid(False)
-
-    # Annotations with clean background boxes in open whitespace
     ax1.annotate(
-        "Exhaustive Proof\n(Inductive Completeness)",
-        xy=(35, 99.5),
-        xytext=(38, 80),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["green"],
-            lw=0.9,
-        ),
-        fontsize=7.2,
-        color=COLORS["green"],
-        fontweight="bold",
+        "proof still needs a separate\ncompleteness or induction argument",
+        xy=(36, 99),
+        xytext=(21, 4),
+        fontsize=5.2,
+        color=COLORS["evidence_ink"],
+        arrowprops=dict(arrowstyle="->", color=COLORS["green"], lw=0.7),
         bbox=dict(
             boxstyle="round,pad=0.2",
             facecolor="white",
             edgecolor=COLORS["green"],
-            alpha=0.92,
-            lw=0.6,
+            alpha=0.95,
+            lw=0.5,
         ),
-        zorder=5,
+        zorder=6,
     )
 
-    ax1.annotate(
-        "State Space Explosion\n(Solver Timeout Barrier)",
-        xy=(45, 62),
-        xytext=(46, 18),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["red"],
-            lw=0.9,
-        ),
-        fontsize=7.5,
-        color=COLORS["red"],
-        fontweight="bold",
-        bbox=dict(
-            boxstyle="round,pad=0.2",
-            facecolor="white",
-            edgecolor=COLORS["red"],
-            alpha=0.92,
-            lw=0.6,
-        ),
-        zorder=5,
+    # Solver cost, conceptual, on a secondary log axis with markers for grayscale
+    ax2 = ax1.twinx()
+    runtime = 0.05 * np.exp(0.21 * k)
+    ax2.plot(
+        k,
+        runtime,
+        color=COLORS["purple"],
+        linewidth=0.9,
+        marker="o",
+        markevery=24,
+        markersize=2.4,
+        zorder=2,
+    )
+    ax2.set_yscale("log")
+    ax2.set_yticks([])
+    ax2.minorticks_off()
+    ax1.text(
+        61.2,
+        119,
+        "Solver cost (log scale,\nconceptual, circle markers)",
+        color=COLORS["designspace_ink"],
+        fontsize=5.3,
+        ha="left",
+        va="center",
+        clip_on=False,
     )
 
-    ax1.set_title(
-        "Conceptual State-Space Coverage vs. BMC Unroll Depth in Hardware Units",
-        fontsize=9.8,
-        pad=9,
-        fontweight="bold",
-    )
-
-    for spine in ["top"]:
+    for spine in ("top", "right"):
         ax1.spines[spine].set_visible(False)
         ax2.spines[spine].set_visible(False)
-    ax1.spines["left"].set_color(COLORS["ink"])
-    ax1.spines["bottom"].set_color(COLORS["ink"])
-
-    # Combine legends from both axes and place in upper left
-    lines = line1 + line2 + line3 + line4 + line_rt
-    labels = [l.get_label() for l in lines]
-    ax1.legend(
-        lines, labels, loc="upper left", framealpha=0.92, fontsize=8.0, borderpad=0.25
-    )
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        svg_path = output_dir / "fig-sva-bmc-coverage-depth.svg"
-        pdf_path = output_dir / "fig-sva-bmc-coverage-depth.pdf"
-        png_path = output_dir / "fig-sva-bmc-coverage-depth.png"
-        fig.savefig(svg_path, format="svg", bbox_inches="tight")
-        fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
-        fig.savefig(png_path, format="png", dpi=300, bbox_inches="tight")
+        base = output_dir / "fig-sva-bmc-coverage-depth"
+        fig.savefig(base.with_suffix(".svg"), format="svg", bbox_inches="tight")
+        fig.savefig(base.with_suffix(".pdf"), format="pdf", bbox_inches="tight")
+        fig.savefig(
+            base.with_suffix(".png"), format="png", dpi=300, bbox_inches="tight"
+        )
         plt.close(fig)
-        return str(svg_path)
-
+        return str(base.with_suffix(".svg"))
     return ""
 
 
 if __name__ == "__main__":
-    out_dir = Path(__file__).resolve().parent
-    saved_file = generate_plot(out_dir)
-    print(f"Plot successfully saved to {saved_file}")
+    print(generate_plot(Path(__file__).resolve().parent))

@@ -48,7 +48,7 @@ pinned commits, so they are the first thing to check:
 RTLLM: 50 files, 61 module declarations
 OpenTitan: 1137 files, 936 module declarations
 CV32E40P: 126 files, 123 module declarations
-VeeR EL2: 44 files, 112 module declarations
+VeeR EH1: 44 files, 112 module declarations
 BlackParrot: 125 files, 125 module declarations
 ```
 
@@ -63,7 +63,7 @@ A moved branch cannot silently change the result.
 | RTLLM | AI benchmark reference RTL | `51ed553d0ffd32797a1a0a13e051656bf302c81f` |
 | OpenTitan | Production-oriented open RTL | `e3f3234aa3772760cdf40e79a8ae4471b6b02213` |
 | CV32E40P | Production-oriented open RTL | `6033d2b1be3295ec774d17ac4cf226faacfdeb08` |
-| VeeR EL2 | Production-oriented open RTL | `d04b1c7ae675a63dc4307cacfd10547ec937b928` |
+| VeeR EH1 | Production-oriented open RTL | `d04b1c7ae675a63dc4307cacfd10547ec937b928` |
 | BlackParrot | Production-oriented open RTL | `f91010f654a5dfd00f83dbe25dbda482218d540b` |
 
 Each output row additionally carries `source_path` and `source_sha256`, so any
@@ -102,7 +102,7 @@ rows except `extraction_timestamp`, which records when the run happened. Verifie
 | Same, equal weight per repository | 232 | 991 | 4.27x |
 
 Modules parsed: 217 benchmark (VerilogEval 156, RTLLM 61) and 1,296 production
-(OpenTitan 936, CV32E40P 123, VeeR EL2 112, BlackParrot 125).
+(OpenTitan 936, CV32E40P 123, VeeR EH1 112, BlackParrot 125).
 
 The pooled 6.7x is a module-weighted figure over these six repositories. It is
 not a universal ratio, and the two sensitivity checks are reported alongside it

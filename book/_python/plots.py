@@ -56,6 +56,13 @@ COLORS = {
     "methods_ink": "#8A5310",
     "evidence_ink": "#157A38",
     "decision_ink": "#A82E70",
+    # TINT tier (pale card/panel/bar fills; pair with the same role's mark)
+    "workload_tint": "#E4F1F6",
+    "designspace_tint": "#F0ECFA",
+    "constraints_tint": "#FDECEC",
+    "methods_tint": "#FBF0DE",
+    "evidence_tint": "#E7F5EC",
+    "decision_tint": "#FBEDF4",
     # Neutrals / chrome
     "ink": "#20252B",
     "muted": "#3E474B",

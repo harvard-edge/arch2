@@ -37,24 +37,12 @@ def main():
         REPO_ROOT / "book" / "images" / "fig-synthesis-verification-funnel"
     )
 
-    fig, ax = plt.subplots(figsize=(8.4, 4.6))
+    fig, ax = plt.subplots(figsize=(6.0, 4.4))
     fig.subplots_adjust(left=0.04, right=0.96, top=0.95, bottom=0.06)
 
     ax.set_xlim(0, 100)
-    ax.set_ylim(-6, 104)
+    ax.set_ylim(-6, 96)
     ax.axis("off")
-
-    # Title
-    ax.text(
-        50,
-        101,
-        "Multi-Fidelity Verification & Physical Signoff Funnel",
-        ha="center",
-        va="center",
-        fontsize=9.2,
-        fontweight="bold",
-        color=COLORS["ink"],
-    )
 
     # 5 Tiers Data
     tiers = [
@@ -64,7 +52,7 @@ def main():
             "checks": "Syntax valid, elaborated module hierarchy, port types",
             "latency": "Milliseconds (free / open-source)",
             "y": 78,
-            "width": 64,
+            "width": 62,
             "color": COLORS["blue"],
         },
         {
@@ -73,34 +61,34 @@ def main():
             "checks": "AXI / TLM handshakes, port widths, clock domain tags",
             "latency": "Seconds (low compute overhead)",
             "y": 62,
-            "width": 54,
+            "width": 58,
             "color": COLORS["green"],
         },
         {
             "name": "Stage 3: Functional & Assertion Verification",
             "tools": "SystemVerilog Assertions (SVA) / BMC / Sim",
             "checks": "Temporal invariants, state-machine deadlocks, coverage",
-            "latency": "Minutes (simulation pool / SAT solver)",
+            "latency": "Minutes (simulation / SAT)",
             "y": 46,
-            "width": 44,
+            "width": 54,
             "color": COLORS["orange"],
         },
         {
             "name": "Stage 4: Static Timing Analysis (STA)",
-            "tools": "OpenSTA / Synopsys PrimeTime / Cadence Tempus",
-            "checks": "Multi-corner setup & hold slack, WNS/TNS, max transition",
-            "latency": "Tens of minutes (licensed STA seat)",
+            "tools": "OpenSTA / PrimeTime / Tempus",
+            "checks": "Multi-corner setup & hold slack, WNS/TNS",
+            "latency": "Minutes to hours (licensed)",
             "y": 30,
-            "width": 34,
+            "width": 50,
             "color": COLORS["purple"],
         },
         {
             "name": "Stage 5: Physical DRC / LVS Signoff",
-            "tools": "OpenROAD / Cadence Innovus / Synopsys ICC2",
-            "checks": "Design rule clean (DRC), layout vs. schematic (LVS)",
-            "latency": "Hours to days (full signoff toolchain)",
+            "tools": "Calibre / KLayout / Netgen",
+            "checks": "Design rules (DRC), layout vs. schematic (LVS)",
+            "latency": "Hours+",
             "y": 14,
-            "width": 24,
+            "width": 46,
             "color": COLORS["red"],
         },
     ]
@@ -223,7 +211,7 @@ def main():
     ax.text(
         42,
         -1.2,
-        "Tapeout-Qualified Clean Implementation (GDSII / OASIS)",
+        "Signoff-Clean Implementation (GDSII / OASIS)",
         ha="center",
         va="center",
         fontsize=6.5,
@@ -280,8 +268,8 @@ def main():
             linestyle="-.",
         ),
     )
-    ax.plot([54, 76], [14, 14], color=COLORS["purple"], lw=1.0, linestyle="-.")
-    ax.plot([59, 76], [30, 30], color=COLORS["purple"], lw=1.0, linestyle="-.")
+    ax.plot([67.6, 76], [14, 14], color=COLORS["purple"], lw=1.0, linestyle="-.")
+    ax.plot([65.6, 76], [30, 30], color=COLORS["purple"], lw=1.0, linestyle="-.")
     ax.text(
         76,
         40,
@@ -293,41 +281,13 @@ def main():
         color=COLORS["purple"],
         bbox=dict(
             boxstyle="round,pad=0.3",
-            facecolor="#FBF0DE",
-            edgecolor=COLORS["orange"],
+            facecolor=COLORS["designspace_tint"],
+            edgecolor=COLORS["purple"],
             lw=0.6,
         ),
     )
 
-    # Right side architectural principles card
-    ax.text(
-        76,
-        72,
-        "Signoff Funnel Economics:\n"
-        "• Hierarchical Multi-Fidelity:\n"
-        "  Fast AST & schema checks prune non-viable\n"
-        "  candidates before licensed tools run.\n"
-        "• License Capacity Protection:\n"
-        "  Commercial STA & PnR tools are strictly\n"
-        "  rate-limited by license pool seats.\n"
-        "• Separation of Concerns:\n"
-        "  Architectural search proposes candidate RTL;\n"
-        "  ECO closures repair physical margins without\n"
-        "  restarting the generative loop.",
-        ha="left",
-        va="center",
-        fontsize=5.0,
-        color=COLORS["ink"],
-        bbox=dict(
-            boxstyle="round,pad=0.4",
-            facecolor="#F6F8FA",
-            edgecolor=COLORS["grid"],
-            lw=0.7,
-        ),
-    )
-
     save_figure_bundle(fig, out_plot_ch)
-    save_figure_bundle(fig, out_plot_global)
     print(f"Generated clean workflow funnel: {out_plot_ch}")
     plt.close(fig)
 

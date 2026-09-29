@@ -60,6 +60,13 @@ disagree.
 
 ### The honest replacement already exists
 
+> **Correction, 28 September 2026.** This was wrong. A check against Herdt, Tempel,
+> Grosse and Drechsler (ASP-DAC 2021) found that the paper reports no line coverage
+> and none of the 88.4%, 34.8%, or tier values below. It seeds 2,455 mutants into a
+> reference instruction-set simulator, and the official compliance suite kills 2,263.
+> `chapter7-testbench-vacuity-mutation.csv` is now marked withdrawn; the values
+> transcribed from the paper are in `chapter7-herdt-mutation-compliance.csv`.
+
 `data/datasets/chapter7-testbench-vacuity-mutation.csv` has **no
 generating script** and carries a per-row `citation` and `url` to
 Herdt, Grosse and Drechsler (ASPDAC 2021) plus OpenHW CORE-V. It reports

@@ -21,6 +21,5 @@ Executable Quarto figures in the chapter:
 - `fig-ch05-conformal-coverage`: synthetic support-change illustration.
 - `fig-bayesian-optimization`: illustrative Gaussian-process posterior and
   upper-confidence-bound acquisition.
-- Search-efficiency chart from `generate_ch05_plots.py`.
 
 The `.pdf` files beside active SVG sources are generated print companions.

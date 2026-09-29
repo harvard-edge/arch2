@@ -6,6 +6,13 @@ Panel A: The Fixed-Silicon Software Dividend (2.0x-3.8x throughput increase on f
 Panel B: Hardware Generational Steps vs. Cumulative In-Place Software Gains.
 """
 
+import sys as _sys
+
+_sys.exit(
+    "WITHDRAWN 2026-09-28: this script draws figures from unsourced or invented values "
+    "and would overwrite corrected book figures. Use book/contents/chapters/09-patterns/data/plot_mlperf_software_dividend.py instead."
+)
+
 import csv
 import re
 import sys
