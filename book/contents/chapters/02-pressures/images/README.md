@@ -26,10 +26,12 @@ Generated figures with scripts (moved from chapters 7 and 9; datasets in
   regimes; `generate_ch09_logca_phase_diagram.py` reads
   `chapter9-interconnect-logca-specs.csv`.
 - `fig-ch09-software-porting-wall`: CUTLASS, Triton, and vLLM code growth;
-  `generate_ch09_software_porting_wall.py` reads the `chapter9-{cutlass,triton,vllm}-*.csv`
-  datasets.
+  `measure_software_porting_wall.py` (retained harness, rerun 2026-09-29) writes the
+  `chapter9-{cutlass,triton,vllm}-*.csv` datasets and `generate_ch09_software_porting_wall.py`
+  plots them.
 - `fig-ch07-wilson-verification-scissors`: Wilson Research / Siemens EDA
-  schedule share, first-silicon success, and respin causes;
+  verification-time share, first-silicon success, and staffing ratio (printed or stated
+  values only; Collett rows and respin-cause panel removed 2026-09-29);
   `data/datasets/plot_wilson_scissors.py` reads
   `chapter7-wilson-verification-scissors-gap.csv`.
 
@@ -47,3 +49,7 @@ Executable Quarto figures in the chapter:
 - `fig-verification-demand-scissors`: verification and design staffing demand.
 - `fig-design-cost-composition`: leading-node design-cost estimates and their
   published composition.
+
+Photographs: `cerebras_wse_scale.jpg` is a Cerebras Systems promotional image (Hot Chips 2019
+WSE-1 comparison); source and license not yet recorded. The accelerator photo collage was
+removed 2026-09-29 (duplicated product photos under different labels).

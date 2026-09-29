@@ -1,3 +1,9 @@
+import sys as _sys
+
+_sys.exit(
+    "WITHDRAWN 2026-09-28: this script draws figures from unsourced or invented values "
+    "and would overwrite corrected book figures. Use the per-figure generators beside each chapter (no chapter uses the plot_chN.png outputs) instead."
+)
 import matplotlib.pyplot as plt
 import csv
 from pathlib import Path

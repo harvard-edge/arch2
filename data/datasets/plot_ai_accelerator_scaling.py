@@ -27,7 +27,13 @@ def main():
         for row in rows
         if row["Vendor"] == "NVIDIA" and 2016 <= int(row["Release_Year"]) <= 2022
     ]
-    labels = ["P100\n2016", "V100\n2017", "A100\n2020", "H100\n2022"]
+    # Tick labels come from the rows themselves (part token and release year).
+    labels = [
+        next(t for t in row["Chip_Name"].split() if t[0] in "PVAH" and t[1:].isdigit())
+        + "\n"
+        + row["Release_Year"]
+        for row in chips
+    ]
     compute = [float(row["Peak_FP16_BF16_TFLOPS"]) for row in chips]
     bandwidth = [float(row["Memory_Bandwidth_GBs"]) for row in chips]
     power = [float(row["TDP_Watts"]) for row in chips]

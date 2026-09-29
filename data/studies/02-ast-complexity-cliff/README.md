@@ -20,8 +20,8 @@ and SHA-256 of the source it came from.
 > **Note on an earlier version.** This study previously reported a 175x gap from
 > `hardware_ast_complexity_gap.csv`. That file was never measured. Its per-module
 > values were literal tables inside its own generator, and the upstream commits
-> in its header were hand-typed placeholders. It is retained, marked, at
-> `data/synthetic/SYNTHETIC-hardware_ast_complexity_gap.csv`. The direction of
+> in its header were hand-typed placeholders. It and its generator were deleted
+> on 29 September 2026. The direction of
 > the original claim survives; the magnitude did not.
 
 ---
@@ -73,7 +73,7 @@ and SHA-256 of the source it came from.
 | Column Name | Data Type | Description |
 | :--- | :--- | :--- |
 | `corpus_category` | `string` | `AI benchmark reference RTL` or `Production-oriented open RTL` |
-| `dataset_name` | `string` | Source repository (VerilogEval, RTLLM, OpenTitan, CV32E40P, VeeR EL2, BlackParrot) |
+| `dataset_name` | `string` | Source repository (VerilogEval, RTLLM, OpenTitan, CV32E40P, VeeR EH1, BlackParrot) |
 | `repository_url` | `string` | Canonical repository URL |
 | `repository_commit` | `string` | Full 40-character commit SHA, verified after checkout |
 | `source_path` | `string` | Path of the parsed file within that repository |
@@ -103,7 +103,7 @@ and SHA-256 of the source it came from.
 2. Lu, Y., et al., *RTLLM: An Open-Source Benchmark for RTL Generation Using LLMs*, IEEE TCAD, 2024.
 3. lowRISC, *OpenTitan*, `e3f3234aa3772760cdf40e79a8ae4471b6b02213`.
 4. OpenHW Group, *CV32E40P*, `6033d2b1be3295ec774d17ac4cf226faacfdeb08`.
-5. CHIPS Alliance, *VeeR EL2 (Cores-SweRV)*, `d04b1c7ae675a63dc4307cacfd10547ec937b928`.
+5. CHIPS Alliance, *VeeR EH1 (Cores-SweRV)*, `d04b1c7ae675a63dc4307cacfd10547ec937b928`.
 6. BlackParrot, *BlackParrot RISC-V multicore*, `f91010f654a5dfd00f83dbe25dbda482218d540b`.
 
 ---

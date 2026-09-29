@@ -6,16 +6,12 @@ Image-backed figures currently used by the chapter:
 - `fig-architecture-data-progression`: the chapter's progression from
   heterogeneous source artifacts through checked data, durable knowledge and
   current state, linked representations, and method handoff.
-- `fig-ch01-money-plot-data-gap-funnel`: software versus hardware corpus volume
-  and the public-HDL synthesizability funnel. Moved in from Chapter 1; the
-  files still live in `../../01-moonshot/images/` and the chapter's image path
-  points at this directory, so the assets must be relocated here.
 - `fig-split-brain-causality`: stale reference state diverging from current
   project state.
 - `fig-execution-history`: accepted and rejected work linked to the state and
   conditions that produced it.
-- `fig-architecture-data-scarcity`: domain corpus volume and data scarcity spectrum
-  across five engineering tiers.
+- `fig-ch04-ast-complexity-cliff`: measured module syntax size and internal
+  hierarchy, generated from `data/studies/02-ast-complexity-cliff/`.
 
 Moved to Chapter 5 with their owning method material:
 
@@ -35,3 +31,11 @@ Executable figure:
 - `fig-public-code-to-rtl`: the OpenRTLSet C/C++ collection path from
   permissively licensed repositories through the authors' synthesizability
   screen and successful Vitis HLS conversion.
+
+Removed 2026-09-29: the orphaned `fig-architecture-data-scarcity` figure, its dataset,
+and its generators, and `fig-ch01-money-plot-data-gap-funnel.png`. None was referenced
+by the chapter and none was verified.
+
+Removed 2026-09-29: `fig-hardware-representation-dilation` (definition-use token
+distance). Its token counts and syntax-node counts could not be re-derived from the
+pinned source files with a real parser, so the figure was not verifiable.

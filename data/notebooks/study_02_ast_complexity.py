@@ -101,7 +101,7 @@ def _(mo):
         > An earlier version of this study published **175x** from a file that no
         > tool produced. Its per-module values were literal tables inside its own
         > generator, and the commit hashes in its header were hand-typed
-        > placeholders. That file now sits marked in `data/synthetic/`. This
+        > placeholders. That file has since been deleted. This
         > notebook exists so the replacement can be checked rather than trusted.
         """
     )

@@ -160,7 +160,7 @@ def main() -> int:
     dataset_order = [
         "VerilogEval",
         "RTLLM",
-        "VeeR EL2",
+        "VeeR EH1",
         "CV32E40P",
         "BlackParrot",
         "OpenTitan",

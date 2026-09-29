@@ -79,7 +79,7 @@ CORPORA = (
         checkout_dir="cv32e40p",
     ),
     Corpus(
-        name="VeeR EL2",
+        name="VeeR EH1",
         category="Production-oriented open RTL",
         url="https://github.com/chipsalliance/Cores-SweRV.git",
         commit="d04b1c7ae675a63dc4307cacfd10547ec937b928",
@@ -193,7 +193,7 @@ def selected_files(corpus: Corpus, checkout: Path) -> list[Path]:
             return rel.startswith("hw/") and "/rtl/" in rel and "/dv/" not in rel
         if corpus.name == "CV32E40P":
             return rel.startswith("rtl/")
-        if corpus.name == "VeeR EL2":
+        if corpus.name == "VeeR EH1":
             return rel.startswith("design/")
         if corpus.name == "BlackParrot":
             excluded = ("/test/", "/testbench/", "/simulation/", "/syn/", "/mock/")

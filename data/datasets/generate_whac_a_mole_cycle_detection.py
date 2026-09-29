@@ -30,31 +30,19 @@ def main():
     out_ch = ch_dir / "fig-whac-a-mole"
     out_global = REPO_ROOT / "book" / "images" / "fig-whac-a-mole"
 
-    fig, ax = plt.subplots(figsize=(8.8, 4.4))
+    fig, ax = plt.subplots(figsize=(8.8, 2.3))
     fig.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.04)
 
     ax.set_xlim(0, 100)
-    ax.set_ylim(0, 100)
+    ax.set_ylim(45, 92)
     ax.axis("off")
-
-    # Title
-    ax.text(
-        50,
-        96.5,
-        "Cyclic State Detection via Cryptographic Signatures vs. Scalar Violation Counts",
-        ha="center",
-        va="center",
-        fontsize=9.2,
-        fontweight="bold",
-        color=COLORS["ink"],
-    )
 
     # 3 States across time: t, t+1, t+2
     states = [
         {
             "title": "Iteration $t$: Candidate State $S_t$",
-            "hash": "Hash: SHA256(RTL, SDC) = 0x8f3c...",
-            "metrics": "Timing: 15 Setup Violations (WNS = -0.42ns)\nDRC: 0 Spacing / Antenna Violations",
+            "hash": "State signature: H(S_t) = hash(RTL, SDC, UPF)",
+            "metrics": "Timing: n setup violations (WNS < 0)\nDRC: clean",
             "x": 5,
             "y": 48,
             "w": 25,
@@ -63,8 +51,8 @@ def main():
         },
         {
             "title": "Iteration $t+1$: Candidate State $S_{t+1}$",
-            "hash": "Hash: SHA256(RTL, SDC) = 0x2b1e...",
-            "metrics": "Timing: 0 Setup Violations (WNS > 0)\nDRC: 15 Routing Shorts / Hold Violations",
+            "hash": "State signature: H(S_t+1), differs from H(S_t)",
+            "metrics": "Timing: setup met (WNS >= 0)\nn routing shorts and hold violations",
             "x": 37.5,
             "y": 48,
             "w": 25,
@@ -73,8 +61,8 @@ def main():
         },
         {
             "title": "Iteration $t+2$: Candidate State $S_{t+2}$",
-            "hash": "Hash: SHA256(RTL, SDC) = 0x8f3c... (Match!)",
-            "metrics": "Timing: 15 Setup Violations (WNS = -0.42ns)\nDRC: 0 Spacing / Antenna Violations",
+            "hash": "State signature: H(S_t+2) = H(S_t)",
+            "metrics": "Timing: n setup violations (WNS < 0)\nDRC: clean",
             "x": 70,
             "y": 48,
             "w": 25,
@@ -163,92 +151,6 @@ def main():
         color=COLORS["ink"],
     )
 
-    # Lower Left Card: The Naive Violation-Count Trap
-    trap_rect = patches.FancyBboxPatch(
-        (5, 5),
-        43.5,
-        36,
-        boxstyle="round,pad=0.6,rounding_size=1.2",
-        facecolor="#FBF0DE",
-        edgecolor=COLORS["orange"],
-        linewidth=1.4,
-        zorder=2,
-    )
-    ax.add_patch(trap_rect)
-    ax.text(
-        26.75,
-        36.5,
-        "The Naive Scalar Count Trap (Blind to State Identity)",
-        ha="center",
-        va="center",
-        fontsize=6.8,
-        fontweight="bold",
-        color=COLORS["orange"],
-        zorder=3,
-    )
-    trap_text = (
-        "• Scalar Monitoring: Counts total violations (15 -> 15 -> 15).\n"
-        "• The Illusion: Optimizer assumes continuous search progress or\n"
-        "  stalls because violation count does not decrease.\n"
-        "• The Hazard: Cannot distinguish productive exploration along a\n"
-        "  Pareto boundary from cyclic thrashing between two inverted\n"
-        "  failure modes (setup timing vs. hold / routing congestion)."
-    )
-    ax.text(
-        7.5,
-        20.0,
-        trap_text,
-        ha="left",
-        va="center",
-        fontsize=5.2,
-        color=COLORS["ink"],
-        linespacing=1.4,
-        zorder=3,
-    )
-
-    # Lower Right Card: Cryptographic State-Signature Comparator
-    antidote_rect = patches.FancyBboxPatch(
-        (51.5, 5),
-        43.5,
-        36,
-        boxstyle="round,pad=0.6,rounding_size=1.2",
-        facecolor="#E7F5EC",
-        edgecolor=COLORS["green"],
-        linewidth=1.4,
-        zorder=2,
-    )
-    ax.add_patch(antidote_rect)
-    ax.text(
-        73.25,
-        36.5,
-        "Cryptographic Cycle Detection (The Architectural Antidote)",
-        ha="center",
-        va="center",
-        fontsize=6.8,
-        fontweight="bold",
-        color=COLORS["green"],
-        zorder=3,
-    )
-    antidote_text = (
-        "• State Fingerprint: Hashes RTL AST, SDC constraints, and UPF intent.\n"
-        "• Exact Cycle Check: Evaluates H(S_t) == H(S_{t+2}) equality.\n"
-        "• Deterministic Halt: Identifies that state S_{t+2} exactly repeats S_t\n"
-        "  despite identical violation counts.\n"
-        "• Recovery Action: Breaks the infinite loop, releases EDA licenses,\n"
-        "  rolls back to last trusted checkpoint, and requests strategy change."
-    )
-    ax.text(
-        54.0,
-        20.0,
-        antidote_text,
-        ha="left",
-        va="center",
-        fontsize=5.2,
-        color=COLORS["ink"],
-        linespacing=1.4,
-        zorder=3,
-    )
-
     # Cycle arc from state t+2 back to state t
     # Arc centered at (50, 72), width = 65, height = 24
     arc = patches.Arc(
@@ -273,7 +175,7 @@ def main():
     ax.text(
         50,
         86.5,
-        r"Cryptographic Match: $H(S_{t+2}) = H(S_t) \rightarrow$ Infinite Cycle Detected!",
+        r"Signature match: $H(S_{t+2}) = H(S_t) \rightarrow$ repeated state detected",
         ha="center",
         va="center",
         fontsize=6.5,

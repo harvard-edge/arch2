@@ -1,16 +1,20 @@
 """
-Wilson Research Group Functional Verification Scissors Gap Plot (2002-2024)
+Wilson Research Group verification-effort and first-silicon plot (2007-2024)
 ---------------------------------------------------------------------------
-Visualizes 22 years of longitudinal empirical data from Harry Foster / Wilson Research / Siemens EDA:
-Panel A: Verification Schedule & Staffing Divergence vs. First-Pass Silicon Success Collapse (2002-2024).
-Panel B: Silicon Respin Flaw Distribution & Logic Defect Root Causes.
+Plots only values printed on Foster's published charts or stated in the study text, as recorded
+(with a per-value source) in chapter7-wilson-verification-scissors-gap.csv:
+  - mean share of project time in verification (printed means, 2010-2020);
+  - first-silicon success (stated in text: 2014, 2020, 2022, 2024);
+  - verification-to-design staffing ratio (printed engineer counts 2007-2020; 2022 and 2024 derived
+    from the studies' stated growth rates and drawn hollow).
+Years without a printed or stated value are left blank and not drawn.
 """
 
 import csv
 import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
-import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -20,6 +24,20 @@ from book._python.plots import COLORS, apply_style
 
 apply_style()
 
+OUT = (
+    REPO_ROOT
+    / "book"
+    / "contents"
+    / "chapters"
+    / "02-pressures"
+    / "images"
+    / "fig-ch07-wilson-verification-scissors"
+)
+
+
+def series(rows, key):
+    return [(int(r["study_year"]), float(r[key])) for r in rows if r[key].strip()]
+
 
 def main():
     csv_file = (
@@ -28,221 +46,122 @@ def main():
         / "datasets"
         / "chapter7-wilson-verification-scissors-gap.csv"
     )
-    out_svg = (
-        REPO_ROOT
-        / "book"
-        / "contents"
-        / "chapters"
-        / "02-pressures"
-        / "images"
-        / "fig-ch07-wilson-verification-scissors.svg"
-    )
-    out_pdf = (
-        REPO_ROOT
-        / "book"
-        / "contents"
-        / "chapters"
-        / "02-pressures"
-        / "images"
-        / "fig-ch07-wilson-verification-scissors.pdf"
-    )
-    out_png = (
-        REPO_ROOT
-        / "book"
-        / "contents"
-        / "chapters"
-        / "02-pressures"
-        / "images"
-        / "fig-ch07-wilson-verification-scissors.png"
-    )
-    out_svg.parent.mkdir(parents=True, exist_ok=True)
-
-    years = []
-    verif_time = []
-    first_silicon = []
-    staff_ratio_years = []
-    staff_ratio = []
-    latest_row = None
-
     with open(csv_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader((row for row in f if not row.startswith("#")))
-        for row in reader:
-            y = float(row["study_year"])
-            years.append(y)
-            verif_time.append(float(row["avg_pct_project_time_in_verification"]))
-            first_silicon.append(float(row["first_silicon_success_pct"]))
-            if row["staffing_ratio_verif_to_design"] != "N/A":
-                staff_ratio_years.append(y)
-                staff_ratio.append(float(row["staffing_ratio_verif_to_design"]))
-            if latest_row is None or y > float(latest_row["study_year"]):
-                latest_row = row
+        rows = list(csv.DictReader(row for row in f if not row.startswith("#")))
 
-    fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(7.8, 3.6), gridspec_kw={"width_ratios": [1.12, 1.08]}
-    )
-    fig.subplots_adjust(wspace=0.58, left=0.08, right=0.94, top=0.88, bottom=0.18)
+    vt = series(rows, "avg_pct_project_time_in_verification")
+    fs = series(rows, "first_silicon_success_pct")
+    ratio = [
+        (
+            int(r["study_year"]),
+            float(r["mean_peak_verification_engineers"])
+            / float(r["mean_peak_design_engineers"]),
+            r["engineers_evidence"] == "printed_data_label",
+        )
+        for r in rows
+    ]
 
-    # -------------------------------------------------------------
-    # Panel A: 22-Year Verification Resource Trends vs. First Silicon Success
-    # -------------------------------------------------------------
-    ax1.plot(
-        years,
-        verif_time,
-        marker="o",
+    fig, ax = plt.subplots(figsize=(5.6, 3.3))
+    fig.subplots_adjust(left=0.11, right=0.86, top=0.95, bottom=0.16)
+
+    ax.plot(
+        [y for y, _ in vt],
+        [v for _, v in vt],
         color=COLORS["purple"],
         linewidth=1.8,
+        marker="o",
         markersize=4.0,
-        label="% Project Time in Verification (~58%)",
+        label="Mean share of project time in verification (%)",
         zorder=3,
     )
-    ax1.plot(
-        years,
-        first_silicon,
-        marker="s",
+    ax.plot(
+        [y for y, _ in fs],
+        [v for _, v in fs],
         color=COLORS["red"],
         linewidth=1.8,
+        marker="s",
         markersize=4.0,
-        label="First-Pass Silicon Success (Plunged to 14%)",
+        label="First-silicon success (% of projects)",
         zorder=4,
     )
 
-    # Secondary axis for Staffing Ratio with proper padding
-    ax1_sub = ax1.twinx()
-    ax1_sub.plot(
-        staff_ratio_years,
-        staff_ratio,
-        marker="^",
+    sub = ax.twinx()
+    sub.plot(
+        [y for y, _, _ in ratio],
+        [v for _, v, _ in ratio],
         color=COLORS["blue"],
-        linewidth=1.5,
+        linewidth=1.4,
         linestyle="--",
-        markersize=4.0,
-        label="Verif-to-Design Staffing Ratio",
         zorder=2,
     )
-    ax1_sub.set_ylim(0.4, 1.6)
-    ax1_sub.set_ylabel("Staffing Ratio", fontsize=5.8, color=COLORS["blue"], labelpad=2)
-    ax1_sub.tick_params(axis="y", colors=COLORS["blue"], labelsize=5.6, pad=2)
-
-    ax1.set_xlim(2001, 2025)
-    ax1.set_ylim(8, 85)
-    ax1.set_xlabel("Study Year (Wilson Research / Siemens EDA Biennial)", fontsize=6.6)
-    ax1.set_ylabel("Share of Projects / Schedule (%)", fontsize=6.6)
-    ax1.set_title(
-        "A. 22-Year Verification Scissors Divergence",
-        fontsize=7.6,
-        fontweight="bold",
-        pad=8,
+    for y, v, printed in ratio:
+        sub.plot(
+            [y],
+            [v],
+            marker="^",
+            markersize=4.4,
+            color=COLORS["blue"],
+            markerfacecolor=COLORS["blue"] if printed else "white",
+            markeredgewidth=1.0,
+            zorder=3,
+        )
+    sub.plot(
+        [],
+        [],
+        color=COLORS["blue"],
+        linestyle="--",
+        marker="^",
+        markersize=4.4,
+        label="Verification-to-design staffing ratio (right axis;\nhollow = derived from stated growth rates)",
     )
-    ax1.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
+    sub.set_ylim(0.4, 1.6)
+    sub.set_ylabel("Staffing ratio", fontsize=6.6, color=COLORS["blue"], labelpad=3)
+    sub.tick_params(axis="y", colors=COLORS["blue"], labelsize=6.0, pad=2)
 
-    # Annotate key milestones with clean boxes
-    ax1.annotate(
-        "2024 All-Time Low: 14%\n(86% require respin)",
-        xy=(2024, 14),
-        xytext=(2014.5, 18),
+    last_y, last_v = fs[-1]
+    ax.annotate(
+        f"{last_y}: {last_v:.0f}% first-silicon success",
+        xy=(last_y, last_v),
+        xytext=(2013.2, 15),
         arrowprops=dict(arrowstyle="->", color=COLORS["red"], lw=0.8),
-        fontsize=4.8,
+        fontsize=5.6,
         fontweight="bold",
         color=COLORS["red"],
         bbox=dict(
             boxstyle="round,pad=0.2",
             facecolor="white",
             edgecolor=COLORS["red"],
-            alpha=0.9,
-            lw=0.6,
-        ),
-        zorder=5,
-    )
-    ax1.annotate(
-        "58% Project Time\nin Verification",
-        xy=(2024, 58),
-        xytext=(2014.0, 68),
-        arrowprops=dict(arrowstyle="->", color=COLORS["purple"], lw=0.8),
-        fontsize=4.8,
-        fontweight="bold",
-        color=COLORS["purple"],
-        bbox=dict(
-            boxstyle="round,pad=0.2",
-            facecolor="white",
-            edgecolor=COLORS["purple"],
-            alpha=0.9,
+            alpha=0.92,
             lw=0.6,
         ),
         zorder=5,
     )
 
-    # Unified Legend
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax1_sub.get_legend_handles_labels()
-    ax1.legend(
-        lines1 + lines2,
-        labels1 + labels2,
+    ax.set_xlim(2006, 2025)
+    ax.set_ylim(0, 85)
+    ax.set_xticks([y for y in range(2007, 2025) if y in {r[0] for r in ratio}])
+    ax.set_xlabel("Survey year", fontsize=6.8)
+    ax.set_ylabel("Percent", fontsize=6.8)
+    ax.tick_params(axis="both", labelsize=6.0)
+    ax.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
+
+    h1, l1 = ax.get_legend_handles_labels()
+    h2, l2 = sub.get_legend_handles_labels()
+    ax.legend(
+        h1 + h2,
+        l1 + l2,
         loc="upper left",
-        fontsize=4.6,
+        fontsize=5.4,
         frameon=True,
         facecolor="white",
         edgecolor="none",
-        borderpad=0.25,
+        borderpad=0.3,
     )
 
-    # -------------------------------------------------------------
-    # Panel B: Flaws Contributing to Silicon Respins (2024 Data)
-    # -------------------------------------------------------------
-    # Every bar is read from the latest study year in the dataset. The dataset
-    # carries exactly these five respin causes; do not add a sixth without a
-    # column to back it.
-    respin_causes = [
-        ("Logic or Functional Flaws", "logic_functional_flaws_respin_pct"),
-        ("Analog / Mixed-Signal Tuning", "analog_mixed_signal_respin_pct"),
-        ("Clocking / CDC Flaws", "clocking_cdc_flaws_respin_pct"),
-        ("Static Timing Defects (Setup)", "timing_defect_setup_respin_pct"),
-        ("Firmware / HW-SW Interaction", "firmware_hw_sw_respin_pct"),
-    ]
-    categories = [label for label, _ in respin_causes]
-    pcts = [float(latest_row[col]) for _, col in respin_causes]
-    cat_colors = [
-        COLORS["red"],
-        COLORS["orange"],
-        COLORS["blue"],
-        COLORS["green"],
-        COLORS["purple"],
-    ]
-
-    y_cat = np.arange(len(categories))
-    bars = ax2.barh(y_cat, pcts, color=cat_colors, alpha=0.88, height=0.58, zorder=3)
-    ax2.set_yticks(y_cat)
-    ax2.set_yticklabels(categories, fontsize=5.4, color=COLORS["ink"])
-    ax2.tick_params(axis="y", pad=3)
-    ax2.invert_yaxis()  # Highest on top
-    ax2.set_xlim(0, 60)
-    ax2.set_xlabel(
-        "Projects Reporting Defect Cause (%, Multiple Allowed)", fontsize=6.6
-    )
-    ax2.set_title(
-        "B. Primary Root Causes of Silicon Respins (2024)",
-        fontsize=7.6,
-        fontweight="bold",
-        pad=8,
-    )
-    ax2.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
-
-    for bar, val in zip(bars, pcts):
-        ax2.text(
-            val + 1.2,
-            bar.get_y() + bar.get_height() / 2,
-            f"{val:.0f}%",
-            va="center",
-            ha="left",
-            fontsize=5.4,
-            fontweight="bold",
-            color=COLORS["ink"],
-        )
-
-    plt.savefig(out_svg, format="svg", bbox_inches="tight")
-    plt.savefig(out_pdf, format="pdf", bbox_inches="tight")
-    plt.savefig(out_png, format="png", dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Generated Wilson Verification Scissors plot -> {out_svg} and {out_pdf}")
+    for ext, kw in (("svg", {}), ("pdf", {}), ("png", {"dpi": 300})):
+        fig.savefig(OUT.with_suffix(f".{ext}"), bbox_inches="tight", **kw)
+    plt.close(fig)
+    print(f"Generated {OUT}.svg/.pdf/.png")
 
 
 if __name__ == "__main__":

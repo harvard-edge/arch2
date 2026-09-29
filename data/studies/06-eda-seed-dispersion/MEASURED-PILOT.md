@@ -1,8 +1,8 @@
 # Executed OpenROAD placement-seed pilot
 
-This candidate preserves the original `eda_seed_dispersion_qor_lottery.csv`,
-README, plot script, and figure assets unchanged. It provides an independently
-named measured pilot for review before any manuscript or website integration.
+This pilot replaces an earlier seed-dispersion file whose values came from a
+noise function rather than a tool run. That file and its generator were deleted
+on 29 September 2026.
 
 ## Evidence status
 
@@ -43,7 +43,7 @@ linux/amd64 container failed at clock-tree synthesis with an illegal instruction
 under ARM emulation.
 This candidate therefore makes no post-CTS, routing, GDS, signoff, multi-PDK,
 multi-design, thread, or operating-system claim. It cannot substantiate the
-original 684-run or universal 2.22% claims.
+684-run and universal 2.22% claims made by the deleted synthetic file.
 
 ## Reproduction
 

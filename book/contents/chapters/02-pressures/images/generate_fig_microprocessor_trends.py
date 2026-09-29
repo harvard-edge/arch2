@@ -2,7 +2,7 @@
 """Generate fig-microprocessor-trends: 50-year CPU trends joined with AI accelerator frontier.
 
 This script extends Karl Rupp's 50-year CPU scaling frontier (1971-2021) with the
-14-year AI accelerator scaling frontier (2012-2024, 23 primary-cited parts).
+2012-2024 accelerator frontier (23 accelerators including GPUs; undisclosed specs are N/A).
 
 Inputs:
   - data/datasets/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0)
@@ -54,15 +54,26 @@ def accelerator_frontier():
         rows = [r for r in csv.reader(f) if r and not r[0].startswith("#")]
     head, rows = rows[0], rows[1:]
     idx = {name: i for i, name in enumerate(head)}
+
+    def num(text):
+        # Undisclosed specifications are recorded as N/A and never plotted.
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
     chips = []
     for r in rows:
         chips.append(
             {
                 "name": r[idx["Chip_Name"]],
                 "year": int(r[idx["Release_Year"]]),
-                "trans_k": float(r[idx["Transistors_Billion"]])
-                * 1e6,  # billions -> thousands
-                "watts": float(r[idx["TDP_Watts"]]),
+                "trans_k": (
+                    num(r[idx["Transistors_Billion"]]) * 1e6  # billions -> thousands
+                    if num(r[idx["Transistors_Billion"]]) is not None
+                    else None
+                ),
+                "watts": num(r[idx["TDP_Watts"]]),
                 "wafer": "Wafer-Scale" in r[idx["Packaging_Type"]],
             }
         )
@@ -71,7 +82,7 @@ def accelerator_frontier():
     def frontier(key):
         pts, best = [], 0.0
         for c in packaged:
-            if c[key] > best:
+            if c[key] is not None and c[key] > best:
                 best = c[key]
                 pts.append((c["year"], best, c["name"]))
         return pts
@@ -103,7 +114,7 @@ def generate_figure(out_dir: Path | None = None):
 
     # dy nudges the end-of-line labels apart to avoid collisions
     lines = [
-        ("transistors", c_purple, "Transistors\n(thousands)", -9),
+        ("transistors", c_purple, "CPU transistors\n(thousands)", -9),
         ("specint", c_blue, "Single-thread perf\n(SpecINT x 1000)", 0),
         ("frequency", c_orange, "Frequency (MHz)", 7),
         ("cpu_watts", c_red, "CPU power: 4-year max (W)", -4),
@@ -125,7 +136,7 @@ def generate_figure(out_dir: Path | None = None):
 
     # Accelerator frontier
     for pts, colour, label, marker in (
-        (acc_trans, c_purple, "Accelerator transistors", "^"),
+        (acc_trans, c_purple, "Accelerator transistors\n(thousands)", "^"),
         (acc_watts, c_red, "Accelerator TDP (W)", "s"),
     ):
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
@@ -257,7 +268,7 @@ def generate_figure(out_dir: Path | None = None):
                 marker="^",
                 ms=4.6,
                 mfc="white",
-                label="Accelerator frontier (2012–2024)",
+                label="Accelerator frontier, incl. GPUs (2012–2024)",
             ),
         ],
         loc="lower right",
@@ -272,7 +283,7 @@ def generate_figure(out_dir: Path | None = None):
     out_pdf = out_dir / "fig-microprocessor-trends.pdf"
     out_svg = out_dir / "fig-microprocessor-trends.svg"
 
-    fig.savefig(out_png, dpi=220)
+    fig.savefig(out_png, dpi=300)
     fig.savefig(out_pdf)
     fig.savefig(out_svg)
     plt.close(fig)

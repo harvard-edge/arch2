@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH = 960
 HEIGHT = 285
+# Top band formerly held the Part strip; crop it from the viewBox.
+TOP_CROP = 32
 
 INK = "#20252B"
 MUTED = "#3E474B"
@@ -276,7 +278,7 @@ class SVG:
         chapter = self.chapter
         self.add('<?xml version="1.0" encoding="utf-8"?>')
         self.add(
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {TOP_CROP} {WIDTH} {HEIGHT - TOP_CROP}" '
             f'role="img" aria-labelledby="cover-title-{chapter.number} cover-desc-{chapter.number}">'
         )
         self.add(
@@ -304,6 +306,9 @@ class SVG:
         self.text(14, 83, chapter.thesis, size=20, weight=700)
 
     def part_strip(self) -> None:
+        # The book was flattened on 2026-09-11 and no longer has Parts, so the
+        # strip is not drawn. PARTS and Chapter.part are kept for history only.
+        return
         gap = 4
         w = (WIDTH - 28 - 3 * gap) / 4
         for index, label in enumerate(PARTS, start=1):
@@ -448,8 +453,8 @@ def chapter_3(svg: SVG) -> None:
         ("Explore", "legal candidates", "artifact"),
         ("Implement", "execution record", "method"),
         ("Evaluate", "checked comparison", "evidence"),
-        ("Interpret & explain", "supported account", "evidence"),
-        ("Review & decide", ("advance / revise", "reject / stop"), "decision"),
+        ("Interpret", "supported account", "evidence"),
+        ("Commit", ("advance / revise", "reject / stop"), "decision"),
     )
     x, y, w, h, gap = 14, 111, 143, 83, 14
     centers: list[float] = []
