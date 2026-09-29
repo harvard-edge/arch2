@@ -22,7 +22,18 @@ each to a subsystem, and a seeded stratified sample of 231 was audited.
 - Errata in which an arithmetic, floating-point, or vector unit computes or
   schedules incorrectly are rare: 4 of 231 audited, about 2.2% of the population
   (0.6 to 4.4%).
-- 87% of errata carry no planned fix.
+- 87% of errata carry no planned fix, but that does not make a workaround the usual
+  end state: of the 1,547 no-fix errata, 685 state that no workaround exists, 323 state
+  none identified and then offer software guidance or a partial mitigation, and 537
+  (35%) name a workaround (`workaround_status.csv`).
+- The largest reported class is mostly I/O: 228 of its 347 rule-assigned errata (66%)
+  are I/O and peripheral, and memory controllers, coherence fabrics, and caches together
+  hold 12.6% of all errata by rule. The figure labels it "I/O, memory controller,
+  coherence" for that reason.
+- 1,536 of 1,774 errata (87%) come from Intel documents. In the 238 AMD errata alone,
+  the same class holds 24.8% by rule.
+- The shares have no denominator: no document reports how much logic or specified
+  behavior each subsystem contains, so they are not normalized by subsystem size.
 
 > **Note on the earlier version.** A study with this ID previously reported that
 > 31.3% of 1,771 errata sat in the "Memory Hierarchy". That figure was an artifact:
@@ -82,6 +93,7 @@ replaced, or duplicated, in both the summary table and the detailed section.
 | Fetch, extract, check | [`data/scrapers/mine_cpu_errata.py`](../../scrapers/mine_cpu_errata.py) | `sources.csv`, `errata.csv`, `.cache/errata_text.jsonl` |
 | Classify | [`classify_errata.py`](./classify_errata.py) with [`classification_rules.yml`](./classification_rules.yml) | `errata_classified.csv` |
 | Draw audit sample | [`audit_sample.py`](./audit_sample.py) | `audit_sample.csv` (labels added by the auditor) |
+| Workaround field | [`workaround_status.py`](./workaround_status.py) | `workaround_status.csv` (class of each erratum's Workaround text; the text itself stays in the git-ignored cache) |
 | Audit metrics | [`audit_metrics.py`](./audit_metrics.py) with [`reporting_classes.yml`](./reporting_classes.yml) | `audit_metrics.json` |
 | Figure | [`plot_errata_subsystems.py`](./plot_errata_subsystems.py) | `book/contents/chapters/11-ownership/images/fig-errata-subsystem-shares.{svg,pdf,png}` |
 
@@ -116,6 +128,10 @@ and ambiguous rows say which other class they could be.
 **The labels are a model-assisted reading, not human review.** The auditor was the
 same model that wrote the rules. The worksheet hid the rule label, but that does not
 make the reading independent, and no second labeler measured inter-rater agreement.
+This is a co-generation limitation: the rules and the labels share one reader's
+assumptions. A blind relabel of the 231 sampled errata by an independent human, with
+Cohen's kappa against the model labels, would measure agreement beyond chance and give
+the adjusted shares an independent reference. It has not been done.
 
 **Metrics.** Per-class precision with Wilson 95% intervals; population agreement and
 audit-adjusted shares estimated from the stratified sample with a stratified
@@ -170,6 +186,7 @@ cd data/studies/01-silicon-errata-archaeology
 ../../../.venv/bin/python classify_errata.py
 ../../../.venv/bin/python audit_sample.py      # verifies the committed sample; never overwrites labels
 ../../../.venv/bin/python audit_metrics.py
+../../../.venv/bin/python workaround_status.py
 ../../../.venv/bin/python plot_errata_subsystems.py
 ```
 

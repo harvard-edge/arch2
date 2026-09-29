@@ -7638,6 +7638,15 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         r"static single assignment",
         False,
     ),
+    "CVDP": (
+        "Comprehensive Verilog Design Problems",
+        True,
+        "a",
+        "verification",
+        "An NVIDIA benchmark of realistic hardware design and verification tasks drawn from production-style RTL workflows.",
+        r"Comprehensive\ Verilog\ Design\ Problems",
+        False,
+    ),
     "ITRS": (
         "International Technology Roadmap for Semiconductors",
         True,

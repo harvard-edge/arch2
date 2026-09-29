@@ -266,8 +266,8 @@ def evaluate_codesign(paradigm: str) -> Dict[str, Any]:
         compiler_strategy = "Standard GCC -O3"
         description = "Isolated custom scalar opcode drafted by LLM"
         action_taken = "Single opcode addition; scalar address calculation and load/store bottlenecks persist"
-        provenance = (
-            riscv_res["tool"] if riscv_res else "Calibrated RISC-V Profiler Model"
+        provenance = "Illustrative fixture (authored cycle counts)" + (
+            f"; compile check: {riscv_res['tool']}" if riscv_res else ""
         )
 
     elif paradigm == "driven":
@@ -280,10 +280,8 @@ def evaluate_codesign(paradigm: str) -> Dict[str, Any]:
         compiler_strategy = "Compiler autotuning (unroll=8, loop skewing)"
         description = "Aggressive compiler autotuning on static hardware"
         action_taken = "Compiler flag sweep; unrolling exhausts 32-entry register file, triggering 32k spill cycles"
-        provenance = (
-            f"{riscv_res['tool']} (Verified 92 stack spills in loop)"
-            if riscv_res and riscv_res.get("driven")
-            else "Calibrated RISC-V Profiler Model"
+        provenance = "Illustrative fixture (authored cycle counts)" + (
+            f"; compile check: {riscv_res['tool']}" if riscv_res else ""
         )
 
     elif paradigm == "native":
@@ -298,10 +296,8 @@ def evaluate_codesign(paradigm: str) -> Dict[str, Any]:
             "Joint HW/SW co-design: SIMD-4 post-inc hardware + matched vector lowering"
         )
         action_taken = "Cross-layer co-adaptation: post-increment addressing eliminates address arithmetic; SIMD vectors eliminate spills"
-        provenance = (
-            f"{riscv_res['tool']} (Co-designed SIMD lowering)"
-            if riscv_res
-            else "Calibrated RISC-V Profiler Model"
+        provenance = "Illustrative fixture (authored cycle counts)" + (
+            f"; compile check: {riscv_res['tool']}" if riscv_res else ""
         )
 
     else:

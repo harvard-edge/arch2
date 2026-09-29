@@ -18,10 +18,12 @@
   <a href="https://arch2.mlsysbook.ai"><img src="https://img.shields.io/badge/site-arch2.mlsysbook.ai-1f6f8b" alt="Architecture 2.0 site"></a>
 </p>
 
-**Architecture 2.0** is the engineering discipline of using AI, grounded in
-architectural representations, tools, and experiments, to formulate, explore,
-implement, evaluate, explain, and defend computer architecture decisions. This
-public research and teaching project develops that discipline through a
+**Architecture 2.0** is the discipline of building AI-native design systems,
+the ensembles of learned models, simulators, tool interfaces, and checks that
+carry system intent through real tools to a supported architecture result, and
+of holding them to an architecture-grade evidence standard. Deciding where AI
+earns its place, and what evidence its use must produce, is that discipline's
+first test. This public research and teaching project develops that discipline through a
 synthesis lecture, companion labs, community resources, and a versioned
 design-loop card.
 
@@ -78,7 +80,7 @@ The public site connects the following maintained surfaces.
 
 | Surface | Role |
 | --- | --- |
-| **Synthesis lecture** | Develops the discipline of using AI to formulate, explore, implement, evaluate, explain, and defend computer architecture decisions. |
+| **Synthesis lecture** | Develops the discipline of building AI-native design systems and holding them to an architecture-grade evidence standard. |
 | **Design-loop card** | A versioned twelve-field review record with machine-checkable claims, evidence, independent profiles, replay, and decision rights. |
 | **Empirical studies** | Empirical research tracks, datasets, and simulator-backed study records supporting the synthesis lecture. |
 | **Tool registry** | A maintained index of simulators, proxy models, verification harnesses, benchmarks, datasets, and data representations, each tied to a role in an architecture design loop. |

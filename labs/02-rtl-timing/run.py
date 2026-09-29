@@ -629,12 +629,12 @@ def main() -> None:
             console.print(
                 f"[bold red]• Stage 1 [AI-Assisted]:[/bold red] Synthesized naive 32-bit ripple carry -> "
                 f"Datapath delay: [bold white]{results['assisted']['datapath_delay_ns']:.3f} ns[/bold white], "
-                f"WNS: [bold red]{results['assisted']['slack_ns']:+.3f} ns[/bold red] "
+                f"Illustrative slack: [bold red]{results['assisted']['slack_ns']:+.3f} ns[/bold red] "
                 f"(TIMING VIOLATED: {results['assisted']['logic_depth_stages']} logic stages)"
             )
         else:
             print(
-                f"1. [AI-Assisted] Delay: {results['assisted']['datapath_delay_ns']:.3f} ns | Slack: {results['assisted']['slack_ns']:+.3f} ns | Status: FAIL"
+                f"1. [AI-Assisted] Delay: {results['assisted']['datapath_delay_ns']:.3f} ns | Illustrative slack: {results['assisted']['slack_ns']:+.3f} ns | Status: FAIL"
             )
 
     # Stage 2: AI-Driven
@@ -657,12 +657,12 @@ def main() -> None:
             console.print(
                 f"[bold yellow]• Stage 2 [AI-Driven]:[/bold yellow] Applied gate sizing and buffering -> "
                 f"Datapath delay: [bold white]{results['driven']['datapath_delay_ns']:.3f} ns[/bold white], "
-                f"WNS: [bold yellow]{results['driven']['slack_ns']:+.3f} ns[/bold yellow] "
+                f"Illustrative slack: [bold yellow]{results['driven']['slack_ns']:+.3f} ns[/bold yellow] "
                 f"(TIMING VIOLATED: {results['driven']['logic_depth_stages']} logic stages remain)"
             )
         else:
             print(
-                f"2. [AI-Driven] Delay: {results['driven']['datapath_delay_ns']:.3f} ns | Slack: {results['driven']['slack_ns']:+.3f} ns | Status: FAIL"
+                f"2. [AI-Driven] Delay: {results['driven']['datapath_delay_ns']:.3f} ns | Illustrative slack: {results['driven']['slack_ns']:+.3f} ns | Status: FAIL"
             )
 
     # Stage 3: AI-Native
@@ -690,12 +690,12 @@ def main() -> None:
             console.print(
                 f"[bold green]• Stage 3 [AI-Native]:[/bold green] Redundant carry-save architecture synthesized -> "
                 f"Datapath delay: [bold white]{results['native']['datapath_delay_ns']:.3f} ns[/bold white], "
-                f"WNS: [bold green]{results['native']['slack_ns']:+.3f} ns[/bold green] "
+                f"Illustrative slack: [bold green]{results['native']['slack_ns']:+.3f} ns[/bold green] "
                 f"([bold green]1 logic stage; {equiv_data['vectors_matched']}/{equiv_data['vectors_tested']} equivalence vectors verified; TIMING CLOSED[/bold green])"
             )
         else:
             print(
-                f"3. [AI-Native] Delay: {results['native']['datapath_delay_ns']:.3f} ns | Slack: {results['native']['slack_ns']:+.3f} ns | Status: PASS"
+                f"3. [AI-Native] Delay: {results['native']['datapath_delay_ns']:.3f} ns | Illustrative slack: {results['native']['slack_ns']:+.3f} ns | Status: PASS"
             )
 
     # Save structured results

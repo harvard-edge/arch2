@@ -27,6 +27,7 @@ local acronyms = {
   ["CNN"] = "convolutional neural network: A class of deep neural networks using spatial convolution kernels, widely used in computer vision and structured tensor representations.",
   ["CPO"] = "co-packaged optics: An advanced packaging technology that integrates optical components directly alongside silicon computing elements to reduce power and increase bandwidth.",
   ["CPU"] = "central processing unit: The primary general-purpose execution engine that sequences and executes instruction streams in a computer system.",
+  ["CVDP"] = "Comprehensive Verilog Design Problems: An NVIDIA benchmark of realistic hardware design and verification tasks drawn from production-style RTL workflows.",
   ["CVE"] = "Common Vulnerabilities and Exposures: A standardized, publicly disclosed dictionary of cybersecurity vulnerabilities and exposures identifying software and hardware flaws.",
   ["CXL"] = "Compute Express Link: An open industry-standard cache-coherent interconnect protocol running over PCIe physical layers for high-speed CPU-to-device and CPU-to-memory expansion.",
   ["DAG"] = "directed acyclic graph: A directed graph with no directed cycles.",
