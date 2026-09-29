@@ -50,6 +50,6 @@ Executable Quarto figures in the chapter:
 - `fig-design-cost-composition`: leading-node design-cost estimates and their
   published composition.
 
-Photographs: `cerebras_wse_scale.jpg` is a Cerebras Systems promotional image (Hot Chips 2019
-WSE-1 comparison); source and license not yet recorded. The accelerator photo collage was
+`fig-cerebras-wse-scale` is an authored scale drawing (2026-09-29) that replaced an unlicensed
+Cerebras promotional photograph; its dimensions come from Cerebras (2019) and the V100 paper. The accelerator photo collage was
 removed 2026-09-29 (duplicated product photos under different labels).

@@ -484,14 +484,16 @@ def main() -> None:
             Panel(
                 "[bold white on blue] ARCHITECTURE 2.0: MICRO-LOOP C [/bold white on blue]\n"
                 "[bold cyan]Physical Macro Placement, RUDY Congestion & DRC Verification[/bold cyan]\n"
-                f"[dim]Die Dimensions: {die_w:,.0f} µm x {die_h:,.0f} µm (1.00 mm²) | Model: 2D RUDY ({args.grid_size}x{args.grid_size} grid) | Signoff: Peak <= 75.0% & DRC == 0[/dim]",
+                f"[dim]Die Dimensions: {die_w:,.0f} µm x {die_h:,.0f} µm (1.00 mm²) | Model: 2D RUDY ({args.grid_size}x{args.grid_size} grid) | HPWL and layouts are authored fixtures; 'DRCs' = bins over 85% of nominal capacity[/dim]",
                 border_style="bright_blue",
             )
         )
     else:
         print("=" * 80)
         print("Micro-Loop C: Physical Design & Routing Congestion")
-        print(f"Die: {die_w:.0f} x {die_h:.0f} um | Model: 2D RUDY")
+        print(
+            f"Die: {die_w:.0f} x {die_h:.0f} um | Model: simplified RUDY | HPWL and layouts are authored fixtures; DRCs = bins over 85% of nominal capacity"
+        )
         print("=" * 80)
 
     results: Dict[str, Any] = {}
@@ -513,7 +515,7 @@ def main() -> None:
                 f"[bold red]• Stage 1 [AI-Assisted]:[/bold red] Open-loop macro drafting -> "
                 f"HPWL: [bold white]{results['assisted']['hpwl_um']:,.0f} µm[/bold white], "
                 f"Peak Congestion: [bold red]{results['assisted']['peak_congestion_pct']}%[/bold red], "
-                f"DRCs: [bold red]{results['assisted']['drc_violations']}[/bold red] (FAILED: unrouted channel shorts)"
+                f"DRCs: [bold red]{results['assisted']['drc_violations']}[/bold red] (over the model's 85% bin threshold)"
             )
         else:
             print(
@@ -561,7 +563,7 @@ def main() -> None:
                 f"[bold green]• Stage 3 [AI-Native]:[/bold green] Co-adapted peripheral pin orientation & 80 µm routing avenues -> "
                 f"HPWL: [bold white]{results['native']['hpwl_um']:,.0f} µm[/bold white] (-33.5%), "
                 f"Peak Congestion: [bold green]{results['native']['peak_congestion_pct']}%[/bold green], "
-                f"DRCs: [bold green]0[/bold green] ([bold green]PHYSICAL SIGNOFF CLOSED[/bold green])"
+                f"DRCs: [bold green]0[/bold green] (model threshold met; illustrative, not signoff)"
             )
         else:
             print(

@@ -2,7 +2,7 @@
 """Generate fig-microprocessor-trends: 50-year CPU trends joined with AI accelerator frontier.
 
 This script extends Karl Rupp's 50-year CPU scaling frontier (1971-2021) with the
-2012-2024 accelerator frontier (23 accelerators including GPUs; undisclosed specs are N/A).
+2012-2026 accelerator frontier (25 accelerators including GPUs; undisclosed specs are N/A).
 
 Inputs:
   - data/datasets/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0)
@@ -268,7 +268,7 @@ def generate_figure(out_dir: Path | None = None):
                 marker="^",
                 ms=4.6,
                 mfc="white",
-                label="Accelerator frontier, incl. GPUs (2012–2024)",
+                label="Accelerator frontier, incl. GPUs (2012–2026)",
             ),
         ],
         loc="lower right",
