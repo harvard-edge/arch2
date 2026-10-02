@@ -7,6 +7,11 @@ This script extends Karl Rupp's 50-year CPU scaling frontier (1971-2021) with th
 Inputs:
   - data/datasets/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0)
   - data/datasets/chapter2-ai-accelerator-scaling-frontier.csv (Primary-cited accelerators)
+  - data/datasets/chapter2-ai-design-milestones.csv (dated, primary-cited AI-assisted design events)
+
+The band after 2026 is a hypothesis, not data: it marks the possibility that the design
+process becomes the next lever. Milestones are events drawn on their own rail and carry
+no y value.
 
 Outputs:
   - book/contents/chapters/02-pressures/images/fig-microprocessor-trends.png
@@ -34,7 +39,14 @@ CPU_CSV = REPO_ROOT / "data" / "datasets" / "chapter1-micro-trend.csv"
 ACC_CSV = (
     REPO_ROOT / "data" / "datasets" / "chapter2-ai-accelerator-scaling-frontier.csv"
 )
+MILESTONE_CSV = REPO_ROOT / "data" / "datasets" / "chapter2-ai-design-milestones.csv"
 DEFAULT_OUT_DIR = Path(__file__).resolve().parent
+
+
+def milestones():
+    with open(MILESTONE_CSV, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(l for l in f if not l.startswith("#")))
+    return [(float(r["decimal_year"]), r) for r in rows]
 
 
 def cpu_series():
@@ -183,8 +195,9 @@ def generate_figure(out_dir: Path | None = None):
     )
     ax.annotate(
         "Cerebras wafer-scale\n(shown for scale, not on the frontier)",
-        xy=(wx[-1], wy[-1]),
-        xytext=(6, -2),
+        xy=(wx[0], wy[0]),
+        xytext=(-8, 4),
+        ha="right",
         textcoords="offset points",
         fontsize=8.0,
         color=c_grey,
@@ -233,9 +246,82 @@ def generate_figure(out_dir: Path | None = None):
     # Shaded band for specialization era
     ax.axvspan(2016, 2026, color=c_accent_bg, alpha=0.04, zorder=0)
 
-    ax.set_xlim(1970, 2026)
-    ax.set_ylim(0.5, 2.2e10)
-    ax.set_xticks(range(1970, 2021, 10))
+    # Hypothesized next era: hatched, labeled as a question, no data in it.
+    c_dec = COLORS.get("decision_ink", "#A82E70")
+    ax.axvline(2026, color=c_dec, ls="--", lw=1.0, alpha=0.9)
+    ax.axvspan(
+        2026,
+        2040,
+        facecolor="none",
+        edgecolor=c_dec,
+        hatch="////",
+        lw=0,
+        alpha=0.16,
+        zorder=0,
+    )
+    ax.text(
+        2033,
+        8.0e9,
+        "AI-native\ndesign era?",
+        ha="center",
+        va="center",
+        fontsize=9.5,
+        fontweight="bold",
+        color=c_dec,
+        linespacing=1.1,
+    )
+    ax.text(
+        2033,
+        1.3e9,
+        "hypothesis; dated milestones below",
+        ha="center",
+        fontsize=7.6,
+        color=c_dec,
+        style="italic",
+    )
+
+    # AI-assisted design milestones: events on a rail, listed in the hypothesis band.
+    ms = milestones()
+    short = {
+        "AlphaChip": "AlphaChip floorplans TPU blocks",
+        "ChipNeMo": "ChipNeMo domain-adapted LLM",
+        "Design Conductor": "Design Conductor RISC-V CPU",
+        "Design Conductor 2.0": "Design Conductor 2.0 accelerator",
+        "AlphaEvolve": "AlphaEvolve circuit in TPU silicon",
+        "Jalapeno": "Jalape\u00f1o, 9 months to tapeout",
+    }
+    rail_y = 0.62
+    ax.plot([2020.8, 2026.8], [rail_y, rail_y], color=c_dec, lw=1.4, zorder=6)
+    label_y = [3.6e1, 1.8e1, 9.0, 4.5, 2.25, 1.12]
+    for (yr, row), ly in zip(ms, label_y):
+        ax.plot(
+            yr, rail_y, marker="D", ms=4.8, color=c_dec, mec="white", mew=0.8, zorder=7
+        )
+        ax.plot([yr, 2027.25], [rail_y, ly], color=c_dec, lw=0.5, alpha=0.45, zorder=5)
+        ax.text(
+            2027.4,
+            ly,
+            f"{short[row['milestone']]} \u00b7 {row['date']}",
+            fontsize=7.2,
+            color=c_ink,
+            va="center",
+            ha="left",
+            zorder=8,
+        )
+    ax.text(
+        2027.4,
+        7.2e1,
+        "AI-assisted design milestones",
+        fontsize=7.6,
+        color=c_dec,
+        fontweight="bold",
+        ha="left",
+        va="center",
+    )
+
+    ax.set_xlim(1970, 2040)
+    ax.set_ylim(0.45, 2.2e10)
+    ax.set_xticks(range(1970, 2031, 10))
     ax.set_yticks([1, 1e2, 1e4, 1e6, 1e8, 1e10])
     ax.set_yticklabels(
         [r"$10^0$", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^8$", r"$10^{10}$"]
@@ -271,13 +357,13 @@ def generate_figure(out_dir: Path | None = None):
                 label="Accelerator frontier, incl. GPUs (2012–2026)",
             ),
         ],
-        loc="lower right",
+        loc="upper left",
         fontsize=8.2,
         frameon=False,
-        bbox_to_anchor=(0.98, 0.02),
+        bbox_to_anchor=(0.01, 0.80),
     )
 
-    fig.subplots_adjust(left=0.055, right=0.815, top=0.90, bottom=0.10)
+    fig.subplots_adjust(left=0.055, right=0.985, top=0.90, bottom=0.10)
 
     out_png = out_dir / "fig-microprocessor-trends.png"
     out_pdf = out_dir / "fig-microprocessor-trends.pdf"
