@@ -22,10 +22,11 @@ each to a subsystem, and a seeded stratified sample of 231 was audited.
 - Errata in which an arithmetic, floating-point, or vector unit computes or
   schedules incorrectly are rare: 4 of 231 audited, about 2.2% of the population
   (0.6 to 4.4%).
-- 87% of errata carry no planned fix, but that does not make a workaround the usual
-  end state: of the 1,547 no-fix errata, 685 state that no workaround exists, 323 state
-  none identified and then offer software guidance or a partial mitigation, and 537
-  (35%) name a workaround (`workaround_status.csv`).
+- 1,547 of 1,774 errata (87%) carry no planned fix. When dispositions differ
+  across steppings, the extraction retains the least resolved disposition. This
+  counts documented entries, not affected shipped processors. Workaround subgroup
+  counts have been withdrawn because their field extraction was not reliable
+  (see the validation limits below).
 - The largest reported class is mostly I/O: 228 of its 347 rule-assigned errata (66%)
   are I/O and peripheral, and memory controllers, coherence fabrics, and caches together
   hold 12.6% of all errata by rule. The figure labels it "I/O, memory controller,
@@ -93,7 +94,6 @@ replaced, or duplicated, in both the summary table and the detailed section.
 | Fetch, extract, check | [`data/scrapers/mine_cpu_errata.py`](../../scrapers/mine_cpu_errata.py) | `sources.csv`, `errata.csv`, `.cache/errata_text.jsonl` |
 | Classify | [`classify_errata.py`](./classify_errata.py) with [`classification_rules.yml`](./classification_rules.yml) | `errata_classified.csv` |
 | Draw audit sample | [`audit_sample.py`](./audit_sample.py) | `audit_sample.csv` (labels added by the auditor) |
-| Workaround field | [`workaround_status.py`](./workaround_status.py) | `workaround_status.csv` (class of each erratum's Workaround text; the text itself stays in the git-ignored cache) |
 | Audit metrics | [`audit_metrics.py`](./audit_metrics.py) with [`reporting_classes.yml`](./reporting_classes.yml) | `audit_metrics.json` |
 | Figure | [`plot_errata_subsystems.py`](./plot_errata_subsystems.py) | `book/contents/chapters/11-ownership/images/fig-errata-subsystem-shares.{svg,pdf,png}` |
 
@@ -186,7 +186,6 @@ cd data/studies/01-silicon-errata-archaeology
 ../../../.venv/bin/python classify_errata.py
 ../../../.venv/bin/python audit_sample.py      # verifies the committed sample; never overwrites labels
 ../../../.venv/bin/python audit_metrics.py
-../../../.venv/bin/python workaround_status.py
 ../../../.venv/bin/python plot_errata_subsystems.py
 ```
 
@@ -197,6 +196,48 @@ without it records the new revision, and the audit must then be re-drawn and
 re-labeled because class sizes change.
 
 ## 5. Limits
+
+### Withdrawn workaround subgroup counts (10 October 2026)
+
+A release audit cold-downloaded all 19 vendor PDFs, matched all committed SHA-256
+hashes, and reproduced the 1,774 title/ID/disposition records and the calculated
+metrics. Those checks establish source identity and reproducibility, not the
+correctness of every extracted body field.
+
+The previously committed `workaround_status.csv` has been removed from the
+published data. At least eight entries classified as no workaround plus guidance
+contained no guidance: the parser had retained page furniture, another title,
+a duplicate phrase, or punctuation. Two more workaround fields were omitted when
+an entry continued on another page. These ten records were checked against the
+rendered source pages; they are a confirmed minimum, not an estimate of all errors.
+
+| Erratum | Source document | Printed page | Confirmed issue |
+| :--- | :--- | ---: | :--- |
+| BDF46 | [Intel 333811](https://cdrdv2.intel.com/v1/dl/getContent/333811) | 23 | Product footer mistaken for guidance |
+| SKX47 | [Intel 336065](https://cdrdv2.intel.com/v1/dl/getContent/336065) | 33 | Page furniture mistaken for guidance |
+| SKX98 | Intel 336065 | 45 | Page furniture mistaken for guidance |
+| SPR31 | [Intel 772415](https://cdrdv2.intel.com/v1/dl/getContent/772415) | 28 | Extra punctuation mistaken for guidance |
+| EMR30 | [Intel 793902](https://cdrdv2.intel.com/v1/dl/getContent/793902) | 27 | Page furniture mistaken for guidance |
+| EMR48 | Intel 793902 | 32 | Page furniture mistaken for guidance |
+| ADL066 | [Intel 682436](https://cdrdv2.intel.com/v1/dl/getContent/682436) | 36 | Another title mistaken for guidance |
+| LNL008 | [Intel 827538](https://cdrdv2.intel.com/v1/dl/getContent/827538) | 14 | Duplicated phrase mistaken for guidance |
+| ICL008 | [Intel 341079](https://cdrdv2.intel.com/v1/dl/getContent/341079) | 18 | Workaround in continuation omitted |
+| LNL004 | Intel 827538 | 14 | No-workaround statement in continuation omitted |
+
+No corrected global workaround split is reported. Recovering one requires repairing
+entry boundaries, page reading order, and continuation merging; separating actual
+mitigation instructions from non-actionable trailing context; and checking the
+recovered fields against the sources before recomputation. Description and
+implication fields used in classification fallback and the audit also need a
+field-level check because they share the extractor. The subsystem estimates remain
+conditional on the disclosed model-assisted labels, not an independently validated
+reference classification.
+
+`workaround_status.py` now produces only an unvalidated diagnostic worksheet in
+`.cache/workaround_candidates.csv`. Its text-pattern labels do not establish that
+a workaround or guidance exists. It is excluded from the publication pipeline.
+
+### Other limits
 
 - A published erratum is what a vendor chose to document, not a census of escapes.
 - Descriptions are not committed, so re-reading the audit needs the vendor PDFs.

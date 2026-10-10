@@ -1,32 +1,14 @@
 #!/usr/bin/env python3
-"""Classify what each erratum's Workaround field says, without committing the text.
+"""Export unvalidated workaround text for parser diagnosis; not publication data.
 
-Inputs:
-    errata.csv                 every erratum (from data/scrapers/mine_cpu_errata.py)
-    .cache/errata_text.jsonl   erratum body text, including the Workaround field
-                               (git-ignored; re-created by the scraper from the
-                               hash-verified vendor PDFs)
+The former workaround_status.csv and its subgroup counts were withdrawn after
+source checks found page furniture, repeated titles, and omitted continuations.
+This helper preserves the parsed text and literal text-pattern labels so a future
+field-level audit can find defects. A label does not establish the presence of a
+workaround or usable guidance. See README.md for the confirmed source cases.
 
-Output:
-    workaround_status.csv      one row per erratum: family, erratum_id, vendor,
-                               status (the document's fix disposition), and
-                               workaround_class
-
-workaround_class is assigned by these rules, applied to the field with
-surrounding whitespace removed:
-
-    none_stated         the field is only "None", "None identified", or
-                        "None Identified", with or without a final period
-    none_with_guidance  the field begins with "None" or "None identified" and
-                        then continues, usually with software guidance or a
-                        partial mitigation
-    workaround_stated   any other non-empty field (a BIOS, microcode, OS, or
-                        software workaround, including "It is possible for the
-                        BIOS to contain a workaround")
-    not_extracted       the scraper recovered no Workaround text
-
-Only the class is committed. The vendor text stays in the git-ignored cache,
-as the rest of this study's descriptions do.
+Inputs: errata.csv and the git-ignored .cache/errata_text.jsonl.
+Output: .cache/workaround_candidates.csv, with every row marked unvalidated.
 
     python3 data/studies/01-silicon-errata-archaeology/workaround_status.py
 """
@@ -50,8 +32,8 @@ def classify(text: str) -> str:
     if NONE_ONLY.fullmatch(t):
         return "none_stated"
     if NONE_PREFIX.match(t):
-        return "none_with_guidance"
-    return "workaround_stated"
+        return "none_with_trailing_text"
+    return "other_text"
 
 
 def main() -> int:
@@ -70,14 +52,37 @@ def main() -> int:
         raise SystemExit(
             f"{len(missing)} errata have no cached text; rerun the scraper"
         )
-    out = HERE / "workaround_status.csv"
+    out = HERE / ".cache" / "workaround_candidates.csv"
     with out.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["family", "erratum_id", "vendor", "status", "workaround_class"])
+        w.writerow(
+            [
+                "family",
+                "erratum_id",
+                "vendor",
+                "status",
+                "text_pattern",
+                "validation_status",
+                "parsed_text",
+            ]
+        )
         for r in errata:
-            cls = classify(text[(r["family"], r["erratum_id"])])
-            w.writerow([r["family"], r["erratum_id"], r["vendor"], r["status"], cls])
-    print(out.relative_to(HERE.parents[2]))
+            parsed = text[(r["family"], r["erratum_id"])]
+            cls = classify(parsed)
+            w.writerow(
+                [
+                    r["family"],
+                    r["erratum_id"],
+                    r["vendor"],
+                    r["status"],
+                    cls,
+                    "unvalidated",
+                    parsed,
+                ]
+            )
+    print(
+        f"UNVALIDATED diagnostic worksheet, not publication data: {out.relative_to(HERE.parents[2])}"
+    )
     return 0
 
 

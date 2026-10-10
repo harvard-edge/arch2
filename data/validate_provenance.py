@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""Fail if a generated dataset is presented as evidence.
+"""Screen dataset metadata and prevent known withdrawn artifacts returning.
 
-Two rules, both learned from real defects in this repository:
-
-1. Nothing under ``data/datasets/`` may be produced by a random number
-   generator. Two files were, for weeks, while calling themselves provenance
-   datasets.
-2. A dataset header may not name a tool version that its own generating script
-   hardcodes. That combination -- a claimed tool version and a literal in the
-   generator -- is the signature of a fabricated measurement, because a real
-   run reports its own version.
-
-Generated data is deleted, not quarantined. The former ``data/synthetic/``
-directory was removed on 2026-09-29; this validator fails if it reappears.
+This checks selected fabrication patterns, explicit input records, row counts,
+and published-file references. Matching a source-like header or generator name
+does not authenticate a measurement. Randomized experiments and bootstraps can
+be legitimate; the historical patterns checked here concern fabricated values.
+Source accuracy and numerical correctness require separate audits.
 
     python3 data/validate_provenance.py
 
@@ -21,9 +14,12 @@ Exits non-zero on any violation, so it can gate a commit or a build.
 
 from __future__ import annotations
 
+import csv as csvlib
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 RECEIPTS = ROOT / "data" / "datasets"
@@ -62,9 +58,46 @@ problems: list[str] = []
 notes: list[str] = []
 unprovenanced: list = []
 
+# Exact withdrawn release artifacts, not a filename-pattern ban on new studies.
+WITHDRAWN = (
+    [f"ch{i}_data.csv" for i in range(1, 13)]
+    + [f"plot_ch{i}.png" for i in range(1, 13)]
+    + [
+        "plot_all_wishlist.py",
+        "chapter1-github-software-hardware-divide.csv",
+        "chapter1_empirical_data_gap_and_funnel.csv",
+        "chapter9-interconnect-logca-specs.csv",
+    ]
+)
+for name in WITHDRAWN:
+    if (RECEIPTS / name).exists():
+        problems.append(f"Withdrawn release artifact remains: data/datasets/{name}")
+
+records = yaml.safe_load((RECEIPTS / "provenance.yml").read_text()).get("receipts", [])
+recorded_paths = {r["path"] for r in records}
+for record in records:
+    path = (ROOT / record["path"]).resolve()
+    if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
+        problems.append(
+            f"Recorded input is missing or outside repository: {record['path']}"
+        )
+        continue
+    if path.suffix == ".csv" and "rows" in record:
+        with path.open() as handle:
+            count = sum(
+                1
+                for _ in csvlib.DictReader(
+                    line for line in handle if not line.startswith("#")
+                )
+            )
+        if count != record["rows"]:
+            problems.append(
+                f"{record['path']}: recorded {record['rows']} rows, found {count}"
+            )
+
 
 def scraper_for(csv_name: str) -> Path | None:
-    """The script that writes this CSV, if any."""
+    """Find a scraper mentioning this CSV; this does not establish dataflow."""
     for d in (SCRAPERS,):
         if not d.is_dir():
             continue
@@ -99,6 +132,7 @@ if RECEIPTS.is_dir():
     candidate_csvs.extend(sorted(RECEIPTS.glob("*.csv")))
 if STUDIES.is_dir():
     candidate_csvs.extend(sorted(STUDIES.rglob("*.csv")))
+candidate_csvs.extend(sorted((ROOT / "book" / "contents").rglob("*.csv")))
 
 for csv in candidate_csvs:
     hdr = header_of(csv)
@@ -129,7 +163,9 @@ for csv in candidate_csvs:
                 )
                 break
         else:
-            notes.append(f"ok  {csv.relative_to(ROOT)}  (measured via {script.name})")
+            notes.append(
+                f"metadata  {csv.relative_to(ROOT)}  (generator mention: {script.name}; not executed)"
+            )
     else:
         head = hdr
         cols = csv.read_text(errors="ignore").splitlines()
@@ -150,9 +186,11 @@ for csv in candidate_csvs:
             k in head.lower()
             for k in ("source", "citation", "http", "doi", "derived", "transcribed")
         )
-        if per_row or in_header:
+        if str(csv.relative_to(ROOT)) in recorded_paths:
+            notes.append(f"metadata  {csv.relative_to(ROOT)}  (explicit input record)")
+        elif per_row or in_header:
             notes.append(
-                f"ok  {csv.relative_to(ROOT)}  (transcribed, carries provenance)"
+                f"metadata  {csv.relative_to(ROOT)}  (source-like header or column; not authenticated)"
             )
         else:
             unprovenanced.append(csv.relative_to(ROOT))
@@ -186,10 +224,12 @@ if __name__ == "__main__":
         print(n)
     print()
     if unprovenanced:
-        print(f"{len(unprovenanced)} dataset(s) carry NO provenance metadata.")
         print(
-            "Not evidence of fabrication; evidence that the source was "
-            "never recorded. Add a source column or a header note.\n"
+            f"{len(unprovenanced)} CSV(s) have no recognized inline metadata or central input record."
+        )
+        print(
+            "Separate study records may cover raw inputs and outputs. This warning "
+            "does not establish that their provenance is absent.\n"
         )
         for u in unprovenanced:
             print(f"  ? {u}")
@@ -199,4 +239,9 @@ if __name__ == "__main__":
         for p in problems:
             print(f"  - {p}")
         sys.exit(1)
-    print(f"{len(notes)} datasets checked. No provenance violations.")
+    print(
+        f"{len(candidate_csvs)} CSVs screened; no selected metadata violations found."
+    )
+    print(
+        "This does not certify numerical correctness, source support, or historical execution."
+    )

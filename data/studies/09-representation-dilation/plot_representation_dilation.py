@@ -2,8 +2,9 @@
 """Draw fig-hardware-representation-dilation from the measured CSV.
 
 (a) Mean declaration-to-use distance in token order against file length.
-(b) Mean path length between the same pairs in pyslang's syntax tree, on the
-    same axes, with the one-edge def-use graph distance marked.
+(b) Mean path length for the recoverable subset of those pairs in pyslang's
+    syntax tree, on the same axes, with the one-edge def-use graph distance
+    marked. Panel annotations state their distinct file and pair counts.
 
 Every plotted value is read from the CSV that measure_representation_dilation.py
 writes. The fit and its band are recomputed here with the same seed.
@@ -110,7 +111,10 @@ def draw_fit(ax, rows: list[dict], y_key: str, label_xy, ha: str) -> None:
         lw=0.9,
         zorder=4,
     )
+    pair_key = "tree_pairs" if y_key == "mean_tree_distance" else "def_use_pairs"
+    pair_count = sum(int(r[pair_key]) for r in pts)
     ax.annotate(
+        f"{len(pts):,} files / {pair_count:,} pairs\n"
         f"log-log slope {slope:.2f}\n95% CI {s_lo:.2f} to {s_hi:.2f}",
         xy=label_xy,
         xycoords="axes fraction",
@@ -176,7 +180,6 @@ def main() -> None:
     handles = []
     for corpus, (marker, group) in STYLE.items():
         hollow = group == "benchmark"
-        n = sum(r["corpus"] == corpus for r in rows)
         handles.append(
             Line2D(
                 [],
@@ -187,7 +190,7 @@ def main() -> None:
                 markerfacecolor="none" if hollow else GROUP_COLOR[group],
                 markeredgecolor=GROUP_COLOR[group] if hollow else COLORS["ink"],
                 markeredgewidth=0.7 if hollow else 0.3,
-                label=f"{corpus} ({n})",
+                label=corpus,
             )
         )
     fig.legend(
@@ -203,6 +206,10 @@ def main() -> None:
     )
     fig.tight_layout(rect=(0, 0.15, 1, 1), w_pad=1.6)
     paths = save_figure_bundle(fig, args.output_base)
+    svg = args.output_base.with_suffix(".svg")
+    svg.write_text(
+        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
+    )
     for p in paths.values():
         print(p)
 

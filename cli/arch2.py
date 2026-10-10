@@ -6930,7 +6930,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
         "a",
         "hardware",
-        "A specialized hardware memory array that searches its entire contents in parallel and returns the location of matching data within a single cycle.",
+        "An associative memory that searches for stored data matching a supplied key and returns matching entries or their locations; lookup latency depends on the implementation.",
         r"content\-addressable\ memory",
         False,
     ),
@@ -7007,12 +7007,12 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
     ),
     "FMA": (
-        "fused multiply-accumulate",
+        "fused multiply-add",
         False,
         "an",
         "hardware",
-        "A hardware floating-point execution unit that computes the product of two numbers and adds an accumulator in a single step with a single rounding stage.",
-        r"fused\ multiply\-accumulate",
+        "A floating-point operation that computes the product of two numbers plus a third operand with a single final rounding.",
+        r"fused\ multiply\-add",
         True,
     ),
     "GDDR5": (
@@ -7092,7 +7092,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
         "a",
         "hardware",
-        "A bare semiconductor die or chiplet that has been comprehensively tested and verified to meet functional and electrical specifications prior to multi-die package assembly.",
+        "A bare semiconductor die or chiplet that has passed specified functional and electrical tests before multi-die package assembly, subject to the test flow's coverage limits.",
         r"known[- ]good[- ]die",
         True,
     ),
@@ -7716,7 +7716,7 @@ CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
         False,
         "a",
         "verification",
-        "An interface where a signal generated in one clock domain is sampled in an asynchronous or unrelated clock domain, risking metastability.",
+        "A transfer of a signal between logic operating in different clock domains; asynchronous crossings require measures to mitigate metastability and preserve transfer correctness.",
         r"clock-domain crossing",
         False,
     ),
@@ -8323,6 +8323,8 @@ def generate_glossary_markdown() -> str:
     ]
 
     for domain_key, domain_title, table_anchor, sec_anchor in GLOSSARY_DOMAINS:
+        # Keep each glossary heading with the table header and its first entry.
+        lines.extend(["```{=latex}", r"\Needspace{16\baselineskip}", "```", ""])
         lines.append(f"## {domain_title} {{#{sec_anchor}}}")
         lines.append("")
         lines.append(

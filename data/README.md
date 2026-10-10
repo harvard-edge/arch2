@@ -1,57 +1,75 @@
-# Architecture 2.0 Data & Empirical Provenance Hub
+# Architecture 2.0 Data and Provenance
 
-This directory holds the datasets, measurement harnesses, and reproduction scripts behind the quantitative figures and tables in *Architecture 2.0* and on the public data page (`www/data.qmd`).
+This directory holds source datasets, measurement harnesses, simulator outputs,
+and reproduction scripts used by the book and its [public data page](../www/data.qmd).
+The [study inventory](studies/README.md) identifies the retained studies and their
+limits; chapter datasets have a separate [provenance guide](datasets/README.md).
 
----
+## Layout
 
-## 1. Layout
+| Location | Contents |
+| --- | --- |
+| `datasets/` | Chapter datasets, upstream source snapshots, plotting scripts, and `provenance.yml` |
+| `studies/01-silicon-errata-archaeology/` | Rebuilt extraction and classification of published CPU errata |
+| `studies/02-ast-complexity-cliff/` | Source-syntax measurements from pinned RTL repositories |
+| `studies/06-eda-seed-dispersion/` | Twenty executed OpenROAD placement runs and raw stage metrics |
+| `studies/08-testbench-vacuity-and-judge-bias/` | Executed VerilogEval mutation pilot; the folder name is historical |
+| `studies/09-representation-dilation/` | Declaration-to-use distances in token order and syntax trees |
+| `studies/ai_systolic_array_study/` | Recorded model proposal and SCALE-Sim comparison on a synthetic workload |
+| `scrapers/` | Source miners and measurement harnesses |
+| `notebooks/` | Notebooks that recompute selected study summaries |
+| `processed/` | Processed corpora and intermediate tables |
 
-```
-data/
-├── README.md                                 # This file
-├── scrapers/                                 # Measurement harnesses and miners
-│   ├── mine_hardware_ast_complexity_real.py  # Study 02: pyslang concrete syntax trees on pinned commits
-│   ├── run_openroad_gcd_placement_seed_pilot.py # Study 06: OpenROAD placement seed pilot (20 seeds, Docker)
-│   ├── mine_verilog_eval_mutation_pilot.py   # Study 08: VerilogEval mutation pilot (Icarus, Yosys)
-│   └── mine_*.py                             # Other miners feeding chapter datasets
-├── datasets/                                 # Chapter datasets and plotting scripts; provenance in provenance.yml
-│   ├── README.md                             # Per-dataset methodology and sources
-│   ├── provenance.yml                        # Audit record for datasets that feed book figures
-│   ├── hardware_ast_complexity_measured.csv  # Study 02 data, N=1,513 module declarations
-│   └── chapter*-*.csv                        # Chapter datasets
-├── studies/                                  # Self-contained measured studies behind www/data.qmd
-│   ├── 02-ast-complexity-cliff/
-│   ├── 06-eda-seed-dispersion/
-│   ├── 08-testbench-vacuity-and-judge-bias/  # Executed VerilogEval mutation pilot
-│   └── ai_systolic_array_study/              # Recorded SCALE-Sim study used in Chapters 5 and 7
-├── notebooks/                                # marimo notebooks that recompute Studies 02 and 06
-└── processed/                                # Processed corpora and intermediate tables
-```
+Studies support both the manuscript and the website. Some chapters read study
+files directly; others use derived chapter datasets or generated figures.
 
-Generated values are not kept in this repository. On 29 September 2026 the former
-`data/synthetic/` quarantine and five website studies (errata, MLPerf software
-dividend, Tiny Tapeout, hardware CVE tax, foundry cost and R&D) were deleted after
-value-by-value checks against their primary sources failed. See
-`data/studies/README.md` for what each check found.
+## What the evidence means
 
----
+- **Measured:** outputs of an executed parser, simulator, or other tool under
+  recorded inputs and configuration. Simulation results are measurements of that
+  model, not silicon measurements or proof of performance on an application.
+- **Mined or transcribed:** values extracted from primary documents or copied
+  from an attributed source. Source fidelity and any subsequent classification
+  must be checked separately.
+- **Analytical:** results calculated from explicit equations and assumptions.
+  They support the stated model, not an empirical claim about an unmeasured system.
+- **Conceptual:** diagrams or examples that explain a relationship. They are not
+  observations and cannot establish a measured magnitude.
 
-## 2. Reproduction
+Generated artifacts and analytical calculations exist in the repository. The
+integrity requirement is to distinguish them from empirical evidence and to trace
+empirical claims to actual sources or retained execution outputs. Equations and
+conceptual diagrams do not supply missing empirical data. A source URL, tool name,
+or `verified` label alone does not establish that a value is correct.
+
+## Reproduction and verification
+
+Use each study's linked instructions in the [inventory](studies/README.md) for
+pinned sources, dependencies, commands, and claim boundaries. Recomputing an
+aggregate, checking a source hash, replaying a simulation, and independently
+replicating a study are different levels of verification.
 
 ```bash
-# Study 02: re-parse the pinned corpora and redraw the figure
-python3 data/scrapers/mine_hardware_ast_complexity_real.py
-python3 data/studies/02-ast-complexity-cliff/plot_ast_complexity_measured.py
-
-# Study 06: needs Docker, about 20 minutes
-python3 data/scrapers/run_openroad_gcd_placement_seed_pilot.py
-python3 data/studies/06-eda-seed-dispersion/plot_placement_seed_pilot.py
-
-# Study 08: needs iverilog, vvp, yosys and a pinned VerilogEval checkout
-python3 data/scrapers/mine_verilog_eval_mutation_pilot.py --corpus <verilog-eval checkout>
-python3 data/studies/08-testbench-vacuity-and-judge-bias/plot_verilog_eval_mutation_pilot.py
-
-# Provenance checks
 python3 data/validate_provenance.py
 python3 data/validate_figure_provenance.py
 ```
+
+These validators check selected metadata patterns, explicit figure declarations,
+source paths, and recorded CSV row counts. They do not establish source accuracy,
+complete source coverage, execution history, or whether a cited study supports a
+claim. A declared input path does not prove that the plotting code reads it.
+
+The October 2026 integrity audit recomputed the retained Studies 02, 06, and 08
+headlines, checked Study 06's 40 raw metric-file hashes, and reconstructed Study
+08's 338 mutant hashes from pinned source. It did not rerun those tools. Retention
+limits and earlier rerun coverage remain documented with the studies.
+
+## Withdrawn material
+
+Earlier fabricated or unsupported datasets were withdrawn; the retained errata,
+AST, placement, and mutation studies must not inherit their predecessors' claims.
+The release cleanup removes the twelve obsolete `ch1_data.csv` through
+`ch12_data.csv` files and their `plot_chN.png` outputs, plus
+`chapter1-github-software-hardware-divide.csv` and
+`chapter1_empirical_data_gap_and_funnel.csv`. The [study history](studies/README.md#withdrawn-predecessors)
+distinguishes replacements from studies that remain withdrawn.

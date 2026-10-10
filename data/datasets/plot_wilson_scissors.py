@@ -7,7 +7,9 @@ Plots only values printed on Foster's published charts or stated in the study te
   - first-silicon success (stated in text: 2014, 2020, 2022, 2024);
   - verification-to-design staffing ratio (printed engineer counts 2007-2020; 2022 and 2024 derived
     from the studies' stated growth rates and drawn hollow).
-Years without a printed or stated value are left blank and not drawn.
+Markers appear only for retained values. Lines stop before 2024 because
+recruitment changed from industry lists to a qualified sample provider.
+Source: Foster, Functional Verification Study Survey Methodology Evolution (2026).
 """
 
 import csv
@@ -61,8 +63,8 @@ def main():
         for r in rows
     ]
 
-    fig, ax = plt.subplots(figsize=(5.6, 3.3))
-    fig.subplots_adjust(left=0.11, right=0.86, top=0.95, bottom=0.16)
+    fig, ax = plt.subplots(figsize=(5.0, 3.8))
+    fig.subplots_adjust(left=0.11, right=0.87, top=0.74, bottom=0.15)
 
     ax.plot(
         [y for y, _ in vt],
@@ -71,12 +73,13 @@ def main():
         linewidth=1.8,
         marker="o",
         markersize=4.0,
-        label="Mean share of project time in verification (%)",
+        label="Mean project time in verification (%)",
         zorder=3,
     )
+    historical_fs = [(y, v) for y, v in fs if y < 2024]
     ax.plot(
-        [y for y, _ in fs],
-        [v for _, v in fs],
+        [y for y, _ in historical_fs],
+        [v for _, v in historical_fs],
         color=COLORS["red"],
         linewidth=1.8,
         marker="s",
@@ -84,11 +87,31 @@ def main():
         label="First-silicon success (% of projects)",
         zorder=4,
     )
+    for y, v in fs:
+        if y >= 2024:
+            ax.plot([y], [v], color=COLORS["red"], marker="s", markersize=4.0, zorder=4)
+
+    ax.axvspan(2023, 2025, color=COLORS["row"], alpha=0.65, zorder=0)
+    ax.axvline(2023, color=COLORS["muted"], linestyle=":", linewidth=0.8, zorder=1)
+    ax.text(
+        2024,
+        76,
+        "2024\nsample\nchange",
+        ha="center",
+        va="center",
+        fontsize=8.0,
+        color=COLORS["muted"],
+        bbox=dict(
+            boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.92
+        ),
+        zorder=5,
+    )
 
     sub = ax.twinx()
+    historical_ratio = [(y, v) for y, v, _ in ratio if y < 2024]
     sub.plot(
-        [y for y, _, _ in ratio],
-        [v for _, v, _ in ratio],
+        [y for y, _ in historical_ratio],
+        [v for _, v in historical_ratio],
         color=COLORS["blue"],
         linewidth=1.4,
         linestyle="--",
@@ -112,19 +135,19 @@ def main():
         linestyle="--",
         marker="^",
         markersize=4.4,
-        label="Verification-to-design staffing ratio (right axis;\nhollow = derived from stated growth rates)",
+        label="Verification/design staffing ratio (right axis;\nhollow = derived from stated growth rates)",
     )
     sub.set_ylim(0.4, 1.6)
-    sub.set_ylabel("Staffing ratio", fontsize=6.6, color=COLORS["blue"], labelpad=3)
-    sub.tick_params(axis="y", colors=COLORS["blue"], labelsize=6.0, pad=2)
+    sub.set_ylabel("Staffing ratio", fontsize=8.5, color=COLORS["blue"], labelpad=3)
+    sub.tick_params(axis="y", colors=COLORS["blue"], labelsize=8.0, pad=2)
 
     last_y, last_v = fs[-1]
     ax.annotate(
         f"{last_y}: {last_v:.0f}% first-silicon success",
         xy=(last_y, last_v),
-        xytext=(2013.2, 15),
+        xytext=(2011.8, 15),
         arrowprops=dict(arrowstyle="->", color=COLORS["red"], lw=0.8),
-        fontsize=5.6,
+        fontsize=8.0,
         fontweight="bold",
         color=COLORS["red"],
         bbox=dict(
@@ -140,18 +163,19 @@ def main():
     ax.set_xlim(2006, 2025)
     ax.set_ylim(0, 85)
     ax.set_xticks([y for y in range(2007, 2025) if y in {r[0] for r in ratio}])
-    ax.set_xlabel("Survey year", fontsize=6.8)
-    ax.set_ylabel("Percent", fontsize=6.8)
-    ax.tick_params(axis="both", labelsize=6.0)
+    ax.set_xlabel("Survey year", fontsize=8.5)
+    ax.set_ylabel("Percent", fontsize=8.5)
+    ax.tick_params(axis="both", labelsize=8.0)
     ax.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
 
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = sub.get_legend_handles_labels()
-    ax.legend(
+    fig.legend(
         h1 + h2,
         l1 + l2,
         loc="upper left",
-        fontsize=5.4,
+        bbox_to_anchor=(0.075, 0.995),
+        fontsize=8.0,
         frameon=True,
         facecolor="white",
         edgecolor="none",
@@ -160,6 +184,10 @@ def main():
 
     for ext, kw in (("svg", {}), ("pdf", {}), ("png", {"dpi": 300})):
         fig.savefig(OUT.with_suffix(f".{ext}"), bbox_inches="tight", **kw)
+    svg = OUT.with_suffix(".svg")
+    svg.write_text(
+        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
+    )
     plt.close(fig)
     print(f"Generated {OUT}.svg/.pdf/.png")
 

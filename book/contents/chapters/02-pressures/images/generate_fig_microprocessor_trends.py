@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate fig-microprocessor-trends: 50-year CPU trends joined with AI accelerator frontier.
+"""Generate fig-microprocessor-trends: sampled CPU trends and accelerator specifications.
 
-This script extends Karl Rupp's 50-year CPU scaling frontier (1971-2021) with the
+Show Karl Rupp's CPU sample maxima (1971-2021) beside a separate
 2012-2026 accelerator frontier (25 accelerators including GPUs; undisclosed specs are N/A).
+The earlier CPU cutoff does not establish a power ceiling after 2021.
 
 Inputs:
   - data/datasets/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0)
@@ -13,9 +14,10 @@ The band after 2026 is a hypothesis, not data: it marks the possibility that the
 process becomes the next lever. Milestones are events drawn on their own rail and carry
 no y value.
 
-Outputs:
+Outputs (4.8 × 5.2 inches, with a 300-dpi PNG):
   - book/contents/chapters/02-pressures/images/fig-microprocessor-trends.png
   - book/contents/chapters/02-pressures/images/fig-microprocessor-trends.pdf
+  - book/contents/chapters/02-pressures/images/fig-microprocessor-trends.svg
 """
 
 import csv
@@ -104,274 +106,243 @@ def accelerator_frontier():
 
 def generate_figure(out_dir: Path | None = None):
     apply_style()
-
     out_dir = out_dir or DEFAULT_OUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
-
     cpu = cpu_series()
     acc_trans, acc_watts, wafer = accelerator_frontier()
 
-    # Color palette
-    c_purple = COLORS.get("purple", "#7B4EA8")
-    c_blue = COLORS.get("blue", "#1F77B4")
-    c_orange = COLORS.get("orange", "#E8A33D")
-    c_red = COLORS.get("red", "#D62728")
-    c_green = COLORS.get("green", "#2CA02C")
-    c_ink = COLORS.get("ink", "#212121")
-    c_grey = "#70757A"
-    c_accent_bg = COLORS.get("red", "#A51C30")
+    purple = COLORS.get("purple", "#7B4EA8")
+    blue = COLORS.get("blue", "#1F77B4")
+    orange = COLORS.get("orange", "#E8A33D")
+    red = COLORS.get("red", "#D62728")
+    green = COLORS.get("green", "#2CA02C")
+    ink = COLORS.get("ink", "#212121")
+    grey = "#62676C"
+    decision = COLORS.get("decision_ink", "#A82E70")
 
-    fig, ax = plt.subplots(figsize=(12.4, 4.6))
+    # Match the book's physical column width. Keeping a fixed canvas prevents
+    # long annotations from silently expanding the PDF and shrinking every label.
+    fig = plt.figure(figsize=(4.8, 5.2))
+    ax = fig.add_axes((0.115, 0.535, 0.86, 0.395))
     ax.set_yscale("log")
-
-    # dy nudges the end-of-line labels apart to avoid collisions
-    lines = [
-        ("transistors", c_purple, "CPU transistors\n(thousands)", -9),
-        ("specint", c_blue, "Single-thread perf\n(SpecINT x 1000)", 0),
-        ("frequency", c_orange, "Frequency (MHz)", 7),
-        ("cpu_watts", c_red, "CPU power: 4-year max (W)", -4),
-        ("cpu_threads", c_green, "CPU logical\nhardware threads", -14),
-    ]
-    for key, colour, label, dy in lines:
-        xs, ys = zip(*cpu[key])
-        ax.plot(xs, ys, "o-", color=colour, ms=3.4, lw=1.5, zorder=3)
-        ax.annotate(
-            label,
-            xy=(xs[-1], ys[-1]),
-            xytext=(6, dy),
-            textcoords="offset points",
-            color=colour,
-            fontsize=8.6,
-            fontweight="bold",
-            va="center",
-        )
-
-    # Accelerator frontier
-    for pts, colour, label, marker in (
-        (acc_trans, c_purple, "Accelerator transistors\n(thousands)", "^"),
-        (acc_watts, c_red, "Accelerator TDP (W)", "s"),
+    handles = []
+    for key, color, label in (
+        ("transistors", purple, "CPU transistors (thousands)"),
+        ("specint", blue, "CPU SpecINT × 1000"),
+        ("frequency", orange, "CPU frequency (MHz)"),
+        ("cpu_watts", red, "CPU sampled power (W)"),
+        ("cpu_threads", green, "CPU hardware threads"),
     ):
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        ax.plot(
-            xs,
-            ys,
+        xs, ys = zip(*cpu[key])
+        (line,) = ax.plot(
+            xs, ys, "o-", color=color, ms=2.3, lw=1.05, label=label, zorder=3
+        )
+        handles.append(line)
+
+    for pts, color, label, marker in (
+        (acc_trans, purple, "Accel. transistors (thousands)", "^"),
+        (acc_watts, red, "Accel. power rating (W)", "s"),
+    ):
+        (line,) = ax.plot(
+            [p[0] for p in pts],
+            [p[1] for p in pts],
             marker=marker,
             ls="--",
-            color=colour,
-            ms=4.6,
-            lw=1.6,
-            alpha=0.95,
+            color=color,
+            ms=3.2,
+            lw=1.1,
             mfc="white",
-            mew=1.4,
+            mew=0.8,
             zorder=4,
+            label=label,
         )
-        ax.annotate(
-            label,
-            xy=(xs[-1], ys[-1]),
-            xytext=(6, 0),
-            textcoords="offset points",
-            color=colour,
-            fontsize=8.6,
-            fontweight="bold",
-            style="italic",
-            va="center",
-        )
+        handles.append(line)
 
-    # Cerebras wafer-scale parts, shown for scale but deliberately off the packaged frontier line
-    wx = [c["year"] for c in sorted(wafer, key=lambda c: c["year"])]
-    wy = [c["trans_k"] for c in sorted(wafer, key=lambda c: c["year"])]
-    ax.plot(
-        wx,
-        wy,
+    # Wafer-scale points remain separate from the packaged-part frontier.
+    wafer = sorted(wafer, key=lambda c: c["year"])
+    (line,) = ax.plot(
+        [c["year"] for c in wafer],
+        [c["trans_k"] for c in wafer],
         ls=":",
         marker="D",
-        ms=4,
-        color=c_grey,
-        lw=1.1,
-        alpha=0.75,
+        ms=2.8,
+        color=grey,
+        lw=1.0,
         mfc="white",
-        mew=1.1,
+        mew=0.8,
         zorder=2,
+        label="Wafer-scale transistors (thousands)",
     )
-    ax.annotate(
-        "Cerebras wafer-scale\n(shown for scale, not on the frontier)",
-        xy=(wx[0], wy[0]),
-        xytext=(-8, 4),
-        ha="right",
-        textcoords="offset points",
-        fontsize=8.0,
-        color=c_grey,
-        style="italic",
-        va="center",
-    )
+    handles.append(line)
 
-    # Vertical era boundaries
-    ax.axvline(2005, color=c_ink, ls="--", lw=0.9, alpha=0.65)
-    ax.axvline(2016, color=c_ink, ls="--", lw=0.9, alpha=0.65)
-    ax.text(
-        2004.4,
-        2.2e6,
-        "Dennard\nscaling ends",
-        fontsize=8.0,
-        color=c_ink,
-        ha="right",
-        va="center",
-    )
-    ax.text(
-        2015.4,
-        3.0e5,
-        "specialization\nturn",
-        fontsize=8.0,
-        color=c_ink,
-        ha="right",
-        va="center",
-    )
-
-    # Era headers
-    for a, b, name in (
-        (1971, 2005, "Device-scaling era"),
-        (2005, 2016, "Parallelism era"),
-        (2016, 2026, "Specialization era"),
-    ):
-        ax.text(
-            (a + b) / 2,
-            8.0e9,
-            name,
-            ha="center",
-            fontsize=9.5,
-            fontweight="bold",
-            color=c_ink,
-        )
-
-    # Shaded band for specialization era
-    ax.axvspan(2016, 2026, color=c_accent_bg, alpha=0.04, zorder=0)
-
-    # Hypothesized next era: hatched, labeled as a question, no data in it.
-    c_dec = COLORS.get("decision_ink", "#A82E70")
-    ax.axvline(2026, color=c_dec, ls="--", lw=1.0, alpha=0.9)
+    for year in (2005, 2016):
+        ax.axvline(year, color=ink, ls="--", lw=0.65, alpha=0.55)
+    ax.axvspan(2016, 2026, color=red, alpha=0.04, zorder=0)
+    ax.axvline(2026, color=decision, ls="--", lw=0.75, alpha=0.9)
     ax.axvspan(
         2026,
         2040,
         facecolor="none",
-        edgecolor=c_dec,
+        edgecolor=decision,
         hatch="////",
         lw=0,
         alpha=0.16,
         zorder=0,
     )
+    for year, label in (
+        (1987.5, "Device scaling"),
+        (2010.5, "Parallelism"),
+        (2021, "Specialization"),
+    ):
+        ax.text(
+            year,
+            1.055,
+            label,
+            transform=ax.get_xaxis_transform(),
+            ha="center",
+            va="bottom",
+            fontsize=6.8,
+            color=ink,
+        )
     ax.text(
         2033,
-        8.0e9,
+        1.2e6,
         "AI-native\ndesign era?",
         ha="center",
         va="center",
-        fontsize=9.5,
+        fontsize=7.3,
         fontweight="bold",
-        color=c_dec,
-        linespacing=1.1,
+        color=decision,
     )
     ax.text(
         2033,
-        1.3e9,
-        "hypothesis; dated milestones below",
+        1.5e4,
+        "Hypothesis",
         ha="center",
-        fontsize=7.6,
-        color=c_dec,
+        fontsize=7.0,
+        color=decision,
         style="italic",
     )
-
-    # AI-assisted design milestones: events on a rail, listed in the hypothesis band.
-    ms = milestones()
-    short = {
-        "AlphaChip": "AlphaChip floorplans TPU blocks",
-        "ChipNeMo": "ChipNeMo domain-adapted LLM",
-        "Design Conductor": "Design Conductor RISC-V CPU",
-        "Design Conductor 2.0": "Design Conductor 2.0 accelerator",
-        "AlphaEvolve": "AlphaEvolve circuit in TPU silicon",
-        "Jalapeno": "Jalape\u00f1o, 9 months to tapeout",
-    }
-    rail_y = 0.62
-    ax.plot([2020.8, 2026.8], [rail_y, rail_y], color=c_dec, lw=1.4, zorder=6)
-    label_y = [3.6e1, 1.8e1, 9.0, 4.5, 2.25, 1.12]
-    for (yr, row), ly in zip(ms, label_y):
-        ax.plot(
-            yr, rail_y, marker="D", ms=4.8, color=c_dec, mec="white", mew=0.8, zorder=7
-        )
-        ax.plot([yr, 2027.25], [rail_y, ly], color=c_dec, lw=0.5, alpha=0.45, zorder=5)
-        ax.text(
-            2027.4,
-            ly,
-            f"{short[row['milestone']]} \u00b7 {row['date']}",
-            fontsize=7.2,
-            color=c_ink,
-            va="center",
-            ha="left",
-            zorder=8,
-        )
-    ax.text(
-        2027.4,
-        7.2e1,
-        "AI-assisted design milestones",
-        fontsize=7.6,
-        color=c_dec,
-        fontweight="bold",
-        ha="left",
-        va="center",
-    )
-
     ax.set_xlim(1970, 2040)
     ax.set_ylim(0.45, 2.2e10)
-    ax.set_xticks(range(1970, 2031, 10))
+    ax.set_xticks(range(1970, 2041, 10))
     ax.set_yticks([1, 1e2, 1e4, 1e6, 1e8, 1e10])
     ax.set_yticklabels(
         [r"$10^0$", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^8$", r"$10^{10}$"]
     )
-    ax.grid(axis="y", color="#E8EAED", lw=0.6)
+    ax.set_xlabel("Release year", fontsize=7.2, labelpad=4)
+    ax.grid(axis="y", color="#E8EAED", lw=0.5)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.spines["left"].set_color("#DADCE0")
-    ax.spines["bottom"].set_color("#DADCE0")
-    ax.tick_params(labelsize=8.5, colors=c_ink)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color("#DADCE0")
+    ax.tick_params(labelsize=7.0, colors=ink, pad=2, length=2.5)
 
-    # Legend placed cleanly in lower right whitespace without overlapping labels
-    ax.legend(
-        handles=[
-            Line2D(
-                [],
-                [],
-                color=c_ink,
-                lw=1.5,
-                marker="o",
-                ms=3.4,
-                label="CPU frontier (Rupp, 1971–2021)",
-            ),
-            Line2D(
-                [],
-                [],
-                color=c_ink,
-                lw=1.6,
-                ls="--",
-                marker="^",
-                ms=4.6,
-                mfc="white",
-                label="Accelerator frontier, incl. GPUs (2012–2026)",
-            ),
-        ],
+    # The wafer label wraps within its column rather than enlarging the canvas.
+    handles[-1].set_label(
+        "Cerebras wafer-scale transistors\n(thousands; shown for scale)"
+    )
+    ordered = [handles[i] for i in (0, 1, 2, 3, 4, 5, 6, 7)]
+    fig.legend(
+        handles=ordered,
         loc="upper left",
-        fontsize=8.2,
+        bbox_to_anchor=(0.06, 0.477),
+        ncol=2,
+        fontsize=7.0,
         frameon=False,
-        bbox_to_anchor=(0.01, 0.80),
+        handlelength=2.0,
+        columnspacing=1.1,
+        handletextpad=0.55,
+        labelspacing=0.50,
+        borderaxespad=0,
+    )
+    fig.text(
+        0.075,
+        0.323,
+        "CPU: 4-year sample maxima, 1971–2021 (Rupp).",
+        fontsize=7.0,
+        color=grey,
+    )
+    fig.text(
+        0.075,
+        0.302,
+        "Accelerators: packaged-part frontier, 2012–2026.",
+        fontsize=7.0,
+        color=grey,
+    )
+    fig.text(
+        0.075,
+        0.281,
+        "2005: Dennard scaling ends; 2016: specialization turn.",
+        fontsize=7.0,
+        color=grey,
     )
 
-    fig.subplots_adjust(left=0.055, right=0.985, top=0.90, bottom=0.10)
+    # A separate chronological report rail has no hardware-performance y value.
+    # Equal row spacing is explicitly stated; dates retain their full precision.
+    fig.text(
+        0.075,
+        0.249,
+        "AI-assisted design reports",
+        fontsize=8.1,
+        fontweight="bold",
+        color=decision,
+    )
+    fig.text(
+        0.075,
+        0.228,
+        "Report dates; rail spacing is not to scale.",
+        fontsize=7.0,
+        color=grey,
+    )
+    short = {
+        "AlphaChip": "AlphaChip: TPU block floorplans",
+        "ChipNeMo": "ChipNeMo: domain-adapted LLM",
+        "Design Conductor": "Design Conductor: RISC-V CPU",
+        "Design Conductor 2.0": "Design Conductor 2.0: accelerator",
+        "AlphaEvolve": "AlphaEvolve: next-generation TPU circuit",
+        "Jalapeno": "Jalapeño: nine months to tapeout",
+    }
+    rows = sorted(milestones(), key=lambda item: item[0])
+    ys = [0.191 - i * 0.031 for i in range(len(rows))]
+    fig.add_artist(
+        Line2D(
+            [0.086, 0.086],
+            [ys[-1], ys[0]],
+            transform=fig.transFigure,
+            color=decision,
+            lw=0.9,
+            alpha=0.55,
+        )
+    )
+    for (_, row), y in zip(rows, ys):
+        fig.add_artist(
+            Line2D(
+                [0.086],
+                [y],
+                transform=fig.transFigure,
+                marker="D",
+                ms=3.4,
+                color=decision,
+                mec="white",
+                mew=0.5,
+            )
+        )
+        fig.text(0.112, y, row["date"], va="center", fontsize=7.1, color=grey)
+        fig.text(
+            0.268, y, short[row["milestone"]], va="center", fontsize=7.1, color=ink
+        )
 
     out_png = out_dir / "fig-microprocessor-trends.png"
     out_pdf = out_dir / "fig-microprocessor-trends.pdf"
     out_svg = out_dir / "fig-microprocessor-trends.svg"
-
+    # Exact 4.8-inch width: all text is authored at its final print size.
     fig.savefig(out_png, dpi=300)
     fig.savefig(out_pdf)
     fig.savefig(out_svg)
+    out_svg.write_text(
+        "\n".join(line.rstrip() for line in out_svg.read_text().splitlines()) + "\n"
+    )
     plt.close(fig)
     print(f"Generated {out_png}, {out_pdf}, and {out_svg}")
 

@@ -1,17 +1,15 @@
-"""
-Architectural Diagram: Closed-Loop Repair & Cryptographic State Hash Cycle Detection (Chapter 10)
-------------------------------------------------------------------------------------------------
-Visualizes how automated repair loops can become trapped in cyclic regressions (the Whac-a-Mole
-effect) and how cryptographic state signatures H(S_t) == H(S_{t+2}) reliably detect state
-oscillations that scalar violation counts cannot see.
+"""Draw the conceptual candidate-recurrence diagram for Chapter 10.
 
-Exports SVG, PDF, and 300 DPI PNG to:
-- book/contents/chapters/10-evaluation/images/fig-whac-a-mole.{png,svg,pdf}
-- book/images/fig-whac-a-mole.{png,svg,pdf}
+The native width matches the book column so labels remain readable in print.
+A repair followed by rollback restores candidate artifacts, while a controller
+state check is still needed before calling the recurrence a workflow cycle.
+Exports identical SVG, PDF, and 300 DPI PNG twins to both image directories.
 """
 
+import shutil
 import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
@@ -25,175 +23,163 @@ apply_style()
 
 
 def main():
-    ch_dir = REPO_ROOT / "book" / "contents" / "chapters" / "10-evaluation" / "images"
-    ch_dir.mkdir(parents=True, exist_ok=True)
-    out_ch = ch_dir / "fig-whac-a-mole"
-    out_global = REPO_ROOT / "book" / "images" / "fig-whac-a-mole"
-
-    fig, ax = plt.subplots(figsize=(8.8, 2.3))
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.04)
-
+    fig, ax = plt.subplots(figsize=(4.8, 4.5))
+    fig.subplots_adjust(left=0.035, right=0.975, top=0.98, bottom=0.02)
     ax.set_xlim(0, 100)
-    ax.set_ylim(45, 92)
+    ax.set_ylim(0, 120)
     ax.axis("off")
 
-    # 3 States across time: t, t+1, t+2
-    states = [
-        {
-            "title": "Iteration $t$: Candidate State $S_t$",
-            "hash": "State signature: H(S_t) = hash(RTL, SDC, UPF)",
-            "metrics": "Timing: n setup violations (WNS < 0)\nDRC: clean",
-            "x": 5,
-            "y": 48,
-            "w": 25,
-            "h": 24,
-            "color": COLORS["blue"],
-        },
-        {
-            "title": "Iteration $t+1$: Candidate State $S_{t+1}$",
-            "hash": "State signature: H(S_t+1), differs from H(S_t)",
-            "metrics": "Timing: setup met (WNS >= 0)\nn routing shorts and hold violations",
-            "x": 37.5,
-            "y": 48,
-            "w": 25,
-            "h": 24,
-            "color": COLORS["orange"],
-        },
-        {
-            "title": "Iteration $t+2$: Candidate State $S_{t+2}$",
-            "hash": "State signature: H(S_t+2) = H(S_t)",
-            "metrics": "Timing: n setup violations (WNS < 0)\nDRC: clean",
-            "x": 70,
-            "y": 48,
-            "w": 25,
-            "h": 24,
-            "color": COLORS["blue"],
-        },
-    ]
-
-    for s in states:
-        rect = patches.FancyBboxPatch(
-            (s["x"], s["y"]),
-            s["w"],
-            s["h"],
-            boxstyle="round,pad=0.5,rounding_size=1.2",
-            facecolor="white",
-            edgecolor=s["color"],
-            linewidth=1.6,
-            zorder=3,
-        )
-        ax.add_patch(rect)
-        ax.text(
-            s["x"] + s["w"] / 2,
-            s["y"] + s["h"] - 3.4,
-            s["title"],
-            ha="center",
-            va="center",
-            fontsize=6.8,
-            fontweight="bold",
-            color=s["color"],
-            zorder=4,
-        )
-        ax.text(
-            s["x"] + s["w"] / 2,
-            s["y"] + s["h"] - 8.2,
-            s["hash"],
-            ha="center",
-            va="center",
-            fontsize=5.2,
-            fontfamily="monospace",
-            color=COLORS["ink"],
-            zorder=4,
-        )
-        ax.text(
-            s["x"] + s["w"] / 2,
-            s["y"] + 5.0,
-            s["metrics"],
-            ha="center",
-            va="center",
-            fontsize=5.1,
-            color=COLORS["muted"],
-            zorder=4,
-        )
-
-    # Transition arrows
-    ax.annotate(
-        "",
-        xy=(37.5, 60),
-        xytext=(30, 60),
-        arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=1.3),
-        zorder=5,
-    )
     ax.text(
-        33.75,
-        64.5,
-        r"Repair $\Delta_1$" + "\n(Buffer Sizing)",
+        52,
+        114,
+        "A rollback restores the earlier candidate",
         ha="center",
         va="center",
-        fontsize=4.8,
-        color=COLORS["ink"],
-    )
-
-    ax.annotate(
-        "",
-        xy=(70, 60),
-        xytext=(62.5, 60),
-        arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=1.3),
-        zorder=5,
-    )
-    ax.text(
-        66.25,
-        64.5,
-        r"Repair $\Delta_2$" + "\n(Wire Widening)",
-        ha="center",
-        va="center",
-        fontsize=4.8,
-        color=COLORS["ink"],
-    )
-
-    # Cycle arc from state t+2 back to state t
-    # Arc centered at (50, 72), width = 65, height = 24
-    arc = patches.Arc(
-        (50, 72),
-        65,
-        22,
-        theta1=0,
-        theta2=180,
-        color=COLORS["red"],
-        linewidth=1.8,
-        linestyle="--",
-        zorder=5,
-    )
-    ax.add_patch(arc)
-    ax.annotate(
-        "",
-        xy=(17.5, 72),
-        xytext=(17.5, 74),
-        arrowprops=dict(arrowstyle="->", color=COLORS["red"], lw=1.8),
-        zorder=5,
-    )
-    ax.text(
-        50,
-        86.5,
-        r"Signature match: $H(S_{t+2}) = H(S_t) \rightarrow$ repeated state detected",
-        ha="center",
-        va="center",
-        fontsize=6.5,
+        fontsize=9,
         fontweight="bold",
-        color=COLORS["red"],
-        bbox=dict(
-            boxstyle="round,pad=0.3",
-            facecolor="white",
-            edgecolor=COLORS["red"],
-            lw=1.0,
-        ),
-        zorder=6,
+        color=COLORS["ink"],
     )
 
-    save_figure_bundle(fig, out_ch)
-    save_figure_bundle(fig, out_global)
-    print(f"Generated clean cycle detection figure: {out_ch}")
+    states = [
+        (94, r"Candidate $S_t$", r"Signature $H(S_t)$", "Before repair", "blue"),
+        (
+            70,
+            r"Candidate $S_{t+1}$",
+            r"$H(S_{t+1}) \ne H(S_t)$",
+            "Physical artifacts changed",
+            "orange",
+        ),
+        (
+            46,
+            r"Candidate $S_{t+2}$",
+            r"$H(S_{t+2}) = H(S_t)$",
+            "Earlier artifacts restored",
+            "blue",
+        ),
+    ]
+    for y, title, signature, note, color in states:
+        ax.add_patch(
+            patches.FancyBboxPatch(
+                (19, y - 8),
+                74,
+                16,
+                boxstyle="round,pad=0.5,rounding_size=1.2",
+                facecolor="white",
+                edgecolor=COLORS[color],
+                linewidth=1.3,
+                zorder=3,
+            )
+        )
+        for offset, content, size, weight, ink in [
+            (4.5, title, 10, "bold", COLORS[color]),
+            (0, signature, 10, "normal", COLORS["ink"]),
+            (-4.5, note, 8, "normal", COLORS["muted"]),
+        ]:
+            ax.text(
+                56,
+                y + offset,
+                content,
+                ha="center",
+                va="center",
+                fontsize=size,
+                fontweight=weight,
+                color=ink,
+                zorder=4,
+            )
+
+    for y0, y1, label in [(85.3, 78.7, "Physical repair"), (61.3, 54.7, "Rollback")]:
+        ax.annotate(
+            "",
+            xy=(56, y1),
+            xytext=(56, y0),
+            arrowprops=dict(arrowstyle="->", color=COLORS["ink"], lw=1.1),
+            zorder=5,
+        )
+        ax.text(
+            62,
+            (y0 + y1) / 2,
+            label,
+            ha="left",
+            va="center",
+            fontsize=8,
+            color=COLORS["ink"],
+            zorder=5,
+        )
+
+    # Recurrence links candidate artifacts, not the complete controller state.
+    ax.plot(
+        [18.5, 11, 11],
+        [46, 46, 94],
+        linestyle="--",
+        color=COLORS["red"],
+        linewidth=1.1,
+        zorder=2,
+    )
+    ax.annotate(
+        "",
+        xy=(18.5, 94),
+        xytext=(11, 94),
+        arrowprops=dict(arrowstyle="->", color=COLORS["red"], lw=1.1),
+        zorder=5,
+    )
+    ax.text(
+        5,
+        70,
+        "Matching candidate signatures",
+        rotation=90,
+        ha="center",
+        va="center",
+        fontsize=8,
+        color=COLORS["constraints_ink"],
+        zorder=5,
+    )
+
+    ax.text(
+        52,
+        28,
+        "Signature inputs: canonical netlist, placement/routing\n"
+        "database, and effective loaded constraints.",
+        ha="center",
+        va="center",
+        fontsize=8,
+        linespacing=1.35,
+        color=COLORS["ink"],
+        zorder=5,
+    )
+    ax.text(
+        52,
+        10,
+        "Before retrying: check tool configuration, random state,\n"
+        "policy state, and action history. A candidate match alone\n"
+        "does not establish a workflow cycle.",
+        ha="center",
+        va="center",
+        fontsize=8,
+        linespacing=1.4,
+        color=COLORS["ink"],
+        bbox=dict(
+            boxstyle="round,pad=0.55",
+            facecolor=COLORS["row"],
+            edgecolor=COLORS["grid"],
+            lw=0.7,
+        ),
+        zorder=5,
+    )
+
+    chapter_images = (
+        REPO_ROOT / "book" / "contents" / "chapters" / "10-evaluation" / "images"
+    )
+    bundle = save_figure_bundle(fig, chapter_images / "fig-whac-a-mole", dpi=300)
+    svg = bundle["svg"]
+    svg.write_text(
+        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
+    )
+    global_images = REPO_ROOT / "book" / "images"
+    global_images.mkdir(parents=True, exist_ok=True)
+    for artifact in bundle.values():
+        shutil.copy2(artifact, global_images / artifact.name)
     plt.close(fig)
+    print("Wrote print-sized candidate-recurrence figure twins")
 
 
 if __name__ == "__main__":

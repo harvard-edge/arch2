@@ -98,8 +98,8 @@ rows except `extraction_timestamp`, which records when the run happened. Verifie
 | --- | ---: | ---: | ---: |
 | Median concrete syntax nodes per module | 168 | 1,125 | 6.70x |
 | Median clean lines of code per module | 16 | 99 | 6.19x |
-| Same, diagnostic-free files only | 141.5 | 675 | 4.77x |
-| Same, equal weight per repository | 232 | 991 | 4.27x |
+| Median syntax nodes, diagnostic-free files only | 141.5 | 675 | 4.77x |
+| Median of repository syntax-node medians | 232 | 991 | 4.27x |
 
 Modules parsed: 217 benchmark (VerilogEval 156, RTLLM 61) and 1,296 production
 (OpenTitan 936, CV32E40P 123, VeeR EH1 112, BlackParrot 125).
@@ -119,9 +119,11 @@ citing it.
 - Parser diagnostics are retained rather than used to exclude macro-heavy
   production RTL, which would bias the comparison toward simple files. The
   diagnostic-free sensitivity check exists to show the size of that effect.
-- Hierarchy depth follows an instantiation only when the child module name has
-  exactly one definition in the selected corpus. It is a **lower bound** on
-  elaborated depth. Ambiguous cases are counted in their own column.
+- Source-reference depth follows an instantiation only when the child module
+  name has exactly one definition in the selected corpus. It is not elaborated
+  instance depth or a bound on it: conditional branches can add inactive
+  references, while unresolved children can shorten a path. Ambiguous cases
+  are counted in their own column.
 - Clock-event signal counts and CDC primitive mentions are **lexical
   indicators**. They are not verified clock domains and not verified crossings.
   No claim about asynchronous crossing counts follows from this data.

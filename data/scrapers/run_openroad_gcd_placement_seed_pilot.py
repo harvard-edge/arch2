@@ -26,7 +26,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORFS = Path(__file__).resolve().parent / ".cache" / "openroad-flow-scripts"
 STUDY_DIR = REPO_ROOT / "data" / "studies" / "06-eda-seed-dispersion"
@@ -70,7 +69,7 @@ CSV_FIELDS = [
     "detailedplace_json_sha256",
     "floorplan_odb_sha256",
     "placement_odb_sha256",
-    "stdout_dataset",
+    "stdout_receipt",
     "extraction_timestamp",
 ]
 
@@ -191,6 +190,20 @@ def docker_metadata() -> dict[str, str]:
     }
 
 
+def read_csv_rows(path: Path) -> list[dict[str, Any]]:
+    """Read released rows and accept the earlier runner's stdout column alias."""
+
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(l for l in handle if not l.startswith("#")))
+    for row in rows:
+        legacy_path = row.pop("stdout_dataset", "")
+        receipt_path = row.get("stdout_receipt", "")
+        if legacy_path and receipt_path and legacy_path != receipt_path:
+            raise ValueError(f"Conflicting stdout paths for seed {row['seed']}")
+        row["stdout_receipt"] = receipt_path or legacy_path
+    return rows
+
+
 def write_csv(rows: list[dict[str, Any]]) -> None:
     CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     with CSV_PATH.open("w", newline="", encoding="utf-8") as handle:
@@ -200,7 +213,7 @@ def write_csv(rows: list[dict[str, Any]]) -> None:
 
 
 def refresh_retained_artifacts(rows: list[dict[str, Any]], flow: Path) -> None:
-    """Copy retained stage metrics byte-for-byte and refresh artifact hashes."""
+    """Copy available metrics without replacing or erasing historical hashes."""
 
     for row in rows:
         seed = int(row["seed"])
@@ -214,18 +227,25 @@ def refresh_retained_artifacts(rows: list[dict[str, Any]], flow: Path) -> None:
         floorplan_path = results_dir / "2_floorplan.odb"
         placement_path = results_dir / "3_place.odb"
 
-        if gp_path.exists():
-            shutil.copyfile(gp_path, gp_raw)
-            row["globalplace_json_sha256"] = sha256_file(gp_raw)
-        if dp_path.exists():
-            shutil.copyfile(dp_path, dp_raw)
-            row["detailedplace_json_sha256"] = sha256_file(dp_raw)
-        row["floorplan_odb_sha256"] = (
-            sha256_file(floorplan_path) if floorplan_path.exists() else ""
-        )
-        row["placement_odb_sha256"] = (
-            sha256_file(placement_path) if placement_path.exists() else ""
-        )
+        available = []
+        for field, source, retained in (
+            ("globalplace_json_sha256", gp_path, gp_raw),
+            ("detailedplace_json_sha256", dp_path, dp_raw),
+            ("floorplan_odb_sha256", floorplan_path, None),
+            ("placement_odb_sha256", placement_path, None),
+        ):
+            if not source.exists():
+                continue
+            digest = sha256_file(source)
+            if row.get(field) and row[field] != digest:
+                raise ValueError(
+                    f"Seed {seed}: {source} differs from the recorded {field}"
+                )
+            available.append((field, source, retained, digest))
+        for field, source, retained, digest in available:
+            if retained is not None:
+                shutil.copyfile(source, retained)
+            row[field] = digest
 
 
 def write_summary(
@@ -429,7 +449,7 @@ def run_full_flow_smoke(
             "architecture": platform.machine(),
         },
         "container_command": container_script,
-        "stdout_dataset": SMOKE_STDOUT_RECEIPT.relative_to(REPO_ROOT).as_posix(),
+        "stdout_receipt": SMOKE_STDOUT_RECEIPT.relative_to(REPO_ROOT).as_posix(),
         "stdout_sha256": sha256_file(SMOKE_STDOUT_RECEIPT),
         "start_timestamp": start_timestamp,
         "end_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -470,8 +490,7 @@ def main() -> int:
     start_timestamp = datetime.now(timezone.utc).isoformat()
     rows: list[dict[str, Any]] = []
     if args.resume and CSV_PATH.exists():
-        with CSV_PATH.open(encoding="utf-8") as handle:
-            rows = list(csv.DictReader(l for l in handle if not l.startswith("#")))
+        rows = read_csv_rows(CSV_PATH)
         if SUMMARY_PATH.exists():
             previous_summary = read_json(SUMMARY_PATH)
             start_timestamp = previous_summary.get("execution", {}).get(
@@ -479,6 +498,7 @@ def main() -> int:
             )
 
     flow = args.orfs.resolve() / "flow"
+    attempted_new_work = False
     for seed in range(args.start_seed, args.end_seed + 1):
         completed = next(
             (
@@ -491,6 +511,7 @@ def main() -> int:
         if completed is not None:
             print(f"seed {seed:02d}/{args.end_seed:02d}: retained", flush=True)
             continue
+        attempted_new_work = True
         variant = f"arch2-placement-seed-{seed:02d}"
         fixed_make_args = (
             f"DESIGN_CONFIG={DESIGN_CONFIG} "
@@ -592,7 +613,7 @@ def main() -> int:
             "detailedplace_json_sha256": sha256_file(dp_raw) if dp else "",
             "floorplan_odb_sha256": "",
             "placement_odb_sha256": sha256_file(odb_path) if odb_path.exists() else "",
-            "stdout_dataset": stdout_path.relative_to(REPO_ROOT).as_posix(),
+            "stdout_receipt": stdout_path.relative_to(REPO_ROOT).as_posix(),
             "extraction_timestamp": timestamp,
         }
         rows = [existing for existing in rows if int(existing["seed"]) != seed]
@@ -610,6 +631,10 @@ def main() -> int:
             f"seed {seed:02d}/{args.end_seed:02d}: {status} in {elapsed:.1f}s",
             flush=True,
         )
+
+    if not attempted_new_work:
+        print("No new attempts; retained CSV and execution summary unchanged.")
+        return 0 if all(row["status"] == "pass" for row in rows) else 1
 
     refresh_retained_artifacts(rows, flow)
     write_csv(rows)

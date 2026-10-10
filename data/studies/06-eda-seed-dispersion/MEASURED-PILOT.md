@@ -9,7 +9,7 @@ on 29 September 2026.
 - All 20 runs execute the ORFS `gcd` design on Nangate45 from the exact ORFS
   commit and official container digest recorded in
   `openroad_gcd_placement_seed_pilot_summary.json`.
-- The design, constraint, ORFS commit, container digest, host architecture,
+- The design and constraint source identifiers, ORFS commit, container digest, host architecture,
   thread count, fixed seeds, varied global-placement seed, tool return code,
   elapsed time, stage error counts, pre-placement database hash, placement
   database hash, and raw-stage JSON hashes are retained.
@@ -18,9 +18,11 @@ on 29 September 2026.
   `raw-openroad-placement-pilot/`.
 - Runs are serial and single-threaded. Only `GPL_RANDOM_SEED` changes from 1
   through 20; `GRT_SEED` and `OR_SEED` remain 1.
-- All 20 rows have the same `2_floorplan.odb` input hash. The 20 resulting
-  `3_place.odb` hashes are distinct, which binds the measured variation to
-  runs that began from one retained placement input.
+- All 20 rows record the same `2_floorplan.odb` input hash and distinct
+  `3_place.odb` output hashes. The databases themselves are not packaged in
+  this release; the recorded hashes cannot be independently checked against
+  those original database files. Reproduction must rebuild the inputs from
+  the pinned sources.
 
 ## Current measured result
 
@@ -62,3 +64,17 @@ uv run --with matplotlib --with numpy \
 The runner clears only each explicitly named candidate flow variant before
 execution. It refuses a tracked-dirty ORFS checkout and writes the aggregate
 CSV and summary after every completed run.
+
+With `--resume`, the runner accepts the released `stdout_receipt` column and
+the earlier runner's `stdout_dataset` alias. Missing local build artifacts do
+not erase recorded hashes, and conflicting artifacts are rejected. When all
+requested seeds already have successful records, no evidence files are
+rewritten. The summary's historical runner hash identifies the code used for
+the recorded execution, not subsequent repairs to the runner.
+
+The resume regression check uses copies of the released rows without running
+Docker or modifying the pilot:
+
+```bash
+python3 data/studies/06-eda-seed-dispersion/test_pilot_resume.py
+```

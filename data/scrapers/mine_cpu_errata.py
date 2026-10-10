@@ -30,6 +30,13 @@ Usage:
     python3 data/scrapers/mine_cpu_errata.py --verify-hashes
         # refuse to proceed if a cached PDF's SHA-256 differs from sources.csv
 
+Validation scope: the completeness checks cover IDs, titles, and dispositions.
+They do not validate body-field boundaries. A 2026-10-10 source audit found page
+furniture and continuation defects in Workaround fields; the published workaround
+subgroup counts were withdrawn. Description/Implication fields also require a
+field-level source review before treating their extraction as validated. See the
+study README. Cached body text remains diagnostic input, not verified ground truth.
+
 Requires poppler (pdftotext, pdfinfo) and curl on PATH, and PyMuPDF (pip install
 pymupdf==1.27.2.2), which reads font weight to find Intel erratum headings.
 """

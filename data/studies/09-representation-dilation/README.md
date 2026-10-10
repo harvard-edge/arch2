@@ -1,7 +1,8 @@
 # Declaration-to-use distance in token order and in the syntax tree
 
 This study measures how far a signal's uses sit from its declaration when RTL is
-read as a flat token sequence, and how far the same pairs sit in a parse tree.
+read as a flat token sequence, and how far the subset with recoverable syntax
+paths sits in a parse tree.
 It supports `fig-ch04-spatial-semantic-dilation` and the paragraphs around it in
 Chapter 4. Every number in that passage is computed inline from the CSV this
 study writes.
@@ -22,7 +23,7 @@ These match the chapter and the docstring of `measure_representation_dilation.py
 | Use | A reference to a declaration in any expression, read or write, as bound by slang's name lookup (a `NamedValue` expression). Each (declaration position, use position) pair counts once, however many parameterized instances elaborate it. Only pairs whose declaration and use are in the same file count. |
 | Token distance | `abs(i_use - i_decl)`, positions between the declared name's token and the use's token. |
 | File value | The mean over all pairs in the file (`mean_token_distance`). The CSV also carries the median, 90th percentile, and maximum. |
-| Tree distance | Edges on the path between the declaration's syntax node and the use's name node in pyslang's concrete syntax tree (`mean_tree_distance`). |
+| Tree distance | Edges on the path between the declaration's syntax node and the use's name node in pyslang's concrete syntax tree, when both nodes and a common ancestor are recoverable (`mean_tree_distance`). |
 | Def-use graph distance | One edge per pair, by construction. Not measured. The CSV column `def_use_graph_distance` records the constant so the comparison is explicit. |
 
 The unit of analysis is a source file, because a file is the flat sequence a
@@ -79,9 +80,15 @@ Nothing is dropped. Files that yield no measurement stay in the CSV with
 | `ibex/rtl/ibex_pkg.sv` | no module or interface declaration |
 | `ibex/rtl/ibex_tracer_pkg.sv` | no module or interface declaration |
 
-No file had a parse error. One measured file, `bsg_fifo_1r1w_small.sv`, has
-token distances but no tree distance, because all of its uses come through
-`.*` wildcard port connections, which have no name node.
+No file had a parse error. Token distances cover 40,995 pairs in 342 files;
+tree distances cover 40,825 pairs in 341 files. Eighteen files lack tree
+distances for some or all token-distance pairs because syntax nodes or a
+common ancestor cannot be recovered. One measured file,
+`bsg_fifo_1r1w_small.sv`, has eight token-distance pairs but no tree distance:
+all of its uses come through `.*` wildcard port connections, which have no
+name node. The remaining 17 files have partial tree coverage. Per-file counts
+are recorded in `def_use_pairs` and `tree_pairs`; the two panels therefore
+use different available pair sets.
 
 ## Coverage
 
@@ -160,5 +167,10 @@ files.
   files as written, not RTL in general.
 - The benchmark and production groups differ in size by construction, so the
   per-group slopes are the check that the trend is not produced by pooling.
+- The file-level bootstrap describes resampling stability within this
+  convenience corpus. Shared templates and related files are not independent
+  draws from a wider population of hardware.
+- Tree distances use the recoverable subset of token-distance pairs, not an
+  exactly matched pair set.
 - The measurement says nothing about whether any model's accuracy depends on
   this distance.

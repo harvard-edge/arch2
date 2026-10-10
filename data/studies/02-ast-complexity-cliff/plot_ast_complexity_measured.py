@@ -93,13 +93,25 @@ def main() -> int:
     production_median = statistics.median(production_nodes)
     ratio = production_median / benchmark_median
 
-    fig, (ax1, ax2) = plt.subplots(
-        1,
-        2,
-        figsize=(7.4, 3.25),
-        gridspec_kw={"width_ratios": [1.08, 0.92]},
+    # The book places this composite in a 4.8-inch text column.  Stacked
+    # panels keep ordinary labels legible at that final physical size.
+    plt.rcParams.update(
+        {
+            "font.size": 7.0,
+            "axes.labelsize": 8.0,
+            "axes.titlesize": 8.5,
+            "xtick.labelsize": 7.0,
+            "ytick.labelsize": 7.0,
+            "legend.fontsize": 7.0,
+        }
     )
-    fig.subplots_adjust(left=0.075, right=0.975, top=0.88, bottom=0.19, wspace=0.36)
+    fig, (ax1, ax2) = plt.subplots(
+        2,
+        1,
+        figsize=(4.8, 5.2),
+        gridspec_kw={"height_ratios": [1.0, 0.95]},
+    )
+    fig.subplots_adjust(left=0.16, right=0.98, top=0.95, bottom=0.10, hspace=0.47)
 
     bench_x, bench_y = ecdf(benchmark_nodes)
     prod_x, prod_y = ecdf(production_nodes)
@@ -135,7 +147,7 @@ def main() -> int:
         f"{benchmark_median:,.0f} → {production_median:,.0f} nodes",
         ha="center",
         va="center",
-        fontsize=5.6,
+        fontsize=7.0,
         color=COLORS["ink"],
         bbox={
             "boxstyle": "round,pad=0.25",
@@ -195,19 +207,20 @@ def main() -> int:
         ax2.text(
             share + 1.7,
             bar.get_y() + bar.get_height() / 2,
-            f"{share:.0f}%  (max depth {max_depth})",
+            f"{share:.0f}%  (max source depth {max_depth})",
             va="center",
             ha="left",
-            fontsize=5.5,
+            fontsize=7.0,
             color=COLORS["ink"],
         )
     ax2.axhline(1.5, color=COLORS["grid"], linewidth=0.9)
     ax2.set_yticks(y)
     ax2.set_yticklabels([name for name, _, _, _ in dataset_stats])
     ax2.invert_yaxis()
-    ax2.set_xlim(0, 110)
-    ax2.set_xlabel("Modules reaching a uniquely defined local child (%)")
-    ax2.set_title("(b) Repository-Internal Hierarchy", loc="left", fontweight="bold")
+    ax2.set_xlim(0, 123)
+    ax2.set_xticks(range(0, 101, 20))
+    ax2.set_xlabel("Modules referencing a uniquely defined local child (%)")
+    ax2.set_title("(b) Source-Level Module References", loc="left", fontweight="bold")
     ax2.grid(axis="x", color=COLORS["grid"], linewidth=0.5, zorder=0)
     ax2.legend(
         handles=[

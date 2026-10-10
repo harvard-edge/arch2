@@ -35,7 +35,9 @@ token distance
 
 tree distance
     The number of edges on the path between the declaration's syntax node and
-    the use's syntax node in pyslang's concrete syntax tree.
+    the use's syntax node in pyslang's concrete syntax tree, when both nodes
+    and a common ancestor are recoverable. File means use this available
+    subset, which can be smaller than the token-distance pair set.
 
 def-use graph distance
     One edge for every pair, by construction. Not measured; it is the

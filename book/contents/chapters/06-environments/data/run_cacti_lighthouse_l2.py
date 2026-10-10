@@ -22,7 +22,7 @@ The patch removes a redundant default argument and changes no model code.
 Verified on arm64 macOS with Apple clang; on x86 Linux with g++ the stock
 `make` target may build without it.
 
-Declared construction rule (the chapter says the study must supply one):
+Declared cache specifications for these model runs:
     64-byte lines, 16-way set associative (2,048 / 3,072 / 4,096 sets for
     2 / 3 / 4 MiB; CACTI requires power-of-two associativity), one bank, one
     read-write port, ECC on, 360 K, the design objective of the stock
@@ -31,8 +31,11 @@ Device type is run both ways, because the study has not bound it: ITRS
 high-performance (itrs-hp) and ITRS low-standby-power (itrs-lstp) for both
 the cell array and the peripheral circuits.
 
-These choices are the author's, stated so the runs can be repeated. They are
-one legal organization per capacity, not an optimized design.
+These choices are the author's, stated so the runs can be repeated. With
+Force cache config false, CACTI selects an internal array organization for
+each capacity and device type under its ED^2 objective. The runs therefore
+hold the declared cache specifications fixed, not the selected internal
+geometry. They do not establish an optimized physical macro at the target node.
 
 Usage:
     python3 run_cacti_lighthouse_l2.py --cacti-dir /path/to/built/cacti

@@ -46,10 +46,22 @@ verified. The frozen records are not rewritten to hide the mismatch.
 ## Recorded outcome
 
 Cycles and utilization below are computed by SCALE-Sim for the frozen inputs.
-The retained runner computes the local score and dispositions. None of the
-values are measurements from silicon.
+The historical runner computed the local score and dispositions; the
+standalone [`replay.py`](replay.py) now checks those records and recomputes
+their metrics. None of the values are measurements from silicon.
 
-| Arm | Shape | Total cycles | Average layer utilization | Local score | Disposition |
+The score uses the sum of the report's `Total Cycles` column, which excludes
+prefetch, divided by the **unweighted arithmetic mean** of the three layers'
+`Overall Util %` values, expressed as a fraction. These are compute-window
+cycles, not complete application latency. The separately retained
+`Total Cycles (incl. prefetch)` column sums to 17,371 for the 32x32 baseline
+and 17,500 for 16x64. Their exact score tie applies to the preregistered
+excluding-prefetch metric. Including prefetch would make 16x64 about 0.743
+percent worse with the same utilization denominator, still inside the
+preregistered 1 percent tolerance. This sensitivity check does not change
+the historical metric or establish end-to-end latency across layers.
+
+| Arm | Shape | Cycles excluding prefetch | Unweighted mean layer utilization | Local score | Disposition |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Model | 32x32 baseline | 13,917 | 41.196% | 33,782.40 | Tied best |
 | Model | 16x64 | 13,917 | 41.196% | 33,782.40 | Tied best |
@@ -82,46 +94,65 @@ The machine-readable result in
 recommends retaining the 32x32 baseline and stopping this bounded search. Its
 accountable decision status remains `awaiting_author_confirmation`.
 
-## Deterministic replay
+## Verification and replay
 
-From `labs/` in the documented Python 3.11 environment:
+The former `arch2_labs.study` package is retired. The standalone runner in
+this directory supports this frozen experiment only. It neither calls a
+model nor uses the network. It does not rewrite the original records,
+repair the missing prompt, or claim to reproduce the model interaction.
 
-```bash
-.venv/bin/python -m arch2_labs.study validate-model
-.venv/bin/python -m arch2_labs.study verify-reference \
-  --reference examples/ai_systolic_array_study/recorded/reference
-.venv/bin/python -m arch2_labs.study replay \
-  --reference examples/ai_systolic_array_study/recorded/reference
-```
-
-Replay uses no network access or model credential. It reruns all twelve
-SCALE-Sim evaluations and compares every stable input, raw summary report,
-parsed result, and hash with the recorded reference.
-
-SCALE-Sim also emits large per-layer access traces. Those deterministic
-intermediates are regenerated during replay but are not archived. The fixture
-retains each exact input plus `COMPUTE_REPORT.csv`, `BANDWIDTH_REPORT.csv`, and
-`DETAILED_ACCESS_REPORT.csv`, which support the reported metrics and keep the
-reference compact.
-
-## Optional live proposal
-
-The live adapter is not part of deterministic replay and never overwrites the
-recorded result. It accepts any local or remote command that reads the retained
-current prompt from standard input and emits one schema-valid JSON object on
-standard output. This starts a new proposal call and cannot reproduce the
-recorded generation.
+From the repository root, verification needs only Python's standard library:
 
 ```bash
-export ARCH2_MODEL_COMMAND='your-model-command --json'
-export ARCH2_MODEL_ID='exact-model-identifier'
-export ARCH2_MODEL_PROVIDER='provider-or-local-runtime'
-.venv/bin/python -m arch2_labs.study_live --out /tmp/arch2-live-proposal
+python3 data/studies/ai_systolic_array_study/replay.py verify
 ```
 
-For a runtime that needs a credential, set
-`ARCH2_MODEL_REQUIRED_CREDENTIAL` to the *name* of its credential environment
-variable. The adapter verifies that the variable exists but never records its
-value. Missing runtime, model identity, credential, invalid JSON, invalid
-geometry, and schema failures stop safely without modifying the recorded
-reference.
+Verification checks the complete 75-file reference manifest, file sizes and
+SHA-256 hashes, model-response and schema hashes, twelve evaluation records,
+input identities, raw report schemas and layer counts. It recomputes the
+metrics, local scores, gates and reported outcomes. The known prompt mismatch
+is printed as a limitation. A different prompt modification, missing report,
+changed metric, or broken hash fails verification. These internal consistency
+checks do not authenticate the historical model call or its preregistration.
+
+Replay requires SCALE-Sim 3.0.0. Python 3.11 matches the historical execution
+environment; the runner was also checked with Python 3.14. Install the
+simulator in a separate environment if needed (installation requires package
+access; verification and replay themselves do not):
+
+```bash
+python3 -m venv /tmp/arch2-systolic-env
+/tmp/arch2-systolic-env/bin/python -m pip install -r data/studies/ai_systolic_array_study/requirements.txt
+/tmp/arch2-systolic-env/bin/python data/studies/ai_systolic_array_study/replay.py replay \
+  --output /tmp/arch2-systolic-replay
+```
+
+The output directory must not already exist and must be outside this study
+directory. Choose a new output name for each replay. Each of the twelve runs
+gets a log and three summary CSV reports. `replay_summary.json` records the
+current interpreter and simulator versions, run results and completion
+status. Failed runs leave their new outputs for inspection and exit with an
+error; no baseline is replaced. Large access-trace files are not exported by
+this runner.
+
+Comparison requires exact report headers, three ordered layers, integer
+counts, cycle values, `Overall Util %`, bandwidth/access values and decision
+scores. Only `Compute Util %`, a diagnostic unused by the decision score,
+allows an absolute difference of at most `1e-12` percentage points. Independent
+Python 3.11/3.14 replays differed there by at most approximately `2.14e-14`.
+The runner preserves the original left-to-right aggregation order because
+Python changed floating-point `sum` after version 3.11. No tolerance is used
+to excuse a changed decision or a missing/extra run.
+
+The regression tests include corrupted records, a missing report, metrics
+that disagree with raw data despite refreshed hashes, malformed report
+schemas, strict cycle comparisons and refusal to overwrite output paths:
+
+```bash
+python3 -m pytest -q tests/test_systolic_replay.py
+```
+
+The full twelve-run replay test requires SCALE-Sim 3.0.0; the remaining tests
+do not. A new model proposal would be a separate study requiring its own
+exact prompt, model response, provenance and output directory. There is no
+live model adapter in this package.

@@ -22,6 +22,9 @@ Bucket definitions (paths are relative to the repository root; a file counts onc
            python_loc         python/ (excluding the two backend trees)
            shared_cpp_loc     include/ + lib/ (C++, TableGen; the shared compiler)
            Before v3.0 the NVIDIA-specific lowering lived inside lib/ and is counted as shared.
+           The backend directory buckets include vendored SDK headers, examples, and tests.
+           They are path-based counts, not comparable measures of compiler implementation
+           or porting effort. The figure therefore plots their combined source-tree total.
   vLLM     attention_loc csrc/attention/
            quant_loc     csrc/quantization/
            moe_loc       csrc/moe/
@@ -201,6 +204,12 @@ HEADER = (
 def write(rows, name, slug, fname, today):
     with open(DATA / fname, "w", encoding="utf-8", newline="") as fh:
         fh.write(HEADER.format(date=today, slug=slug, ext=" ".join(CODE_EXT)))
+        if name == "triton":
+            fh.write(
+                "# Buckets follow directories, not equivalent kinds of engineering work: backend trees include\n"
+                "# vendored SDK headers, examples, and tests; pre-v3 NVIDIA lowering is counted in shared_cpp_loc.\n"
+                "# The figure sums the four measured buckets rather than comparing shared versus backend code.\n"
+            )
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)

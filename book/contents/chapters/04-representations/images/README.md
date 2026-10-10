@@ -10,10 +10,12 @@ Image-backed figures currently used by the chapter:
   project state.
 - `fig-execution-history`: accepted and rejected work linked to the state and
   conditions that produced it.
-- `fig-ch04-ast-complexity-cliff`: measured module syntax size and internal
-  hierarchy, generated from `data/studies/02-ast-complexity-cliff/`.
+- `fig-ch04-ast-complexity-cliff`: measured module syntax size and source-reference
+  depth in vertically stacked panels sized for the book text column, generated
+  from `data/studies/02-ast-complexity-cliff/`.
 - `fig-hardware-representation-dilation` (label `fig-ch04-spatial-semantic-dilation`):
-  measured declaration-to-use distance in token order and in the syntax tree,
+  measured declaration-to-use distance in token order and, for the subset
+  with recoverable paths, in the syntax tree,
   drawn by `data/studies/09-representation-dilation/plot_representation_dilation.py`
   from `../data/fig-hardware-representation-dilation.csv`.
 

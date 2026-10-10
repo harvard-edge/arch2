@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Measure syntax complexity from pinned, retained Verilog repositories.
 
-This pipeline is deliberately separate from ``mine_hardware_ast_complexity.py``.
-The earlier dataset remains available as a baseline, while this script produces
-an independently named measured dataset whose rows are traceable to source
-files and commit hashes.
+This pipeline replaces the deleted, unmeasured complexity dataset with
+measurements traceable to source files and commit hashes.
 
 The unit of analysis is a successfully parsed Verilog/SystemVerilog module
 declaration. Metrics describe source syntax, not elaborated hardware. In
@@ -316,6 +314,12 @@ def module_records(
 
 
 def assign_internal_hierarchy_depth(records: list[ModuleRecord]) -> None:
+    """Measure source-reference depth, not elaborated instance depth.
+
+    Conditional generate branches remain in the source graph, and references
+    without a unique local definition are not followed. The result is not a
+    bound on the instance depth of an elaborated configuration.
+    """
     by_dataset: dict[str, list[ModuleRecord]] = {}
     for record in records:
         by_dataset.setdefault(record.dataset_name, []).append(record)

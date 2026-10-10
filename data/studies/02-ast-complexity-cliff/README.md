@@ -8,9 +8,9 @@
 
 ## 1. Overview & Research Question
 
-> **Research Question:** How large is the source-complexity and internal-hierarchy
-> difference between the reference RTL shipped with AI hardware generation
-> benchmarks and production-oriented open silicon RTL?
+> **Research Question:** How do source complexity and the depth of module
+> references differ between AI hardware benchmark reference RTL and
+> production-oriented open silicon RTL?
 
 The study parses 1,513 SystemVerilog module declarations from six public
 repositories at pinned commits, using `pyslang` 11.0.0 for a standalone,
@@ -28,7 +28,10 @@ and SHA-256 of the source it came from.
 
 ## 2. Visual Exhibit
 
-![Measured source complexity and internal hierarchy across 1,513 RTL modules](./fig_ast_complexity_measured.png)
+![Measured source complexity and source-reference depth across 1,513 RTL modules](./fig_ast_complexity_measured.png)
+
+The panels are stacked for the book's 4.8-inch text column. Ordinary plot
+labels retain approximately 7-point type at that final width.
 
 - **Raster (300 DPI):** [`fig_ast_complexity_measured.png`](./fig_ast_complexity_measured.png)
 - **Vector PDF:** [`fig_ast_complexity_measured.pdf`](./fig_ast_complexity_measured.pdf)
@@ -42,19 +45,19 @@ and SHA-256 of the source it came from.
 | :--- | ---: | ---: | ---: |
 | Median concrete syntax nodes per module | 168 | 1,125 | 6.70x |
 | Median clean lines of code per module | 16 | 99 | 6.19x |
-| Same, diagnostic-free files only | 141.5 | 675 | 4.77x |
-| Same, equal weight per repository | 232 | 991 | 4.27x |
+| Median syntax nodes, diagnostic-free files only | 141.5 | 675 | 4.77x |
+| Median of repository syntax-node medians | 232 | 991 | 4.27x |
 
 - **Source-complexity gap:** a module-weighted median of 168 concrete syntax
   nodes for benchmark reference RTL against 1,125 for production-oriented RTL,
   across 217 and 1,296 parsed modules.
-- **The ratio depends on weighting, and both checks are reported.** The pooled
+- **The ratio depends on the sample and summary statistic.** The pooled
   6.7x is not offered as a universal ratio.
-- **Hierarchy separates the corpora more sharply than size does.** No VerilogEval
+- **Source-level module references provide a second distinction.** No VerilogEval
   module instantiates another module in the corpus. RTLLM reaches a uniquely
-  defined local child in 16% of its modules, to a maximum internal depth of 5.
+  defined local child in 16% of its modules, to a maximum source-reference depth of 5.
   Production repositories reach one in 45% to 63% of modules, to a maximum
-  internal depth of 13.
+  source-reference depth of 13.
 - **Clocking is a weaker signal than the earlier version claimed.** Multiple
   clock-like event signals appear in 5.1% of production modules against 0.5% of
   benchmark modules. This is a lexical indicator, not a verified clock domain
@@ -63,6 +66,11 @@ and SHA-256 of the source it came from.
 ---
 
 ## 4. Packaged Datasets & Schema
+
+Hierarchy is recovered from standalone source parses, without full-design
+elaboration. Conditional branches can add references absent from an evaluated
+configuration, while unresolved children can shorten a source-reference path.
+The result is not a bound on elaborated instance depth.
 
 ### Primary data files
 - [`hardware_ast_complexity_measured.csv`](./hardware_ast_complexity_measured.csv) (1,513 module rows)
@@ -91,8 +99,8 @@ and SHA-256 of the source it came from.
 | `recognized_cdc_primitive_mentions` | `integer` | Mentions of known synchronizer primitives (lexical) |
 | `hierarchy_instantiation_count` | `integer` | Module instantiations found in the module body |
 | `resolved_internal_submodule_instantiations` | `integer` | Instantiations whose child name has exactly one definition in the corpus |
-| `ambiguous_internal_submodule_instantiations` | `integer` | Instantiations with duplicate or unresolved child definitions, not followed |
-| `internal_hierarchy_depth` | `integer` | Depth through resolved children only; a lower bound on elaborated depth |
+| `ambiguous_internal_submodule_instantiations` | `integer` | Instantiations with multiple local child definitions, not followed |
+| `internal_hierarchy_depth` | `integer` | Source-reference depth through uniquely defined children; not an elaborated instance depth or a bound on it |
 | `extraction_timestamp` | `string` | When the run happened; the only column that varies between reruns |
 
 ---

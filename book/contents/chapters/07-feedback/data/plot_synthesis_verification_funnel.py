@@ -1,294 +1,174 @@
-"""
-Architectural Workflow: Multi-Fidelity Synthesis & Verification Signoff Funnel (Chapter 7)
------------------------------------------------------------------------------------------
-Visualizes the hierarchical multi-fidelity screening pipeline that protects scarce
-downstream compute and commercial EDA licenses during automated architectural search.
+"""Selected verification checks and repair routes, sized for a 4.8-inch column.
 
-Key Architectural Elements:
-1. Five progressive screening tiers with increasing physical fidelity and execution latency.
-2. Two closed-loop recovery pathways:
-   - Early structural/functional rejections route back to Generative Agent Revision.
-   - Late physical/timing near-misses route to Localized ECO Optimization.
-3. Conceptual schematic: no numbers, percentages, or runtimes. Stage costs are
-   ordinal labels only (lowest to highest), and the engines are examples.
-
-Exports SVG, PDF, and 300 DPI PNG to:
-- book/contents/chapters/07-feedback/images/fig-synthesis-verification-funnel.{png,svg,pdf}
+This unscaled workflow contains no empirical attrition or runtime data.
 """
 
-import sys
 from pathlib import Path
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from book._python.plots import COLORS, apply_style, save_figure_bundle
-
-apply_style()
+sys.path.insert(0, str(REPO_ROOT))
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
+from book._python.plots import COLORS, apply_style
 
 
 def main():
-    chapter_dir = Path(__file__).resolve().parents[1]
-    out_plot_ch = chapter_dir / "images" / "fig-synthesis-verification-funnel"
-
-    fig, ax = plt.subplots(figsize=(6.0, 4.4))
-    fig.subplots_adjust(left=0.04, right=0.96, top=0.95, bottom=0.06)
-
-    ax.set_xlim(0, 100)
-    ax.set_ylim(-6, 96)
+    apply_style()
+    fig, ax = plt.subplots(figsize=(4.8, 6.0))
+    fig.subplots_adjust(left=0.015, right=0.985, top=0.985, bottom=0.015)
+    ax.set(xlim=(0, 4.8), ylim=(0, 6))
     ax.axis("off")
 
-    # 5 Tiers Data
-    tiers = [
-        {
-            "name": "Stage 1: Syntactic & AST Parsing",
-            "tools": "Tree-Sitter / Verilator / Slang",
-            "checks": "Syntax valid, elaborated module hierarchy, port types",
-            "latency": "lowest",
-            "y": 78,
-            "width": 62,
-            "color": COLORS["blue"],
-        },
-        {
-            "name": "Stage 2: Interface Schema & Interconnect",
-            "tools": "Static Schema Linters / Protocol Checkers",
-            "checks": "AXI / TLM handshakes, port widths, clock domain tags",
-            "latency": "low",
-            "y": 62,
-            "width": 58,
-            "color": COLORS["green"],
-        },
-        {
-            "name": "Stage 3: Functional & Assertion Verification",
-            "tools": "SVA checkers / BMC / simulators",
-            "checks": "Temporal invariants, state-machine deadlocks, coverage",
-            "latency": "moderate to high",
-            "y": 46,
-            "width": 54,
-            "color": COLORS["orange"],
-        },
-        {
-            "name": "Stage 4: Static Timing Analysis (STA)",
-            "tools": "OpenSTA / PrimeTime / Tempus",
-            "checks": "Multi-corner setup & hold slack, WNS/TNS",
-            "latency": "high",
-            "y": 30,
-            "width": 50,
-            "color": COLORS["purple"],
-        },
-        {
-            "name": "Stage 5: Physical DRC / LVS Signoff",
-            "tools": "Calibre / KLayout / Netgen",
-            "checks": "Design rules (DRC), layout vs. schematic (LVS)",
-            "latency": "highest",
-            "y": 14,
-            "width": 46,
-            "color": COLORS["red"],
-        },
-    ]
-
-    # Draw funneled tiers
-    for i, t in enumerate(tiers):
-        y = t["y"]
-        w = t["width"]
-        x = 42 - w / 2
-
-        # Main tier box
-        rect = patches.FancyBboxPatch(
-            (x, y - 5.5),
-            w,
-            11,
-            boxstyle="round,pad=0.6,rounding_size=1.2",
-            facecolor="white",
-            edgecolor=t["color"],
-            linewidth=1.6,
-            zorder=3,
-        )
-        ax.add_patch(rect)
-
-        # Stage header & description
-        ax.text(
-            x + 1.8,
-            y + 2.2,
-            t["name"],
-            ha="left",
-            va="center",
-            fontsize=6.8,
-            fontweight="bold",
-            color=t["color"],
-            zorder=4,
-        )
-        ax.text(
-            x + 1.8,
-            y - 0.4,
-            f"Checks: {t['checks']}",
-            ha="left",
-            va="center",
-            fontsize=5.2,
-            color=COLORS["ink"],
-            zorder=4,
-        )
-        ax.text(
-            x + 1.8,
-            y - 2.8,
-            f"Example engines: {t['tools']}  •  Relative cost: {t['latency']}",
-            ha="left",
-            va="center",
-            fontsize=4.7,
-            fontstyle="italic",
-            color=COLORS["muted"],
-            zorder=4,
-        )
-
-        # Connecting downward funnel arrow to next stage
-        if i < len(tiers) - 1:
-            next_y = tiers[i + 1]["y"]
-            ax.annotate(
-                "",
-                xy=(42, next_y + 5.5),
-                xytext=(42, y - 5.5),
-                arrowprops=dict(
-                    arrowstyle="->",
-                    color=COLORS["ink"],
-                    lw=1.2,
-                    shrinkA=1,
-                    shrinkB=1,
-                ),
+    def box(y, h, role):
+        ax.add_patch(
+            FancyBboxPatch(
+                (0.08, y),
+                4.64,
+                h,
+                boxstyle="round,pad=.01,rounding_size=.05",
+                facecolor="white",
+                edgecolor=COLORS[role],
+                lw=1.1,
                 zorder=2,
             )
+        )
 
-    # Top Input: Generative Candidate Proposals
-    ax.annotate(
-        "",
-        xy=(42, 83.5),
-        xytext=(42, 91.5),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["ink"],
-            lw=1.4,
-            shrinkA=1,
-            shrinkB=1,
-        ),
-        zorder=2,
-    )
+    def arrow(a, b):
+        ax.annotate(
+            "",
+            xy=(2.4, b),
+            xytext=(2.4, a),
+            arrowprops=dict(arrowstyle="->", lw=1, color=COLORS["muted"]),
+        )
+
     ax.text(
-        42,
-        92.8,
-        "Generative Proposals (Candidate Pool $N_0$)",
+        2.4,
+        5.83,
+        "Generative candidate proposals",
         ha="center",
         va="center",
-        fontsize=6.5,
-        fontweight="bold",
-        color=COLORS["ink"],
-        bbox=dict(
-            boxstyle="round,pad=0.3",
-            facecolor="#F6F8FA",
-            edgecolor=COLORS["grid"],
-            lw=0.8,
-        ),
+        fontsize=10,
+        weight="bold",
     )
-
-    # Bottom Output: Tapeout-Ready Silicon
-    ax.annotate(
-        "",
-        xy=(42, 0.5),
-        xytext=(42, 8.5),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["green"],
-            lw=1.5,
-            shrinkA=1,
-            shrinkB=1,
+    arrow(5.64, 5.48)
+    stages = [
+        (
+            4.80,
+            "1. Syntax and elaboration",
+            "Grammar, module hierarchy, and port types",
+            "Tree-Sitter / Verilator / Slang",
+            "workload",
         ),
-        zorder=2,
-    )
+        (
+            3.98,
+            "2. Interface and interconnect",
+            "Handshake rules, port widths, and clock-domain tags",
+            "Schema linters / protocol checkers",
+            "evidence",
+        ),
+        (
+            3.16,
+            "3. Functional and assertion checks",
+            "Temporal properties, deadlocks, and coverage",
+            "SVA checkers / BMC / simulators",
+            "methods",
+        ),
+        (
+            2.34,
+            "4. Static timing analysis",
+            "Setup and hold checks under specified modes and corners",
+            "OpenSTA / PrimeTime / Tempus",
+            "designspace",
+        ),
+        (
+            1.52,
+            "5. Physical verification",
+            "Design rules and layout-versus-schematic checks",
+            "Calibre / KLayout / Netgen",
+            "constraints",
+        ),
+    ]
+    for y, title, checks, tools, role in stages:
+        box(y, 0.64, role)
+        ax.text(
+            0.23,
+            y + 0.48,
+            title,
+            ha="left",
+            va="center",
+            fontsize=9,
+            weight="bold",
+            color=COLORS[role + "_ink"],
+        )
+        ax.text(0.23, y + 0.28, checks, ha="left", va="center", fontsize=8)
+        ax.text(
+            0.23,
+            y + 0.095,
+            "Example engines: " + tools,
+            ha="left",
+            va="center",
+            fontsize=8,
+            fontstyle="italic",
+        )
+        if y > 1.6:
+            arrow(y - 0.035, y - 0.155)
+    arrow(1.49, 1.29)
     ax.text(
-        42,
-        -1.2,
-        "Signoff-Clean Implementation (GDSII / OASIS)",
+        2.4,
+        1.15,
+        "Implementation passing the listed checks",
         ha="center",
         va="center",
-        fontsize=6.5,
-        fontweight="bold",
-        color=COLORS["green"],
-        bbox=dict(
-            boxstyle="round,pad=0.3",
-            facecolor="#E7F5EC",
-            edgecolor=COLORS["green"],
-            lw=0.8,
-        ),
-    )
-
-    # Left Column: Invalidation & Generative Revision Feedback Loop
-    ax.plot([8, 8], [46, 88], color=COLORS["red"], lw=1.2, linestyle="--")
-    # Lines from stages 1, 2, 3 to rejection line
-    for st_idx in [0, 1, 2]:
-        sy = tiers[st_idx]["y"]
-        sx = 42 - tiers[st_idx]["width"] / 2
-        ax.plot([sx, 8], [sy, sy], color=COLORS["red"], lw=1.0, linestyle="--")
-
-    # Connect top of rejection line back into the proposal stream
-    ax.annotate(
-        "",
-        xy=(41.4, 88),
-        xytext=(8, 88),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["red"],
-            lw=1.0,
-            linestyle="--",
-            shrinkA=0,
-            shrinkB=0,
-        ),
+        fontsize=9,
+        weight="bold",
+        color=COLORS["evidence_ink"],
     )
     ax.text(
-        8,
-        92,
-        "Structural & Functional Failures\nRoute to Generative Prompt / AST Repair",
-        ha="center",
-        va="bottom",
-        fontsize=5.2,
-        fontweight="bold",
-        color=COLORS["red"],
-    )
-
-    # Right Column: Near-Miss Physical ECO Loop & Signoff Economics
-    ax.annotate(
-        "",
-        xy=(76, 36),
-        xytext=(76, 14),
-        arrowprops=dict(
-            arrowstyle="->",
-            color=COLORS["purple"],
-            lw=1.2,
-            linestyle="-.",
-        ),
-    )
-    ax.plot([67.6, 76], [14, 14], color=COLORS["purple"], lw=1.0, linestyle="-.")
-    ax.plot([65.6, 76], [30, 30], color=COLORS["purple"], lw=1.0, linestyle="-.")
-    ax.text(
-        76,
-        40,
-        "Near-Miss Timing & DRC Failures\nRoute to Localized ECO Optimization\n(Buffer insertion, gate sizing, wire widening)",
+        0.16,
+        0.78,
+        "Early structural or functional failure:",
         ha="left",
         va="center",
-        fontsize=5.2,
-        fontweight="bold",
-        color=COLORS["purple"],
-        bbox=dict(
-            boxstyle="round,pad=0.3",
-            facecolor=COLORS["designspace_tint"],
-            edgecolor=COLORS["purple"],
-            lw=0.6,
-        ),
+        fontsize=8.5,
+        weight="bold",
+        color=COLORS["constraints_ink"],
     )
-
-    save_figure_bundle(fig, out_plot_ch)
-    print(f"Generated clean workflow funnel: {out_plot_ch}")
+    ax.text(
+        0.16,
+        0.58,
+        "Revise generated RTL; rerun the affected checks.",
+        ha="left",
+        va="center",
+        fontsize=8,
+    )
+    ax.text(
+        0.16,
+        0.32,
+        "Physical timing or DRC near-miss:",
+        ha="left",
+        va="center",
+        fontsize=8.5,
+        weight="bold",
+        color=COLORS["designspace_ink"],
+    )
+    ax.text(
+        0.16,
+        0.12,
+        "Assess a local ECO; rerun the affected checks.",
+        ha="left",
+        va="center",
+        fontsize=8,
+    )
+    base = (
+        Path(__file__).resolve().parents[1] / "images/fig-synthesis-verification-funnel"
+    )
+    for ext in ("svg", "pdf", "png"):
+        fig.savefig(base.with_suffix("." + ext), dpi=300, bbox_inches="tight")
+    svg = base.with_suffix(".svg")
+    svg.write_text("\n".join(x.rstrip() for x in svg.read_text().splitlines()) + "\n")
     plt.close(fig)
+    print(base)
 
 
 if __name__ == "__main__":

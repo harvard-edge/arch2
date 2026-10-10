@@ -12,6 +12,11 @@
 
 This study measures instance area and setup timing slack dispersion across 20 physical placement runs in OpenROAD (pinned container digest) on the GCD benchmark with the Nangate45 cell library, varying only the global placement seed (`GPL_RANDOM_SEED` 1–20) on identical RTL and floorplan.
 
+The release retains raw logs, stage metrics, pinned source identifiers, and
+recorded database hashes. It does not include the original floorplan or
+placement databases, so their hashes cannot be checked against those files;
+reproduction requires rebuilding the inputs from the pinned sources.
+
 ---
 
 ## 2. Visual Exhibits & Figure Gallery

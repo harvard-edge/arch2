@@ -1,105 +1,40 @@
 #!/usr/bin/env python3
-"""Fail if a figure's data has no honest account of where it came from.
+"""Check explicit evidence declarations for active manuscript figures.
 
-Companion to ``validate_provenance.py``, which polices the dataset files. This
-one polices the figures built from them, and it exists because of a real defect:
-``fig-testbench-vacuity-and-judge-bias`` drew its values from ``rng.gauss`` while
-its caption attributed them to three real papers.
-
-The rule is not "never use a random number generator". The manuscript has
-legitimate constructed illustrations, and they are good figures. The rule is:
-
-    A figure whose numbers do not come from a data file must either
-    declare itself constructed, or cite the source it transcribed.
-
-Silence is the defect. A constructed figure that says so is honest. A
-constructed figure whose caption reads like a measurement is not, and neither is
-a table of numbers typed into a script with no source named anywhere.
+The figure_evidence map in data/datasets/provenance.yml distinguishes measured,
+transcribed, analytical, and conceptual figures. This check verifies inventory,
+source-file existence, and bibliography keys. It does not execute generators,
+prove that a plot consumes its declared inputs, or certify numerical correctness
+or the support a cited source provides. Those require separate source audits.
 
     python3 data/validate_figure_provenance.py [--verbose]
-
-Exits non-zero on any violation, so it can gate a commit or a build.
 """
-
 from __future__ import annotations
 
-import io
 import re
 import sys
-import tokenize
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 CHAPTERS = ROOT / "book" / "contents"
-
-RNG_PATTERNS = [
-    r"\brng\s*\.\s*(gauss|uniform|normalvariate|betavariate|triangular)",
-    r"\brandom\s*\.\s*(gauss|uniform|normalvariate|triangular|random)\b",
-    r"\bnp\.random\.(normal|randn|uniform|lognormal|choice)",
-    r"_gaussian_noise\s*\(",
-]
-
-# Words that tell the reader the figure is not a measurement. Kept deliberately
-# broad: the point is that the caption said *something*, not that it used an
-# approved synonym.
-DECLARES_CONSTRUCTED = [
-    "constructed",
-    "illustrative",
-    "illustration",
-    "schematic",
-    "stylized",
-    "hypothetical",
-    "notional",
-    "conceptual",
-    "for illustration",
-    "no real system",
-    "not a measurement",
-    "synthetic",
-    "toy example",
-]
-
-# Inline numeric literals above this count mean the script carries its own data
-# table rather than a few layout constants.
-LITERAL_THRESHOLD = 25
+MANIFEST = ROOT / "data" / "datasets" / "provenance.yml"
+EVIDENCE_CLASSES = {"measured", "transcribed", "analytical", "conceptual"}
 
 
-def strip_code(src: str) -> str:
-    """Blank out comments and strings so prose about an RNG is not read as one."""
-    try:
-        out: list[str] = []
-        last = (1, 0)
-        for tok, text, start, end, _ in tokenize.generate_tokens(
-            io.StringIO(src).readline
-        ):
-            if tok in (tokenize.COMMENT, tokenize.STRING):
-                text = re.sub(r"\S", " ", text)
-            if start[0] > last[0]:
-                out.append("\n" * (start[0] - last[0]))
-            out.append(text)
-            last = end
-        return "".join(out)
-    except Exception:
-        return "\n".join(re.sub(r"#.*$", "", line) for line in src.splitlines())
+@lru_cache(maxsize=1)
+def bibliography_keys() -> set[str]:
+    text = (ROOT / "book" / "references" / "references.bib").read_text()
+    return set(re.findall(r"@\w+\s*\{\s*([^,\s]+)\s*,", text))
 
 
-def uses_rng(src: str) -> str | None:
-    code = strip_code(src)
-    for pat in RNG_PATTERNS:
-        m = re.search(pat, code)
-        if m:
-            return f"{m.group(0)} (line {code[: m.start()].count(chr(10)) + 1})"
-    return None
-
-
-def reads_data(src: str) -> str | None:
-    m = re.search(r"['\"]([A-Za-z0-9._/-]+\.(?:csv|json|tsv))['\"]", src)
-    return Path(m.group(1)).name if m else None
-
-
-def literal_count(src: str) -> int:
-    return len(re.findall(r"\b\d+\.?\d*\s*[,\]]", strip_code(src)))
+def cited_sources(caption: str) -> set[str]:
+    """Only actual bibliography entries count; @fig/@tbl/@eq are not sources."""
+    refs = set(re.findall(r"@([A-Za-z][A-Za-z0-9_:.-]*)", caption))
+    return refs & bibliography_keys()
 
 
 def caption_of_cell(block: str) -> str:
@@ -159,131 +94,92 @@ def collect_figures() -> dict[str, dict]:
     return figs
 
 
-@lru_cache(maxsize=1)
-def generator_sources() -> tuple[tuple[Path, str], ...]:
-    """Read the full generator inventory once per validation invocation."""
-    sources = []
-    for py in sorted(ROOT.rglob("*.py")):
-        sp = str(py)
-        if "/.git/" in sp or "/.venv" in sp or "/.cache/" in sp:
-            continue
-        try:
-            src = py.read_text(errors="ignore")
-        except Exception:
-            continue
-        sources.append((py, src))
-    return tuple(sources)
-
-
-def generator_for(stem: str | None) -> tuple[Path, str] | None:
-    if not stem:
-        return None
-    for py, src in generator_sources():
-        if stem in src:
-            return py, src
-    return None
-
-
-def classify(label: str, info: dict) -> tuple[str, str, str]:
-    """Return (verdict, detail, where)."""
-    caption = (info.get("caption") or "").lower()
-    declared = any(w in caption for w in DECLARES_CONSTRUCTED)
-    cited = bool(re.search(r"@[A-Za-z][A-Za-z0-9_:.-]{3,}", info.get("caption") or ""))
-
-    if info["cell"]:
-        src, where = info["cell"], f"{info['qmd'].name} inline cell"
-    else:
-        found = generator_for(info["stem"])
-        if not found:
-            assets = list((info["qmd"].parent / "images").glob(f"{info['stem']}.*"))
-            if any(a.suffix == ".svg" for a in assets):
-                return "ok-diagram", "hand-authored SVG, makes no data claim", ""
-            if assets:
-                return (
-                    "ok-photo",
-                    (
-                        f"raster only ({assets[0].suffix}), no plotted data; "
-                        f"check third-party image permissions, not data provenance"
-                    ),
-                    "",
-                )
-            return "unresolved", "no generator and no vector source found", ""
-        py, src = found
-        where = str(py.relative_to(ROOT))
-
-    rng = uses_rng(src)
-    if rng:
-        if declared:
-            return "ok-constructed", f"{rng}, caption declares it", where
+def classify(
+    label: str, info: dict, evidence: dict | None = None
+) -> tuple[str, str, str]:
+    """Validate a declaration, never infer evidence class from image format."""
+    if evidence is None:
+        evidence = (
+            yaml.safe_load(MANIFEST.read_text()).get("figure_evidence", {}).get(label)
+        )
+    where = str(info["qmd"].relative_to(ROOT))
+    if not isinstance(evidence, dict):
+        return "VIOLATION", "no explicit figure_evidence declaration", where
+    kind = evidence.get("evidence_class")
+    if kind not in EVIDENCE_CLASSES:
+        return "VIOLATION", f"unknown evidence class: {kind!r}", where
+    data = evidence.get("data", [])
+    keys = evidence.get("citations", [])
+    if not isinstance(data, list) or not all(isinstance(p, str) for p in data):
+        return "VIOLATION", "data must be a list of repository-relative paths", where
+    if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+        return "VIOLATION", "citations must be a list of bibliography keys", where
+    for rel in data:
+        path = (ROOT / rel).resolve()
+        if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
+            return (
+                "VIOLATION",
+                f"declared input is missing or outside repository: {rel}",
+                where,
+            )
+    unknown = set(keys) - bibliography_keys()
+    if unknown:
         return (
             "VIOLATION",
-            (
-                f"generated values ({rng}) and the caption does not say so"
-                + (". It cites sources instead" if cited else "")
-            ),
+            "unknown bibliography keys: " + ", ".join(sorted(unknown)),
             where,
         )
-
-    data = reads_data(src)
-    if data:
-        return "ok-data", f"reads {data}", where
-
-    n = literal_count(src)
-
-    if n > LITERAL_THRESHOLD:
-        if cited or declared:
-            kind = "transcribed, cited" if cited else "declared constructed"
-            return "ok-inline", f"~{n} inline values, {kind}", where
+    source_keys = set(keys) | cited_sources(info.get("caption", ""))
+    if kind == "measured" and not data:
+        return "VIOLATION", "measured figure requires retained data paths", where
+    if kind == "transcribed" and not (data or source_keys):
         return (
             "VIOLATION",
-            (
-                f"~{n} inline numeric values with no data file, no citation, "
-                f"and no statement that the figure is constructed"
-            ),
+            "transcribed figure requires retained data or bibliographic sources",
             where,
         )
-
-    return "ok-analytic", f"~{n} literals, computed or schematic", where
+    generator = evidence.get("generator")
+    if generator and generator != "inline" and not (ROOT / generator).is_file():
+        return "VIOLATION", f"declared generator is missing: {generator}", where
+    if not info["cell"]:
+        assets = list((info["qmd"].parent / "images").glob(f"{info['stem']}.*"))
+        if not any(
+            p.suffix.lower() in {".svg", ".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+            for p in assets
+        ):
+            return "VIOLATION", "no figure asset found", where
+    detail = (
+        f"{len(data)} retained input(s)" if data else "explicit evidence declaration"
+    )
+    if kind in {"analytical", "conceptual"}:
+        detail += "; not empirical observations"
+    return f"declared-{kind}", detail, where
 
 
 def main() -> int:
-    verbose = "--verbose" in sys.argv
+    manifest = yaml.safe_load(MANIFEST.read_text()).get("figure_evidence", {})
     figs = collect_figures()
     results = [
-        (label, *classify(label, info), info) for label, info in sorted(figs.items())
+        (label, *classify(label, info, manifest.get(label, {})))
+        for label, info in sorted(figs.items())
     ]
-
-    counts = Counter(r[1] for r in results)
-    violations = [r for r in results if r[1] == "VIOLATION"]
-    unresolved = [r for r in results if r[1] == "unresolved"]
-
-    print(f"{len(results)} referenced figures\n")
-    for k, v in sorted(counts.items()):
-        print(f"  {k:16s} {v:3d}")
-
-    if verbose:
-        print()
-        for label, verdict, detail, where, _ in results:
-            if verdict.startswith("ok"):
-                print(f"  {verdict:16s} {label}\n{' ' * 20}{detail}")
-
-    if unresolved:
-        print(f"\n{len(unresolved)} figure(s) could not be resolved to a source.")
-        print("Not evidence of fabrication; evidence that the trail is not recorded.\n")
-        for label, _, detail, _, info in unresolved:
-            print(f"  ? {label}  [{info['qmd'].parent.name}]  {detail}")
-
-    if violations:
-        print(f"\n{len(violations)} FIGURE PROVENANCE VIOLATION(S):\n")
-        for label, _, detail, where, info in violations:
-            print(f"  - {label}  [{info['qmd'].parent.name}]")
-            print(f"      {detail}")
-            if where:
-                print(f"      {where}")
+    failures = [r for r in results if r[1] == "VIOLATION"]
+    stale = sorted(set(manifest) - set(figs))
+    print(f"{len(figs)} active figure declarations\n")
+    for kind, count in sorted(Counter(r[1] for r in results).items()):
+        print(f"  {kind:24s} {count:3d}")
+    if "--verbose" in sys.argv:
+        for label, verdict, detail, where in results:
+            print(f"  {verdict:24s} {label}: {detail}")
+    for label, _, detail, where in failures:
+        print(f"  FAIL {label}: {detail} [{where}]")
+    for label in stale:
+        print(f"  FAIL inactive figure remains in evidence inventory: {label}")
+    if failures or stale:
         return 1
-
+    print("\nEvidence declarations and source paths are structurally consistent.")
     print(
-        "\nEvery figure either reads a data file, cites a source, or says it is constructed."
+        "This does not certify plotted values, generator dataflow, or source support."
     )
     return 0
 
