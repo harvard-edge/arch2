@@ -177,7 +177,7 @@ An invalid contract test workshop.
         introduction = form["body"][0]["attributes"]["value"]
         self.assertIn("unverified", introduction)
 
-    def test_generated_pull_requests_target_dev(self) -> None:
+    def test_generated_pull_requests_target_main(self) -> None:
         workflow_dir = ROOT / ".github" / "workflows"
         for name in ("tool", "workshop", "resource"):
             workflow = yaml.safe_load(
@@ -195,9 +195,18 @@ An invalid contract test workshop.
             create_pr = next(
                 step for step in steps if step["name"] == "Create pull request"
             )
-            self.assertEqual(checkout["with"]["ref"], "dev")
+            self.assertEqual(checkout["with"]["ref"], "main")
             self.assertFalse(checkout["with"]["persist-credentials"])
-            self.assertEqual(create_pr["with"]["base"], "dev")
+            self.assertEqual(create_pr["with"]["base"], "main")
+
+    def test_main_is_carried_back_into_dev(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / "sync-main-to-dev.yml").read_text()
+        )
+        # PyYAML reads the bare `on` key as True.
+        self.assertEqual(workflow[True]["push"]["branches"], ["main"])
+        checkout = workflow["jobs"]["sync"]["steps"][0]
+        self.assertEqual(checkout["with"]["ref"], "dev")
 
 
 if __name__ == "__main__":
