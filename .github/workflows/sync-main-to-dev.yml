@@ -1,0 +1,68 @@
+name: Sync main into dev
+
+# Community submissions (readings, tools, workshops) merge straight into main so
+# they publish without waiting for a book release. This carries every main push
+# back into dev, so dev always contains main and a release can keep promoting
+# dev to main as a fast-forward. After a normal release main is already an
+# ancestor of dev and the merge is a no-op. If the merge conflicts, nothing is
+# pushed and an issue is opened for a maintainer to resolve locally.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-main-to-dev
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge main into dev
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Merge main into dev
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "dev already contains main; nothing to do."
+            exit 0
+          fi
+          if git merge --no-ff --no-edit -m "Merge main into dev" origin/main; then
+            git push origin HEAD:dev
+            echo "Merged main into dev."
+          else
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            echo "::error::main does not merge cleanly into dev."
+            exit 1
+          fi
+
+      - name: Open an issue on conflict
+        if: failure() && steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue create \
+            --title "Sync main into dev needs a manual merge" \
+            --body "The automatic merge of main (${GITHUB_SHA::8}) into dev hit a conflict, so dev was not updated. Merge main into dev locally and push. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
