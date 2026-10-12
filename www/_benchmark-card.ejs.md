@@ -48,6 +48,14 @@ const availabilityLabels = {
         <span class="availability-badge availability-<%= availability %>"><%= availabilityLabels[availability] %></span>
         <span class="verification-date"><% if (item.last_verified) { %>Verified <%= pandocSafe(item.last_verified) %><% } else { %>Unverified<% } %></span>
       </div>
+      <div class="benchmark-eval-scope" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem;">
+        <% if (item.operational_layer) { %>
+          <span class="benchmark-layer-badge"><%= pandocSafe(item.operational_layer) %></span>
+        <% } %>
+        <% if (item.evaluation_object) { %>
+          <span class="benchmark-object-badge">Object: <%= pandocSafe(item.evaluation_object) %></span>
+        <% } %>
+      </div>
       <p class="listing-description"><%= pandocSafe(item.description) %></p>
 
       <% if (item.primary_metric) { %>

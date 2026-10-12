@@ -37,3 +37,5 @@ def test_every_benchmark_has_required_fields() -> None:
         assert doc["categories"][0] in ALLOWED_BENCHMARK_CATEGORIES
         assert doc.get("hardware_domains"), f"{path} missing hardware_domains"
         assert doc.get("artifact_availability"), f"{path} missing artifact_availability"
+        assert doc.get("evaluation_object"), f"{path} missing evaluation_object"
+        assert doc.get("operational_layer"), f"{path} missing operational_layer"

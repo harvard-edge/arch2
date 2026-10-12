@@ -1,4 +1,4 @@
-"""Shared constants for the Architecture 2.0 benchmark and workload portal."""
+"""Shared constants for the Architecture 2.0 benchmark portal."""
 
 import os
 import re
@@ -8,12 +8,13 @@ BENCHMARKS_DIR = os.environ.get("ARCH2_BENCHMARK_REGISTRY", "www/benchmarks")
 BENCHMARKS_SCHEMA = "www/schemas/benchmark.schema.json"
 
 ALLOWED_BENCHMARK_CATEGORIES = [
-    "Target Workloads",
-    "Kernel Autotuning",
-    "RTL Generation",
-    "Verification & Red-Teaming",
-    "Physical Design & EDA",
-    "Architecture DSE",
+    "Specification-to-RTL",
+    "Verification & Bug Localization",
+    "Physical Design & EDA Surrogates",
+    "Autonomous DSE & Co-Design",
+    "Kernel Autotuning & Synthesis",
+    "Benchmark Health & Red-Teaming",
+    "End-to-End Silicon Flows",
 ]
 
 ALLOWED_AVAILABILITY = [
