@@ -49,6 +49,7 @@ echo "==> Building generated registry indexes"
 PYTHONPATH=.github/scripts python3 .github/scripts/build_catalog_index.py
 PYTHONPATH=.github/scripts python3 .github/scripts/build_workshops_index.py
 PYTHONPATH=.github/scripts python3 .github/scripts/build_readings_index.py
+PYTHONPATH=.github/scripts python3 .github/scripts/build_benchmarks_index.py
 python3 .github/scripts/render_book_navbar.py
 
 if [[ "${SKIP_BOOK:-0}" != "1" ]]; then
@@ -94,6 +95,7 @@ if [[ -d _site/tools ]]; then
   find _site/tools -name '*.html' -print0 | xargs -0 perl -0pi -e '
     s#href="\./book/#href="../book/#g;
     s#href="\./about\.html"#href="../about.html"#g;
+    s#href="\./benchmarks\.html"#href="../benchmarks.html"#g;
     s#href="\./data\.html"#href="../data.html"#g;
     s#href="\./start\.html"#href="../start.html"#g;
     s#href="\./readings\.html"#href="../readings.html"#g;
@@ -101,6 +103,7 @@ if [[ -d _site/tools ]]; then
     s#href="\./workbench\.html"#href="../workbench.html"#g;
     s#href="\./workshops\.html"#href="../workshops.html"#g;
     s#href="\./submit\.html"#href="../submit.html"#g;
+    s#href="\./submit-benchmark\.html"#href="../submit-benchmark.html"#g;
     s#href="\./submit-resource\.html"#href="../submit-resource.html"#g;
     s#href="\./submit-workshop\.html"#href="../submit-workshop.html"#g;
     s#href="\./tools/index\.html"#href="./index.html"#g;
@@ -109,7 +112,7 @@ if [[ -d _site/tools ]]; then
   '
 
   if grep -R -n -E \
-    'href="\./(about|data|start|readings|arxiv|workbench|workshops|submit|submit-resource|submit-workshop)\.html"' \
+    'href="\./(about|benchmarks|data|start|readings|arxiv|workbench|workshops|submit|submit-benchmark|submit-resource|submit-workshop)\.html"' \
     _site/tools; then
     echo "error: assembled tool pages retain root-relative navigation links" >&2
     exit 1
