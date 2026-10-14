@@ -3996,6 +3996,14 @@ UNRESOLVED_RENDERED_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         re.compile(r"\bCitation\?", re.I),
         "citation rendered as an unresolved question marker",
     ),
+    (
+        "duplicated-ref-prefix",
+        re.compile(
+            r"\b(Chapter|Section|Figure|Table|Listing|Equation|Appendix)\s+\1\b",
+            re.I,
+        ),
+        "duplicated cross-reference prefix appears in rendered output",
+    ),
 )
 
 
@@ -6703,6 +6711,10 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
         r"|\*\*)"  # line-initial label
     )
     inline_bold = re.compile(r"\*\*(.+?)\*\*")
+    redundant_xref_prefix = re.compile(
+        r"\b(Chapter|Section|Subsection|Figure|Table|Equation|Appendix|Listing|Part)s?\s+(@(?:sec|fig|tbl|eq|lst)-[a-z0-9-]+)",
+        re.IGNORECASE,
+    )
     findings: list[Finding] = []
     for path in targets:
         in_fence = False
@@ -6713,6 +6725,18 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
                 continue
             if in_fence:
                 continue
+            for match in redundant_xref_prefix.finditer(line):
+                findings.append(
+                    Finding(
+                        "error",
+                        "redundant-xref-prefix",
+                        f"{_relative(path)}:{lineno}",
+                        f'"{match.group(0)}" duplicates the cross-reference label prefix in rendered output; write "{match.group(2)}" directly',
+                        span=match.group(0),
+                        replacement=match.group(2),
+                        context=line.rstrip(),
+                    )
+                )
             prose = anchors.sub("", line)
             for match in vocabulary.finditer(prose):
                 replacement = STRIPPED_VOCABULARY[match.group(1).lower()]
