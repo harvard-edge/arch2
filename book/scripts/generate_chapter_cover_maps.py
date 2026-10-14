@@ -20,7 +20,7 @@ ROW = "#E4E8ED"
 WHITE = "#FFFFFF"
 
 ROLES = {
-    "neutral": (WHITE, GRID, INK),
+    "neutral": ("#F5F8FA", "#7E8B96", INK),
     "workload": ("#E4F1F6", "#1683A6", "#136680"),
     "artifact": ("#F0ECFA", "#6A4FC7", "#59429E"),
     "constraint": ("#FDECEC", "#DE3D3C", "#C62A2A"),
@@ -252,7 +252,7 @@ class SVG:
             title,
             size=title_size,
             weight=700,
-            fill=role_ink,
+            fill=INK,
             anchor=anchor,
         )
         for index, line in enumerate(lines):
@@ -417,7 +417,7 @@ def chapter_2(svg: SVG) -> None:
         "NEXT-DECISION",
         size=14,
         weight=700,
-        fill=ROLES["constraint"][2],
+        fill=INK,
         anchor="middle",
     )
     svg.text(
@@ -426,7 +426,7 @@ def chapter_2(svg: SVG) -> None:
         "BOTTLENECK",
         size=14,
         weight=700,
-        fill=ROLES["constraint"][2],
+        fill=INK,
         anchor="middle",
     )
     svg.line("M 552 170 H 596")
@@ -476,7 +476,7 @@ def chapter_3(svg: SVG) -> None:
         )
         if index:
             flow_arrow(svg, sx - gap, sx, y + h / 2)
-    svg.rect(72, 222, 816, 42, role="neutral", stroke=ROLES["artifact"][1])
+    svg.rect(72, 222, 816, 42, role="artifact")
     svg.text(
         480,
         240,
@@ -586,7 +586,7 @@ def chapter_5(svg: SVG) -> None:
             body_size=13,
             center=True,
         )
-    svg.rect(44, 226, 872, 42, role="neutral", stroke=ROLES["workload"][1])
+    svg.rect(44, 226, 872, 42, role="workload")
     svg.text(
         480,
         244,
@@ -622,7 +622,7 @@ def chapter_6(svg: SVG) -> None:
         body_offset=37,
         body_gap=15,
     )
-    svg.rect(166, 103, 610, 148, role="workload", fill="#F7FBFC")
+    svg.rect(166, 103, 610, 148, role="workload")
     svg.text(181, 124, "ENVIRONMENT", size=15.5, weight=700, fill=ROLES["workload"][2])
     svg.text(
         310,
@@ -631,7 +631,7 @@ def chapter_6(svg: SVG) -> None:
         size=12,
         fill=MUTED,
     )
-    svg.rect(234, 136, 486, 96, role="artifact", fill="#FAF8FD")
+    svg.rect(234, 136, 486, 96, role="artifact")
     svg.text(249, 156, "HARNESS", size=14.5, weight=700, fill=ROLES["artifact"][2])
     svg.text(
         337,
@@ -740,7 +740,7 @@ def chapter_7(svg: SVG) -> None:
 
 
 def chapter_8(svg: SVG) -> None:
-    svg.rect(14, 103, 932, 70, role="neutral", fill="#F8FAFB")
+    svg.rect(14, 103, 932, 70, role="neutral", fill="#F5F8FA")
     svg.text(
         28,
         126,
@@ -779,7 +779,7 @@ def chapter_8(svg: SVG) -> None:
     )
     flow_arrow(svg, 522, 600, 138)
 
-    svg.rect(14, 180, 932, 70, role="neutral", fill="#F8FAFB")
+    svg.rect(14, 180, 932, 70, role="neutral", fill="#F5F8FA")
     svg.text(
         28,
         203,
@@ -818,7 +818,7 @@ def chapter_8(svg: SVG) -> None:
         body_gap=14,
     )
     flow_arrow(svg, 522, 600, 215)
-    svg.rect(170, 255, 620, 27, role="neutral", stroke=ROLES["constraint"][1])
+    svg.rect(170, 255, 620, 27, role="constraint")
     svg.text(
         480,
         274,
@@ -855,7 +855,7 @@ def chapter_9(svg: SVG) -> None:
         )
         if index:
             flow_arrow(svg, sx - gap, sx, y + h / 2)
-    svg.rect(14, 233, 330, 35, role="neutral", stroke=ROLES["constraint"][1])
+    svg.rect(14, 233, 330, 35, role="constraint")
     svg.text(
         179,
         255,
@@ -889,7 +889,7 @@ def list_card(
 
 
 def chapter_10(svg: SVG) -> None:
-    svg.rect(14, 101, 932, 152, role="constraint", fill=WHITE, stroke_width=1.7)
+    svg.rect(14, 101, 932, 152, role="constraint", stroke_width=1.7)
     svg.text(
         28,
         121,
@@ -966,8 +966,7 @@ def chapter_11(svg: SVG) -> None:
         932,
         168,
         role="neutral",
-        fill="#F8FAFB",
-        stroke=MUTED,
+        fill="#F5F8FA",
         stroke_width=1.7,
     )
     svg.text(28, 122, "ACCOUNTABLE ORGANIZATION", size=13.5, weight=700)
@@ -1017,7 +1016,7 @@ def chapter_11(svg: SVG) -> None:
         "NAMED COMMITMENT",
         size=13.5,
         weight=700,
-        fill=ROLES["decision"][2],
+        fill=INK,
         anchor="middle",
     )
     svg.text(
@@ -1026,7 +1025,7 @@ def chapter_11(svg: SVG) -> None:
         "AUTHORITY",
         size=13.5,
         weight=700,
-        fill=ROLES["decision"][2],
+        fill=INK,
         anchor="middle",
     )
     svg.text(830, 207, "ADVANCE / HOLD / REJECT", size=10, fill=MUTED, anchor="middle")
