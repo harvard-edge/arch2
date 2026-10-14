@@ -3,7 +3,7 @@
 Active conceptual diagrams:
 
 - `fig-architecture-levers`: five architectural scales and their comparison
-  obligations, from a core to a warehouse-scale system; hand-authored SVG. The layout does not encode magnitude.
+  obligations, stacked from a warehouse-scale system at the top down to a core at the bottom (funneling outward as the boundary expands from core to warehouse-scale); hand-authored SVG.
 - `ch2_tao_vs_taos`: specialization coupled to technology, architecture, and
   optimization.
 - `fig-waterbed-effect`: an unscaled energy-dependency diagram, hand-authored
@@ -46,7 +46,7 @@ retains the analytical break-even equations and explains the measurements needed
 to apply them.
 
 The static `fig-ch02-accelerator-scaling-frontier` compares dense FP16 peak
-throughput, HBM bandwidth, and TDP for P100, V100, A100, and H100 (2016–2022).
+throughput, HBM bandwidth, and TDP for P100, V100, A100, H100, and B200 (2016–2024).
 
 Executable Quarto figures in the chapter:
 

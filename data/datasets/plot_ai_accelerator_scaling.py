@@ -1,6 +1,6 @@
-"""Compare dense FP16 throughput and the HBM balance point, 2016–2022.
+"""Compare dense FP16 throughput and the HBM balance point, 2016–2024.
 
-Use the P100, V100, A100, and H100 SXM rows from the source dataset.
+Use the P100, V100, A100, H100, and B200 SXM rows from the source dataset.
 P100 uses conventional FP16 arithmetic; later parts use Tensor Cores.
 No structured-sparsity multiplier is included. These specifications are
 not application measurements or compute-density measurements.
@@ -25,11 +25,11 @@ def main():
     chips = [
         row
         for row in rows
-        if row["Vendor"] == "NVIDIA" and 2016 <= int(row["Release_Year"]) <= 2022
+        if row["Vendor"] == "NVIDIA" and 2016 <= int(row["Release_Year"]) <= 2024
     ]
     # Tick labels come from the rows themselves (part token and release year).
     labels = [
-        next(t for t in row["Chip_Name"].split() if t[0] in "PVAH" and t[1:].isdigit())
+        next(t for t in row["Chip_Name"].split() if t[0] in "PVAHB" and t[1:].isdigit())
         + "\n"
         + row["Release_Year"]
         for row in chips
@@ -54,7 +54,7 @@ def main():
             linewidth=1.5,
         )
     axes[0].set_yscale("log")
-    axes[0].set_ylim(0.8, 100)
+    axes[0].set_ylim(0.8, 160)
     axes[0].set_ylabel("Growth relative to P100 (log scale)")
     axes[0].set_title("(a) Arithmetic and data supply", loc="left")
     axes[0].legend(loc="upper left", fontsize=5.8, frameon=False)
