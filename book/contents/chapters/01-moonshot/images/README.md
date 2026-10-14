@@ -9,8 +9,9 @@ Hand-authored conceptual figures (no data claims):
   4.8-inch print width.
 - `fig-ch01-three-layers-ai-integration`: the three operational layers (point
   assistance, container-bound optimization, AI-native design system). The diagram
-  uses three rows of inputs, permitted work, and feedback or results. Body text
-  is 7.92 pt at the intended 4.8-inch print width. Evaluation fidelity remains
+  stacks Layer 1 at the bottom and Layer 3 at the top; each row shows what the
+  team specifies (released decisions struck through), what the system works on,
+  and the feedback it receives. Evaluation fidelity remains
   separate from workflow scope; the diagram carries no numerical data.
 - `fig-architecture-20-loop`: the proposed loop from generation through tool
   evaluation back to generation, with architect review.

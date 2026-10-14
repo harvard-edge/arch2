@@ -1,6 +1,6 @@
-"""Render the authored taxonomy SVG at its 4.8-inch print width.
+"""Render the authored operational-layers SVG at its 4.8-inch print width.
 
-The 480-unit viewBox uses 11-unit body text (7.92 pt in print).
+The 760-unit viewBox stacks Layer 1 at the bottom and Layer 3 at the top.
 The PNG twin retains that physical width at 300 dpi.
 """
 
