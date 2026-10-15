@@ -94,7 +94,7 @@ When an incoming candidate fails pre-flight validation, such as specifying an il
 
 Separating execution status from log parsing still solves only half the translation problem: a structured return makes tool feedback readable by an algorithm, but a clean exit code and a parsed timing report mean nothing if the tool evaluated the wrong design state. Even when a wrapper formats every command flag and parses every output field properly, the run can still be corrupted if a persistent tool session or scratch directory inherits state from an earlier candidate.
 
-### Stateful Tools and Exact Translation
+### Managing Stateful Tools and Cross-Stage Translation
 
 A tool's starting state is part of its input, even when that state is absent from the request: a physical-design session may already hold an in-memory netlist, placement, and routing database, or a simulator may resume from a saved checkpoint, as when OpenROAD saves and reloads its design database [@OpenROADDocs]. If a generator submits revised controller RTL while execution resumes from an in-memory database built from the previous candidate, or if a persistent Tcl shell retains stale Design Exchange Format (DEF) floorplan geometries, the resulting report describes the old design under the new candidate's name. Leftover files on a shared `tmpfs` scratch volume cause the same silent corruption when multi-corner static timing analysis (STA) runs read stale Standard Parasitic Exchange Format (SPEF) extractions or cached timing graphs from an earlier pass.
 
@@ -125,7 +125,7 @@ The prospective Lighthouse study illustrates what this translation discipline re
 **Required behavior.** Wrappers must preserve relevant capacities, dimensions, cache policies, and memory arbitration wherever those properties are modeled. An unsupported feature must be reported rather than silently replaced by a default. Differences between tool outputs must be interpreted in light of their models and conditions. These are requirements for the unexecuted study, not observed wrapper results.
 :::
 
-## Environment Provisioning, Typed Interfaces, and Tool Lineage
+## Pinning Tool Versions, Schemas, and Provenance
 
 If a team launches a multi-day search while passing simulator flags, library corners, and workload binaries through ordinary mutable project directories, a mid-week edit to a shared constraint file or compiler script silently alters the baseline for every subsequent candidate. Enforcing consistent representations across tools therefore starts before the search loop dispatches its first job. During provisioning, the harness freezes shared study inputs and defines how it accepts candidate artifacts (such as revised SystemVerilog modules, simulator configurations, or compiler schedules), how design sources, process libraries, and workload inputs are identified, what typed requests each tool wrapper accepts and returns, and which tool paths evaluate behavioral correctness, cycle-level throughput, or physical timing and power.
 
@@ -221,13 +221,13 @@ Evaluation throughput is equally tied to what each backend models. For example, 
 
 Existing orchestration frameworks provide different parts of this multi-tool integration: ArchGym connects search algorithms to architecture simulators [@KrishnanEtAl2023ArchGym], CHIA supports hardware-software co-design workflows that combine design tools, simulators, software builds, and model calls [@CuiEtAl2026CHIA], and workflow engines such as Nextflow and Snakemake schedule execution dependencies [@DiTommasoEtAl2017Nextflow; @KosterEtAl2012Snakemake]. Regardless of which framework a team builds upon, the study still has to specify which tool path answers each architectural question, which artifacts pass between stages, and what conditions permit reuse. Once those static tool paths, typed interfaces, and lineage rules are configured, the harness must manage their runtime execution as concurrent requests queue, run, and fail on shared cluster hardware.
 
-## Runtime Orchestration, Fault Isolation, and Execution State
+## Running Parallel Tool Jobs Without Losing State
 
 In an active search campaign, an optimizer regularly proposes a new candidate while an earlier multi-hour gem5 simulation or OpenROAD place-and-route job is still running on the cluster. Without runtime coordination, the new submission can overwrite RTL or constraint files in a live workspace, a batch-scheduler preemption can erase the accounting record of compute time and license hours already spent, and a stalled job can hold a commercial license seat indefinitely.
 
 At runtime, the harness prevents those collisions by isolating each attempt's working directory, admitting requests only as compute slots and EDA licenses open up, tracking active runs across cluster nodes, and binding returned reports, exit statuses, and resource costs to the exact inputs and checkpoints that produced them. An asynchronous interface lets the optimizer submit a candidate and continue exploring while the harness tracks in-flight attempts, contains failures, and decides when completed artifacts can be reused. Supporting that loop starts with submitting and monitoring jobs without accidentally launching duplicate runs.
 
-### Asynchronous Scheduling and Idempotency
+### Scheduling Parallel Runs and Making Retries Safe
 
 In a synchronous interface, such as the `step()` call in reinforcement learning (RL) environments like Gymnasium [@TowersEtAl2023Gymnasium], the call blocks until the action finishes and returns its result directly. Blocking is convenient when an evaluation takes milliseconds, but hardware simulations and physical-design runs can take hours or days. Separating job submission from completion lets a search method submit a candidate, monitor outstanding requests, and continue other work while tools execute through a scheduler adapter connected to Slurm, IBM LSF, or a container service.
 
@@ -334,7 +334,7 @@ Simply stopping a process does not reset an environment, nor does a matching che
 **The lesson.** Before reusing a library view, the harness must check that it is the view required for the requested design and operating conditions. Checksums help identify PDK, LEF, and Liberty files, but compatibility also depends on their contents and intended use. A clean report from the wrong view cannot establish that the design meets timing under the intended conditions.
 :::
 
-### Design Drift and Execution Variability {#sec-incremental-churn-dispersion}
+### Separating Hardware Changes from Tool and Seed Noise {#sec-incremental-churn-dispersion}
 
 Cache keys catch stale library views when inputs change within a run, but an evaluation can also go stale because the surrounding project moved on while a search was running. During an exploration campaign against a fixed baseline snapshot $t_0$, concurrent engineering work may update compiler passes, runtime software, tool versions, or RTL bus interfaces on the main branch. A candidate evaluated against snapshot $t_0$ may therefore need adaptation and re-evaluation before its results apply at $t_0 + \Delta t$. The earlier execution record still describes the original configuration accurately, but its numbers do not automatically carry over to the updated baseline.
 

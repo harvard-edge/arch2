@@ -40,7 +40,7 @@ Within this progression, the split between durable project knowledge and live pr
 
 Keeping those records distinct starts with naming the exact information a study needs, and only then identifying the sources that can provide it. Access restrictions shape both steps from the outset, and @sec-architecture-data-access develops their consequences for using and sharing data.
 
-## Heterogeneous Architectural Data Sources
+## Why Architecture Data Spans Multiple Tools and Layers
 
 Optimizing against a single data source easily steers a design into a trap: a compiler schedule that minimizes IR instruction count can stall on memory-bank conflicts in cycle simulation, and an RTL block that clears functional simulation can still fail setup timing or routing congestion once mapped to standard cells. No single file or tool captures the whole picture. Specifications state what a system should do, source code and compiler artifacts describe how a computation is organized, simulators and hardware measurements report runtime behavior under particular operating conditions, and physical-design reports establish area, timing, and power costs that a software trace cannot see. Design review notes add context that automated tool logs never record, explaining why an alternative was chosen or ruled out when integration or schedule constraints drove the decision.
 
@@ -177,7 +177,7 @@ Public availability therefore answers only the first part of the data question. 
 
 Launching a data-collection sweep without an explicit plan can burn weeks of cluster compute and tool licenses while leaving the study's central question unanswered: a team can run thousands of cycle simulations on a single convenient input shape, or synthesize netlists at one nominal corner, only to discover that the decisive memory-traffic or timing bottleneck was never exercised. Even in a software-focused experiment like the Lighthouse mapping study, testing a schedule change requires new compilation, numerical verification, and simulator execution. Planning that collection therefore requires balancing three coupled choices: the tool path used to evaluate a candidate, the compute and engineering resources required per sample, and the workloads or operating conditions covered.
 
-### Observation Modalities and Evaluation Fidelity
+### Choosing Tools That Can See the Bottleneck
 
 Choosing a fast evaluation tool that is blind to bus arbitration or layout parasitics can certify a candidate right across a contention or timing cliff, because the physical effect that breaks the design never enters the model. Which tool path a study needs depends on the question it asks: in the Lighthouse mapping study, comparing compiler schedules requires execution results that capture computation and data movement, whereas estimating the physical cost of the accelerator itself requires synthesis and layout tools. Because each tool answers one question well while leaving others unresolved, the alternatives in @tbl-observation-source-limits trade observation scope and modeling assumptions against acquisition cost.
 
@@ -204,7 +204,7 @@ Even within a single tool, hardware measurements depend on the operating conditi
 
 To keep these dependencies explicit, we can describe each evaluated candidate by the context-bound tuple $\mathcal{O} = \langle s_{\text{design}}, w_{\text{workload}}, \tau_{\text{tool}}, \kappa_{\text{corner}}, y_{\text{metrics}} \rangle$. Here $s_{\text{design}}$ denotes the microarchitectural and RTL configuration together with the candidate's software choices; $w_{\text{workload}}$ identifies the application inputs, execution phase, and matching binary; $\tau_{\text{tool}}$ identifies the compiler and evaluation toolchain; $\kappa_{\text{corner}}$ specifies the process, voltage, and temperature (PVT) conditions where applicable; and $y_{\text{metrics}}$ contains the returned measurements. Just as a latency number in the mapping study is incomplete without its schedule and hardware target, a power estimate requires the implementation and switching-activity assumptions that produced it, and the tuple records these dependencies without implying that every tool supplies every field.
 
-### Computational Cost and Sample Acquisition Economics
+### The Compute and License Cost of Collecting Samples
 
 In the Lighthouse mapping study, sample acquisition begins well before timed execution: each candidate schedule must compile for the target, pass output correctness checks, and load into the evaluation environment before a simulator or hardware run can return latency and diagnostic counters. While preparing the compiler backend or calibrating the accelerator model is a shared upfront investment, compilation, testing, execution, and diagnosis accumulate per candidate and multiply across repeated runs and workload shapes, so a dataset budget that counts only the final timing call misses much of the work required to produce a usable label.
 
@@ -295,7 +295,7 @@ For modern accelerator and transformer workloads, compact workload descriptors e
 
 Whether a team can reuse captured traces or phase descriptors across candidates depends on whether the compiler output changes. In the Lighthouse mapping study, a new loop tiling or scheduling choice alters the memory-access stream itself, so replaying an old schedule's trace would not evaluate the new schedule; the workload inputs and comparison window stay matched, but each candidate must generate its own trace. Basic block vectors likewise stay bound to the compiled binary, collection policy, frame identifiers, and execution parameters that produced them. That dependency separates a software-changing mapping study from a hardware cache study that holds the compiled software image fixed across candidates.
 
-### Context Binding and Environmental Provenance
+### Recording Simulator Flags, Tool Versions, and Operating Corners
 
 If a simulator flag, compiler version, or static random-access memory (SRAM) process corner drifts silently between Tuesday's baseline run and Friday's candidate run, the dataset will attribute that environmental shift to the hardware change. Preventing such false attributions requires binding the evaluation path, acquisition cost, and workload coverage together in every recorded sample. In the Lighthouse cache comparison introduced in @sec-architecture-20-ontology, holding the software fixed while varying cache capacity means capturing both the hardware design state $s_{\text{design}}$ (repository commit hashes, macro parameters, and SRAM compiler configurations) and the environmental state (workload dataset, software image version, and representative instruction window).
 
@@ -317,7 +317,7 @@ Because cycle-accurate simulation and physical layout are too slow to run on eve
 
 In the mapping study, inexpensive analytical estimates can screen many candidate schedules while cycle-level evaluations examine selected candidates near constraint boundaries or decision crossovers, leaving unvisited regions unsupported. When an adaptive selection policy picks those follow-up samples from earlier results, the dataset must also record its selection rules, candidate pools, and available observations; otherwise, a later evaluation cannot tell whether its test cases already steered the sampling loop [@DworkEtAl2015ReusableHoldout].
 
-### Dataset Integrity and Construction Pipelines
+### Cleaning Logs and Preventing Train-Test Leakage
 
 Even carefully collected tool runs can be ruined during dataset assembly if a regular-expression log parser silently turns a negative timing slack or missing report into `0.0`, or if a random train-test split scatters variants from the same Chisel or SystemVerilog generator template across both partitions. Curation is what prevents those pipeline bugs from masquerading as clean training data. In the mapping dataset, each row identifies a kernel, input shape, schedule, and hardware target, and links to its compiled artifact, correctness result, repeated timings, and diagnostic counters, with consistent units, grouped repetitions, and missing results kept distinct from measured zeros. The source kernel and transformation history also supply the grouping keys needed for evaluation splits, because holding out new schedules for a familiar kernel tests a different capability from holding out an operator family that never appeared in training.
 
@@ -372,7 +372,7 @@ More generally, what a failed evaluation can teach depends on why it failed (@tb
 
 These diagnostic records also point to what the next experiment should test. In the mapping study, a schedule whose buffers exceed local-memory capacity directly motivates trying a smaller tile or a different staging pattern; the diagnosed failure gives the next run a clear hypothesis while leaving open which revision will succeed.
 
-## Distilling Durable Architectural Knowledge from Empirical Data
+## Turning Raw Tool Runs into Reusable Design Knowledge
 
 While curated observations establish what happened under particular test conditions, turning those records into durable architectural knowledge requires explaining *why* the result occurred well enough to guide another decision. Suppose evaluations in our Lighthouse mapping study found that one schedule reduced both off-chip transfers and execution time on matched inputs, suggesting that its tiling kept intermediate data in local memory for reuse. Because the timing result alone does not establish that mechanism, an architect needs the transfer counts, stall behavior, and generated schedule to test that explanation against alternatives such as a change in parallelism or instruction overhead (an illustrative interpretation rather than a reported Lighthouse result).
 
@@ -642,7 +642,7 @@ Even when a team holds legitimate access to production collateral, the governing
 
 These legal boundaries also limit what an outside reviewer can reproduce. While public benchmarks built on open PDKs (such as SkyWater 130\ nm or IHP 130\ nm) allow researchers to compare methods under open conditions, claims about commercial production nodes still depend on private foundry verification. Teams can bridge this gap by adapting *Datasheets for Datasets* to computer architecture [@GebruEtAl2021Datasheets], publishing permitted schemas, collection procedures, toolchain manifests, artifact hashes, and evaluation policies so that independent reviewers can audit the structure of a study while proprietary silicon collateral remains secured in approved environments.
 
-## Representation Pipelines and Data Handoffs
+## Handing Data and Constraints Cleanly Between Stages
 
 Handing an automated search tool or language model a raw directory of source files and feature tables without an explicit boundary contract invites immediate trouble: the tool can modify a frozen system bus interface, propose an SRAM capacity that no memory compiler macro supports, or burn the entire simulation budget re-evaluating configurations that already failed. Before any design method runs, the dataset's schemas, provenance, and licensing terms must be packaged into a representation handoff that specifies which choices the method may change, which measurements are already available, how new candidates will be checked, and what each evaluation will cost.
 
@@ -654,7 +654,7 @@ In our Lighthouse mapping study, that handoff connects the target computation to
 **The application:** Expose the functional and physical relationships a decision relies on, or link directly to the sources and checks needed to establish them.
 :::
 
-### Invariants and Feature Encodings
+### Keeping Fixed Interfaces Separate from Tunable Parameters
 
 Even a seemingly isolated parameter change can break a chip build if the representation treats that parameter as an independent scalar: stepping the Lighthouse L2 cache from 2\ MiB to 3\ MiB without updating the SRAM bank count, wrapper instantiation, and hierarchical path names in the SDC timing and UPF power files produces an unelaboratable netlist or a misapplied constraint check. Every handoff therefore starts by separating the choices a study may vary from the fixed invariants and the dependent files that must update alongside each choice. In the Lighthouse mapping study, loop tile sizes and software scheduling can vary while the hardware target, workload inputs, and required numerical behavior stay fixed; any generated schedule must compile cleanly and match that numerical baseline, and meeting the latency target through a new scratchpad organization would require widening the study's scope.
 
@@ -688,7 +688,7 @@ Because a single design edit can ripple across several linked files, keeping tho
 
 Even with provenance links in place, the format limits summarized in @tbl-representation-formats mean that a handoff can still leave out critical context. A published plot may report a speedup without the compiler flags or rejected schedules needed to reproduce it, and a link between a high-level architectural knob and a gate-level netlist may omit the intermediate synthesis transformations needed to explain why a path failed timing. Before handing a representation to an automated method, the architect has to check whether those links are complete enough for the question at hand, because an optimizer will readily favor a candidate that scores well under an incomplete model even when unmodeled data transfers, timing paths, or power effects determine whether the design works in the system.
 
-### Representation Handoff Protocols
+### What a Complete Handoff Package Contains
 
 When invariants, feature encodings, and tool budgets live in scattered scripts and meeting notes, teams routinely confuse planned tool runs with already-collected measurements or train a predictor on a problem that has no evaluation budget left to verify its recommendations. Combining invariants, encodings, provenance, and blind spots into a single representation handoff protocol prevents that confusion. In our prospective Lighthouse mapping study, where no timing dataset or working compiler backend has yet been built, the handoff separates already-collected observations from the schema and explicit budget for measurements still to be acquired. That separation lets a method determine whether existing data covers the needed tensor shapes and schedules, which features are available before running a tool, and what new evaluations will cost.
 

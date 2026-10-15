@@ -26,7 +26,7 @@ This qualification step builds directly on machine-usable representations (@sec-
 
 ![**Qualifying returned signals into actionable feedback and retained learning.** Raw tool outputs pass through verification qualification to establish their validity envelope and bounded claims. Feedback routes the qualified evidence to guide revisions, further checks, or stopping decisions, while durable observations are retained for cross-run learning.](images/ch07-cover-map.svg){#fig-ch07-cover-map width="100%" fig-alt="Chapter overview diagram in which a returned signal passes through verification qualification and a bounded claim before feedback routes the next action and learning is retained."}
 
-## Qualified Architectural Actions and Decisions {#sec-from-feedback-to-decision}
+## Turning Tool Feedback into Qualified Design Actions {#sec-from-feedback-to-decision}
 
 Generating register-transfer level (RTL) candidates and establishing that they meet their requirements are different jobs. Even when a tool run finishes cleanly, it can leave an unhandled multicycle path,[^fn-mcp-c07] an unconstrained power domain, or a floating CMOS node[^fn-floating-cmos-c07] unexamined. An AI-native design system must therefore determine what its tool returns actually reveal about a candidate and how those findings should guide redesign.
 
@@ -62,7 +62,7 @@ How a run fails or what it omits also shapes qualification before any repair beg
 
 [^fn-upf-c07]: **Unified Power Format (UPF)**: The standard declarative specification language for low-power design intent, defining power domains, supply nets, power-switch networks, isolation cells, and level shifters. Modern toolchains decouple logical RTL from physical power intent; RTL simulation cannot verify power-gating sequences or domain transitions without companion UPF constraints and power-state tables.
 
-## Evaluation Signal Sources and Signoff Attrition {#sec-signal-sources-attrition}
+## Why Candidates That Pass Early Simulators Fail at Signoff {#sec-signal-sources-attrition}
 
 The checks that produce these returns span a wide range of latency, spatial granularity, and physical fidelity. Analytical roofline estimators can evaluate simple kernels in milliseconds, whereas cycle-accurate simulation and full-chip physical signoff may take hours, and hardware emulation trades compilation time for execution speed by running long instruction traces far faster than software simulation. Across electronic design automation (EDA) engines, static timing, dynamic IR-drop,[^fn-ir-drop-c07] and design rule checking likewise diagnose different physical failure modes: an IR-drop report from RedHawk-SC locates a voltage droop on the die, while Cadence Tempus isolates a failing timing path. Neither report by itself names which upstream architectural choice should change, but lineage that binds each metric to candidate parameters, RTL revisions, tool flags, and constraints makes it possible to trace the physical symptom back to its architectural cause.
 
@@ -103,7 +103,7 @@ Each tier in this funnel also retains a different amount of diagnostic detail. E
 
 Because a cheap parser or linter can reject a malformed proposal in seconds, early filtering makes a larger proposal stream affordable, provided each filter is suited to the candidates it screens. Ordering those checks requires weighing what each check can reject, how long it takes, which input artifacts it needs, and how much downstream work a justified rejection saves. A fast check belongs early when its output is strong enough to rule a candidate out, though passing an early check leaves every downstream physical and functional obligation open. Before any empirical measurement from these stages can be compared across candidates, it must also satisfy basic admission criteria.
 
-## Empirical Admission Criteria {#sec-empirical-admission-criteria}
+## Deciding When a Candidate Earns the Next Tool Run {#sec-empirical-admission-criteria}
 
 An empirical measurement cannot enter an architectural comparison until its record establishes exactly what was measured and under what conditions. A clean exit code from a simulator or synthesis run can still hide uninitialized cache warmup states (where cold-start misses distort instructions per cycle), uncalibrated process corners, or truncated trace intervals. The seven record elements in @tbl-measurement-record make these conditions inspectable by identifying the value, recording how it was extracted, and stating the variation and error bounds that limit its use.
 
@@ -134,7 +134,7 @@ Meeting these seven admission criteria makes a metric eligible for comparison, b
 
 When an automated repair or retiming loop modifies pipeline control logic, dynamic simulation across sampled execution traces can easily miss a rare multi-master stall deadlock that requires a specific cycle-level interleaving to trigger. Catching such corner-case hazards before spending compute and licenses on downstream synthesis and place-and-route runs requires formal checks, which evaluate interface protocol compliance, control invariants, or circuit equivalence directly against a candidate's declared model and assumptions rather than against a matched performance baseline. Yet a clean exit from a formal solver is just as easy to misread as an unqualified simulator log. A solver that stops at a finite cycle depth or passes under over-constrained input assumptions reports no violations without proving the hardware safe. Whereas a completed unbounded proof establishes that an implementation satisfies an invariant across every reachable state within its assumptions, a bounded search or an inconclusive solver run supports a much narrower conclusion, making the returned proof status as important as the property itself.
 
-### Proof Statuses and Contract Equivalence {#sec-proof-statuses-equivalence}
+### Interpreting Formal Proofs and Equivalence Checks {#sec-proof-statuses-equivalence}
 
 Running a formal engine inside an automated design loop immediately raises two practical questions: if the solver returns a failing trace on a simplified model, does that trace expose a genuine RTL bug or an artifact of the abstraction, and if an optimizer retimes pipeline stages, how do we verify that the modified circuit still implements the same architectural behavior? On the first question, formal verification tools such as JasperGold and VC Formal evaluate microarchitectural contracts expressed as SystemVerilog Assertions (SVA)[^fn-sva-c07] under explicit assumptions that constrain legal input sequences, resets, and clock domains [@Clarke2018ModelChecking]. When a tool checks a simplified abstract model to keep the state space tractable, counterexample-guided abstraction refinement (CEGAR) tests any returned failure trace against the concrete RTL: *spurious counterexamples* (artifacts of an over-approximated abstraction that cannot occur in actual hardware) trigger automatic model refinement, whereas *realizable counterexamples* expose genuine RTL defects or specification errors [@ClarkeEtAl2000CEGAR].[^fn-cegar-c07]
 
@@ -496,7 +496,7 @@ The prospective Lighthouse L2 cache configuration shows what such a test has to 
 
 Because these Lighthouse trade-offs are hypotheses rather than measured results, the telemetry also needs checks for simulator artifacts. A fixed-latency queueing model, omitted DRAM refresh cycles, or an unconstrained register-file assumption in the compiler backend can each manufacture an apparent mechanism that exists only inside the model. Even when controlled contrasts and model checks support a proposed mechanism, that conclusion remains scoped to the model and its identification assumptions. Otherwise, the mechanism remains contradicted, unresolved, or untested according to the evidence in @tbl-outcome-mechanism, even when a supported top-line outcome can still be retained separately.
 
-## Verification and Falsification Boundaries {#sec-independent-checks-and-correlated-errors}
+## Combining Independent Checks to Catch Blind Spots {#sec-independent-checks-and-correlated-errors}
 
 Testing whether an individual outcome or mechanism holds still leaves a broader risk: a candidate can pass functional simulation, prove a bus-interface assertion, and close setup timing at a nominal operating point, yet still fail on silicon when simultaneous vector-unit switching triggers a dynamic voltage droop that none of those checks modeled. Because passing any single check supports only the obligations that check actually observes, the architect must verify that the qualified results together cover every requirement of the design. Assurance engineering structures this argument by linking high-level performance, correctness, and physical claims to their supporting checks and explicit assumptions [@Kelly2004GSN].
 
@@ -516,7 +516,7 @@ Physical signoff requirements cannot be discharged at a single operating point b
 **Outcome.** A requirement remains open if its returned check is unqualified or no check has been assigned to it. For an unqualified return, investigate the qualification gap and repair or rerun the check as needed. Where no check exists, assign a suitable evaluation path. This mapping states what the prospective subsystem would need; it does not report completed Lighthouse verification.
 :::
 
-### Scoping Observations and Check Fidelity {#sec-check-fidelity-scoping}
+### Matching Each Check to What It Can Actually Observe {#sec-check-fidelity-scoping}
 
 Every tool check in an architecture flow operates within the observational horizon @sec-data-representations-world-models records for its source, and qualification turns that horizon into an explicit boundary on the claim. A syntax linter verifies port lists and grammar without ensuring that logic will synthesize cleanly; a cycle-level simulator measures instruction throughput across modeled queues while remaining blind to physical layout congestion, clock-tree skew, or parasitic wire $RC$ delays.[^fn-rc-delay-c07] Neither a faster proxy upstream nor a clean physical pass downstream widens what a tool can check beyond what its underlying model observes.
 
@@ -579,7 +579,7 @@ Audits of agentic benchmarks point to a related hazard: weak test suites and rew
 
 Hardware security properties expose another shared blind spot. Because Spectre and Meltdown demonstrated leakage through transient execution and microarchitectural side channels that ordinary checks of architectural outputs need not detect [@KocherEtAl2019Spectre; @LippEtAl2018Meltdown], test suites that inspect only architectural outputs can agree while leaving the relevant information-flow property unexamined, for the same reason that inspecting isolated executions cannot establish noninterference (@sec-formal-bounds-sequential-equivalence). When a search loop evaluates an objective based only on throughput or power, performance, and area, it can favor changes to speculation, resource sharing, or hardware mitigations without charging their security cost. Catching those regressions requires checks matched to the threat model, such as a noninterference proof under declared speculative semantics, cache-timing-channel analysis, or a structural check for domain isolation, rather than repeating a functional test that never observes information flow.
 
-## Routing Evidence Across System and Operational Layers {#sec-routing-evidence-layers}
+## Routing Failures Back to the Layer That Caused Them {#sec-routing-evidence-layers}
 
 Once a check returns a qualified result, that evidence must reach the part of the design process equipped to act on it. A formal counterexample may call for RTL repair or specification revision, once the verification team establishes whether the specification misstates the intended contract or the RTL violates it. Negative timing slack calls for timing diagnosis before choosing a repair, whereas an unresolved empirical delta calls for expanded trace sampling. Because these actions change different objects, collapsing every tool return into a single scalar optimizer score loses the information needed to choose the next step. Similarly, a *distribution shift* changes the workloads, tool versions, or operating conditions that generated the data on which a surrogate or claim was qualified;[^fn-proxy-shift-c07] a known change in those conditions, or deteriorating agreement with new reference measurements, calls for requalifying the affected surrogate rather than continuing to optimize against stale assumptions (@tbl-feedback-destinations).
 
@@ -618,7 +618,7 @@ When checkers disagree, the conflict needs diagnosis before it drives a design c
 
 Even when a qualified check confirms a real violation, the appropriate action is sometimes a bounded waiver rather than an immediate redesign. Siemens Calibre Auto-Waivers provides a concrete example of retaining and applying geometric design-rule waivers across layout iterations [@SiemensCalibreAutoWaivers]. In the discipline proposed here, each accepted exception records its technical rationale, the affected rule and design scope (including spatial coordinates or identifying geometry where relevant), any compensating controls, the responsible owner, and the reopening trigger. A waiver documents a bounded exception; it does not turn the underlying violation into an unconditional pass.
 
-## Propagating Feedback into Optimizer State {#sec-propagating-feedback-optimizer}
+## Updating Search Models and Constraints After Each Run {#sec-propagating-feedback-optimizer}
 
 Routing qualified evidence determines what to retain about the design, but the same evidence can also change how the search proposes its next candidate. Those two uses of feedback must remain distinct: a verified timing failure belongs permanently in the study's findings, while the optimizer may also use it to update a surrogate or steer toward another design. Allowing unverified returns, transient execution errors, or biased candidate distributions into the optimizer state can mislead subsequent proposals [@SculleyEtAl2015Hidden; @Settles2009ActiveLearning].
 

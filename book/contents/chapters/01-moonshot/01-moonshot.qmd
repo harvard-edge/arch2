@@ -41,7 +41,7 @@ Judging whether a design system meets those contracts requires separating two qu
 
 ![**From a system goal to evaluated candidate designs.** A high-level system request expands into explicit constraints and workload specifications, followed by coordinated design experiments using learned models and engineering tools. Evaluation separates design quality from the engineering effort needed to develop and verify candidates, providing evidence for human review rather than authorizing autonomous tapeout decisions.](images/ch01-cover-map.svg){#fig-ch01-cover-map width="100%" fig-alt="Chapter overview diagram in which a system goal leads to explicit requirements, coordinated design experiments, and evaluation of the design and the effort needed to develop it, followed by human review."}
 
-## Scaling Limits and the Case for Learned Design {#sec-case-for-ai-native-design}
+## Why Manual Design Loops No Longer Keep Up {#sec-case-for-ai-native-design}
 
 Consider an architect tasked with accelerating a target workload under fixed power and chip-area constraints. Increasing on-chip memory capacity can reduce stall cycles, but consumes precious die area and leakage power. Reorganizing the computation might extract more throughput from existing hardware, but demands extensive software rewrites. The architect's challenge is to determine which combination of microarchitectural and software choices satisfies the constraints, and whether the gains justify the design cost.
 
@@ -55,7 +55,7 @@ In the memory subsystem example, a generated controller or software schedule is 
 
 This closed loop defines the Architecture 2.0 moonshot: coordinating cross-layer exploration from high-level system intent down to a physically realizable design. An automated system formalizes architecture questions, bounds the search space, and couples learned proposals directly to physical electronic design automation (EDA) tools, making it practical to evaluate alternatives that manual flows never have time to consider. The capability remains a demanding research frontier. Its value will not be proved by fast isolated demos or synthetic code-generation benchmarks, but by finding better architectural trade-offs, cutting total engineering effort, or both, when measured against strong conventional baselines.
 
-## Historical Context and Design Transitions {#sec-historical-context}
+## Lessons from Earlier Shifts in Design Automation {#sec-historical-context}
 
 Major transitions in computer architecture history offer clear precedents for this shift. Each breakthrough redefined how architects express design intent and evaluate trade-offs, and each succeeded only because it was anchored by dependable implementation tools and rigorous checking infrastructure. These milestones show what any new automated workflow must provide before engineers can trust its results.
 
@@ -80,7 +80,7 @@ Across each of these transitions, an abstraction made larger design problems tra
 
 Architecture 2.0 proposes the next logical step in this progression. Just as Mead–Conway decoupled layout from process chemistry, and logic synthesis decoupled RTL behavior from gate-level boolean logic, Architecture 2.0 seeks to decouple compact architectural intent from the manual coordination of cross-stack tools and representations. The input is a high-level system specification, and the design loop coordinates candidate generation, simulation, and physical implementation across layers. As in every previous transition, raising the level of abstraction works only when backed by explicit verification and signoff checks that engineers can audit.
 
-## Architecture 2.0 and Its Operational Layers {#sec-three-operational-layers}
+## Three Scopes of AI-Assisted Architecture {#sec-three-operational-layers}
 
 When an engineering team lumps all "AI for chip design" together, expectations quickly outrun what a given tool can actually change. A local Verilog autocomplete model cannot relieve a system-wide memory bottleneck, and a parameter tuner cannot close a power gap if the frozen bus interface itself prevents every legal configuration from meeting the budget. Drafting an isolated cache controller, sweeping its capacities inside a fixed bus protocol, and redesigning the memory hierarchy alongside its compiler runtime require very different levels of coordination across the system stack.
 
@@ -137,7 +137,7 @@ The Go comparison also highlights an essential physical distinction between game
 
 Physical ground truth therefore remains the final check on any proposal, while human architects frame the problem, set the operating envelope, and define the correctness contract that every candidate must satisfy.
 
-### Coordinating Actions and Tool Feedback
+### Closing the Loop Between Proposals and Tool Checks
 
 Evaluating candidates against physical tools pays off most when fixing a bottleneck requires coordinated changes across several layers of the stack. Consider an accelerator whose interface requires an entire input array to fit in on-chip memory before execution begins. If that interface stays fixed, an input tensor larger than on-chip memory forces a buffer expansion that exceeds the silicon area budget. A better organization can process the tensor in smaller tiles using an explicit double-buffered scratchpad with direct memory access (DMA) descriptor chaining and streaming first-in, first-out (FIFO) queues.[^fn-double-buffering-dma-c01] Making that change work, however, requires matching updates to the software schedule, memory transfer protocol, and partial-result accumulation. A Layer 2 parameter search over buffer sizes cannot find this design because changing the interface and compiler schedule lies outside its fixed template.
 
@@ -151,7 +151,7 @@ The feedback returning from engineering tools carries rich diagnostic structure 
 
 Each experiment refines both the candidate design and the next step of the search. Running those iterations reliably takes substantial engineering infrastructure to keep hardware RTL and software binaries in sync, parse outputs from diverse tools, and recover cleanly from tool crashes. Whether that infrastructure cost is worth paying becomes clear only on a demanding system problem, such as designing a wearable processor under strict power, thermal, and latency limits.
 
-## The Lighthouse XR System-on-Chip (SoC) Case Study
+## The Lighthouse Mobile XR Case Study
 
 Evaluating an automated design tool on an isolated arithmetic kernel or a standalone RTL module hides the cross-layer bottlenecks that dominate real silicon programs: a block that looks efficient in a unit testbench can still starve on off-chip memory traffic, stall behind compiler scheduling dependencies, or violate the heat limits of a wearable package. To keep those full-system constraints in view across every chapter, this book uses a running design challenge called the *Lighthouse* project. The task is to design a mobile extended-reality (XR) compute subsystem that runs concurrent perception and rendering workloads within the strict power, thermal, and latency budgets of a wearable device, serving as a shared testbed even though the complete system remains a research target rather than a completed silicon tapeout.
 
@@ -205,7 +205,7 @@ Decisions in one domain quickly surface as physical or protocol constraints in a
 
 Because the eight domains are coupled so tightly, tuning a single parameter inside a fixed template, such as sweeping cache capacity in an unchanged hierarchy, reaches diminishing returns quickly. Larger gains come from testing whether a different organization altogether, such as replacing hardware-managed caches with software-scheduled scratchpads and DMA descriptor streaming, fits the 3\ W budget better. Even then, a study does not have to search all eight domains at once. Instead, the architect picks a focused question, holds the surrounding interfaces fixed, and opens only the degrees of freedom needed to answer it, turning an open-ended prompt into an executable specification that tools can actually run.
 
-## Decomposing Intent into Executable Specifications {#sec-intent-vs-spec}
+## Turning Design Goals into Executable Specifications {#sec-intent-vs-spec}
 
 If a team hands the two-paragraph Lighthouse prompt straight to an automated search tool, the run either stalls immediately on missing input traces and cell libraries, or exploits holes in the problem statement, such as shrinking on-chip memory to meet the 3\ W target on paper while pushing uncounted DRAM traffic outside the simulation boundary. Preventing those failures requires an executable specification that translates high-level design intent into the exact configurations, workloads, and checks that simulators and synthesis tools run. Suppose the Lighthouse team wants to test whether co-designing the memory hierarchy and software tiling can meet the frame deadlines within the 3\ W envelope. Out of the eight domains in @fig-moonshot-prompt, the executable specification states which parameters are held fixed, which are allowed to vary, and which measurements decide whether a candidate succeeds.
 
@@ -239,13 +239,13 @@ Keeping that context attached to every measurement is what makes a comparison tr
 
 For that reason, the design system must save every candidate architecture, software schedule, and tool configuration as a versioned artifact paired with its execution record, including input datasets, model checkpoints, random seeds, and tool versions (@sec-architecture-20-ontology). With that provenance in place, engineers can audit unexpected wins, reproduce failures, and tell whether an improvement came from a better model or a quiet change in the evaluation harness.
 
-## Evaluating and Interpreting Architectural Evidence
+## Judging Whether an Architectural Gain Is Real
 
 Provenance tells us how a measurement was produced; the next step is deciding what that measurement says about the architecture question. In the Lighthouse memory study, the question is whether co-designing the memory hierarchy and software tiling can meet the frame deadlines within the 3\ W power envelope and die-area budget, and each tool run tests only one piece of that claim.
 
 If a larger cache cuts simulated frame latency but blows past the area budget during floorplanning, the experiment has still done useful work by exposing a physical bottleneck. The team can now drop that candidate, try a different banking layout, or ask whether finer software tiling can get by with a smaller buffer. Reporting the simulated speedup while leaving out the area failure would hide the very constraint that should drive the next iteration.
 
-### Evaluation Fidelity and Validated Claims
+### Matching the Claim to the Tool That Tested It
 
 An automated search can easily mistake a favorable early estimate for a finished chip, treating a back-of-the-envelope analytical formula or a fast learned power predictor as proof that a candidate will route cleanly and close timing at signoff. Preventing that error requires separating three things in every experiment: the *candidate* (the specific hardware–software configuration under test), the *artifacts* that tools build from it (RTL source, gate netlists, floorplans, software binaries, and their measurements), and the *architectural conclusion* that those measurements actually support. Because each tool observes the design at a different level of detail, any reported metric has to state the fidelity level that produced it.
 
@@ -315,7 +315,7 @@ Testing whether an AI-native workflow actually helps on a problem like Lighthous
 
 Together, these rules give us three plain questions to ask of any published design-automation result: which architectural parameters was the method allowed to change, what did implementation and verification tools actually prove about the resulting chip, and what did the complete workflow cost in compute and engineering time? A tool does not need to solve the entire Lighthouse challenge to be useful, as long as we state clearly which piece of the job it handles and where its evaluation stops.
 
-## Capabilities and Boundaries of Published Systems {#sec-data-scarcity-verification-load}
+## What Published Systems Can and Cannot Do Yet {#sec-data-scarcity-verification-load}
 
 Three published efforts in hardware-description generation, learned macro placement, and commercial accelerator design show how those three questions clarify what current methods accomplish and where their evaluation stops.
 
@@ -359,7 +359,7 @@ Evaluations of automated chip design often blur technical feasibility, workflow 
 
 When we keep these three evaluations distinct, research progress can be measured with scientific rigor rather than shifting goalposts after experiments conclude.
 
-## Organization of the Monograph
+## How the Rest of This Book Is Organized
 
 The chapters ahead examine both the architectural bottlenecks behind those three tests and the automated design methods built to address them. Assuming familiarity with core computer architecture and introducing machine learning, formal verification, and physical signoff concepts as they are used (with reading paths detailed in the Preface), the book progresses through three parts. It first diagnoses why manual design loops no longer scale and defines the six-stage Architecture 2.0 life cycle (@sec-design-loop-no-longer-scales and @sec-architecture-20-ontology). It then builds the core engineering machinery: structured design-state records (@sec-data-representations-world-models), prediction, generation, and optimization methods (@sec-methods-generation-prediction-optimization), reproducible tool harnesses (@sec-architecture-environments-tool-interfaces), and the verification checks that test what those tools return (@sec-feedback-verification-trust). Finally, it examines how closed-loop patterns transfer across the stack (@sec-loop-patterns-across-stack), how to evaluate complete workflows under adversarial tests and matched budgets (@sec-evaluating-agentic-architect), what decisions human architects must own (@sec-what-architect-owns), and what shared open infrastructure the field needs to build next (@sec-bootstrapping-ecosystem).
 
