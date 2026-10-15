@@ -1,0 +1,140 @@
+{
+  "turn_id": 3,
+  "turn_slug": "turn3_formulate_bw_wall",
+  "turn_label": "Turn 3 — Layer 2 Hardware-Only Hits FP16 DRAM Roofline Ceiling (Return Arrow -> 1. Formulate)",
+  "summary_headline": "All hardware realism gates pass (randreset=PASS, elasticity=1.009, area=1.82 mm^2), but streaming uncompressed FP16 weights over the 16 B/cycle DRAM bus requires >=19,028 cycles/token (max 5,255 tok/s). Stage 5 proves >=8,000 tok/s is physically impossible in Layer 2 alone and routes Return Arrow -> 1. Formulate to unlock Layer 3 INT4 co-design.",
+  "formulate": {
+    "stage": "Formulate",
+    "turn_id": 3,
+    "question": "With the 256-deep credit-tracked `msh_fetch` engine, byte-serial `msh_deq`, and deterministic reset clear sweeps in place, can a pure Layer 2 (hardware-only) accelerator streaming standard uncompressed FP16 weights achieve the >= 8,000 tokens/s (<= 12,500 cycles/token at 100 MHz) goal?",
+    "baseline_metrics": {
+      "tokens_per_sec": 4.0,
+      "cycles_per_token": 25000000.0
+    },
+    "target_metrics": {
+      "tokens_per_sec_goal": 8000.0,
+      "max_cycles_per_token_budget": 12500.0,
+      "dram_port_bytes_per_cycle": 16,
+      "target_clock_mhz": 100.0
+    },
+    "frozen_contract_files": [
+      "harness/resource_budgets.json (dram_port_bytes_per_cycle = 16, target_freq_mhz = 100.0)",
+      "reference/gen_weights.py (active_weight_bytes)",
+      "nanochip/engine/roofline.py"
+    ],
+    "integrity_sha256_ok": true,
+    "operational_layer": "Layer 2: Hardware Microarchitecture",
+    "legal_design_space": [
+      "Layer 2 Hardware Microarchitecture only (credit-tracked prefetch, wide MAC arrays, pipelined accumulators) under an uncompressed FP16 off-chip weight stream (304,448 B/token)"
+    ],
+    "non_goals": [
+      "Cannot alter the frozen 16 B/cycle DRAM bus width or 100 MHz target clock in resource_budgets.json"
+    ]
+  },
+  "explore": {
+    "stage": "Explore",
+    "turn_id": 3,
+    "operational_layer": "Layer 2: Hardware Microarchitecture",
+    "title": "Credit-Tracked 256-Deep Prefetch (`msh_fetch`) + Pipelined GEMV under Uncompressed FP16 Stream",
+    "hypothesis": "With a 256-beat credit-tracked response FIFO (`u_fifo_data` + `u_fifo_meta`) and 64-entry FWFT segment queue hiding the 24-cycle DRAM latency, saturate the 16 B/cycle memory port to reach >= 8,000 tok/s.",
+    "predicted_cycles_per_token": 21600.0,
+    "predicted_tokens_per_sec": 4629.63,
+    "predicted_area_mm2": 1.82,
+    "predicted_critical_path_ns": 5.8,
+    "files_touched": [
+      "nanochip/kpu/rtl/msh_fetch.v",
+      "nanochip/engine/roofline.py"
+    ],
+    "code_diff_summary": "Added 256-beat credit-tracked FIFO (`occ = wr_ptr - rd_ptr < 256`) and 128-cycle post-reset SRAM clear sweep (`clr_active`) in `msh_fetch.v`; evaluated DRAM byte-conservation roofline in `roofline.py`.",
+    "code_snippet": "// Byte-conservation roofline proof (nanochip/engine/roofline.py):\n// Uncompressed FP16 active weights = 304,448 B/token\n// Minimum DRAM beats @ 16 B/cycle  = 304,448 / 16 = 19,028 cycles/token\n// Max possible throughput @ 100MHz = 100e6 / 19,028 = 5,255.41 tokens/sec < 8,000 tok/s!\n// Deficit vs 12,500-cycle budget   = +6,528 cycles/token (+52.2% over budget before compute)"
+  },
+  "implement": {
+    "stage": "Implement",
+    "turn_id": 3,
+    "representations_synced": {
+      "float32_ref": "SYNCED",
+      "python_selfmodel": "SYNCED",
+      "verilog_rtl": "SYNCED (all functional, reset, and elasticity checks pass)"
+    },
+    "tools_invoked": [
+      "python3 nanochip/engine/roofline.py",
+      "yosys -s synth_tech.ys (msh_fetch.v)",
+      "verilator +verilator+rand+reset+2 & 2x latency sweep"
+    ],
+    "tool_wall_seconds": 20.85,
+    "operational_faults": [],
+    "variant_rtl_file": "nanochip/kpu/rtl/msh_fetch.v"
+  },
+  "evaluate": {
+    "stage": "Evaluate",
+    "turn_id": 3,
+    "integrity_ok": true,
+    "audit_ok": true,
+    "audit_violations": [],
+    "lint_ok": true,
+    "lint_warnings": 1,
+    "selfmodel_cosine_min": 1.0,
+    "selfmodel_bit_exact": true,
+    "nominal_sim_ok": true,
+    "measured_cycles_per_token": 21920.0,
+    "measured_tokens_per_sec": 4562.04,
+    "dram_bytes_per_token": 304448.0,
+    "roofline_cycles": 913344,
+    "randreset_ok": true,
+    "latency_2x_elasticity": 1.0091,
+    "synth_area_mm2": 1.82,
+    "synth_gate_count": 148500,
+    "synth_critical_path_ns": 5.84,
+    "all_gates_passed": true,
+    "extra_metrics": {
+      "fp16_active_bytes_per_token": 304448,
+      "fp16_min_dram_beats_per_token": 19028,
+      "fp16_roofline_max_tokens_per_sec": 5255.41,
+      "target_tokens_per_sec": 8000.0,
+      "target_max_cycles_per_token": 12500,
+      "fp16_deficit_cycles_per_token": 6528,
+      "msh_fetch_area_um2": 102829.75,
+      "msh_fetch_buffered_critical_path_ns": 1.017
+    }
+  },
+  "interpret": {
+    "stage": "Interpret",
+    "turn_id": 3,
+    "prediction_vs_measurement_error_pct": 1.46,
+    "root_cause_category": "Formulation & Operational-Layer Roofline Wall (Byte Conservation on 16 B/cycle Bus)",
+    "causal_diagnosis": "The microarchitectural fixes from Turn 2 worked as predicted: `randreset_ok = True`, `latency_2x_elasticity = 1.0091`, and measured cycles (`21,920 cyc/tok`, `4,562.04 tok/s`) match our analytical model (`21,600 cyc/tok`) within `1.46%`, achieving `86.8%` of the uncompressed FP16 bandwidth roofline (`5,255.41 tok/s`). Yet the design STILL falls short of the `8,000 tok/s` (`<= 12,500 cyc/tok`) target! Why? `roofline.py` proves by byte conservation that streaming `304,448 B/token` across a `16 B/cycle` port requires an absolute physical minimum of `19,028 cycles/token` — exceeding the `12,500`-cycle budget by `6,528 cycles/token` (`+52.2%`) even with an infinitely fast, zero-area compute engine. No further Layer 2 hardware tuning can cross a byte-conservation wall.",
+    "return_arrow_target": "1. Formulate",
+    "next_action_recommendation": "Route return arrow all the way back to `1. Formulate` to escalate from **Layer 2 (Hardware Microarchitecture)** to **Layer 3 (Cross-Stack Hardware-Algorithm Co-Design)**: reformulate the datapath around packed **INT4 group-128 weight streaming (`76,112 B/token`, `4,757` minimum DRAM beats/token)** with fused on-the-fly dequantization, algebraic zero-point folding (`sum(q-z)x = sum(qx) - z*sum(x)`), and on-chip `head.q` (`16 KiB`) + `WBUF` (`3.94 KiB`) residency."
+  },
+  "commit": {
+    "stage": "Commit",
+    "turn_id": 3,
+    "decision": "REVISE_FORMULATION",
+    "reviewer": "Architecture 2.0 Automated Referee + Human Architect",
+    "rationale": "All hardware realism gates passed (`randreset`, `elasticity=1.0091`, `1.46%` model error), proving the measurement is trustworthy and the bottleneck is fundamental to the Layer 2 problem formulation. Approved escalation to Layer 3 (Hardware-Algorithm Co-Design).",
+    "non_claims": [
+      "Do not continue searching Layer 2 MAC/pipeline organizations when the 16 B/cycle DRAM port is mathematically saturated at 19,028 cycles/token under FP16 weights."
+    ],
+    "design_loop_card_path": "design-loop-card/CARDS/nano_kpu_codesign.md"
+  },
+  "tool_receipts": {
+    "roofline_co_design_proof": {
+      "layer2_fp16_min_cycles_per_token": 19028,
+      "layer2_fp16_max_tokens_per_sec": 5255.41,
+      "layer3_int4_min_cycles_per_token": 4757,
+      "layer3_int4_max_tokens_per_sec": 21021.65,
+      "fp16_violates_8000_tok_s_by_cycles": 6528,
+      "return_arrow_required": "1. Formulate"
+    },
+    "yosys_msh_fetch": {
+      "ok": true,
+      "file": "msh_fetch.v",
+      "top_module": "msh_fetch",
+      "area_um2": 102829.75,
+      "area_mm2": 0.10283,
+      "unbuffered_critical_path_ns": 2111.916,
+      "buffered_critical_path_ns": 1.017,
+      "wireload_buffering_speedup_x": 2076.86
+    }
+  }
+}

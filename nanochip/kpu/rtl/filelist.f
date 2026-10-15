@@ -1,0 +1,10 @@
+rtl/msh_chip_top.v
+rtl/msh_fetch.v
+rtl/msh_gemv.v
+rtl/msh_deq.v
+rtl/msh_vec.v
+rtl/msh_kda.v
+rtl/msh_mla.v
+rtl/msh_seq.v
+rtl/msh_mem.v
+rtl/msh_lg.v

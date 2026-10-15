@@ -6,7 +6,7 @@
   <a href="https://arch2.mlsysbook.ai/start.html"><b>Start with the card</b></a> ·
   <a href="https://arch2.mlsysbook.ai"><b>Website</b></a> ·
   <a href="https://arch2.mlsysbook.ai/book/"><b>Synthesis lecture</b></a> ·
-  <a href="https://github.com/harvard-edge/arch2/tree/main/labs"><b>Labs</b></a> ·
+  <a href="nanochip/README.md"><b>Nanochip Labs</b></a> ·
   <a href="https://arch2.mlsysbook.ai/tools/"><b>Tool registry</b></a> ·
   <a href="https://arch2.mlsysbook.ai/readings.html"><b>Readings</b></a> ·
   <a href="https://arch2.mlsysbook.ai/workshops.html"><b>Workshops</b></a> ·
@@ -48,7 +48,7 @@ Architecture 2.0 is part of the [mlsysbook.ai](https://mlsysbook.ai) family.
 | If you want to... | Go here |
 | --- | --- |
 | Draft and validate a context-profile design-loop card in 30 minutes | [Start workflow](https://arch2.mlsysbook.ai/start.html) |
-| Run a tool-backed student study and inspect its run archive | [Companion labs](https://github.com/harvard-edge/arch2/tree/main/labs) |
+| Run the 6-stage AI-native design loop and X-Ray Cockpit on `nanochip` (`MoonshotAI/nano-kpu`) | [Nanochip companion labs](nanochip/README.md) |
 | Download the machine-checkable blank card | [YAML template](https://arch2.mlsysbook.ai/design-loop-card/template.yaml) |
 | Read the core argument | [Architecture 2.0 synthesis lecture](https://arch2.mlsysbook.ai/book/) |
 | Find tools, simulators, benchmarks, datasets, and loop infrastructure | [Tool registry](https://arch2.mlsysbook.ai/tools/) |
@@ -93,7 +93,7 @@ The public site connects the following maintained surfaces.
 | Path | What it contains |
 | --- | --- |
 | [`book/`](book/) | Quarto book project: config and render machinery at the root, manuscript under [`book/contents/`](book/contents/) (see [docs/REPO-LAYOUT.md](docs/REPO-LAYOUT.md)). |
-| [`data/studies/`](data/studies/) and [`labs/`](labs/) | Empirical studies, datasets, and execution artifacts. |
+| [`nanochip/`](nanochip/) and [`data/studies/`](data/studies/) | The 6-stage AI-native design-loop workbench (`MoonshotAI/nano-kpu`), X-Ray Cockpit, empirical studies, and execution artifacts. |
 | [`design-loop-card/`](design-loop-card/) and [`schemas/`](schemas/) | Human-readable templates and machine-checkable contracts for recording a study. |
 | [`examples/`](examples/) | Completed cards and supporting evidence that show how the contracts are used. |
 | [`www/`](www/) and [`tools/`](tools/) | Source for the project site, community resources, and tool registry. |

@@ -1,0 +1,35 @@
+# yosys area/timing metrics flow (frozen harness file).
+# Memories are collected but NOT decomposed into FFs; their bits are counted
+# separately and credited as SRAM-macro area (see scoring.py).
+# One ltp report is emitted on the final mapped netlist (the scored one).
+# The former pre-abc informational ltp was dropped: on ~2M-cell designs
+# with structural pseudo-loops (measured 9.5M loop warnings on one solver
+# design) ltp's cycle analysis dominated synth wall-time, and levels_rtl
+# (its only unique output) is informational -- evaluate.py parses it as 0
+# when absent. abc runs with -fast: exhaustive abc takes
+# hours on a realistic-scale design (~500k cells), which would make every
+# evaluation unfinishable; -fast maps every submission with the same
+# effort, so NE/levels stay comparable (slightly conservative for all).
+# Invoked by evaluate.py with {FILES}/{MACROS} substituted into a temp copy.
+read_verilog -sv {FILES}
+hierarchy -check -top msh_chip_top
+proc
+log === per-module stats (pre-flatten, module-structure metrics) ===
+stat -json
+flatten
+opt_expr
+opt_clean
+stat -json
+memory -nomap
+opt -fast
+techmap
+opt -fast
+abc -fast -g AND,NAND,OR,NOR,XOR,XNOR,ANDNOT,ORNOT,MUX
+opt_clean
+stat
+stat -json
+# macro instances stay blackboxed; dump just their cells + parameters for
+# pricing (a full-netlist write_json hit 672 MB on a 2.19M-cell design)
+tee -o {MACROS} dump t:msh_sram t:msh_rom
+log === scored longest path (final mapped netlist) ===
+ltp -noff

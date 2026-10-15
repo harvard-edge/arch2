@@ -1,0 +1,43 @@
+# yosys technology-anchored metrics flow (frozen harness file).
+# Maps the design to the bundled academic Nangate45 standard-cell library
+# (typical corner, from The-OpenROAD-Project/OpenROAD-flow-scripts) and
+# reports REAL units: mapped standard-cell area in um^2 and an abc `stime`
+# critical-path estimate in ps.
+#
+# Snapshot two-pass abc: `design -save` snapshots the pre-map netlist; the
+# FIRST abc maps it and `stat -liberty` reports logic area on that mapped
+# netlist (pre-buffer, comparable across designs). `design -load` restores
+# the snapshot and the SECOND abc maps again, then applies fanout buffering
+# and sizing (buffer;upsize;dnsize) before `stime`: without buffering, the
+# wireload delay of unbuffered high-fanout nets (reset/config broadcast,
+# wide buses) dominates the report by 2-3 orders of magnitude on
+# realistic-scale designs (measured: 5084 ns unbuffered vs 6 ns buffered on
+# a ~1M-gate design with ~20 levels of real logic depth). The second pass
+# cannot share the first pass's mapped state (yosys skips abc when there is
+# nothing left to map), hence the snapshot + remap; abc is deterministic so
+# the area and timing figures come from the same mapping. Buffers inserted
+# for timing are real but small (<10% of logic) and are not counted in the
+# reported area.
+# Memories stay as $mem_v2 (SRAM/ROM macros, credited separately as bits);
+# macro read paths terminate at the blackbox boundary and are not part of
+# the measured critical path. The delay/area here cover the mapped logic +
+# flops. This flow feeds the resource/timing gates and the primary tokens/s
+# metric. Invoked by evaluate.py with {FILES}/{LIB} substituted into a temp
+# copy.
+read_verilog -sv {FILES}
+hierarchy -check -top msh_chip_top
+proc
+flatten
+opt_expr
+opt_clean
+memory -nomap
+opt -fast
+techmap
+opt -fast
+dfflibmap -liberty {LIB}
+design -save preabc
+abc -liberty {LIB} -script +strash;dretime;map;topo
+opt_clean
+stat -liberty {LIB}
+design -load preabc
+abc -liberty {LIB} -script +strash;dretime;map;topo;buffer;upsize;dnsize;topo;stime,-c

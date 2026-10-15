@@ -1,0 +1,160 @@
+{
+  "turn_id": 2,
+  "turn_slug": "turn2_explore_chaos_stall",
+  "turn_label": "Turn 2 — Chaos Stall & 16-Way Parallel Demux Physical Bloat (Return Arrow -> 2. Explore)",
+  "summary_headline": "Passes nominal happy-path simulation (cos_min=1.0000), but fails Yosys physical synthesis (152,629 cells / 0.1665 mm^2 in msh_deq alone from 16 parallel byte demuxes), fails +verilator+rand+reset+2, and degrades to 1.68x under 2x DRAM latency.",
+  "formulate": {
+    "stage": "Formulate",
+    "turn_id": 2,
+    "question": "Does a brute-force parallel byte-unpacking microarchitecture with shallow FIFO buffering satisfy hardware realism (`randreset`, `2x DRAM latency elasticity`, and Nangate45 area/timing budgets) once representation bugs are fixed?",
+    "baseline_metrics": {
+      "tokens_per_sec": 4.0,
+      "cycles_per_token": 25000000.0
+    },
+    "target_metrics": {
+      "tokens_per_sec_goal": 8000.0,
+      "max_logic_area_mm2": 4.0,
+      "target_period_ns": 10.0,
+      "randreset_byte_identical": true,
+      "latency_2x_elasticity_max": 1.05
+    },
+    "frozen_contract_files": [
+      "harness/evaluate.py (do_randreset, do_latency_sweep, do_tech)",
+      "harness/synth_tech.ys",
+      "harness/lib/NangateOpenCellLibrary_typical.lib"
+    ],
+    "integrity_sha256_ok": true,
+    "operational_layer": "Layer 2: Hardware Microarchitecture",
+    "legal_design_space": [
+      "Synthesizable RTL in rtl/msh_deq.v and rtl/msh_fetch.v",
+      "Nangate45 standard-cell library + msh_sram macros"
+    ],
+    "non_goals": [
+      "No reliance on simulator-default zero initialization of flip-flops or SRAMs",
+      "No unbuffered dynamic crossbar demuxes that explode standard-cell area"
+    ]
+  },
+  "explore": {
+    "stage": "Explore",
+    "turn_id": 2,
+    "operational_layer": "Layer 2: Hardware Microarchitecture",
+    "title": "16-Way Parallel Byte-Stream Demux (`msh_deq_parallel16_demux`) & Shallow Fetch Queue",
+    "hypothesis": "Unpack all 16 bytes of each 128-bit DRAM beat in a single cycle using 16 parallel variable-index byte demuxes (`qrow_v[8*(pos+b) +: 8] <= beat_aligned[8*b +: 8]`) and issue DRAM requests through a shallow 2-entry in-flight window.",
+    "predicted_cycles_per_token": 13800.0,
+    "predicted_tokens_per_sec": 7246.38,
+    "predicted_area_mm2": 0.85,
+    "predicted_critical_path_ns": 3.2,
+    "files_touched": [
+      "nanochip/trajectories/variants/msh_deq_parallel16_demux.v",
+      "nanochip/trajectories/variants/msh_fetch_no_reset_clr.v"
+    ],
+    "code_diff_summary": "16 parallel variable-indexed byte writes into 1024-bit qrow_v in msh_deq_parallel16_demux.v (152,629 cells vs 13,236 cells for byte-serial msh_deq.v) and shallow un-cleared fetch FIFO in msh_fetch_no_reset_clr.v.",
+    "code_snippet": "// ANTI-PATTERN in msh_deq_parallel16_demux.v (152,629 cells, 166,485.68 um^2):\nfor (b = 0; b < 16; b = b + 1) begin\n    if (b[4:0] < ws_count) begin\n        dst_idx = pos[6:0] + b[6:0];\n        if (state == S_Q) qrow_v[8*dst_idx +: 8] <= beat_aligned[8*b +: 8];\n    end\nend\n\n// KIMI K3 FIX in rtl/msh_deq.v (13,236 cells, 18,331.39 um^2 — 9.08x smaller!):\n// byte-serial intake: 1 variable-index byte demux instead of 16 parallel ones\nif (beat_cnt != 5'd0) begin\n    if (state == S_Q) qrow_v[8*pos[6:0] +: 8] <= beat_r[7:0];\n    beat_r <= {8'b0, beat_r[127:8]};\nend"
+  },
+  "implement": {
+    "stage": "Implement",
+    "turn_id": 2,
+    "representations_synced": {
+      "float32_ref": "SYNCED",
+      "python_selfmodel": "SYNCED (bit_exact = True on happy path)",
+      "verilog_rtl": "SYNCED on happy path; FAILS physical synthesis efficiency & chaos stress"
+    },
+    "tools_invoked": [
+      "yosys -s synth_tech.ys (NangateOpenCellLibrary_typical.lib on msh_deq_parallel16_demux.v vs msh_deq.v)",
+      "verilator +verilator+rand+reset+2 (do_randreset)",
+      "verilator --lat-base=48 --lat-jitter=24 --stall-permille=50 (do_latency_sweep)"
+    ],
+    "tool_wall_seconds": 47.09,
+    "operational_faults": [],
+    "variant_rtl_file": "nanochip/trajectories/variants/msh_deq_parallel16_demux.v"
+  },
+  "evaluate": {
+    "stage": "Evaluate",
+    "turn_id": 2,
+    "integrity_ok": true,
+    "audit_ok": true,
+    "audit_violations": [],
+    "lint_ok": true,
+    "lint_warnings": 1,
+    "selfmodel_cosine_min": 1.0,
+    "selfmodel_bit_exact": true,
+    "nominal_sim_ok": true,
+    "measured_cycles_per_token": 21840.0,
+    "measured_tokens_per_sec": 4578.75,
+    "dram_bytes_per_token": 76112.0,
+    "roofline_cycles": 228336,
+    "randreset_ok": false,
+    "latency_2x_elasticity": 1.684,
+    "synth_area_mm2": 0.166486,
+    "synth_gate_count": 152629,
+    "synth_critical_path_ns": 4.467,
+    "all_gates_passed": false,
+    "extra_metrics": {
+      "msh_deq_par16_gate_count": 152629,
+      "msh_deq_par16_comb_gates_unbuffered": 151511,
+      "msh_deq_par16_comb_gates_buffered": 173532,
+      "msh_deq_par16_area_um2": 166485.68,
+      "msh_deq_par16_unbuffered_delay_ns": 432654.144,
+      "msh_deq_par16_buffered_delay_ns": 4.467,
+      "msh_deq_serial_gate_count": 13236,
+      "msh_deq_serial_area_um2": 18331.39,
+      "msh_deq_serial_buffered_delay_ns": 1.479,
+      "demux_area_bloat_ratio_x": 9.08,
+      "demux_cell_bloat_ratio_x": 11.53
+    }
+  },
+  "interpret": {
+    "stage": "Interpret",
+    "turn_id": 2,
+    "prediction_vs_measurement_error_pct": 36.81,
+    "root_cause_category": "Microarchitectural & Physical Realizability Flaw (Crossbar Area Bloat + Latency Stalls + Reset Hazard)",
+    "causal_diagnosis": "Nominal happy-path simulation passed (`cos_min = 1.0000`, `selfmodel_bit_exact = True`), which in a naive benchmark would look like success. However, the multi-gate physical and chaos referees exposed three microarchitectural flaws: (1) Yosys + Nangate45 synthesis of `msh_deq_parallel16_demux.v` exploded to **152,629 cells (`166,485.68 um^2`, `4.467 ns` buffered / `432,654.1 ns` unbuffered)** because 16 parallel variable-indexed byte writes into a 1024-bit vector synthesize into sixteen 128-to-1 byte demux trees. Replacing this with Kimi K3's 1-byte/cycle shift emitter (`beat_r >> 8` in `rtl/msh_deq.v`) shrinks `msh_deq` by **9.08x in area (`18,331.39 um^2`, `13,236` cells)** and **3.02x in critical path (`1.479 ns`)** at `< 35` cycles/token cost! (2) Under `do_latency_sweep` (`lat_base = 24 -> 48`), the shallow fetch window serialized on memory round-trips (`elasticity = 1.684` and `21,840 cyc/tok` vs `13,800` predicted). (3) Under `+verilator+rand+reset+2`, un-cleared FIFO/SRAM state caused output divergence (`randreset_ok = False`).",
+    "return_arrow_target": "2. Explore",
+    "next_action_recommendation": "Route return arrow to `2. Explore` to redesign the microarchitecture: (a) replace the 16-way parallel demux in `msh_deq` with a byte-serial shift emitter (`beat_r`), (b) equip `msh_fetch` with a 64-entry FWFT segment queue + 256-beat credit-tracked dual-SRAM FIFO (`occ = wr_ptr - rd_ptr < 256`), and (c) add explicit post-reset hardware clear loops (`clr_active`, `ST_CLEAR`, `S_CLR`) across all stateful SRAM macros."
+  },
+  "commit": {
+    "stage": "Commit",
+    "turn_id": 2,
+    "decision": "REJECT",
+    "reviewer": "Architecture 2.0 Automated Referee (`yosys` + `verilator randreset` + `latency_sweep`)",
+    "rationale": "Rejected despite 100% happy-path functional accuracy because hardware realism gates failed (`randreset_ok = False`, `latency_2x_elasticity = 1.684`, and 9.08x unnecessary crossbar area bloat in `msh_deq`).",
+    "non_claims": [
+      "Happy-path Verilator simulation passing `cos_min = 1.0000` is NOT sufficient evidence of a realizable accelerator when `+verilator+rand+reset+2`, `2x latency elasticity`, and Nangate45 synthesis fail."
+    ],
+    "design_loop_card_path": "design-loop-card/CARDS/nano_kpu_codesign.md"
+  },
+  "tool_receipts": {
+    "yosys_msh_deq_parallel16_demux": {
+      "ok": true,
+      "file": "msh_deq_parallel16_demux.v",
+      "top_module": "msh_deq",
+      "gate_count": 152629,
+      "comb_gates_unbuffered": 151511,
+      "comb_gates_buffered": 173532,
+      "area_um2": 166485.68,
+      "area_mm2": 0.166486,
+      "unbuffered_critical_path_ps": 432654144.0,
+      "unbuffered_critical_path_ns": 432654.144,
+      "buffered_critical_path_ps": 4467.03,
+      "buffered_critical_path_ns": 4.467,
+      "wireload_buffering_speedup_x": 96854.99,
+      "wall_seconds": 43.57
+    },
+    "yosys_msh_deq_byte_serial_kimi_k3": {
+      "ok": true,
+      "file": "msh_deq.v",
+      "top_module": "msh_deq",
+      "gate_count": 13236,
+      "comb_gates_unbuffered": 11888,
+      "comb_gates_buffered": 13037,
+      "area_um2": 18331.39,
+      "area_mm2": 0.018331,
+      "unbuffered_critical_path_ps": 266514.91,
+      "unbuffered_critical_path_ns": 266.515,
+      "buffered_critical_path_ps": 1478.99,
+      "buffered_critical_path_ns": 1.479,
+      "wireload_buffering_speedup_x": 180.2,
+      "wall_seconds": 3.52
+    }
+  }
+}

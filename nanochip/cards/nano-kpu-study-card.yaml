@@ -1,0 +1,572 @@
+schema_version: "2.0"
+design_loop_card:
+  card_id: moonshot-kimi-k3-nano-kpu-v2
+  profiles:
+    context: complete
+    inspectability: complete
+    replay: complete
+    independent_review: complete
+    disclosure: complete
+    decision_rights: complete
+  profile_gaps: {}
+  intent:
+    objective: >
+      Design, verify, and synthesize a complete hybrid-attention Mixture-of-Experts
+      (MoE) inference processor (msh_chip_top: Layer 0 Kimi Delta Attention + Layer 1
+      NoPE Multi-Head Latent Attention + top-2 routed and 1 shared SwiGLU experts +
+      attention-residual mixing) that maximizes steady-state decode throughput
+      (tokens/sec) at 100.0 MHz while clearing bit-exact fixed-point equivalence,
+      float32 cosine/argmax accuracy, random-reset robustness, 2x DRAM latency
+      elasticity, and Nangate45 pre-layout area and timing budgets.
+    constraints:
+      - Preserve all 35 frozen specification, reference, and harness files in nanochip/kpu/harness/manifest.json (verified by SHA-256).
+      - Clear per-row float32 cosine similarity >= 0.98 and pooled argmax agreement >= 0.99 across teacher-forced sequences (seq_len 48 and 16, public seed 20260706).
+      - Achieve 100% bit-exact int32 logit agreement between Verilog RTL (msh_chip_top) and the Python fixed-point self-model (rtl/selfmodel/fxmodel.py).
+      - Fit within 4.0 mm^2 standard-cell + macro area and 4.0 MiB on-chip SRAM (all storage beyond flip-flops instantiated as msh_sram/msh_rom macros priced at 1.0 Mbit/mm^2, zero inferred $mem_v2 or latch cells).
+      - Close pre-layout static timing <= 10.0 ns (100.0 MHz target clock) in Nangate45 typical corner after two-pass ABC fanout buffering and sizing over a 16 B/cycle DRAM interface (>= 24-cycle latency).
+    non_goals:
+      - Claim post-layout DRC/LVS signoff, clock-tree synthesis (CTS) closure, routed metal RC parasitic timing closure, or foundry tapeout readiness.
+      - Claim multi-corner multi-mode (MCMM) PVT timing signoff or characterized Liberty timing arcs across the blackboxed msh_sram and msh_rom macros.
+      - Claim perplexity or downstream task accuracy on trained LLM checkpoints (evaluation uses deterministic splitmix64-seeded INT4 group-128 weights against reference/model.py).
+    risks:
+      - Statistical 5K_hvratio_1_1 wireload modeling in Yosys/ABC under-predicts long crossbar congestion and over-predicts unbuffered fanout trees (266.5 ns unbuffered vs 1.479 ns buffered on msh_deq).
+      - Blackboxed msh_sram and msh_rom macros terminate timing paths at macro boundaries without setup/hold or clock-to-Q Liberty characterization.
+      - Hidden evaluation seeds may vary group_size (64 vs 128) and sequence length up to max_seq=64, requiring runtime header self-configuration.
+    deployment_assumptions:
+      - Single synchronous clock domain at 100.0 MHz (10.0 ns period) with active-low synchronous reset.
+      - External memory controller honors the 128-bit (16 B/cycle) in-order read response and posted-write protocol defined in docs/interface.md.
+  task:
+    kind: autonomous_asic_rtl_and_numeric_codesign
+    description: >
+      Co-design the internal fixed-point number formats (Q4.26 activations, Q4.27 KDA
+      recurrent state, piece-wise linear interpolated LUT ROMs, zero-point-folded INT4
+      group-128 GEMV) and the 10-module synthesizable Verilog-2005 RTL microarchitecture
+      of msh_chip_top under the frozen MoonshotAI/nano-kpu evaluation harness.
+  design_space:
+    legal:
+      - Custom internal fixed-point formats (Q4.26, Q4.27, Q8.37, 80-bit exact sum-of-squares accumulator) and disclosed LUT generators (rtl/roms/*.hex).
+      - Microarchitectural pipelining, dual-parity SRAM accumulator banking (qacc even/odd in msh_gemv.v), byte-serial vs parallel intake demuxing (msh_deq.v), and 256-deep credit-tracked DRAM request queuing (msh_fetch.v).
+      - On-chip caching of token-independent tensors within the 4.0 MiB / 4.0 mm^2 macro budget (16 KiB LM-head shadow buffer hq in msh_fetch.v).
+    invalid:
+      - Modifying any of the 35 frozen files in harness/manifest.json or relaxing resource_budgets.json / scoring.py thresholds.
+      - Simulation-only Verilog escapes ($fopen, $fread, $fwrite, $system, DPI imports, $readmemh outside rtl/roms/, or redefining msh_sram/msh_rom).
+      - Inferred latches ($_DLATCH_*) or unmapped behavioral memories ($mem_v2) bypassing the msh_sram / msh_rom macro wrapper contract.
+      - Relying on simulator zero-initialization of unreset flip-flops (caught by +verilator+rand+reset+2).
+    deferred:
+      - Physical floorplanning, macro placement, clock-tree synthesis (CTS), detailed routing, parasitic RC extraction (SPEF), and multi-corner STA in OpenROAD.
+      - Replacement of behavioral/blackbox msh_sram and msh_rom stubs with foundry-compiled SRAM bitcell macros (e.g., OpenRAM or commercial memory compilers).
+      - Power grid (IR drop) analysis, electromigration, and gate-level netlist power simulation.
+  representation:
+    state_schema_id: arch2.nanochip.three-layer-representation-sandwich.v2
+    abstraction: >
+      Three-tier multi-fidelity representation sandwich: (1) Normative float32 mathematical
+      reference (reference/model.py), (2) Bit-exact integer/fixed-point C-model twin
+      (rtl/selfmodel/fxmodel.py + fxluts.py), and (3) Synthesizable Verilog-2005 RTL
+      (rtl/msh_*.v, 10 modules) plus analytical cycle-accounting model (REPORT.md perf-model).
+    reads:
+      - Self-describing binary memory image (64-word header + FNV-1a descriptor table + INT4 packed weights + Q3.12 scales + uint4 zeros + input token IDs).
+      - Disclosed piece-wise linear LUT hex tables (sigmoid, alpha, expneg, rsqrt, recip in rtl/roms/).
+      - Frozen resource_budgets.json and NangateOpenCellLibrary_typical.lib.
+    writes:
+      - Per-position int32 logits rows [seq_len, 512], uint32 argmax token IDs, and completion magic word 0x600D_D00D in external memory.
+      - Six-section quantitative measurement report (build/score.json) and SHA-256 bound evidence packets.
+    uncertainties:
+      - Float32 BLAS ULP variations across host CPUs (absorbed by scale-invariant cosine similarity >= 0.98 and 1% logit-std near-tie argmax forgiveness).
+      - Pre-layout ABC topological delay (stime,-c with 5K_hvratio_1_1 wireload) vs post-route physical interconnect delay.
+  environment:
+    environment_id: moonshot-nano-kpu-frozen-harness-v1
+    actions:
+      - Edit Verilog RTL modules under rtl/ and update rtl/filelist.f.
+      - Edit bit-exact fixed-point self-model under rtl/selfmodel/fxmodel.py and LUT generators under scripts/gen_roms.py.
+      - Execute harness verification and synthesis flows (check_integrity.py, audit.py, verilator, yosys/abc).
+    invalid_actions:
+      - Modify any frozen file listed in harness/manifest.json.
+      - Emit out-of-bounds memory writes or complete a run with fewer DRAM read beats than floor_weight_bytes (62,250 B).
+    blast_radius_limit: >
+      Strictly isolated to mutable design deliverables (rtl/* and REPORT.md); all 35
+      evaluation harness, reference model, and budget files are cryptographically locked
+      by SHA-256 in harness/manifest.json.
+    observations:
+      - Per-row minimum and mean cosine similarity, pooled argmax agreement, and bit-exact selfmodel diff row indices.
+      - Simulated cycle counts, DRAM read/write beats, 2x latency elasticity ratio, and random-reset byte identity.
+      - Yosys/ABC mapped logic area (mm^2), macro bit count and area (mm^2), NAND2-equivalent (NE) cell count, latch count, and critical-path delay (ns).
+    fidelity: >
+      Cycle-accurate RTL simulation (Verilator 5.x with 16 B/cycle DRAM port model,
+      deterministic jitter, and 5% request stall back-pressure) paired with pre-layout
+      technology-mapped static timing and cell area in Nangate45 (Yosys + Berkeley ABC).
+  method_roles:
+    - actor_id: kimi-k3-autonomous-architect
+      actor_type: model
+      roles:
+        - plan
+        - predict
+        - generate
+        - optimize
+      reads:
+        - Frozen task specification (docs/TASK_SPEC.md, architecture.md, interface.md, memory_map.md, quantization.md) and reference/model.py.
+        - Diagnostic feedback from Verilator simulation, fxmodel.py bit-exact diffs, and Yosys/ABC synthesis reports.
+      writes:
+        - "Analytical roofline & cycle prediction (perf-model: 11,200 cyc/tok)."
+        - Bit-exact Python fixed-point twin (rtl/selfmodel/fxmodel.py) and 10 Verilog RTL modules (rtl/msh_*.v).
+      limitations:
+        - Cannot modify frozen harness files, waive predeclared rejection gates, or authorize silicon signoff beyond pre-layout synthesis scope.
+    - actor_id: nano-kpu-frozen-harness
+      actor_type: pipeline
+      roles:
+        - verify
+        - critique
+        - tool_call
+      reads:
+        - Candidate RTL (rtl/filelist.f), fixed-point self-model (rtl/selfmodel/run.sh), and frozen manifest/budgets.
+      writes:
+        - Deterministic verification verdicts, score.json measurement sections, and replay evidence packets.
+      limitations:
+        - Evaluates pre-layout synthesis and behavioral SRAM/ROM macros; cannot measure post-route congestion, CTS skew, or multi-corner silicon timing.
+    - actor_id: arch2-signoff-architect
+      actor_type: person
+      roles:
+        - critique
+        - verify
+        - coordinate
+      reads:
+        - Harness evaluation logs, evidence packets, return-arrow trajectory, and physical proxy-gap disclosures.
+      writes:
+        - Pre-layout verification signoff recommendation and accountable commitment decision in this Design-Loop Card v2.0.
+      limitations:
+        - Authorizes pre-layout architectural commitment and open-source benchmark release only; requires full physical P&R before any foundry tapeout.
+  feedback_budget:
+    evaluations: 48
+    latency: ~10 seconds for inner-loop selfcheck/fxmodel/submodule synth; ~12 minutes for full-chip Verilator + Yosys/ABC evaluation.
+    compute_or_tool_cost: 48-hour autonomous engineering window on standard multi-core CPU workstation running open-source Verilator and Yosys/ABC.
+    human_review: Zero human intervention during Kimi K3's 48-hour design loop; post-hoc Architecture 2.0 audit and card signoff.
+    fidelity: Multi-fidelity ladder (float32 reference -> integer fxmodel.py -> Verilator RTL sim -> Yosys/ABC Nangate45 tech synthesis).
+    model_calls: 240
+    energy_or_carbon: Local CPU simulation and synthesis; no GPU cluster required for EDA verification.
+  claims:
+    - claim_id: claim-throughput-2180x
+      claim_type: architecture_outcome
+      statement: >
+        The co-designed msh_chip_top processor achieves 8,720.58 tok/s (11,467.125 cycles/token)
+        at the 100.0 MHz target clock on the nano hybrid-attention MoE workload, a 2,180.15x
+        speedup over the 4.0 tok/s baseline while clearing all functional and robustness gates.
+      baseline_or_comparator: >
+        Declared 4.0 tok/s baseline in harness/resource_budgets.json and the 4,757 cycles/token
+        (21,021.7 tok/s) ideal zero-compute INT4 DRAM bandwidth roofline at 16 B/cycle.
+      outcome: >
+        Measured 550,422 cycles across seq_len=48 (11,467.125 cycles/token = 8,720.583 tok/s
+        at 100.0 MHz), reaching 41.5% of the theoretical uncached pin-bandwidth ceiling
+        including all KDA recurrence, MLA attention, MoE routing, and control serialization.
+      scope: >
+        Teacher-forced nano evaluation workload (2 layers: L0 KDA + L1 NoPE-MLA, d_model=64,
+        8 experts top-2 + 1 shared, vocab=512, INT4 group-128, seed 20260706) under cycle-accurate
+        Verilator simulation with 16 B/cycle DRAM port model.
+      non_claims:
+        - Does not claim 20,000 tok/s under serialized single-engine execution without overlapping GEMV and vector engines.
+        - Does not claim post-layout silicon clock frequency or measured hardware power consumption.
+      status: supported
+      evidence_refs:
+        - evidence-formulation-roofline
+        - evidence-evaluation-signoff
+    - claim_id: claim-sandwich-bit-exact
+      claim_type: mechanism
+      statement: >
+        The three-layer Representation Sandwich (float32 reference/model.py <-> Q4.26
+        rtl/selfmodel/fxmodel.py <-> Verilog rtl/msh_*.v) achieves bit-exact (0 ULP)
+        equivalence between RTL and fxmodel.py while maintaining cos_min = 1.000000
+        (0.9999999926) and 100% argmax agreement (48/48) against float32.
+      baseline_or_comparator: >
+        Direct float32-to-RTL translation without an intermediate bit-exact integer C-model
+        (which fails to isolate numeric quantization drift from RTL pipeline/FSM bugs).
+      outcome: >
+        100% bit-exact int32 logit match across all 48x512 (run 0) and 16x512 (run 1) output
+        positions between msh_chip_top and fxmodel.py, clearing the >= 0.98 cosine and >= 0.99
+        pooled argmax gates with three decades of precision margin.
+      scope: >
+        Public seed 20260706 nano long (seq_len=48) and short (seq_len=16) teacher-forced workloads
+        and random-reset (+verilator+rand+reset+2) stress runs.
+      non_claims:
+        - Does not claim formal equivalence checking (LEC) across arbitrary unseeded tensor values outside the simulated test vectors.
+      status: supported
+      evidence_refs:
+        - evidence-implementation-sandwich
+        - evidence-evaluation-signoff
+    - claim_id: claim-perf-model-calibration
+      claim_type: ai_contribution
+      statement: >
+        Kimi K3's pre-committed analytical cycle model (perf-model: 11,200 cycles/token)
+        predicts the measured full-chip RTL execution time (11,467.125 cycles/token) within
+        2.33% relative error, enabling fast Stage 2 architectural pruning before RTL synthesis.
+      baseline_or_comparator: >
+        Unguarded LLM hardware proposals that hallucinate 20,000+ tok/s while ignoring the
+        19,028 cycles/token (5,255 tok/s) FP16 pin-bandwidth floor.
+      outcome: >
+        Predicted 11,200.0 cycles/token vs measured 11,467.125 cycles/token (relative error
+        0.0233), accurately accounting for the 16 KiB LM-head shadow buffer (hq) saving
+        1,006 DRAM beats/token.
+      scope: >
+        Steady-state long-run (seq_len=48, TIMING_LONG jitter=12, stall=0) cycle accounting
+        for msh_chip_top on the nano configuration.
+      non_claims:
+        - Does not claim cycle-exact prediction under arbitrary external bus contention beyond the modeled testbench profiles.
+      status: supported
+      evidence_refs:
+        - evidence-formulation-roofline
+        - evidence-evaluation-signoff
+    - claim_id: claim-synthesis-area-timing
+      claim_type: safety
+      statement: >
+        Under the frozen two-pass Yosys/ABC Nangate45 synthesis flow, msh_chip_top closes
+        pre-layout timing at 6.166 ns (<= 10.0 ns budget) and occupies 3.610 mm^2 total area
+        (2.707 mm^2 logic + 0.903 mm^2 across 39 SRAM/ROM macros <= 4.0 mm^2 budget) with zero
+        inferred latches, while exposing the 180x wireload buffering gap for Commit governance.
+      baseline_or_comparator: >
+        Unbuffered wireload STA (which reports 266.5 ns on msh_deq alone due to unbuffered high-fanout
+        nets) and naive 16-way parallel byte demuxing (+96K gates in msh_deq).
+      outcome: >
+        Full-chip logic area = 2.707058 mm^2, macro area = 0.903284 mm^2 (0.861439 MiB), total
+        area = 3.610342 mm^2 (90.3% of 4.0 mm^2 budget), critical path = 6.166 ns (162.2 MHz
+        estimated fmax), and msh_deq submodule area = 18,331.39 um^2 with 1,478.99 ps buffered delay.
+      scope: >
+        Pre-layout Yosys 0.64+ / Berkeley ABC synthesis mapped to NangateOpenCellLibrary_typical.lib
+        with blackboxed msh_sram and msh_rom macros priced at 1.0 Mbit/mm^2.
+      non_claims:
+        - Explicitly does NOT claim post-route timing closure, physical DRC/LVS cleanliness, or manufacturable tapeout signoff.
+      status: supported
+      evidence_refs:
+        - evidence-evaluation-signoff
+  evidence:
+    records:
+      - evidence_id: evidence-formulation-roofline
+        producer:
+          producer_id: nano-kpu-frozen-harness
+          producer_type: pipeline
+        kind: Stage 1 & Stage 2 formulation contract, byte-traffic roofline, and perf-model calibration packet.
+        status: computed
+        tool:
+          name: nano-kpu reference/gen_weights.py & harness/check_integrity.py
+          version: "2026.07"
+        inputs:
+          - artifact_id: replay-env-binding
+            uri: replay-environment.json
+            integrity:
+              sha256: sha256:596e3fe1091dccee4c165109ced6425a2d9cfa2ee99db59da364fea0c28b0361
+          - artifact_id: replay-verifier-script
+            uri: replay.py
+            integrity:
+              sha256: sha256:3405e1d85e97266b0560d913e9c3d0ccab5cef5014d031ddf86847445616bcd8
+        outputs:
+          - artifact_id: packet-formulation-roofline
+            uri: evidence/nano-kpu-formulation-roofline.json
+            integrity:
+              sha256: sha256:1a88948e41f7638a002dadbef55d939b6c85d6867da7ec36b42d9ef482e17dd7
+        scope: Frozen manifest integrity (35 files), resource budgets, and FP32/FP16/INT4 roofline bounds for nano.
+        uncertainty: Deterministic analytical byte accounting and cryptographic SHA-256 verification (zero variance).
+        limitations:
+          - Roofline lower bounds assume 100% DRAM bus utilization and zero internal compute or control serialization overhead.
+        integrity:
+          sha256: sha256:1a88948e41f7638a002dadbef55d939b6c85d6867da7ec36b42d9ef482e17dd7
+      - evidence_id: evidence-implementation-sandwich
+        producer:
+          producer_id: nano-kpu-frozen-harness
+          producer_type: pipeline
+        kind: Stage 3 multi-fidelity representation sandwich verification packet (float32 <-> fxmodel.py <-> RTL).
+        status: measured
+        tool:
+          name: nano-kpu reference/selftest.py, harness/selfcheck.py & rtl/selfmodel/fxmodel.py
+          version: "2026.07"
+        inputs:
+          - artifact_id: replay-env-binding
+            uri: replay-environment.json
+            integrity:
+              sha256: sha256:596e3fe1091dccee4c165109ced6425a2d9cfa2ee99db59da364fea0c28b0361
+          - artifact_id: replay-verifier-script
+            uri: replay.py
+            integrity:
+              sha256: sha256:3405e1d85e97266b0560d913e9c3d0ccab5cef5014d031ddf86847445616bcd8
+        outputs:
+          - artifact_id: packet-implementation-sandwich
+            uri: evidence/nano-kpu-implementation-sandwich.json
+            integrity:
+              sha256: sha256:f961e667285165129357be993fd8c6db59945b5ac80e5f1234c497c0806a8363
+        scope: Seed 20260706 nano teacher-forced sequences (seq_len=48 and seq_len=16) across float32, fxmodel.py, and RTL.
+        uncertainty: Exact integer arithmetic for fxmodel.py <-> RTL (0 ULP); < 1e-8 float32 BLAS variation absorbed by cosine metric.
+        limitations:
+          - Verified on seeded synthetic INT4 weights rather than an external natural-language corpus.
+        integrity:
+          sha256: sha256:f961e667285165129357be993fd8c6db59945b5ac80e5f1234c497c0806a8363
+      - evidence_id: evidence-evaluation-signoff
+        producer:
+          producer_id: nano-kpu-frozen-harness
+          producer_type: pipeline
+        kind: Stage 4, 5 & 6 full-chip RTL simulation, chaos stress tests, Nangate45 synthesis, and proxy-gap audit packet.
+        status: measured
+        tool:
+          name: Verilator 5.x + Yosys 0.64+ / Berkeley ABC (Nangate45 typical)
+          version: "2026.07"
+        inputs:
+          - artifact_id: replay-env-binding
+            uri: replay-environment.json
+            integrity:
+              sha256: sha256:596e3fe1091dccee4c165109ced6425a2d9cfa2ee99db59da364fea0c28b0361
+          - artifact_id: replay-verifier-script
+            uri: replay.py
+            integrity:
+              sha256: sha256:3405e1d85e97266b0560d913e9c3d0ccab5cef5014d031ddf86847445616bcd8
+        outputs:
+          - artifact_id: packet-evaluation-signoff
+            uri: evidence/nano-kpu-evaluation-signoff.json
+            integrity:
+              sha256: sha256:f0aebf5f5d99c6760aaf64a3fce4a1b75fb33433ffe530f108a5373de6d71bb4
+        scope: Full-chip msh_chip_top and submodule msh_deq evaluation under frozen harness rules.
+        uncertainty: Deterministic Verilator cycle counts and deterministic single-seed ABC technology mapping.
+        limitations:
+          - Pre-layout synthesis only; omits macro Liberty timing arcs, physical placement/routing congestion, CTS skew, and MCMM corners.
+        integrity:
+          sha256: sha256:f0aebf5f5d99c6760aaf64a3fce4a1b75fb33433ffe530f108a5373de6d71bb4
+  failed_or_rejected:
+    - record_id: reject-turn1-shift-and-audit-defect
+      kind: failed_gate
+      candidate_id: candidate-turn1-unaligned-rtl
+      stage: "Stage 5 Interpret -> Return Arrow to Stage 3 Implement"
+      reason: >
+        Candidate with 1-bit fixed-point shift mismatch (<< 13 vs << 14 in msh_deq) or missing
+        zero-point fold in msh_gemv diverges on row 0 against fxmodel.py; simulation-only
+        $fread/$readmemh escapes fail static audit.py.
+      gate_ref: gate-bit-exact-selfmodel
+      evidence_refs:
+        - evidence-implementation-sandwich
+        - evidence-evaluation-signoff
+    - record_id: reject-turn2-non-elastic-stall-and-demux
+      kind: rejected_alternative
+      candidate_id: candidate-turn2-parallel-demux-inelastic-fifo
+      stage: "Stage 5 Interpret -> Return Arrow to Stage 2 Explore"
+      reason: >
+        A 16-way parallel variable-index byte demux in msh_deq adds ~96,000 gates of mux
+        bloat, while an under-buffered fetch queue without 256-deep credit tracking degrades
+        severely when DRAM latency doubles from 24 to 48 cycles. Replaced by byte-serial
+        beat emitter (18,331 um^2), 256-deep credit FIFO (1.0457x elasticity), and dual-parity
+        qacc SRAM banking.
+      gate_ref: gate-chaos-randreset-and-elasticity
+      evidence_refs:
+        - evidence-evaluation-signoff
+    - record_id: reject-turn3-fp16-bandwidth-wall
+      kind: invalid_candidate
+      candidate_id: candidate-turn3-fp16-uncompressed-stream
+      stage: "Stage 5 Interpret -> Return Arrow to Stage 1 Formulate"
+      reason: >
+        Streaming uncompressed FP16 weights (304,448 B/token) across the 16 B/cycle DRAM port
+        requires a minimum floor of 19,028 cycles/token (max 5,255.4 tok/s at 100 MHz with
+        zero compute latency), making the 20,000 tok/s target physically impossible without
+        co-designing INT4 group-128 fused dequantization (76,109 B/token -> 4,757 cycles/token floor).
+      gate_ref: gate-functional-cosine-and-argmax
+      evidence_refs:
+        - evidence-formulation-roofline
+    - record_id: reject-unbuffered-wireload-signoff
+      kind: failed_gate
+      candidate_id: candidate-unbuffered-abc-netlist
+      stage: "Stage 4 Evaluate -> Two-Pass ABC Synthesis Discipline"
+      reason: >
+        Running ABC static timing without fanout buffering (buffer;upsize;dnsize) under the
+        5K_hvratio_1_1 wireload model yields a 266,514.91 ps (266.5 ns) delay on msh_deq alone
+        (and 5,084 ns full-chip) due to unbuffered high-fanout control/reset broadcast nets.
+      gate_ref: gate-nangate45-timing-closure
+      evidence_refs:
+        - evidence-evaluation-signoff
+  gates:
+    - gate_id: gate-frozen-manifest-integrity
+      category: legality
+      criterion: All 35 frozen files in harness/manifest.json must match their recorded SHA-256 digests without modification.
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-formulation-roofline
+      disposition: continue
+    - gate_id: gate-static-rtl-audit-and-lint
+      category: legality
+      criterion: Zero hard violations in harness/audit.py (no PLI/DPI/$fread/illegal $readmemh/macro redefinition) and Verilator lint errors == 0 with warnings <= 40.
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-evaluation-signoff
+      disposition: continue
+    - gate_id: gate-functional-cosine-and-argmax
+      category: functionality
+      criterion: Every simulated nano run must complete with magic status 0x600D_D00D, read >= 62,250 dense floor bytes, min-row cosine >= 0.98, and pooled argmax agreement >= 0.99.
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-implementation-sandwich
+        - evidence-evaluation-signoff
+      disposition: continue
+    - gate_id: gate-bit-exact-selfmodel
+      category: evidence
+      criterion: Emitted int32 logits from msh_chip_top RTL must match rtl/selfmodel/fxmodel.py bit-for-bit (0 ULP across all rows and columns).
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-implementation-sandwich
+      disposition: continue
+    - gate_id: gate-chaos-randreset-and-elasticity
+      category: reliability
+      criterion: Output dump under randomized flip-flop initialization (+verilator+rand+reset+2) must be byte-identical to normal RTL run, and 2x DRAM latency (48 cyc) run must complete cleanly.
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-evaluation-signoff
+      disposition: continue
+    - gate_id: gate-nangate45-timing-closure
+      category: timing
+      criterion: Two-pass Yosys/ABC mapped critical-path delay in Nangate45 typical corner must not exceed target clock period of 10.0 ns (100.0 MHz).
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: false
+      evidence_refs:
+        - evidence-evaluation-signoff
+      disposition: continue
+      notes: Measured 6.166 ns full-chip (162.2 MHz estimated fmax) and 1.479 ns on msh_deq submodule.
+    - gate_id: gate-nangate45-area-and-sram-budget
+      category: area
+      criterion: Combined Nangate45 standard-cell logic area plus priced macro area (1.0 Mbit/mm^2) must be <= 4.0 mm^2, macro SRAM <= 4.0 MiB, and inferred latch cells == 0.
+      result: passed
+      authority_id: nano-kpu-frozen-harness
+      waiver_rule:
+        allowed: true
+        authority_id: arch2-signoff-architect
+        conditions: >
+          Pre-layout synthesis area/timing proxies may be accepted for architectural benchmark
+          commitment only when accompanied by explicit disclosure of blackboxed SRAM/ROM
+          macros and statistical wireload limitations; never waived for physical tapeout.
+      evidence_refs:
+        - evidence-evaluation-signoff
+      disposition: continue
+      notes: Measured 3.610342 mm^2 total area (2.707058 mm^2 logic + 0.903284 mm^2 macros), 0.861439 MiB SRAM, and 0 latches.
+  decision_rights:
+    - action: propose
+      holder_id: kimi-k3-autonomous-architect
+      holder_type: model
+      scope: May propose fixed-point formats, LUT tables, and Verilog microarchitectures within rtl/ and REPORT.md.
+      conditions: Must preserve all 35 frozen files in harness/manifest.json and adhere to Verilog-2005 synthesizable subset.
+    - action: execute
+      holder_id: nano-kpu-frozen-harness
+      holder_type: pipeline
+      scope: Executes integrity, static audit, Verilator simulation, chaos stress tests, and Yosys/ABC synthesis.
+      conditions: Must run from unmodified frozen harness scripts and record deterministic outputs.
+    - action: reject
+      holder_id: nano-kpu-frozen-harness
+      holder_type: pipeline
+      scope: Automatically rejects any candidate failing integrity, audit, lint, cosine/argmax, randreset, timing, or area gates.
+      conditions: Rejection is automatic and non-negotiable whenever any gate criterion is violated.
+    - action: waive
+      holder_id: arch2-signoff-architect
+      holder_type: person
+      scope: May bound claim scope for pre-layout synthesis proxies where explicitly permitted by gate waiver rules.
+      conditions: Cannot waive functional correctness, manifest integrity, or static cheat audits; must document physical signoff gaps.
+    - action: recommend
+      holder_id: kimi-k3-autonomous-architect
+      holder_type: model
+      scope: May recommend a verified RTL + selfmodel candidate for pre-layout architectural commitment.
+      conditions: All 7 predeclared harness gates must pass and perf-model prediction error must be disclosed.
+    - action: commit
+      holder_id: arch2-signoff-architect
+      holder_type: person
+      scope: Authorizes commitment of msh_chip_top as a verified pre-layout RTL baseline and Architecture 2.0 reference case study.
+      conditions: Commitment is explicitly scoped to pre-layout RTL/synthesis verification and mandates physical P&R before silicon fabrication.
+  recommendation:
+    recommender_id: kimi-k3-autonomous-architect
+    action: Commit msh_chip_top (10 Verilog modules + fxmodel.py) as the verified pre-layout nano-kpu baseline and advance to physical place-and-route.
+    basis: >
+      Candidate passes all 7 predeclared gates, achieves 8,720.58 tok/s (2,180x over baseline),
+      matches fxmodel.py bit-for-bit (0 ULP), survives random-reset and 2x latency stress (1.0457x
+      elasticity), and fits within 3.610 mm^2 and 6.166 ns in Nangate45 pre-layout synthesis.
+    claim_refs:
+      - claim-throughput-2180x
+      - claim-sandwich-bit-exact
+      - claim-perf-model-calibration
+      - claim-synthesis-area-timing
+    authority_limit: Model recommendation cannot authorize foundry tapeout or waive physical backend signoff (OpenROAD P&R, CTS, SPEF STA, DRC/LVS).
+  accountable_decision:
+    status: authorized
+    holder_id: arch2-signoff-architect
+    action: Authorize commitment of MoonshotAI/nano-kpu (msh_chip_top) as a verified pre-layout RTL architecture and Architecture 2.0 flagship benchmark study.
+    rationale: >
+      The frozen evaluation harness and multi-fidelity representation sandwich establish gold-standard
+      evidence for pre-layout RTL correctness, cycle-accurate throughput (8,720.58 tok/s), and
+      technology-mapped logic complexity (3.610 mm^2, 6.166 ns), while transparently bounding the
+      proxy gap between pre-layout wireload STA and physical backend signoff.
+    claim_refs:
+      - claim-throughput-2180x
+      - claim-sandwich-bit-exact
+      - claim-perf-model-calibration
+      - claim-synthesis-area-timing
+    authorized_scope: Pre-layout RTL architecture signoff, open-source reproducible benchmark release, and progression to physical P&R experimentation.
+    recorded_at: "2026-10-15T09:00:00Z"
+    reopen_conditions:
+      - Any SHA-256 mismatch in harness/manifest.json or evidence packets during replay.
+      - Failure on hidden evaluation seeds (group_size=64 or stretched sequence lengths up to max_seq=64).
+      - Post-layout OpenROAD routing congestion, macro placement channel blockage, or SPEF RC timing violations exceeding the 10.0 ns clock period.
+  replay:
+    commands:
+      - command: python3 replay.py verify-all
+        working_directory: nanochip/cards
+    environment_binding:
+      artifact_id: replay-env-binding
+      uri: replay-environment.json
+      sha256: sha256:596e3fe1091dccee4c165109ced6425a2d9cfa2ee99db59da364fea0c28b0361
+    inputs:
+      - artifact_id: replay-verifier-script
+        uri: replay.py
+        sha256: sha256:3405e1d85e97266b0560d913e9c3d0ccab5cef5014d031ddf86847445616bcd8
+    outputs:
+      - artifact_id: packet-formulation-roofline
+        uri: evidence/nano-kpu-formulation-roofline.json
+        sha256: sha256:1a88948e41f7638a002dadbef55d939b6c85d6867da7ec36b42d9ef482e17dd7
+      - artifact_id: packet-implementation-sandwich
+        uri: evidence/nano-kpu-implementation-sandwich.json
+        sha256: sha256:f961e667285165129357be993fd8c6db59945b5ac80e5f1234c497c0806a8363
+      - artifact_id: packet-evaluation-signoff
+        uri: evidence/nano-kpu-evaluation-signoff.json
+        sha256: sha256:f0aebf5f5d99c6760aaf64a3fce4a1b75fb33433ffe530f108a5373de6d71bb4
+    expected_status: Exit code 0, all 35 frozen nano-kpu files intact, bit-exact FxModel cosine verified, and all 3 evidence packets matching SHA-256 digests.
+    observed_status: Exit code 0; replay_verified on 2026-10-15 with all 35 frozen files and 3 evidence packets matching declared SHA-256 hashes.
+    validation_status: replay_verified
+    validated_at: "2026-10-15T09:00:00Z"
+    validator: nanochip/cards/replay.py + ./arch2 validate card v2.0 contract
+  independent_review:
+    review_id: arch2-nanochip-independent-audit-2026
+    reviewer_id: arch2-signoff-architect
+    independence_basis: >
+      The Architecture 2.0 signoff reviewer did not author the upstream Kimi K3 RTL or
+      Moonshot AI harness and audited the artifact independently via cryptographic manifest
+      checks, adversarial red-team mutations, and cross-PDK Yosys/ABC synthesis probes.
+    shared_dependencies:
+      - Both producer and reviewer rely on the frozen MoonshotAI/nano-kpu specification, Verilator 5.x, Yosys 0.64+, and NangateOpenCellLibrary_typical.lib.
+    conflicts: []
+    result: accepted
+    claim_refs:
+      - claim-throughput-2180x
+      - claim-sandwich-bit-exact
+      - claim-perf-model-calibration
+      - claim-synthesis-area-timing
+    evidence_refs:
+      - evidence-formulation-roofline
+      - evidence-implementation-sandwich
+      - evidence-evaluation-signoff
+  disclosure:
+    data_classes:
+      - Open-source Apache-2.0 Verilog RTL, Python float32/fixed-point models, synthetic splitmix64-seeded weights, and open-source Nangate45 synthesis reports.
+    redactions:
+      - Undisclosed grading seed file used by Moonshot AI for private leaderboard evaluation (public seed 20260706 is fully disclosed and replayable).
+    reviewer_roles:
+      - Architecture 2.0 book reader, graduate computer architecture instructor, and silicon verification engineer.
+    release_boundary_or_compliance_review_id: Apache-2.0 open-source release (MoonshotAI/nano-kpu) + Architecture 2.0 pedagogical companion; no proprietary PDK or confidential customer data.
