@@ -94,6 +94,12 @@ def collect_figures() -> dict[str, dict]:
     return figs
 
 
+@lru_cache(maxsize=1)
+def recorded_receipt_paths() -> set[str]:
+    records = yaml.safe_load(MANIFEST.read_text()).get("receipts", [])
+    return {r["path"] for r in records if isinstance(r, dict) and "path" in r}
+
+
 def classify(
     label: str, info: dict, evidence: dict | None = None
 ) -> tuple[str, str, str]:
@@ -114,6 +120,7 @@ def classify(
         return "VIOLATION", "data must be a list of repository-relative paths", where
     if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
         return "VIOLATION", "citations must be a list of bibliography keys", where
+    receipt_paths = recorded_receipt_paths()
     for rel in data:
         path = (ROOT / rel).resolve()
         if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
@@ -122,6 +129,30 @@ def classify(
                 f"declared input is missing or outside repository: {rel}",
                 where,
             )
+        if rel not in receipt_paths:
+            return (
+                "VIOLATION",
+                f"declared input is not registered in provenance.yml receipts: {rel}",
+                where,
+            )
+        if rel.startswith("data/studies/"):
+            parts = Path(rel).parts
+            if len(parts) >= 3:
+                study_dir = ROOT / parts[0] / parts[1] / parts[2]
+                receipt_file = study_dir / "build_receipt.json"
+                if receipt_file.is_file():
+                    import hashlib, json
+
+                    receipt_json = json.loads(receipt_file.read_text())
+                    rel_in_study = str(path.relative_to(study_dir))
+                    expected_sha = receipt_json.get("files", {}).get(rel_in_study)
+                    actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+                    if expected_sha and expected_sha != actual_sha:
+                        return (
+                            "VIOLATION",
+                            f"SHA-256 mismatch against {study_dir.name}/build_receipt.json: {rel}",
+                            where,
+                        )
     unknown = set(keys) - bibliography_keys()
     if unknown:
         return (

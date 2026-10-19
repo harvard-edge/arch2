@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE.parent))
-from book._python.plots import COLORS, apply_style, save_figure_bundle
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 from evidence_bundle import verify_sources, record_build
 from collect import select_pairs
 
@@ -28,12 +28,14 @@ def number(text, key):
 
 
 def main():
-    manifest = verify_sources(HERE)
-    pairs, unpaired = select_pairs(
-        json.loads((HERE / "raw/summary_results.json").read_text())
-    )
-    assert pairs == json.loads((HERE / "selected_pairs.json").read_text())
-    assert unpaired == manifest["unpaired_systems"]
+    manifest = verify_sources(HERE, allow_missing_gitignored=True)
+    raw_summary = HERE / "raw/summary_results.json"
+    if raw_summary.exists():
+        pairs, unpaired = select_pairs(json.loads(raw_summary.read_text()))
+        assert pairs == json.loads((HERE / "selected_pairs.json").read_text())
+        assert unpaired == manifest["unpaired_systems"]
+    else:
+        pairs = json.loads((HERE / "selected_pairs.json").read_text())
     rows = []
     for pair in pairs:
         data = {}

@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE.parent))
-from book._python.plots import COLORS, apply_style, save_figure_bundle
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 from evidence_bundle import verify_sources, record_build
 
 
@@ -150,7 +150,13 @@ def main():
         width=0.65,
     )
     for i, s in enumerate(series):
-        ax.text(i, s["options"] + 1.2, str(s["options"]), ha="center", fontsize=6)
+        ax.text(
+            i,
+            s["options"] + 1.2,
+            str(s["options"]),
+            ha="center",
+            fontsize=FONT_SIZES["annotation"],
+        )
     ax.set(
         xticks=list(x),
         xticklabels=[s["tag"] + "\n" + s["date"][:4] for s in series],

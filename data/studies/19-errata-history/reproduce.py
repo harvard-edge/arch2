@@ -16,15 +16,20 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE.parent))
-from book._python.plots import COLORS, apply_style, save_figure_bundle
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 from evidence_bundle import verify_sources, record_build
 
 
 def main():
-    manifest = verify_sources(HERE)
-    verify_sources(HERE.parent / "13-errata-dispositions")
-    subprocess.run([sys.executable, str(HERE / "extract_history.py")], check=True)
-    manifest = verify_sources(HERE)
+    manifest = verify_sources(HERE, allow_missing_gitignored=True)
+    pdf_dir = HERE.parent / "13-errata-dispositions/raw/pdf"
+    if pdf_dir.exists() and any(pdf_dir.glob("*.pdf")):
+        verify_sources(
+            HERE.parent / "13-errata-dispositions", allow_missing_gitignored=True
+        )
+        (HERE / "source_visual_qa").mkdir(parents=True, exist_ok=True)
+        subprocess.run([sys.executable, str(HERE / "extract_history.py")], check=True)
+        manifest = verify_sources(HERE, allow_missing_gitignored=True)
     rows = list(csv.DictReader((HERE / "annual_counts.csv").open()))
     for r in rows:
         for k in (
@@ -67,7 +72,14 @@ def main():
         ax.bar(years, counts, width=0.62, color=COLORS["evidence"], zorder=3)
         for year, n in zip(years, counts):
             if n:
-                ax.text(year, n + 2, str(n), ha="center", va="bottom", fontsize=6)
+                ax.text(
+                    year,
+                    n + 2,
+                    str(n),
+                    ha="center",
+                    va="bottom",
+                    fontsize=FONT_SIZES["annotation"],
+                )
         ax.set(
             title=title,
             xlim=(2014.5, 2026.5),

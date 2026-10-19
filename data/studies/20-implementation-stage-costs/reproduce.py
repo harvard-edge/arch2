@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE.parent))
-from book._python.plots import COLORS, apply_style, save_figure_bundle
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 from evidence_bundle import record_build, verify_sources
 
 
@@ -29,8 +29,14 @@ def duration(row):
 
 
 def main():
-    manifest = verify_sources(HERE)
-    subprocess.run([sys.executable, str(HERE / "extract_stage_costs.py")], check=True)
+    manifest = verify_sources(HERE, allow_missing_gitignored=True)
+    archive = (
+        HERE / "raw/librelane-spm-ihp-sg13g2-run-37749124131-artifact-11539925672.zip"
+    )
+    if archive.exists():
+        subprocess.run(
+            [sys.executable, str(HERE / "extract_stage_costs.py")], check=True
+        )
     rows = list(csv.DictReader((HERE / "stage-costs.csv").open()))
     for row in rows:
         row["runtime_seconds"] = float(row["runtime_seconds"])
@@ -107,7 +113,11 @@ def main():
     )
     for i, r in enumerate(display):
         ax.text(
-            r["seconds"] + 0.45, i, f'{r["seconds"]:.2f}', va="center", fontsize=6.2
+            r["seconds"] + 0.45,
+            i,
+            f'{r["seconds"]:.2f}',
+            va="center",
+            fontsize=FONT_SIZES["annotation"],
         )
     ax.set_title(f"(a) All 78 step intervals: {total:.1f} seconds", loc="left", pad=9)
     scope_labels = [
@@ -130,7 +140,9 @@ def main():
         xlabel="Elapsed seconds at each accounting boundary",
     )
     for i, value in enumerate(scope_values):
-        scope.text(value + 4, i, f"{value:.1f}", va="center", fontsize=6.2)
+        scope.text(
+            value + 4, i, f"{value:.1f}", va="center", fontsize=FONT_SIZES["annotation"]
+        )
     scope.set_title(
         "(b) The enclosing job also includes setup and other CI work", loc="left", pad=9
     )
@@ -138,7 +150,7 @@ def main():
         axis.grid(axis="x", color=COLORS["grid"], linewidth=0.5)
         axis.grid(axis="y", visible=False)
         axis.spines[["top", "right", "left"]].set_visible(False)
-        axis.tick_params(axis="y", length=0, pad=5, labelsize=6.2)
+        axis.tick_params(axis="y", length=0, pad=5, labelsize=FONT_SIZES["tick"])
     fig.subplots_adjust(left=0.335, right=0.94, top=0.91, bottom=0.11, hspace=0.68)
     save_figure_bundle(fig, HERE / "figure")
     save_figure_bundle(
