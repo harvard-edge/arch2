@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style, save_figure_bundle
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 
 apply_style()
 
@@ -67,38 +67,29 @@ def main():
             f"{speedup:.3f}×",
             va="center",
             ha="left",
-            fontsize=7.2,
+            fontsize=FONT_SIZES["annotation"],
             color=COLORS["ink"],
             bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none"),
             zorder=5,
         )
 
     ax.set_yticks(range(len(rows)))
-    ax.set_yticklabels([r["workload"] for r in rows], fontsize=7.2)
+    ax.set_yticklabels([r["workload"] for r in rows], fontsize=FONT_SIZES["body"])
     ax.set_ylim(len(rows) - 0.4, -0.65)
     ax.set_xlim(1.0, 1.23)
     ax.set_xticks([1.0, 1.05, 1.10, 1.15, 1.20])
     ax.set_title(
         f"{first['accelerator'].replace('NVIDIA ', '')} · {first['accelerators']} GPUs",
         loc="left",
-        fontsize=8.2,
-        fontweight="bold",
         pad=9,
     )
-    ax.set_xlabel("Time-to-train speedup, v2.1 / v3.0 (×)", fontsize=7.4)
+    ax.set_xlabel("Time-to-train speedup, v2.1 / v3.0 (×)")
     ax.axvline(1.0, color=COLORS["muted"], linewidth=0.8, zorder=4)
-    ax.grid(axis="x", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax.grid(axis="x", color=COLORS["grid"], linewidth=0.55, zorder=0)
     ax.grid(axis="y", visible=False)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(axis="x", labelsize=7.0)
     ax.tick_params(axis="y", length=0)
     fig.tight_layout()
-    paths = save_figure_bundle(fig, OUT_BASE, dpi=300, bbox_inches="tight")
-    svg = paths["svg"]
-    svg.write_text(
-        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
-    )
+    save_figure_bundle(fig, OUT_BASE, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {OUT_BASE}.{{svg,pdf,png}}")
 

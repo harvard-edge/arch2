@@ -74,6 +74,17 @@ COLORS = {
     "design_cost_fill": "#E4F1F6",
 }
 
+# Canonical typography hierarchy (in points) shared across all matplotlib figures.
+FONT_SIZES = {
+    "title": 7.2,
+    "label": 6.5,
+    "body": 6.5,
+    "tick": 5.8,
+    "legend": 5.8,
+    "annotation": 5.8,
+    "note": 5.4,
+}
+
 
 def _register_brand_fonts() -> None:
     """Make Arial-family fonts resolvable by name in this interpreter.
@@ -109,12 +120,23 @@ def apply_style() -> None:
     plt.style.use(STYLE_PATH)
     mpl.rcParams["font.family"] = "sans-serif"
     mpl.rcParams["font.sans-serif"] = BRAND_SANS
-    mpl.rcParams["font.size"] = 6.5
-    mpl.rcParams["axes.labelsize"] = 6.5
-    mpl.rcParams["axes.titlesize"] = 7.2
-    mpl.rcParams["xtick.labelsize"] = 5.8
-    mpl.rcParams["ytick.labelsize"] = 5.8
-    mpl.rcParams["legend.fontsize"] = 5.8
+    mpl.rcParams["font.size"] = FONT_SIZES["body"]
+    mpl.rcParams["axes.labelsize"] = FONT_SIZES["label"]
+    mpl.rcParams["axes.titlesize"] = FONT_SIZES["title"]
+    mpl.rcParams["axes.titleweight"] = "bold"
+    mpl.rcParams["axes.labelcolor"] = COLORS["ink"]
+    mpl.rcParams["axes.edgecolor"] = COLORS["ink"]
+    mpl.rcParams["axes.linewidth"] = 0.7
+    mpl.rcParams["axes.spines.top"] = False
+    mpl.rcParams["axes.spines.right"] = False
+    mpl.rcParams["xtick.color"] = COLORS["ink"]
+    mpl.rcParams["ytick.color"] = COLORS["ink"]
+    mpl.rcParams["xtick.labelsize"] = FONT_SIZES["tick"]
+    mpl.rcParams["ytick.labelsize"] = FONT_SIZES["tick"]
+    mpl.rcParams["legend.fontsize"] = FONT_SIZES["legend"]
+    mpl.rcParams["legend.frameon"] = False
+    mpl.rcParams["grid.color"] = COLORS["grid"]
+    mpl.rcParams["grid.linewidth"] = 0.55
     # HTML display width = figsize x dpi under Quarto's retina pipeline; 150
     # sizes data figures to roughly the text column. PDF output is vector
     # (sized by out-width), so this affects HTML only.
@@ -129,8 +151,8 @@ def top_log_axis(
     xticks: list[float],
     xticklabels: list[str],
     xlabel: str,
-    tick_fontsize: float = 6.2,
-    label_fontsize: float = 7,
+    tick_fontsize: float = FONT_SIZES["tick"],
+    label_fontsize: float = FONT_SIZES["label"],
 ) -> None:
     """Use a top-oriented log axis for compact scale-comparison plots."""
 
@@ -166,9 +188,9 @@ def draw_range_rows(
     high_key: str,
     label_x: float,
     right_x: float,
-    label_fontsize: float = 6.4,
-    note_fontsize: float = 5.3,
-    right_fontsize: float = 5.9,
+    label_fontsize: float = FONT_SIZES["body"],
+    note_fontsize: float = FONT_SIZES["note"],
+    right_fontsize: float = FONT_SIZES["annotation"],
     y_positions: list[float] | None = None,
     show_notes: bool = True,
     label_dy: float = -0.12,
@@ -241,7 +263,7 @@ def add_note_box(
     text: str,
     *,
     xywh: tuple[float, float, float, float],
-    fontsize: float = 9.0,
+    fontsize: float = FONT_SIZES["note"],
 ) -> None:
     """Add the shared boxed note used under compact quantitative plots."""
 
@@ -318,7 +340,8 @@ def inject_svg_font_stack(svg_path: Path | str) -> None:
             '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
             1,
         )
-        path.write_text(text, encoding="utf-8")
+    text = "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def save_figure_bundle(
@@ -366,7 +389,7 @@ def draw_spectrum_bars(
     bar_edgecolor: str | None = None,
     in_bar_color: str = "#ffffff",
     out_bar_color: str | None = None,
-    fontsize: float = 9.0,
+    fontsize: float = FONT_SIZES["annotation"],
 ) -> None:
     """Draw standardized horizontal spectrum bars with calibrated inside/outside labels."""
     y_pos = list(range(len(categories)))
@@ -407,10 +430,12 @@ def draw_spectrum_bars(
         ax.set_xlim(*xlim)
 
     ax.set_yticks(y_pos[::-1])
-    ax.set_yticklabels(categories, fontsize=9.5, fontweight="bold", color=COLORS["ink"])
+    ax.set_yticklabels(
+        categories, fontsize=FONT_SIZES["body"], fontweight="bold", color=COLORS["ink"]
+    )
 
     if xlabel:
-        ax.set_xlabel(xlabel, fontsize=10.0, color=COLORS["ink"])
+        ax.set_xlabel(xlabel, fontsize=FONT_SIZES["label"], color=COLORS["ink"])
 
     ax.grid(axis="x", color=COLORS["grid"], linewidth=0.55, zorder=0)
     clean_spines(ax, keep=("bottom", "left"))
