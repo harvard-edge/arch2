@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 
 apply_style()
 
@@ -63,8 +63,8 @@ def main():
         for r in rows
     ]
 
-    fig, ax = plt.subplots(figsize=(5.0, 3.8))
-    fig.subplots_adjust(left=0.11, right=0.87, top=0.74, bottom=0.15)
+    fig, ax = plt.subplots(figsize=(5.0, 3.5))
+    fig.subplots_adjust(left=0.11, right=0.87, top=0.76, bottom=0.15)
 
     ax.plot(
         [y for y, _ in vt],
@@ -99,7 +99,7 @@ def main():
         "2024\nsample\nchange",
         ha="center",
         va="center",
-        fontsize=8.0,
+        fontsize=FONT_SIZES["annotation"],
         color=COLORS["muted"],
         bbox=dict(
             boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.92
@@ -108,6 +108,9 @@ def main():
     )
 
     sub = ax.twinx()
+    sub.spines["right"].set_visible(True)
+    sub.spines["right"].set_color(COLORS["ink"])
+    sub.spines["right"].set_linewidth(0.7)
     historical_ratio = [(y, v) for y, v, _ in ratio if y < 2024]
     sub.plot(
         [y for y, _ in historical_ratio],
@@ -138,8 +141,12 @@ def main():
         label="Verification/design staffing ratio (right axis;\nhollow = derived from stated growth rates)",
     )
     sub.set_ylim(0.4, 1.6)
-    sub.set_ylabel("Staffing ratio", fontsize=8.5, color=COLORS["blue"], labelpad=3)
-    sub.tick_params(axis="y", colors=COLORS["blue"], labelsize=8.0, pad=2)
+    sub.set_ylabel(
+        "Staffing ratio", fontsize=FONT_SIZES["label"], color=COLORS["blue"], labelpad=3
+    )
+    sub.tick_params(
+        axis="y", colors=COLORS["blue"], labelsize=FONT_SIZES["tick"], pad=2
+    )
 
     last_y, last_v = fs[-1]
     ax.annotate(
@@ -147,7 +154,7 @@ def main():
         xy=(last_y, last_v),
         xytext=(2011.8, 15),
         arrowprops=dict(arrowstyle="->", color=COLORS["red"], lw=0.8),
-        fontsize=8.0,
+        fontsize=FONT_SIZES["annotation"],
         fontweight="bold",
         color=COLORS["red"],
         bbox=dict(
@@ -163,10 +170,9 @@ def main():
     ax.set_xlim(2006, 2025)
     ax.set_ylim(0, 85)
     ax.set_xticks([y for y in range(2007, 2025) if y in {r[0] for r in ratio}])
-    ax.set_xlabel("Survey year", fontsize=8.5)
-    ax.set_ylabel("Percent", fontsize=8.5)
-    ax.tick_params(axis="both", labelsize=8.0)
-    ax.grid(True, color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax.set_xlabel("Survey year")
+    ax.set_ylabel("Percent")
+    ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
 
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = sub.get_legend_handles_labels()
@@ -175,19 +181,14 @@ def main():
         l1 + l2,
         loc="upper left",
         bbox_to_anchor=(0.075, 0.995),
-        fontsize=8.0,
+        fontsize=FONT_SIZES["legend"],
         frameon=True,
         facecolor="white",
         edgecolor="none",
         borderpad=0.3,
     )
 
-    for ext, kw in (("svg", {}), ("pdf", {}), ("png", {"dpi": 300})):
-        fig.savefig(OUT.with_suffix(f".{ext}"), bbox_inches="tight", **kw)
-    svg = OUT.with_suffix(".svg")
-    svg.write_text(
-        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
-    )
+    save_figure_bundle(fig, OUT)
     plt.close(fig)
     print(f"Generated {OUT}.svg/.pdf/.png")
 

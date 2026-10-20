@@ -27,7 +27,7 @@ VERSION_NEUTRAL_SOURCES = (
     "book/_quarto.yml",
     "book/tex/version.tex",
     "book/tex/springer-header.tex",
-    "cli/arch2.py",
+    "cli/book.py",
     "book/images/arch2-cover.svg",
     "book/images/arch2-card.svg",
 )

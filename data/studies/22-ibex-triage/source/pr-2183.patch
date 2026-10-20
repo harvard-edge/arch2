@@ -1,0 +1,1179 @@
+From 68a2b3c3ae1c13ff2047ef78bab8e8ea00f0f4e1 Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Wed, 26 Jun 2024 17:20:22 +0200
+Subject: [PATCH 1/7] [dv] Fix exception_stall_instr_cross illegal bins
+
+---
+ dv/uvm/core_ibex/fcov/core_ibex_fcov_if.sv | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/dv/uvm/core_ibex/fcov/core_ibex_fcov_if.sv b/dv/uvm/core_ibex/fcov/core_ibex_fcov_if.sv
+index 54089280d3..3c844da742 100644
+--- a/dv/uvm/core_ibex/fcov/core_ibex_fcov_if.sv
++++ b/dv/uvm/core_ibex/fcov/core_ibex_fcov_if.sv
+@@ -758,9 +758,12 @@ interface core_ibex_fcov_if import ibex_pkg::*; (
+          binsof(cp_stall_type_id) intersect {IdStallTypeLdHz});
+ 
+       // Cannot have a memory stall when we see an LS exception unless it is a load or store
+-      // instruction
++      // instruction or a fetch error (the raw instruction decode can still indicate a load or store
++      // which produces a stall, though won't cause any load or store to occur due to the fetch
++      // error).
+       illegal_bins mem_stall_illegal =
+-        (!binsof(cp_id_instr_category) intersect {InstrCategoryLoad, InstrCategoryStore} &&
++        (!binsof(cp_id_instr_category) intersect {InstrCategoryLoad, InstrCategoryStore,
++                                                  InstrCategoryFetchError} &&
+          binsof(cp_stall_type_id) intersect {IdStallTypeMem}) with
+         (cp_ls_pmp_exception == 1'b1 || cp_ls_error_exception == 1'b1);
+ 
+
+From 327d177b418a5c0704f08e1925ba7427027d016f Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Thu, 27 Jun 2024 15:04:14 +0200
+Subject: [PATCH 2/7] [dv] Fix model mismatches in cases where an access
+ crosses PMP regions
+
+Where an access is unaligned Ibex splits it into two transactions, each
+of which undergoes a PMP check. It is possible for the first half to
+fail a PMP check and the second to succeed and hence produce a request
+on the memory interface.
+
+In Spike it accesses memory byte by byte and if it encounters a PMP
+error for a particular byte it won't try any further bytes.
+
+This results in a mis-match between Ibex and spike when an unaligned
+transaction is split across two PMP regions, one of which allows the
+access and the other doesn't. Ibex generates a transaction and spike
+doesn't producing an error.
+
+This adds a fixup into the co-simulation environment. It detects when we
+have an access that fails PMP that is misaligned. Where this has
+resulted in Ibex producing a memory request that spike would not we
+remove it from the list of memory requests to check after checking that
+the request passes PMP within spike.
+---
+ dv/cosim/cosim.h                              |  4 ++
+ dv/cosim/cosim_dpi.cc                         | 10 ++-
+ dv/cosim/cosim_dpi.h                          |  4 +-
+ dv/cosim/cosim_dpi.svh                        |  2 +-
+ dv/cosim/spike_cosim.cc                       | 63 +++++++++++++++++++
+ dv/cosim/spike_cosim.h                        |  2 +
+ .../ibex_cosim_agent/ibex_cosim_scoreboard.sv |  3 +-
+ .../ibex_mem_intf_agent/ibex_mem_intf.sv      |  4 ++
+ .../ibex_mem_intf_monitor.sv                  | 10 +--
+ .../ibex_mem_intf_seq_item.sv                 | 24 ++++---
+ dv/uvm/core_ibex/tb/core_ibex_tb_top.sv       |  7 +++
+ .../ibex_simple_system_cosim_checker.sv       | 12 +++-
+ 12 files changed, 125 insertions(+), 20 deletions(-)
+
+diff --git a/dv/cosim/cosim.h b/dv/cosim/cosim.h
+index 28c6805b9a..068f83fff2 100644
+--- a/dv/cosim/cosim.h
++++ b/dv/cosim/cosim.h
+@@ -35,6 +35,10 @@ struct DSideAccessInfo {
+   // `misaligned_first` set to true, there is no second half.
+   bool misaligned_first;
+   bool misaligned_second;
++
++  bool misaligned_first_saw_error;
++
++  bool m_mode_access;
+ };
+ 
+ class Cosim {
+diff --git a/dv/cosim/cosim_dpi.cc b/dv/cosim/cosim_dpi.cc
+index 37862629cc..bbc20c901f 100644
+--- a/dv/cosim/cosim_dpi.cc
++++ b/dv/cosim/cosim_dpi.cc
+@@ -66,7 +66,10 @@ void riscv_cosim_notify_dside_access(Cosim *cosim, svBit store,
+                                      svBitVecVal *addr, svBitVecVal *data,
+                                      svBitVecVal *be, svBit error,
+                                      svBit misaligned_first,
+-                                     svBit misaligned_second) {
++                                     svBit misaligned_second,
++                                     svBit misaligned_first_saw_error,
++                                     svBit m_mode_access) {
++
+   assert(cosim);
+ 
+   cosim->notify_dside_access(
+@@ -76,7 +79,10 @@ void riscv_cosim_notify_dside_access(Cosim *cosim, svBit store,
+                       .be = be[0],
+                       .error = error != 0,
+                       .misaligned_first = misaligned_first != 0,
+-                      .misaligned_second = misaligned_second != 0});
++                      .misaligned_second = misaligned_second != 0,
++                      .misaligned_first_saw_error =
++                        misaligned_first_saw_error != 0,
++                      .m_mode_access = m_mode_access != 0});
+ }
+ 
+ void riscv_cosim_set_iside_error(Cosim *cosim, svBitVecVal *addr) {
+diff --git a/dv/cosim/cosim_dpi.h b/dv/cosim/cosim_dpi.h
+index e57bc94228..ee94dddd0a 100644
+--- a/dv/cosim/cosim_dpi.h
++++ b/dv/cosim/cosim_dpi.h
+@@ -27,7 +27,9 @@ void riscv_cosim_notify_dside_access(Cosim *cosim, svBit store,
+                                      svBitVecVal *addr, svBitVecVal *data,
+                                      svBitVecVal *be, svBit error,
+                                      svBit misaligned_first,
+-                                     svBit misaligned_second);
++                                     svBit misaligned_second,
++                                     svBit misaligned_first_saw_error,
++                                     svBit m_mode_access);
+ void riscv_cosim_set_iside_error(Cosim *cosim, svBitVecVal *addr);
+ int riscv_cosim_get_num_errors(Cosim *cosim);
+ const char *riscv_cosim_get_error(Cosim *cosim, int index);
+diff --git a/dv/cosim/cosim_dpi.svh b/dv/cosim/cosim_dpi.svh
+index 4e2b98deeb..c6004f2f4c 100644
+--- a/dv/cosim/cosim_dpi.svh
++++ b/dv/cosim/cosim_dpi.svh
+@@ -22,7 +22,7 @@ import "DPI-C" function void riscv_cosim_set_csr(chandle cosim_handle, int csr_i
+ import "DPI-C" function void riscv_cosim_set_ic_scr_key_valid(chandle cosim_handle, bit valid);
+ import "DPI-C" function void riscv_cosim_notify_dside_access(chandle cosim_handle, bit store,
+   bit [31:0] addr, bit [31:0] data, bit [3:0] be, bit error, bit misaligned_first,
+-  bit misaligned_second);
++  bit misaligned_second, bit misaligned_first_saw_error, bit m_mode_access);
+ import "DPI-C" function int riscv_cosim_set_iside_error(chandle cosim_handle, bit [31:0] addr);
+ import "DPI-C" function int riscv_cosim_get_num_errors(chandle cosim_handle);
+ import "DPI-C" function string riscv_cosim_get_error(chandle cosim_handle, int index);
+diff --git a/dv/cosim/spike_cosim.cc b/dv/cosim/spike_cosim.cc
+index 1432ceaf3e..78bf101d23 100644
+--- a/dv/cosim/spike_cosim.cc
++++ b/dv/cosim/spike_cosim.cc
+@@ -8,6 +8,7 @@
+ #include "riscv/devices.h"
+ #include "riscv/log_file.h"
+ #include "riscv/processor.h"
++#include "riscv/mmu.h"
+ #include "riscv/simif.h"
+ 
+ #include <cassert>
+@@ -411,6 +412,12 @@ bool SpikeCosim::check_sync_trap(uint32_t write_reg,
+     return false;
+   }
+ 
++  if ((processor->get_state()->mcause->read() == 0x5) ||
++      (processor->get_state()->mcause->read() == 0x7)) {
++    // We have a load or store access fault, apply fixup for misaligned accesses
++    misaligned_pmp_fixup();
++  }
++
+   // If we see an internal NMI, that means we receive an extra memory intf item.
+   // Deleting that is necessary since next Load/Store would fail otherwise.
+   if (processor->get_state()->mcause->read() == 0xFFFFFFE0) {
+@@ -619,6 +626,62 @@ void SpikeCosim::early_interrupt_handle() {
+   }
+ }
+ 
++// Ibex splits misaligned accesses into two separate requests. They
++// independently undergo PMP access checks. It is possible for one to fail (so
++// no request produced for that half of the access) whilst the other successed
++// (producing a request for that half of the access).
++//
++// Spike splits misaligned accesses up into bytes and will apply PMP access
++// checks byte by byte in a linear order. As soon as a byte sees a PMP
++// permission failure the rest of the misaligned access is aborted.
++//
++// This results in mismatches as in some misaligned access cases Ibex will
++// produce a request and spike will not.
++//
++// This fixup detects this condition and removes the Ibex access from
++// pending_dside_accesses to avoid a mismatch. This removed access is checked
++// against PMP using the spike MMU to check spike agrees it passes PMP checks.
++//
++// There may be a better way to handle this (e.g. altering spike behaviour to match
++// Ibex) so for now a warning is generated in fixup cases so they can be easily
++// identified.
++void SpikeCosim::misaligned_pmp_fixup() {
++  if (pending_dside_accesses.size() != 0) {
++    auto &top_pending_access = pending_dside_accesses.front();
++    auto &top_pending_access_info = top_pending_access.dut_access_info;
++
++    // If top access is the second half of a misaligned access where the first
++    // half saw an error we have the PMP fixup case
++    if (top_pending_access_info.misaligned_second &&
++        top_pending_access_info.misaligned_first_saw_error) {
++      mmu_t* mmu = processor->get_mmu();
++
++      // Check if the second half of the access (which Ibex produces a request
++      // for and spike does not) passes PMP
++      if (!mmu->pmp_ok(top_pending_access_info.addr, 4,
++            top_pending_access_info.store ? STORE : LOAD,
++            top_pending_access_info.m_mode_access ? PRV_M : PRV_U)) {
++        // Raise an error if the second half shouldn't have passed PMP
++        std::stringstream err_str;
++        err_str << "Saw second half of a misaligned access which not have "
++                << "generated a memory request as it does not pass a PMP check,"
++                << " address: " << std::hex << top_pending_access_info.addr;
++        errors.emplace_back(err_str.str());
++      } else {
++        // Output warning on stdout so we're aware which tests this is happening
++        // in
++        std::cout << "WARNING: Cosim dropping second half of misaligned access "
++                  << "as first half saw an error and second half passed PMP "
++                  << "check, address: "
++                  << std::hex << top_pending_access_info.addr << std::endl;
++        std::cout << std::dec;
++
++        pending_dside_accesses.erase(pending_dside_accesses.begin());
++      }
++    }
++  }
++}
++
+ void SpikeCosim::set_nmi(bool nmi) {
+   if (nmi && !nmi_mode && !processor->get_state()->debug_mode &&
+       processor->halt_request != processor_t::HR_REGULAR) {
+diff --git a/dv/cosim/spike_cosim.h b/dv/cosim/spike_cosim.h
+index 4785da9932..f6cf90fe35 100644
+--- a/dv/cosim/spike_cosim.h
++++ b/dv/cosim/spike_cosim.h
+@@ -95,6 +95,8 @@ class SpikeCosim : public simif_t, public Cosim {
+ 
+   void early_interrupt_handle();
+ 
++  void misaligned_pmp_fixup();
++
+   unsigned int insn_cnt;
+ 
+  public:
+diff --git a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
+index 7dca96826a..9158675ae2 100644
+--- a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
++++ b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
+@@ -178,7 +178,8 @@ class ibex_cosim_scoreboard extends uvm_scoreboard;
+       dmem_port.get(mem_op);
+       // Notify the cosim of all dside accesses emitted by the RTL
+       riscv_cosim_notify_dside_access(cosim_handle, mem_op.read_write == WRITE, mem_op.addr,
+-        mem_op.data, mem_op.be, mem_op.error, mem_op.misaligned_first, mem_op.misaligned_second);
++        mem_op.data, mem_op.be, mem_op.error, mem_op.misaligned_first, mem_op.misaligned_second,
++        mem_op.misaligned_first_saw_error, mem_op.m_mode_access);
+     end
+   endtask: run_cosim_dmem
+ 
+diff --git a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf.sv b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf.sv
+index 0239090517..a4c693e107 100644
+--- a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf.sv
++++ b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf.sv
+@@ -24,6 +24,8 @@ interface ibex_mem_intf#(
+   wire                     error;
+   wire                     misaligned_first;
+   wire                     misaligned_second;
++  wire                     misaligned_first_saw_error;
++  wire                     m_mode_access;
+ 
+   clocking request_driver_cb @(posedge clk);
+     input   reset;
+@@ -70,6 +72,8 @@ interface ibex_mem_intf#(
+     input error;
+     input misaligned_first;
+     input misaligned_second;
++    input misaligned_first_saw_error;
++    input m_mode_access;
+   endclocking
+ 
+   task automatic wait_clks(input int num);
+diff --git a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_monitor.sv b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_monitor.sv
+index 51a99dfbdd..c6c6d26097 100644
+--- a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_monitor.sv
++++ b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_monitor.sv
+@@ -55,10 +55,12 @@ class ibex_mem_intf_monitor extends uvm_monitor;
+     forever begin
+       trans_collected = ibex_mem_intf_seq_item::type_id::create("trans_collected");
+       while(!(vif.monitor_cb.request && vif.monitor_cb.grant)) @(vif.monitor_cb);
+-      trans_collected.addr              = vif.monitor_cb.addr;
+-      trans_collected.be                = vif.monitor_cb.be;
+-      trans_collected.misaligned_first  = vif.monitor_cb.misaligned_first;
+-      trans_collected.misaligned_second = vif.monitor_cb.misaligned_second;
++      trans_collected.addr                       = vif.monitor_cb.addr;
++      trans_collected.be                         = vif.monitor_cb.be;
++      trans_collected.misaligned_first           = vif.monitor_cb.misaligned_first;
++      trans_collected.misaligned_second          = vif.monitor_cb.misaligned_second;
++      trans_collected.misaligned_first_saw_error = vif.monitor_cb.misaligned_first_saw_error;
++      trans_collected.m_mode_access              = vif.monitor_cb.m_mode_access;
+       `uvm_info(get_full_name(), $sformatf("Detect request with address: %0x",
+                 trans_collected.addr), UVM_HIGH)
+       if(vif.monitor_cb.we) begin
+diff --git a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_seq_item.sv b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_seq_item.sv
+index d8b502edc3..c37344a4f4 100644
+--- a/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_seq_item.sv
++++ b/dv/uvm/core_ibex/common/ibex_mem_intf_agent/ibex_mem_intf_seq_item.sv
+@@ -19,18 +19,22 @@ class ibex_mem_intf_seq_item extends uvm_sequence_item;
+   rand bit                      error;
+        bit                      misaligned_first;
+        bit                      misaligned_second;
++       bit                      misaligned_first_saw_error;
++       bit                      m_mode_access;
+ 
+   `uvm_object_utils_begin(ibex_mem_intf_seq_item)
+-    `uvm_field_int      (addr,              UVM_DEFAULT)
+-    `uvm_field_enum     (rw_e, read_write,  UVM_DEFAULT)
+-    `uvm_field_int      (be,                UVM_DEFAULT)
+-    `uvm_field_int      (data,             UVM_DEFAULT)
+-    `uvm_field_int      (intg,             UVM_DEFAULT)
+-    `uvm_field_int      (gnt_delay,         UVM_DEFAULT)
+-    `uvm_field_int      (rvalid_delay,      UVM_DEFAULT)
+-    `uvm_field_int      (error,             UVM_DEFAULT)
+-    `uvm_field_int      (misaligned_first,  UVM_DEFAULT)
+-    `uvm_field_int      (misaligned_second, UVM_DEFAULT)
++    `uvm_field_int      (addr,                       UVM_DEFAULT)
++    `uvm_field_enum     (rw_e, read_write,           UVM_DEFAULT)
++    `uvm_field_int      (be,                         UVM_DEFAULT)
++    `uvm_field_int      (data,                       UVM_DEFAULT)
++    `uvm_field_int      (intg,                       UVM_DEFAULT)
++    `uvm_field_int      (gnt_delay,                  UVM_DEFAULT)
++    `uvm_field_int      (rvalid_delay,               UVM_DEFAULT)
++    `uvm_field_int      (error,                      UVM_DEFAULT)
++    `uvm_field_int      (misaligned_first,           UVM_DEFAULT)
++    `uvm_field_int      (misaligned_second,          UVM_DEFAULT)
++    `uvm_field_int      (misaligned_first_saw_error, UVM_DEFAULT)
++    `uvm_field_int      (m_mode_access,              UVM_DEFAULT)
+   `uvm_object_utils_end
+ 
+   `uvm_object_new
+diff --git a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+index a0e88710a7..1c740be053 100644
+--- a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
++++ b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+@@ -286,6 +286,13 @@ module core_ibex_tb_top;
+   assign data_mem_vif.misaligned_second =
+     dut.u_ibex_top.u_ibex_core.load_store_unit_i.addr_incr_req_o;
+ 
++  assign data_mem_vif.misaligned_first_saw_error =
++    dut.u_ibex_top.u_ibex_core.load_store_unit_i.addr_incr_req_o &
++    dut.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_err_d;
++
++  assign data_mem_vif.m_mode_access =
++    dut.u_ibex_top.u_ibex_core.priv_mode_lsu == ibex_pkg::PRIV_LVL_M;
++
+   initial begin
+     // Drive the clock and reset lines. Reset everything and start the clock at the beginning of
+     // time
+diff --git a/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv b/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
+index 6ff2d2c1f2..ba19d38ccd 100644
+--- a/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
++++ b/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
+@@ -76,6 +76,8 @@ module ibex_simple_system_cosim_checker #(
+   logic [31:0] outstanding_store_data;
+   logic outstanding_misaligned_first;
+   logic outstanding_misaligned_second;
++  logic outstanding_misaligned_first_saw_error;
++  logic outstanding_m_mode_access;
+ 
+   always @(posedge clk_i or negedge rst_ni) begin
+     if (!rst_ni) begin
+@@ -93,12 +95,20 @@ module ibex_simple_system_cosim_checker #(
+ 
+         outstanding_misaligned_second <=
+           u_top.u_ibex_top.u_ibex_core.load_store_unit_i.addr_incr_req_o;
++
++        outstanding_misaligned_first_saw_error <=
++          u_top.u_ibex_top.u_ibex_core.load_store_unit_i.addr_incr_req_o &
++          u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_err_d;
++
++        outstanding_m_mode_access <=
++          u_top.u_ibex_top.u_ibex_core.priv_mode_lsu == ibex_pkg::PRIV_LVL_M;
+       end
+ 
+       if (host_dmem_rvalid) begin
+         riscv_cosim_notify_dside_access(cosim_handle, outstanding_store, outstanding_addr,
+           outstanding_store ? outstanding_store_data : host_dmem_rdata, outstanding_be,
+-          host_dmem_err, outstanding_misaligned_first, outstanding_misaligned_second);
++          host_dmem_err, outstanding_misaligned_first, outstanding_misaligned_second,
++          outstanding_misaligned_first_saw_error, outstanding_m_mode_access);
+       end
+     end
+   end
+
+From 2a80fc989a7bc1de03c4501ffd404cf276a23f36 Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Thu, 27 Jun 2024 18:05:10 +0200
+Subject: [PATCH 3/7] [dv] Update testbench to use new 'pre_val' MIP
+
+The 'pre_val' MIP addresses the scenario where MIP changes as an
+instruction is excuting, this means a CSR instruction can observe a
+different MIP from the one that decides whether or not that instruction
+will be interrupted.
+---
+ dv/cosim/cosim.h                              |  2 +-
+ dv/cosim/cosim_dpi.cc                         |  4 +-
+ dv/cosim/cosim_dpi.h                          |  2 +-
+ dv/cosim/cosim_dpi.svh                        |  3 +-
+ dv/cosim/spike_cosim.cc                       |  7 ++--
+ dv/cosim/spike_cosim.h                        |  2 +-
+ .../ibex_cosim_agent/ibex_cosim_scoreboard.sv |  4 +-
+ .../ibex_cosim_agent/ibex_rvfi_monitor.sv     |  3 +-
+ .../ibex_cosim_agent/ibex_rvfi_seq_item.sv    |  6 ++-
+ dv/uvm/core_ibex/env/core_ibex_rvfi_if.sv     |  6 ++-
+ dv/uvm/core_ibex/tb/core_ibex_tb_top.sv       |  3 +-
+ .../ibex_simple_system_cosim_checker.sv       |  2 +-
+ rtl/ibex_core.sv                              | 41 +++++++++++++------
+ rtl/ibex_lockstep.sv                          |  3 +-
+ rtl/ibex_top.sv                               |  6 ++-
+ rtl/ibex_top_tracing.sv                       | 12 ++++--
+ 16 files changed, 68 insertions(+), 38 deletions(-)
+
+diff --git a/dv/cosim/cosim.h b/dv/cosim/cosim.h
+index 068f83fff2..a5fc3be99e 100644
+--- a/dv/cosim/cosim.h
++++ b/dv/cosim/cosim.h
+@@ -87,7 +87,7 @@ class Cosim {
+   //
+   // At the next call of `step`, the MIP value will take effect (i.e. if it's a
+   // new interrupt that is enabled it will step straight to that handler).
+-  virtual void set_mip(uint32_t mip) = 0;
++  virtual void set_mip(uint32_t pre_mip, uint32_t post_mip) = 0;
+ 
+   // Set the state of the NMI (non-maskable interrupt) line.
+   //
+diff --git a/dv/cosim/cosim_dpi.cc b/dv/cosim/cosim_dpi.cc
+index bbc20c901f..d4b16c05d4 100644
+--- a/dv/cosim/cosim_dpi.cc
++++ b/dv/cosim/cosim_dpi.cc
+@@ -19,10 +19,10 @@ int riscv_cosim_step(Cosim *cosim, const svBitVecVal *write_reg,
+              : 0;
+ }
+ 
+-void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *mip) {
++void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip, const svBitVecVal *post_mip) {
+   assert(cosim);
+ 
+-  cosim->set_mip(mip[0]);
++  cosim->set_mip(pre_mip[0], post_mip[0]);
+ }
+ 
+ void riscv_cosim_set_nmi(Cosim *cosim, svBit nmi) {
+diff --git a/dv/cosim/cosim_dpi.h b/dv/cosim/cosim_dpi.h
+index ee94dddd0a..25c4d1e4b8 100644
+--- a/dv/cosim/cosim_dpi.h
++++ b/dv/cosim/cosim_dpi.h
+@@ -15,7 +15,7 @@ extern "C" {
+ int riscv_cosim_step(Cosim *cosim, const svBitVecVal *write_reg,
+                      const svBitVecVal *write_reg_data, const svBitVecVal *pc,
+                      svBit sync_trap, svBit suppress_reg_write);
+-void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *mip);
++void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip, const svBitVecVal *post_mip);
+ void riscv_cosim_set_nmi(Cosim *cosim, svBit nmi);
+ void riscv_cosim_set_nmi_int(Cosim *cosim, svBit nmi_int);
+ void riscv_cosim_set_debug_req(Cosim *cosim, svBit debug_req);
+diff --git a/dv/cosim/cosim_dpi.svh b/dv/cosim/cosim_dpi.svh
+index c6004f2f4c..35ecd3b8cb 100644
+--- a/dv/cosim/cosim_dpi.svh
++++ b/dv/cosim/cosim_dpi.svh
+@@ -12,7 +12,8 @@
+ 
+ import "DPI-C" function int riscv_cosim_step(chandle cosim_handle, bit [4:0] write_reg,
+   bit [31:0] write_reg_data, bit [31:0] pc, bit sync_trap, bit suppress_reg_write);
+-import "DPI-C" function void riscv_cosim_set_mip(chandle cosim_handle, bit [31:0] mip);
++import "DPI-C" function void riscv_cosim_set_mip(chandle cosim_handle, bit [31:0] pre_mip,
++  bit [31:0] post_mip);
+ import "DPI-C" function void riscv_cosim_set_nmi(chandle cosim_handle, bit nmi);
+ import "DPI-C" function void riscv_cosim_set_nmi_int(chandle cosim_handle, bit nmi_int);
+ import "DPI-C" function void riscv_cosim_set_debug_req(chandle cosim_handle, bit debug_req);
+diff --git a/dv/cosim/spike_cosim.cc b/dv/cosim/spike_cosim.cc
+index 78bf101d23..a44ea2f14b 100644
+--- a/dv/cosim/spike_cosim.cc
++++ b/dv/cosim/spike_cosim.cc
+@@ -584,11 +584,12 @@ void SpikeCosim::initial_proc_setup(uint32_t start_pc, uint32_t start_mtvec,
+   }
+ }
+ 
+-void SpikeCosim::set_mip(uint32_t mip) {
+-  uint32_t new_mip = mip;
++void SpikeCosim::set_mip(uint32_t pre_mip, uint32_t post_mip) {
++  uint32_t new_mip = pre_mip;
+   uint32_t old_mip = processor->get_state()->mip->read();
+ 
+-  processor->get_state()->mip->write_with_mask(0xffffffff, mip);
++  processor->get_state()->mip->write_with_mask(0xffffffff, post_mip);
++  processor->get_state()->mip->write_pre_val(pre_mip);
+ 
+   if (processor->get_state()->debug_mode ||
+       (processor->halt_request == processor_t::HR_REGULAR) ||
+diff --git a/dv/cosim/spike_cosim.h b/dv/cosim/spike_cosim.h
+index f6cf90fe35..a4baad5dc2 100644
+--- a/dv/cosim/spike_cosim.h
++++ b/dv/cosim/spike_cosim.h
+@@ -125,7 +125,7 @@ class SpikeCosim : public simif_t, public Cosim {
+                            uint32_t dut_pc, bool suppress_reg_write);
+   bool check_sync_trap(uint32_t write_reg, uint32_t pc,
+                        uint32_t initial_spike_pc);
+-  void set_mip(uint32_t mip) override;
++  void set_mip(uint32_t pre_mip, uint32_t post_mip) override;
+   void set_nmi(bool nmi) override;
+   void set_nmi_int(bool nmi_int) override;
+   void set_debug_req(bool debug_req) override;
+diff --git a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
+index 9158675ae2..5fd0685e29 100644
+--- a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
++++ b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_cosim_scoreboard.sv
+@@ -120,7 +120,7 @@ class ibex_cosim_scoreboard extends uvm_scoreboard;
+         // cosim with interrupt information and loop back to await the next item.
+         riscv_cosim_set_nmi(cosim_handle, rvfi_instr.nmi);
+         riscv_cosim_set_nmi_int(cosim_handle, rvfi_instr.nmi_int);
+-        riscv_cosim_set_mip(cosim_handle, rvfi_instr.mip);
++        riscv_cosim_set_mip(cosim_handle, rvfi_instr.pre_mip, rvfi_instr.pre_mip);
+ 
+         continue;
+       end
+@@ -145,7 +145,7 @@ class ibex_cosim_scoreboard extends uvm_scoreboard;
+       riscv_cosim_set_debug_req(cosim_handle, rvfi_instr.debug_req);
+       riscv_cosim_set_nmi(cosim_handle, rvfi_instr.nmi);
+       riscv_cosim_set_nmi_int(cosim_handle, rvfi_instr.nmi_int);
+-      riscv_cosim_set_mip(cosim_handle, rvfi_instr.mip);
++      riscv_cosim_set_mip(cosim_handle, rvfi_instr.pre_mip, rvfi_instr.post_mip);
+       riscv_cosim_set_mcycle(cosim_handle, rvfi_instr.mcycle);
+ 
+       // Set performance counters through a pseudo-backdoor write
+diff --git a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_monitor.sv b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_monitor.sv
+index c3fb29a228..0bf50116e7 100644
+--- a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_monitor.sv
++++ b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_monitor.sv
+@@ -37,7 +37,8 @@ class ibex_rvfi_monitor extends uvm_monitor;
+       trans_collected.rd_addr          = vif.monitor_cb.rd_addr;
+       trans_collected.rd_wdata         = vif.monitor_cb.rd_wdata;
+       trans_collected.order            = vif.monitor_cb.order;
+-      trans_collected.mip              = vif.monitor_cb.ext_mip;
++      trans_collected.pre_mip          = vif.monitor_cb.ext_pre_mip;
++      trans_collected.post_mip         = vif.monitor_cb.ext_post_mip;
+       trans_collected.nmi              = vif.monitor_cb.ext_nmi;
+       trans_collected.nmi_int          = vif.monitor_cb.ext_nmi_int;
+       trans_collected.debug_req        = vif.monitor_cb.ext_debug_req;
+diff --git a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_seq_item.sv b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_seq_item.sv
+index 55e11f9dc5..dceba31c47 100644
+--- a/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_seq_item.sv
++++ b/dv/uvm/core_ibex/common/ibex_cosim_agent/ibex_rvfi_seq_item.sv
+@@ -9,7 +9,8 @@ class ibex_rvfi_seq_item extends uvm_sequence_item;
+   bit [4:0]  rd_addr;
+   bit [31:0] rd_wdata;
+   bit [63:0] order;
+-  bit [31:0] mip;
++  bit [31:0] pre_mip;
++  bit [31:0] post_mip;
+   bit        nmi;
+   bit        nmi_int;
+   bit        debug_req;
+@@ -26,7 +27,8 @@ class ibex_rvfi_seq_item extends uvm_sequence_item;
+     `uvm_field_int (rd_addr, UVM_DEFAULT)
+     `uvm_field_int (rd_wdata, UVM_DEFAULT)
+     `uvm_field_int (order, UVM_DEFAULT)
+-    `uvm_field_int (mip, UVM_DEFAULT)
++    `uvm_field_int (pre_mip, UVM_DEFAULT)
++    `uvm_field_int (post_mip, UVM_DEFAULT)
+     `uvm_field_int (nmi, UVM_DEFAULT)
+     `uvm_field_int (nmi_int, UVM_DEFAULT)
+     `uvm_field_int (debug_req, UVM_DEFAULT)
+diff --git a/dv/uvm/core_ibex/env/core_ibex_rvfi_if.sv b/dv/uvm/core_ibex/env/core_ibex_rvfi_if.sv
+index 641e8152ee..0199b87f76 100644
+--- a/dv/uvm/core_ibex/env/core_ibex_rvfi_if.sv
++++ b/dv/uvm/core_ibex/env/core_ibex_rvfi_if.sv
+@@ -26,7 +26,8 @@ interface core_ibex_rvfi_if(input logic clk);
+   logic [3:0]  mem_wmask;
+   logic [31:0] mem_rdata;
+   logic [31:0] mem_wdata;
+-  logic [31:0] ext_mip;
++  logic [31:0] ext_pre_mip;
++  logic [31:0] ext_post_mip;
+   logic        ext_nmi;
+   logic        ext_nmi_int;
+   logic [31:0] ext_debug_req;
+@@ -62,7 +63,8 @@ interface core_ibex_rvfi_if(input logic clk);
+     input mem_wmask;
+     input mem_rdata;
+     input mem_wdata;
+-    input ext_mip;
++    input ext_pre_mip;
++    input ext_post_mip;
+     input ext_nmi;
+     input ext_nmi_int;
+     input ext_debug_req;
+diff --git a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+index 1c740be053..dd05a94c68 100644
+--- a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
++++ b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+@@ -196,7 +196,8 @@ module core_ibex_tb_top;
+   assign rvfi_if.mem_rmask            = dut.rvfi_mem_rmask;
+   assign rvfi_if.mem_rdata            = dut.rvfi_mem_rdata;
+   assign rvfi_if.mem_wdata            = dut.rvfi_mem_wdata;
+-  assign rvfi_if.ext_mip              = dut.rvfi_ext_mip;
++  assign rvfi_if.ext_pre_mip          = dut.rvfi_ext_pre_mip;
++  assign rvfi_if.ext_post_mip         = dut.rvfi_ext_post_mip;
+   assign rvfi_if.ext_nmi              = dut.rvfi_ext_nmi;
+   assign rvfi_if.ext_nmi_int          = dut.rvfi_ext_nmi_int;
+   assign rvfi_if.ext_debug_req        = dut.rvfi_ext_debug_req;
+diff --git a/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv b/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
+index ba19d38ccd..0f7ebdedda 100644
+--- a/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
++++ b/dv/verilator/simple_system_cosim/ibex_simple_system_cosim_checker.sv
+@@ -44,7 +44,7 @@ module ibex_simple_system_cosim_checker #(
+     if (u_top.rvfi_valid) begin
+       riscv_cosim_set_nmi(cosim_handle, u_top.rvfi_ext_nmi);
+       riscv_cosim_set_nmi_int(cosim_handle, u_top.rvfi_ext_nmi_int);
+-      riscv_cosim_set_mip(cosim_handle, u_top.rvfi_ext_mip);
++      riscv_cosim_set_mip(cosim_handle, u_top.rvfi_ext_pre_mip, u_top.rvfi_ext_post_mip);
+       riscv_cosim_set_debug_req(cosim_handle, u_top.rvfi_ext_debug_req);
+       riscv_cosim_set_mcycle(cosim_handle, u_top.rvfi_ext_mcycle);
+       for (int i=0; i < 10; i++) begin
+diff --git a/rtl/ibex_core.sv b/rtl/ibex_core.sv
+index e0a8c6d2a3..fa5c51e3ff 100644
+--- a/rtl/ibex_core.sv
++++ b/rtl/ibex_core.sv
+@@ -141,7 +141,8 @@ module ibex_core import ibex_pkg::*; #(
+   output logic [ 3:0]                  rvfi_mem_wmask,
+   output logic [31:0]                  rvfi_mem_rdata,
+   output logic [31:0]                  rvfi_mem_wdata,
+-  output logic [31:0]                  rvfi_ext_mip,
++  output logic [31:0]                  rvfi_ext_pre_mip,
++  output logic [31:0]                  rvfi_ext_post_mip,
+   output logic                         rvfi_ext_nmi,
+   output logic                         rvfi_ext_nmi_int,
+   output logic                         rvfi_ext_debug_req,
+@@ -1283,7 +1284,8 @@ module ibex_core import ibex_pkg::*; #(
+ 
+   // RVFI extension for co-simulation support
+   // debug_req and MIP captured at IF -> ID transition so one extra stage
+-  ibex_pkg::irqs_t rvfi_ext_stage_mip              [RVFI_STAGES+1];
++  ibex_pkg::irqs_t rvfi_ext_stage_pre_mip          [RVFI_STAGES+1];
++  ibex_pkg::irqs_t rvfi_ext_stage_post_mip         [RVFI_STAGES];
+   logic            rvfi_ext_stage_nmi              [RVFI_STAGES+1];
+   logic            rvfi_ext_stage_nmi_int          [RVFI_STAGES+1];
+   logic            rvfi_ext_stage_debug_req        [RVFI_STAGES+1];
+@@ -1328,11 +1330,21 @@ module ibex_core import ibex_pkg::*; #(
+   always_comb begin
+     // Use always_comb instead of continuous assign so first assign can set 0 as default everywhere
+     // that is overridden by more specific settings.
+-    rvfi_ext_mip                                     = '0;
+-    rvfi_ext_mip[CSR_MSIX_BIT]                       = rvfi_ext_stage_mip[RVFI_STAGES].irq_software;
+-    rvfi_ext_mip[CSR_MTIX_BIT]                       = rvfi_ext_stage_mip[RVFI_STAGES].irq_timer;
+-    rvfi_ext_mip[CSR_MEIX_BIT]                       = rvfi_ext_stage_mip[RVFI_STAGES].irq_external;
+-    rvfi_ext_mip[CSR_MFIX_BIT_HIGH:CSR_MFIX_BIT_LOW] = rvfi_ext_stage_mip[RVFI_STAGES].irq_fast;
++    rvfi_ext_pre_mip               = '0;
++    rvfi_ext_pre_mip[CSR_MSIX_BIT] = rvfi_ext_stage_pre_mip[RVFI_STAGES].irq_software;
++    rvfi_ext_pre_mip[CSR_MTIX_BIT] = rvfi_ext_stage_pre_mip[RVFI_STAGES].irq_timer;
++    rvfi_ext_pre_mip[CSR_MEIX_BIT] = rvfi_ext_stage_pre_mip[RVFI_STAGES].irq_external;
++
++    rvfi_ext_pre_mip[CSR_MFIX_BIT_HIGH:CSR_MFIX_BIT_LOW] =
++      rvfi_ext_stage_pre_mip[RVFI_STAGES].irq_fast;
++
++    rvfi_ext_post_mip               = '0;
++    rvfi_ext_post_mip[CSR_MSIX_BIT] = rvfi_ext_stage_post_mip[RVFI_STAGES-1].irq_software;
++    rvfi_ext_post_mip[CSR_MTIX_BIT] = rvfi_ext_stage_post_mip[RVFI_STAGES-1].irq_timer;
++    rvfi_ext_post_mip[CSR_MEIX_BIT] = rvfi_ext_stage_post_mip[RVFI_STAGES-1].irq_external;
++
++    rvfi_ext_post_mip[CSR_MFIX_BIT_HIGH:CSR_MFIX_BIT_LOW] =
++      rvfi_ext_stage_post_mip[RVFI_STAGES-1].irq_fast;
+   end
+ 
+   assign rvfi_ext_nmi              = rvfi_ext_stage_nmi              [RVFI_STAGES];
+@@ -1487,12 +1499,12 @@ module ibex_core import ibex_pkg::*; #(
+   // the DV environment will see if a trap should have been taken but wasn't.
+   always_ff @(posedge clk_i or negedge rst_ni) begin
+     if (!rst_ni) begin
+-      rvfi_ext_stage_mip[0]       <= '0;
++      rvfi_ext_stage_pre_mip[0]       <= '0;
+       rvfi_ext_stage_nmi[0]       <= '0;
+       rvfi_ext_stage_nmi_int[0]   <= '0;
+       rvfi_ext_stage_debug_req[0] <= '0;
+     end else if ((if_stage_i.instr_valid_id_d & if_stage_i.instr_new_id_d) | rvfi_irq_valid) begin
+-      rvfi_ext_stage_mip[0]       <= instr_valid_id | ~captured_valid ? cs_registers_i.mip :
++      rvfi_ext_stage_pre_mip[0]   <= instr_valid_id | ~captured_valid ? cs_registers_i.mip :
+                                                                         captured_mip;
+       rvfi_ext_stage_nmi[0]       <= instr_valid_id | ~captured_valid ? irq_nm_i :
+                                                                         captured_nmi;
+@@ -1553,7 +1565,8 @@ module ibex_core import ibex_pkg::*; #(
+         rvfi_stage_mem_rdata[i]            <= '0;
+         rvfi_stage_mem_wdata[i]            <= '0;
+         rvfi_stage_mem_addr[i]             <= '0;
+-        rvfi_ext_stage_mip[i+1]            <= '0;
++        rvfi_ext_stage_pre_mip[i+1]        <= '0;
++        rvfi_ext_stage_post_mip[i]         <= '0;
+         rvfi_ext_stage_nmi[i+1]            <= '0;
+         rvfi_ext_stage_nmi_int[i+1]        <= '0;
+         rvfi_ext_stage_debug_req[i+1]      <= '0;
+@@ -1567,7 +1580,7 @@ module ibex_core import ibex_pkg::*; #(
+ 
+         if (i == 0) begin
+           if (rvfi_id_done) begin
+-            rvfi_stage_halt[i]      <= '0;
++            rvfi_stage_halt[i]                 <= '0;
+             rvfi_stage_trap[i]                 <= rvfi_trap_id;
+             rvfi_stage_intr[i]                 <= rvfi_intr_d;
+             rvfi_stage_order[i]                <= rvfi_stage_order_d;
+@@ -1605,7 +1618,8 @@ module ibex_core import ibex_pkg::*; #(
+           // providing information along with a retired instruction. Move these up the rvfi pipeline
+           // for both cases.
+           if (rvfi_id_done | rvfi_ext_stage_irq_valid[i]) begin
+-            rvfi_ext_stage_mip[i+1]       <= rvfi_ext_stage_mip[i];
++            rvfi_ext_stage_pre_mip[i+1]   <= rvfi_ext_stage_pre_mip[i];
++            rvfi_ext_stage_post_mip[i]    <= cs_registers_i.mip;
+             rvfi_ext_stage_nmi[i+1]       <= rvfi_ext_stage_nmi[i];
+             rvfi_ext_stage_nmi_int[i+1]   <= rvfi_ext_stage_nmi_int[i];
+             rvfi_ext_stage_debug_req[i+1] <= rvfi_ext_stage_debug_req[i];
+@@ -1652,7 +1666,8 @@ module ibex_core import ibex_pkg::*; #(
+           // providing information along with a retired instruction. Move these up the rvfi pipeline
+           // for both cases.
+           if (rvfi_wb_done | rvfi_ext_stage_irq_valid[i]) begin
+-            rvfi_ext_stage_mip[i+1]       <= rvfi_ext_stage_mip[i];
++            rvfi_ext_stage_pre_mip[i+1]   <= rvfi_ext_stage_pre_mip[i];
++            rvfi_ext_stage_post_mip[i]    <= rvfi_ext_stage_post_mip[i-1];
+             rvfi_ext_stage_nmi[i+1]       <= rvfi_ext_stage_nmi[i];
+             rvfi_ext_stage_nmi_int[i+1]   <= rvfi_ext_stage_nmi_int[i];
+             rvfi_ext_stage_debug_req[i+1] <= rvfi_ext_stage_debug_req[i];
+diff --git a/rtl/ibex_lockstep.sv b/rtl/ibex_lockstep.sv
+index 9502f830e9..44021dd56e 100644
+--- a/rtl/ibex_lockstep.sv
++++ b/rtl/ibex_lockstep.sv
+@@ -455,7 +455,8 @@ module ibex_lockstep import ibex_pkg::*; #(
+     .rvfi_mem_wmask            (),
+     .rvfi_mem_rdata            (),
+     .rvfi_mem_wdata            (),
+-    .rvfi_ext_mip              (),
++    .rvfi_ext_pre_mip          (),
++    .rvfi_ext_post_mip         (),
+     .rvfi_ext_nmi              (),
+     .rvfi_ext_nmi_int          (),
+     .rvfi_ext_debug_req        (),
+diff --git a/rtl/ibex_top.sv b/rtl/ibex_top.sv
+index 81e49633cb..993736a808 100644
+--- a/rtl/ibex_top.sv
++++ b/rtl/ibex_top.sv
+@@ -117,7 +117,8 @@ module ibex_top import ibex_pkg::*; #(
+   output logic [ 3:0]                  rvfi_mem_wmask,
+   output logic [31:0]                  rvfi_mem_rdata,
+   output logic [31:0]                  rvfi_mem_wdata,
+-  output logic [31:0]                  rvfi_ext_mip,
++  output logic [31:0]                  rvfi_ext_pre_mip,
++  output logic [31:0]                  rvfi_ext_post_mip,
+   output logic                         rvfi_ext_nmi,
+   output logic                         rvfi_ext_nmi_int,
+   output logic                         rvfi_ext_debug_req,
+@@ -390,7 +391,8 @@ module ibex_top import ibex_pkg::*; #(
+     .rvfi_mem_wmask,
+     .rvfi_mem_rdata,
+     .rvfi_mem_wdata,
+-    .rvfi_ext_mip,
++    .rvfi_ext_pre_mip,
++    .rvfi_ext_post_mip,
+     .rvfi_ext_nmi,
+     .rvfi_ext_nmi_int,
+     .rvfi_ext_debug_req,
+diff --git a/rtl/ibex_top_tracing.sv b/rtl/ibex_top_tracing.sv
+index 7e480de58a..14fcfb2994 100644
+--- a/rtl/ibex_top_tracing.sv
++++ b/rtl/ibex_top_tracing.sv
+@@ -119,7 +119,8 @@ module ibex_top_tracing import ibex_pkg::*; #(
+   logic [ 3:0] rvfi_mem_wmask;
+   logic [31:0] rvfi_mem_rdata;
+   logic [31:0] rvfi_mem_wdata;
+-  logic [31:0] rvfi_ext_mip;
++  logic [31:0] rvfi_ext_pre_mip;
++  logic [31:0] rvfi_ext_post_mip;
+   logic        rvfi_ext_nmi;
+   logic        rvfi_ext_nmi_int;
+   logic        rvfi_ext_debug_req;
+@@ -136,7 +137,8 @@ module ibex_top_tracing import ibex_pkg::*; #(
+   logic [31:0] unused_perf_regsh [10];
+ 
+ 
+-  logic [31:0] unused_rvfi_ext_mip;
++  logic [31:0] unused_rvfi_ext_pre_mip;
++  logic [31:0] unused_rvfi_ext_post_mip;
+   logic        unused_rvfi_ext_nmi;
+   logic        unused_rvfi_ext_nmi_int;
+   logic        unused_rvfi_ext_debug_req;
+@@ -148,7 +150,8 @@ module ibex_top_tracing import ibex_pkg::*; #(
+ 
+   // Tracer doesn't use these signals, though other modules may probe down into tracer to observe
+   // them.
+-  assign unused_rvfi_ext_mip = rvfi_ext_mip;
++  assign unused_rvfi_ext_pre_mip = rvfi_ext_pre_mip;
++  assign unused_rvfi_ext_post_mip = rvfi_ext_post_mip;
+   assign unused_rvfi_ext_nmi = rvfi_ext_nmi;
+   assign unused_rvfi_ext_nmi_int = rvfi_ext_nmi_int;
+   assign unused_rvfi_ext_debug_req = rvfi_ext_debug_req;
+@@ -252,7 +255,8 @@ module ibex_top_tracing import ibex_pkg::*; #(
+     .rvfi_mem_wmask,
+     .rvfi_mem_rdata,
+     .rvfi_mem_wdata,
+-    .rvfi_ext_mip,
++    .rvfi_ext_pre_mip,
++    .rvfi_ext_post_mip,
+     .rvfi_ext_nmi,
+     .rvfi_ext_nmi_int,
+     .rvfi_ext_debug_req,
+
+From 822c20b765eb37ddbb67657074fc10f306aa4022 Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Fri, 28 Jun 2024 12:05:02 +0200
+Subject: [PATCH 4/7] [cosim] Correctly deal with checking top of range memory
+ accesses
+
+The cosimulation environment does not know if a memory access from spike
+is due to an instruction fetch or a data memory access. It uses a
+heuristic to differentiate the two. Any access between the PC and the PC
++ 8 is considered an instruction fetch.
+
+This heuristic did not correctly handle addresses at the top of the
+range where the PC + 8 calculation overflows. This commit fixes the top
+of range handling.
+---
+ dv/cosim/spike_cosim.cc | 22 ++++++++++------------
+ 1 file changed, 10 insertions(+), 12 deletions(-)
+
+diff --git a/dv/cosim/spike_cosim.cc b/dv/cosim/spike_cosim.cc
+index a44ea2f14b..7e85cd14b9 100644
+--- a/dv/cosim/spike_cosim.cc
++++ b/dv/cosim/spike_cosim.cc
+@@ -84,8 +84,9 @@ bool SpikeCosim::mmio_load(reg_t addr, size_t len, uint8_t *bytes) {
+   bool dut_error = false;
+ 
+   // Incoming access may be an iside or dside access. Use PC to help determine
+-  // which.
+-  uint32_t pc = processor->get_state()->pc;
++  // which. PC is 64 bits in spike, we only care about the bottom 32-bit so mask
++  // off the top bits.
++  uint64_t pc = processor->get_state()->pc & 0xffffffff;
+   uint32_t aligned_addr = addr & 0xfffffffc;
+ 
+   if (pending_iside_error && (aligned_addr == pending_iside_err_addr)) {
+@@ -93,17 +94,14 @@ bool SpikeCosim::mmio_load(reg_t addr, size_t len, uint8_t *bytes) {
+     // assume it's an iside access and produce an error.
+     pending_iside_error = false;
+     dut_error = true;
+-  } else if (addr < pc || addr >= (pc + 8)) {
++  } else {
+     // Spike may attempt to access up to 8-bytes from the PC when fetching, so
+-    // only check as a dside access when it falls outside that range.
+-
+-    // Otherwise check if the aligned PC matches with the aligned address or an
+-    // incremented aligned PC (to capture the unaligned 4-byte instruction
+-    // case). Assume a successful iside access if either of these checks are
+-    // true, otherwise assume a dside access and check against DUT dside
+-    // accesses.  If the RTL produced a bus error for the access, or the
+-    // checking failed produce a memory fault in spike.
+-    dut_error = (check_mem_access(false, addr, len, bytes) != kCheckMemOk);
++    // only check as a dside access when it falls outside that range
++    bool in_iside_range = (addr >= pc && addr < pc + 8);
++
++    if (!in_iside_range) {
++      dut_error = (check_mem_access(false, addr, len, bytes) != kCheckMemOk);
++    }
+   }
+ 
+   return !(bus_error || dut_error);
+
+From c6c776917a6886dec1c70763a434a53cc28f5214 Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Mon, 1 Jul 2024 09:24:07 +0100
+Subject: [PATCH 5/7] [dv] Output warning message on problematic MIP changes
+
+When an interrupt is raised the Ibex controller will move from the
+DECODE state to the IRQ_TAKEN state when it chooses to handle the
+interrupt. When in IRQ_TAKEN it's possible for the interrupt state to
+change again which aborts the interrupt entry. This leads to mis-matches
+against cosim.
+
+This change adds a warning to flag up cases where this has occurred to
+enable quick triage of failures related to this scenario.
+---
+ dv/uvm/core_ibex/tb/core_ibex_tb_top.sv | 28 +++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+index dd05a94c68..cf37a21577 100644
+--- a/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
++++ b/dv/uvm/core_ibex/tb/core_ibex_tb_top.sv
+@@ -359,4 +359,32 @@ module core_ibex_tb_top;
+     assign dut.u_ibex_top.gen_regfile_ff.register_file_i.gen_rdata_mux_check.
+           u_prim_onehot_check_raddr_b.unused_assert_connected = 1;
+   end
++
++  ibex_pkg::ctrl_fsm_e controller_state;
++  logic                controller_handle_irq;
++  ibex_pkg::irqs_t     ibex_irqs, last_ibex_irqs;
++
++  assign controller_state      = dut.u_ibex_top.u_ibex_core.id_stage_i.controller_i.ctrl_fsm_cs;
++  assign controller_handle_irq = dut.u_ibex_top.u_ibex_core.id_stage_i.controller_i.handle_irq;
++  assign ibex_irqs             = dut.u_ibex_top.u_ibex_core.irqs;
++
++  always_ff @(posedge clk or negedge rst_n) begin
++    if (!rst_n) begin
++      last_ibex_irqs <= '0;
++    end else begin
++      last_ibex_irqs <= ibex_irqs;
++    end
++  end
++
++  always_ff @(posedge clk) begin
++    if (controller_state == ibex_pkg::IRQ_TAKEN) begin
++      if (!controller_handle_irq) begin
++        $display("WARNING: Controller in IRQ_TAKEN but no IRQ to handle, returning to DECODE");
++        $display("IRQs last cycle: %x, IRQs this cycle: %x", last_ibex_irqs, ibex_irqs);
++      end else if (last_ibex_irqs != ibex_irqs) begin
++        $display("WARNING: Controller in IRQ_TAKEN and IRQs have just changed");
++        $display("IRQs last cycle: %x, IRQs this cycle: %x", last_ibex_irqs, ibex_irqs);
++      end
++    end
++  end
+ endmodule
+
+From 6172f8f50922984c44d72d9a4c7d8b58b73db46a Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Wed, 3 Jul 2024 12:30:32 +0100
+Subject: [PATCH 6/7] [ci] Bump co-sim version
+
+---
+ ci/vars.env | 2 +-
+ ci/vars.yml | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ci/vars.env b/ci/vars.env
+index 0d1715d739..ce9af8dfc7 100644
+--- a/ci/vars.env
++++ b/ci/vars.env
+@@ -6,7 +6,7 @@
+ # Quote values to ensure they are parsed as string (version numbers might
+ # end up as float otherwise).
+ VERILATOR_VERSION=v4.210
+-IBEX_COSIM_VERSION=15fbd568
++IBEX_COSIM_VERSION=39612f9
+ RISCV_TOOLCHAIN_TAR_VERSION=20220210-1
+ RISCV_TOOLCHAIN_TAR_VARIANT=lowrisc-toolchain-gcc-rv32imcb
+ RISCV_COMPLIANCE_GIT_VERSION=844c6660ef3f0d9b96957991109dfd80cc4938e2
+diff --git a/ci/vars.yml b/ci/vars.yml
+index d5f226ef68..a91d9e0874 100644
+--- a/ci/vars.yml
++++ b/ci/vars.yml
+@@ -7,7 +7,7 @@
+ # end up as float otherwise).
+ variables:
+   VERILATOR_VERSION: "v4.210"
+-  IBEX_COSIM_VERSION: "15fbd568"
++  IBEX_COSIM_VERSION: "39612f9"
+   RISCV_TOOLCHAIN_TAR_VERSION: "20220210-1"
+   RISCV_TOOLCHAIN_TAR_VARIANT: "lowrisc-toolchain-gcc-rv32imcb"
+   RISCV_COMPLIANCE_GIT_VERSION: "844c6660ef3f0d9b96957991109dfd80cc4938e2"
+
+From d5d3f37e765e02bb73447f8c9fbdc36f2a1831e4 Mon Sep 17 00:00:00 2001
+From: Greg Chadwick <gac@lowrisc.org>
+Date: Wed, 3 Jul 2024 14:51:18 +0100
+Subject: [PATCH 7/7] [cosim] Clang lint fix
+
+---
+ dv/cosim/cosim_dpi.cc   | 29 ++++++++++++-----------
+ dv/cosim/cosim_dpi.h    |  5 +++-
+ dv/cosim/spike_cosim.cc | 51 ++++++++++++++++++++---------------------
+ 3 files changed, 44 insertions(+), 41 deletions(-)
+
+diff --git a/dv/cosim/cosim_dpi.cc b/dv/cosim/cosim_dpi.cc
+index d4b16c05d4..30a3da74dd 100644
+--- a/dv/cosim/cosim_dpi.cc
++++ b/dv/cosim/cosim_dpi.cc
+@@ -2,11 +2,13 @@
+ // Licensed under the Apache License, Version 2.0, see LICENSE for details.
+ // SPDX-License-Identifier: Apache-2.0
+ 
++#include "cosim_dpi.h"
++
+ #include <svdpi.h>
++
+ #include <cassert>
+ 
+ #include "cosim.h"
+-#include "cosim_dpi.h"
+ 
+ int riscv_cosim_step(Cosim *cosim, const svBitVecVal *write_reg,
+                      const svBitVecVal *write_reg_data, const svBitVecVal *pc,
+@@ -19,7 +21,8 @@ int riscv_cosim_step(Cosim *cosim, const svBitVecVal *write_reg,
+              : 0;
+ }
+ 
+-void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip, const svBitVecVal *post_mip) {
++void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip,
++                         const svBitVecVal *post_mip) {
+   assert(cosim);
+ 
+   cosim->set_mip(pre_mip[0], post_mip[0]);
+@@ -69,20 +72,18 @@ void riscv_cosim_notify_dside_access(Cosim *cosim, svBit store,
+                                      svBit misaligned_second,
+                                      svBit misaligned_first_saw_error,
+                                      svBit m_mode_access) {
+-
+   assert(cosim);
+ 
+-  cosim->notify_dside_access(
+-      DSideAccessInfo{.store = store != 0,
+-                      .data = data[0],
+-                      .addr = addr[0],
+-                      .be = be[0],
+-                      .error = error != 0,
+-                      .misaligned_first = misaligned_first != 0,
+-                      .misaligned_second = misaligned_second != 0,
+-                      .misaligned_first_saw_error =
+-                        misaligned_first_saw_error != 0,
+-                      .m_mode_access = m_mode_access != 0});
++  cosim->notify_dside_access(DSideAccessInfo{
++      .store = store != 0,
++      .data = data[0],
++      .addr = addr[0],
++      .be = be[0],
++      .error = error != 0,
++      .misaligned_first = misaligned_first != 0,
++      .misaligned_second = misaligned_second != 0,
++      .misaligned_first_saw_error = misaligned_first_saw_error != 0,
++      .m_mode_access = m_mode_access != 0});
+ }
+ 
+ void riscv_cosim_set_iside_error(Cosim *cosim, svBitVecVal *addr) {
+diff --git a/dv/cosim/cosim_dpi.h b/dv/cosim/cosim_dpi.h
+index 25c4d1e4b8..bbadbc5e3c 100644
+--- a/dv/cosim/cosim_dpi.h
++++ b/dv/cosim/cosim_dpi.h
+@@ -8,6 +8,8 @@
+ #include <stdint.h>
+ #include <svdpi.h>
+ 
++#include "cosim.h"
++
+ // This adapts the C++ interface of the `Cosim` class to be used via DPI. See
+ // the documentation in cosim.h for further details
+ 
+@@ -15,7 +17,8 @@ extern "C" {
+ int riscv_cosim_step(Cosim *cosim, const svBitVecVal *write_reg,
+                      const svBitVecVal *write_reg_data, const svBitVecVal *pc,
+                      svBit sync_trap, svBit suppress_reg_write);
+-void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip, const svBitVecVal *post_mip);
++void riscv_cosim_set_mip(Cosim *cosim, const svBitVecVal *pre_mip,
++                         const svBitVecVal *post_mip);
+ void riscv_cosim_set_nmi(Cosim *cosim, svBit nmi);
+ void riscv_cosim_set_nmi_int(Cosim *cosim, svBit nmi_int);
+ void riscv_cosim_set_debug_req(Cosim *cosim, svBit debug_req);
+diff --git a/dv/cosim/spike_cosim.cc b/dv/cosim/spike_cosim.cc
+index 7e85cd14b9..336d520948 100644
+--- a/dv/cosim/spike_cosim.cc
++++ b/dv/cosim/spike_cosim.cc
+@@ -3,18 +3,19 @@
+ // SPDX-License-Identifier: Apache-2.0
+ 
+ #include "spike_cosim.h"
++
++#include <cassert>
++#include <iostream>
++#include <sstream>
++
+ #include "riscv/config.h"
+ #include "riscv/decode.h"
+ #include "riscv/devices.h"
+ #include "riscv/log_file.h"
+-#include "riscv/processor.h"
+ #include "riscv/mmu.h"
++#include "riscv/processor.h"
+ #include "riscv/simif.h"
+ 
+-#include <cassert>
+-#include <iostream>
+-#include <sstream>
+-
+ // For a short time, we're going to support building against version
+ // ibex-cosim-v0.2 (20a886c) and also ibex-cosim-v0.3 (9af9730). Unfortunately,
+ // they've got different APIs and spike doesn't expose a version string.
+@@ -260,8 +261,8 @@ bool SpikeCosim::step(uint32_t write_reg, uint32_t write_reg_data, uint32_t pc,
+     if (pending_sync_exception) {
+       if (!sync_trap) {
+         std::stringstream err_str;
+-        err_str << "Synchronous trap was expected at ISS PC: "
+-                << std::hex << processor->get_state()->pc
++        err_str << "Synchronous trap was expected at ISS PC: " << std::hex
++                << processor->get_state()->pc
+                 << " but the DUT didn't report one at PC " << pc;
+         errors.emplace_back(err_str.str());
+         return false;
+@@ -293,9 +294,8 @@ bool SpikeCosim::step(uint32_t write_reg, uint32_t write_reg_data, uint32_t pc,
+ 
+   if (pending_iside_error) {
+     std::stringstream err_str;
+-    err_str << "DUT generated an iside error for address: "
+-            << std::hex << pending_iside_err_addr
+-            << " but the ISS didn't produce one";
++    err_str << "DUT generated an iside error for address: " << std::hex
++            << pending_iside_err_addr << " but the ISS didn't produce one";
+     errors.emplace_back(err_str.str());
+     return false;
+   }
+@@ -328,8 +328,8 @@ bool SpikeCosim::check_retired_instr(uint32_t write_reg,
+   if ((processor->get_state()->last_inst_pc & 0xffffffff) != dut_pc) {
+     std::stringstream err_str;
+     err_str << "PC mismatch, DUT retired : " << std::hex << dut_pc
+-            << " , but the ISS retired: "
+-            << std::hex << processor->get_state()->last_inst_pc;
++            << " , but the ISS retired: " << std::hex
++            << processor->get_state()->last_inst_pc;
+     errors.emplace_back(err_str.str());
+     return false;
+   }
+@@ -384,18 +384,17 @@ bool SpikeCosim::check_retired_instr(uint32_t write_reg,
+   return true;
+ }
+ 
+-bool SpikeCosim::check_sync_trap(uint32_t write_reg,
+-                                 uint32_t dut_pc, uint32_t initial_spike_pc) {
++bool SpikeCosim::check_sync_trap(uint32_t write_reg, uint32_t dut_pc,
++                                 uint32_t initial_spike_pc) {
+   // Check if an synchronously-trapping instruction matches
+   // between Spike and the DUT.
+ 
+   // Check that both spike and DUT trapped on the same pc
+   if (initial_spike_pc != dut_pc) {
+     std::stringstream err_str;
+-    err_str << "PC mismatch at synchronous trap, DUT at pc: "
+-            << std::hex << dut_pc
+-            << "while ISS pc is at : "
+-            << std::hex << initial_spike_pc;
++    err_str << "PC mismatch at synchronous trap, DUT at pc: " << std::hex
++            << dut_pc << "while ISS pc is at : " << std::hex
++            << initial_spike_pc;
+     errors.emplace_back(err_str.str());
+     return false;
+   }
+@@ -641,9 +640,9 @@ void SpikeCosim::early_interrupt_handle() {
+ // pending_dside_accesses to avoid a mismatch. This removed access is checked
+ // against PMP using the spike MMU to check spike agrees it passes PMP checks.
+ //
+-// There may be a better way to handle this (e.g. altering spike behaviour to match
+-// Ibex) so for now a warning is generated in fixup cases so they can be easily
+-// identified.
++// There may be a better way to handle this (e.g. altering spike behaviour to
++// match Ibex) so for now a warning is generated in fixup cases so they can be
++// easily identified.
+ void SpikeCosim::misaligned_pmp_fixup() {
+   if (pending_dside_accesses.size() != 0) {
+     auto &top_pending_access = pending_dside_accesses.front();
+@@ -653,13 +652,13 @@ void SpikeCosim::misaligned_pmp_fixup() {
+     // half saw an error we have the PMP fixup case
+     if (top_pending_access_info.misaligned_second &&
+         top_pending_access_info.misaligned_first_saw_error) {
+-      mmu_t* mmu = processor->get_mmu();
++      mmu_t *mmu = processor->get_mmu();
+ 
+       // Check if the second half of the access (which Ibex produces a request
+       // for and spike does not) passes PMP
+       if (!mmu->pmp_ok(top_pending_access_info.addr, 4,
+-            top_pending_access_info.store ? STORE : LOAD,
+-            top_pending_access_info.m_mode_access ? PRV_M : PRV_U)) {
++                       top_pending_access_info.store ? STORE : LOAD,
++                       top_pending_access_info.m_mode_access ? PRV_M : PRV_U)) {
+         // Raise an error if the second half shouldn't have passed PMP
+         std::stringstream err_str;
+         err_str << "Saw second half of a misaligned access which not have "
+@@ -671,8 +670,8 @@ void SpikeCosim::misaligned_pmp_fixup() {
+         // in
+         std::cout << "WARNING: Cosim dropping second half of misaligned access "
+                   << "as first half saw an error and second half passed PMP "
+-                  << "check, address: "
+-                  << std::hex << top_pending_access_info.addr << std::endl;
++                  << "check, address: " << std::hex
++                  << top_pending_access_info.addr << std::endl;
+         std::cout << std::dec;
+ 
+         pending_dside_accesses.erase(pending_dside_accesses.begin());

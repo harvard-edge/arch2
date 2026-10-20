@@ -92,10 +92,9 @@ The public site connects the following maintained surfaces.
 
 | Path | What it contains |
 | --- | --- |
-| [`book/`](book/) | Quarto book project: config and render machinery at the root, manuscript under [`book/contents/`](book/contents/) (see [docs/REPO-LAYOUT.md](docs/REPO-LAYOUT.md)). |
-| [`nanochip/`](nanochip/) and [`data/studies/`](data/studies/) | The 6-stage AI-native design-loop workbench (`MoonshotAI/nano-kpu`), X-Ray Cockpit, empirical studies, and execution artifacts. |
-| [`design-loop-card/`](design-loop-card/) and [`schemas/`](schemas/) | Human-readable templates and machine-checkable contracts for recording a study. |
-| [`examples/`](examples/) | Completed cards and supporting evidence that show how the contracts are used. |
+| [`book/`](book/) | Quarto book project: config and render machinery at the root, manuscript under [`book/contents/`](book/contents/) (see [REPO-LAYOUT.md](.github/REPO-LAYOUT.md)). |
+| [`nanochip/`](nanochip/) and [`data/studies/`](data/studies/) | The 6-stage AI-native design-loop workbench (`MoonshotAI/nano-kpu`), 9-lab cumulative laboratory, X-Ray Cockpit, empirical studies, and execution artifacts. |
+| [`card/`](card/) | Human-readable templates (`card/templates/`), machine-checkable schemas (`card/schemas/`), and completed example cards with replay packets (`card/examples/`). |
 | [`www/`](www/) and [`tools/`](tools/) | Source for the project site, community resources, and tool registry. |
 | [`data/datasets/`](data/datasets/) | Source notes, provenance records, and dataset samples. |
 
@@ -138,7 +137,7 @@ discipline.
 ## Development
 
 Contributor guidance, environment setup, local build commands, branch policy,
-and validation checks live in [CONTRIBUTING.md](CONTRIBUTING.md). The public
+and validation checks live in [CONTRIBUTING.md](.github/CONTRIBUTING.md). The public
 site is published at [arch2.mlsysbook.ai](https://arch2.mlsysbook.ai).
 
 ## Citation

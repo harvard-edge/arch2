@@ -3,7 +3,7 @@
 **Title:** *Signoff Governance, Proxy Gaps & The Design-Loop Card v2.0*
 **Lifecycle Stage:** `6. Commit`
 **Book Alignment:** Part IV — *Governance & Ecosystem* (Chapter 3: *The AI-Native Design Life Cycle*, Chapter 10: *System Evaluation and Red-Teaming*, Chapter 11: *What the Architect Owns*, Chapter 12: *Bootstrapping an AI-Native Ecosystem*)
-**Target Artifact:** [`nanochip/cards/nano-kpu-study-card.yaml`](../../cards/nano-kpu-study-card.yaml), [`nanochip/cards/nano-kpu-study-card.md`](../../cards/nano-kpu-study-card.md), [`nanochip/cards/replay.py`](../../cards/replay.py), [`schemas/design-loop-card.v2.schema.json`](../../../schemas/design-loop-card.v2.schema.json)
+**Target Artifact:** [`nanochip/cards/nano-kpu-study-card.yaml`](../../cards/nano-kpu-study-card.yaml), [`nanochip/cards/nano-kpu-study-card.md`](../../cards/nano-kpu-study-card.md), [`nanochip/cards/replay.py`](../../cards/replay.py), [`card/schemas/design-loop-card.v2.schema.json`](../../../card/schemas/design-loop-card.v2.schema.json)
 
 ---
 

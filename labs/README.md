@@ -3,6 +3,7 @@
 The ***Architecture 2.0*** hands-on laboratory curriculum now lives in [`../nanochip/`](../nanochip/README.md), centered on the complete 6-stage AI-native design loop of **Moonshot AI's `nano-kpu`** (`msh_chip_top`, designed by Kimi K3):
 
 - **Flagship Guide:** [`../nanochip/README.md`](../nanochip/README.md)
+- **9-Lab Cumulative Course:** [`../nanochip/laboratory/course/README.md`](../nanochip/laboratory/course/README.md)
 - **Attribution & Provenance:** [`../nanochip/CREDIT.md`](../nanochip/CREDIT.md)
 - **Design-Loop Card v2.0:** [`../nanochip/cards/nano-kpu-study-card.yaml`](../nanochip/cards/nano-kpu-study-card.yaml)
 

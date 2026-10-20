@@ -18,7 +18,7 @@ format:
 **Core thesis:** *An explicit life cycle connects architectural intent to a reviewed decision. This chapter organizes its responsibilities into six stages (Formulate, Explore, Implement, Evaluate, Interpret, and Commit), linked by structured execution records.*
 :::
 
-Generative AI models and automated search tools can draft register-transfer level (RTL) code, compiler schedules, and microarchitectural configurations in seconds. When an AI generator proposes a new neural processing unit (NPU) accumulator organization for our prospective Lighthouse system-on-chip (SoC), however, that speed helps only if the surrounding workflow can compile the proposal, simulate it, check its physical implementation, and connect any failure back to the design choice that caused it without losing track of which candidate produced which numbers. This chapter organizes that work into a six-stage life cycle: Formulate, Explore, Implement, Evaluate, Interpret, and Commit (@fig-ch03-cover-map). Each stage handles a distinct part of the engineering job, from defining the baseline and physical constraints to deciding what the measured results justify doing next.
+Generative AI models and automated search tools can draft register-transfer level (RTL) code, compiler schedules, and microarchitectural configurations in seconds. When a generator proposes a new neural processing unit (NPU) accumulator organization for our prospective Lighthouse system-on-chip (SoC), however, that speed helps only if the surrounding workflow can compile the proposal, simulate it, check its physical implementation, and connect any failure back to the design choice that caused it without losing track of which candidate produced which numbers. This chapter organizes that work into a six-stage life cycle: Formulate, Explore, Implement, Evaluate, Interpret, and Commit (@fig-ch03-cover-map). Each stage handles a distinct part of the engineering job, from defining the baseline and physical constraints to deciding what the measured results justify doing next.
 
 Keeping those stages distinct makes it clear what was assumed, what actually ran, and what the results showed, so a failed check points back to the assumption or artifact that needs revision before the error propagates across downstream tools. Before examining each stage in detail, we first look at what goes wrong when a team connects a generative model directly to simulation and synthesis tools without that structure. Following the Lighthouse NPU accumulator from its initial throughput target through physical timing checks then shows how structured execution records link each tool result back to the architectural question it tests.
 
@@ -81,7 +81,39 @@ These alternatives trade off more than raw throughput. Adding parallel datapaths
 
 How a team searches those trade-offs depends on what limits the study. When only a few accumulator organizations are on the table, implementing and comparing them directly is often the cheapest path; when the candidate space grows larger, predictive models can screen out weak designs, optimizers can ration scarce tool runs, and generators can propose new topologies. Because each method introduces its own setup cost and modeling assumptions, the practical test is whether it helps answer the architectural comparison within the available budget (@sec-methods-generation-prediction-optimization).
 
-Throughout this search, the exploration history records why each candidate was selected or set aside. Proposals that violate a frozen interface can be rejected immediately, whereas a candidate with uncertain timing may still merit implementation if it tests a useful microarchitectural hypothesis. While changes permitted by the study plan proceed directly to Implement, any proposal that requires altering a system interface or power allocation routes back to Formulate for scope review.
+```{python}
+#| echo: false
+import csv as _csv3ka
+import json as _json3ka
+from pathlib import Path as _Path3ka
+import _python.plots as _ap3ka
+
+_ka10_dir = _Path3ka(_ap3ka.__file__).resolve().parents[2] / "data" / "studies" / "10-kernelagent-search"
+_ka10_sum = {r["label"]: r for r in _json3ka.loads((_ka10_dir / "summary.json").read_text(encoding="utf-8"))}
+_ka10_rows = list(_csv3ka.DictReader((_ka10_dir / "timings.csv").open(encoding="utf-8")))
+_ka10_mv_r5 = next(
+    float(r["time_ms"])
+    for r in _ka10_rows
+    if r["label"] == "Matrix–vector" and int(r["round"]) == 5
+)
+ka10_tasks = len(_ka10_sum)
+ka10_rounds = max(int(r["round"]) for r in _ka10_rows)
+ka10_total = len(_ka10_rows)
+ka10_mv_first = f"{_ka10_sum['Matrix–vector']['first_ms']:.2f}"
+ka10_mv_best = f"{_ka10_sum['Matrix–vector']['best_ms']:.2f}"
+ka10_mv_ratio = f"{_ka10_sum['Matrix–vector']['first_over_best']:.2f}"
+ka10_mv_regress_rounds = _ka10_sum["Matrix–vector"]["rounds_above_previous_best"]
+ka10_mv_r5 = f"{_ka10_mv_r5:.2f}"
+ka10_rms_first = f"{_ka10_sum['RMSNorm']['first_ms']:.2f}"
+ka10_rms_best = f"{_ka10_sum['RMSNorm']['best_ms']:.2f}"
+ka10_rms_ratio = f"{_ka10_sum['RMSNorm']['first_over_best']:.2f}"
+```
+
+Throughout this search, the exploration history records why each candidate was selected or set aside. Proposals that violate a frozen interface can be rejected immediately, whereas a candidate with uncertain timing may still merit implementation if it tests a useful microarchitectural hypothesis. Even in bounded automated kernel tuning, individual search rounds frequently regress against the best candidate found so far before a later round improves the frontier (@fig-ch03-kernelagent-search-trajectories).
+
+![**Automated kernel exploration advances through non-monotonic candidate trials.** Per-round execution time (solid lines) and best-so-far retained latency relative to Round 1 (dashed envelopes) across `{python} ka10_tasks` curated KernelBench operators over `{python} ka10_rounds` rounds (`{python} ka10_total` records) [@Cheng2025KernelAgentArtifacts]. Matrix–vector multiplication improves by `{python} ka10_mv_ratio`$\times$ despite `{python} ka10_mv_regress_rounds` slower intermediate rounds, whereas RMSNorm stays nearly flat (`{python} ka10_rms_ratio`$\times$). These five tasks are curated workspace examples, not a random sample.](images/fig-ch03-kernelagent-search-trajectories){#fig-ch03-kernelagent-search-trajectories width="100%" fig-alt="Six-panel small-multiples chart showing per-round kernel latency for five KernelBench operators across eight optimization rounds and a sixth summary panel of best-retained latency relative to Round 1. Solid curves show non-monotonic per-round execution times with intermediate regressions, while dashed step envelopes trace the monotonic best-retained frontier."}
+
+In the `{python} ka10_tasks` published eight-round traces from @Cheng2025KernelAgentArtifacts, matrix–vector multiplication drops from `{python} ka10_mv_first`\ ms in Round 1 to `{python} ka10_mv_best`\ ms in Round 8 (`{python} ka10_mv_ratio`$\times$), yet `{python} ka10_mv_regress_rounds` of the seven follow-up rounds run slower than the previous best retained candidate, including an `{python} ka10_mv_r5`\ ms regression at Round 5. Across the same eight-round budget, RMSNorm changes only from `{python} ka10_rms_first`\ ms to `{python} ka10_rms_best`\ ms (`{python} ka10_rms_ratio`$\times$). Because these five tasks are author-selected workspace traces rather than a representative sample of KernelBench, they do not establish a general speedup distribution; what they show is why the exploration record must keep every candidate trial distinct from the retained frontier instead of overwriting earlier rounds in place. While changes permitted by the study plan proceed directly to Implement, any proposal that requires altering a system interface or power allocation routes back to Formulate for scope review.
 
 ### Stage 3: Implementing Testable Hardware and Software
 

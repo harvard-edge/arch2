@@ -1,0 +1,338 @@
+# kernel.py
+# A Triton-powered 3D transposed convolution (ConvTranspose3d) forward kernel.
+# - Implements the full math in Triton (no PyTorch compute shortcuts).
+# - Supports optional bias fused into the same kernel.
+# - Designed to match PyTorch ConvTranspose3d with:
+#     weight shape = [in_channels, out_channels, kD, kH, kW]
+#   and default groups=1.
+# - Wrapper `kernel_function` accepts several common calling conventions.
+#
+# Fusion note:
+#   We fuse the bias addition directly into the output accumulation epilogue
+#   inside the same Triton kernel. The wrapper only validates inputs, prepares
+#   the output tensor, and launches the kernel.
+
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _conv_transpose3d_fwd_kernel(
+    x_ptr,                # *BF16 [N, Cin, Di, Hi, Wi]
+    w_ptr,                # *BF16 [Cin, Cout, kD, kH, kW]
+    b_ptr,                # *BF16 [Cout] (ignored if BIAS=False)
+    y_ptr,                # *BF16 [N, Cout, Do, Ho, Wo]
+    #
+    N, Cin, Cout,
+    Di, Hi, Wi,
+    Do, Ho, Wo,
+    #
+    stride_d, stride_h, stride_w,
+    pad_d, pad_h, pad_w,
+    dil_d, dil_h, dil_w,
+    #
+    sx_n, sx_c, sx_d, sx_h, sx_w,    # strides for x
+    sw_ci, sw_co, sw_kd, sw_kh, sw_kw,  # strides for w
+    sy_n, sy_c, sy_d, sy_h, sy_w,    # strides for y
+    #
+    K_D: tl.constexpr,              # kernel depth (compile-time)
+    K_H: tl.constexpr,              # kernel height (compile-time)
+    K_W: tl.constexpr,              # kernel width  (compile-time)
+    BLOCK_S: tl.constexpr,          # number of output spatial points per program
+    BLOCK_OC: tl.constexpr,         # number of output channels per program
+    BLOCK_CIN: tl.constexpr,        # number of input channels loaded per dot
+    BIAS: tl.constexpr,             # whether to fuse bias addition
+):
+    # Program IDs:
+    pid_s = tl.program_id(0)  # tile over flattened (Do*Ho*Wo)
+    pid_oc = tl.program_id(1) # tile over output channels
+    pid_n = tl.program_id(2)  # batch
+
+    # Spatial flattening
+    S_total = Do * Ho * Wo
+    s_base = pid_s * BLOCK_S
+    s_offsets = s_base + tl.arange(0, BLOCK_S)
+    s_mask = s_offsets < S_total
+
+    # Decode (od, oh, ow) from s_offsets
+    ow = s_offsets % Wo
+    tmp = s_offsets // Wo
+    oh = tmp % Ho
+    od = tmp // Ho
+
+    # Output-channel tile
+    oc_base = pid_oc * BLOCK_OC
+    oc_offsets = oc_base + tl.arange(0, BLOCK_OC)
+    oc_mask = oc_offsets < Cout
+
+    # Accumulator [BLOCK_S, BLOCK_OC] in FP32
+    acc = tl.zeros((BLOCK_S, BLOCK_OC), dtype=tl.float32)
+
+    # Optional fused bias add
+    if BIAS:
+        # Load bias[oc] once and broadcast to rows
+        b = tl.load(b_ptr + oc_offsets, mask=oc_mask, other=0).to(tl.float32)
+        acc += b[None, :]
+
+    # Precompute batch base offsets
+    n = pid_n
+    x_base_n = n * sx_n
+    y_base_n = n * sy_n
+
+    # Precompute output base for each s (row)
+    # y_ptrs_rows: base pointers for each row (no oc yet)
+    y_ptrs_rows = y_ptr + y_base_n + od[:, None] * sy_d + oh[:, None] * sy_h + ow[:, None] * sy_w
+
+    # We choose BLOCK_CIN == Cin for this use-case (Cin=32), but we still mask Cin for safety
+    cin_offsets = tl.arange(0, BLOCK_CIN)
+
+    # Iterate over kernel points (kd, kh, kw)
+    for kd in range(0, K_D):
+        # tmpd = od + pad_d - kd*dil_d
+        tmpd = od + pad_d - kd * dil_d
+        # Valid if divisible by stride_d and in range
+        md_ge0 = tmpd >= 0
+        md_mod = (tmpd % stride_d) == 0
+        # id = tmpd // stride_d (integer division)
+        idivd = tmpd // stride_d
+        md_in = idivd < Di
+        m_d = md_ge0 & md_mod & md_in
+
+        for kh in range(0, K_H):
+            tmph = oh + pad_h - kh * dil_h
+            mh_ge0 = tmph >= 0
+            mh_mod = (tmph % stride_h) == 0
+            idivh = tmph // stride_h
+            mh_in = idivh < Hi
+            m_h = mh_ge0 & mh_mod & mh_in
+
+            for kw in range(0, K_W):
+                tmpw = ow + pad_w - kw * dil_w
+                mw_ge0 = tmpw >= 0
+                mw_mod = (tmpw % stride_w) == 0
+                idivw = tmpw // stride_w
+                mw_in = idivw < Wi
+                m_w = mw_ge0 & mw_mod & mw_in
+
+                # Combined valid row mask for this (kd,kh,kw)
+                m_row = s_mask & m_d & m_h & m_w
+
+                # If no valid row at all, we still proceed with masked loads (they become zeros)
+                # Build row base pointers into x at c=0
+                # x[n, c, id, ih, iw] => base per row when c=0:
+                x_row_bases = x_ptr + x_base_n + idivd[:, None] * sx_d + idivh[:, None] * sx_h + idivw[:, None] * sx_w
+
+                # Load X tile: shape [BLOCK_S, BLOCK_CIN]
+                # Pointers for X tile:
+                x_ptrs = x_row_bases + cin_offsets[None, :] * sx_c
+                # Mask for X load: rows valid and cin in range
+                cin_mask = cin_offsets[None, :] < Cin
+                x_mask = m_row[:, None] & cin_mask
+                x_tile = tl.load(x_ptrs, mask=x_mask, other=0).to(tl.bfloat16)
+
+                # Load W tile: [BLOCK_CIN, BLOCK_OC] at (kd,kh,kw)
+                w_ptrs = (w_ptr
+                          + cin_offsets[:, None] * sw_ci
+                          + oc_offsets[None, :] * sw_co
+                          + kd * sw_kd
+                          + kh * sw_kh
+                          + kw * sw_kw)
+                w_mask = (cin_offsets[:, None] < Cin) & (oc_offsets[None, :] < Cout)
+                w_tile = tl.load(w_ptrs, mask=w_mask, other=0).to(tl.bfloat16)
+
+                # Zero out rows of X where invalid (so dot ignores them)
+                # Needed because masked loads may still align but we want no contribution when row invalid.
+                x_tile = tl.where(m_row[:, None], x_tile, tl.zeros_like(x_tile))
+
+                # Accumulate: (BLOCK_S x BLOCK_CIN) @ (BLOCK_CIN x BLOCK_OC) -> (BLOCK_S x BLOCK_OC)
+                acc = tl.dot(x_tile, w_tile, acc)
+
+    # Store result as BF16
+    y_ptrs = y_ptrs_rows + oc_offsets[None, :] * sy_c
+    tl.store(y_ptrs, acc.to(tl.bfloat16), mask=(s_mask[:, None] & oc_mask[None, :]))
+
+
+def _normalize_triple(v, name):
+    """Convert int or 3-tuple to canonical 3-tuple of ints."""
+    if isinstance(v, int):
+        return (v, v, v)
+    if isinstance(v, (list, tuple)) and len(v) == 3:
+        return tuple(int(x) for x in v)
+    raise TypeError(f"{name} must be int or 3-tuple of ints")
+
+
+def _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW, out_pad=(0, 0, 0)):
+    # PyTorch formula:
+    # out = (in - 1) * stride - 2*padding + dilation * (kernel_size - 1) + output_padding + 1
+    Do = (Di - 1) * sD - 2 * pD + dD * (kD - 1) + out_pad[0] + 1
+    Ho = (Hi - 1) * sH - 2 * pH + dH * (kH - 1) + out_pad[1] + 1
+    Wo = (Wi - 1) * sW - 2 * pW + dW * (kW - 1) + out_pad[2] + 1
+    return Do, Ho, Wo
+
+
+def kernel_function(x, *args, **kwargs):
+    """
+    Triton-based 3D transposed convolution (ConvTranspose3d) forward pass.
+
+    Acceptable calling patterns:
+      - kernel_function(x, weight, stride, padding, dilation)
+      - kernel_function(x, weight, bias, stride, padding, dilation)
+      - kernel_function(x, weight, stride=int, padding=int, dilation=int)
+      - kernel_function(x, weight, bias=bias, stride=int|tuple, padding=int|tuple, dilation=int|tuple)
+      - kernel_function(x, stride, padding, dilation) via dict:
+            kernel_function(x, {'weight': w, 'bias': b, 'stride': s, 'padding': p, 'dilation': d})
+
+    Args:
+      x: torch.Tensor [N, Cin, Di, Hi, Wi], BF16 on CUDA
+      weight: torch.Tensor [Cin, Cout, kD, kH, kW], BF16 on CUDA
+      bias: optional torch.Tensor [Cout] BF16 on CUDA or None
+      stride, padding, dilation: int or 3-tuple
+
+    Returns:
+      y: torch.Tensor [N, Cout, Do, Ho, Wo], BF16 on CUDA
+
+    Fused ops:
+      - Bias addition is fused within the same kernel to avoid an extra pass.
+
+    Runtime behavior:
+      - Wrapper only validates inputs, allocates output, and launches Triton.
+      - All math happens inside Triton kernels as required.
+    """
+    # Parse args / kwargs.
+    weight = None
+    bias = None
+    stride = None
+    padding = None
+    dilation = None
+
+    # Dict-style call
+    if len(args) == 1 and isinstance(args[0], dict):
+        params = args[0]
+        weight = params.get('weight', None)
+        bias = params.get('bias', None)
+        stride = params.get('stride', 1)
+        padding = params.get('padding', 0)
+        dilation = params.get('dilation', 1)
+    else:
+        # Try positional patterns
+        if len(args) >= 1:
+            weight = args[0]
+        if len(args) == 4:
+            # x, weight, stride, padding, dilation
+            stride, padding, dilation = args[1], args[2], args[3]
+        elif len(args) == 5:
+            # x, weight, bias, stride, padding, dilation
+            bias, stride, padding, dilation = args[1], args[2], args[3], args[4]
+        elif len(args) == 2:
+            # Might be followed by kwargs for stride/padding/dilation
+            pass
+        elif len(args) == 3:
+            stride, padding, dilation = args[1], args[2], kwargs.get('dilation', kwargs.get('d', 1))
+
+        # Now override with kwargs if provided
+        if 'weight' in kwargs:
+            weight = kwargs['weight']
+        if 'bias' in kwargs:
+            bias = kwargs['bias']
+        if 'stride' in kwargs:
+            stride = kwargs['stride']
+        if 'padding' in kwargs:
+            padding = kwargs['padding']
+        if 'dilation' in kwargs:
+            dilation = kwargs['dilation']
+
+    # Validate presence
+    if weight is None:
+        raise TypeError("weight must be provided")
+    if stride is None:
+        stride = 1
+    if padding is None:
+        padding = 0
+    if dilation is None:
+        dilation = 1
+
+    # Canonicalize tuples
+    sD, sH, sW = _normalize_triple(stride, "stride")
+    pD, pH, pW = _normalize_triple(padding, "padding")
+    dD, dH, dW = _normalize_triple(dilation, "dilation")
+
+    # Validate dtypes/devices per runtime constraints
+    assert x.is_cuda and weight.is_cuda, "x and weight must be CUDA tensors"
+    if bias is not None:
+        assert bias.is_cuda, "bias must be CUDA tensor"
+    # Restrict dtype to BF16 per test; we still accept FP16/FP32 if needed
+    if x.dtype != torch.bfloat16:
+        raise TypeError(f"Expected x to be BF16, got {x.dtype}")
+    if weight.dtype != torch.bfloat16:
+        raise TypeError(f"Expected weight to be BF16, got {weight.dtype}")
+    if bias is not None and bias.dtype != torch.bfloat16:
+        raise TypeError(f"Expected bias to be BF16, got {bias.dtype}")
+
+    # Shapes
+    N, Cin, Di, Hi, Wi = x.shape
+    w_shape = weight.shape
+    if len(w_shape) != 5:
+        raise ValueError("weight must have shape [Cin, Cout, kD, kH, kW]")
+    Cin_w, Cout, kD, kH, kW = w_shape
+    if Cin_w != Cin:
+        raise ValueError(f"Incompatible Cin: x has {Cin}, weight has {Cin_w}")
+    if bias is not None and bias.numel() != Cout:
+        raise ValueError("bias must have shape [Cout]")
+
+    # Output size (no output_padding)
+    Do, Ho, Wo = _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW)
+
+    # Allocate output
+    y = torch.empty((N, Cout, Do, Ho, Wo), device=x.device, dtype=x.dtype)
+
+    # Strides
+    sx_n, sx_c, sx_d, sx_h, sx_w = x.stride()  # N, C, D, H, W
+    sy_n, sy_c, sy_d, sy_h, sy_w = y.stride()
+    sw_ci, sw_co, sw_kd, sw_kh, sw_kw = weight.stride()  # Cin, Cout, kD, kH, kW
+
+    # Grid mapping:
+    # axis0: tiles over S_total = Do*Ho*Wo
+    # axis1: tiles over Cout
+    # axis2: batch N
+    S_total = Do * Ho * Wo
+
+    # Block choices:
+    # - BLOCK_CIN is set to Cin (32 in the test) for a single dot per (kd,kh,kw).
+    # - BLOCK_OC and BLOCK_S chosen as 32 for good tensor core shapes.
+    BLOCK_CIN = 32
+    BLOCK_OC = 32
+    BLOCK_S = 32
+
+    # Quick guards (safe for general cases, tailored to the test)
+    if Cin > BLOCK_CIN:
+        # For simplicity and performance in this task, we require Cin <= 32.
+        # Extending to larger Cin would require looping over Cin-tiles inside the kernel.
+        raise NotImplementedError(f"This kernel expects Cin <= {BLOCK_CIN}; got Cin={Cin}")
+
+    grid = (
+        triton.cdiv(S_total, BLOCK_S),
+        triton.cdiv(Cout, BLOCK_OC),
+        N,
+    )
+
+    _conv_transpose3d_fwd_kernel[grid](
+        x, weight, (bias if bias is not None else y), y,
+        N, Cin, Cout,
+        Di, Hi, Wi,
+        Do, Ho, Wo,
+        sD, sH, sW,
+        pD, pH, pW,
+        dD, dH, dW,
+        sx_n, sx_c, sx_d, sx_h, sx_w,
+        sw_ci, sw_co, sw_kd, sw_kh, sw_kw,
+        sy_n, sy_c, sy_d, sy_h, sy_w,
+        K_D=kD, K_H=kH, K_W=kW,
+        BLOCK_S=BLOCK_S,
+        BLOCK_OC=BLOCK_OC,
+        BLOCK_CIN=BLOCK_CIN,
+        BIAS=(bias is not None),
+        num_warps=8,
+        num_stages=2,
+    )
+    return y

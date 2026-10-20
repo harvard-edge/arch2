@@ -1,7 +1,7 @@
 # Design-Loop Card v2.0: `moonshot-kimi-k3-nano-kpu-v2`
 
 **Machine-Readable Contract:** [`nano-kpu-study-card.yaml`](nano-kpu-study-card.yaml)
-**Schema Version:** `2.0` ([`schemas/design-loop-card.v2.schema.json`](../../schemas/design-loop-card.v2.schema.json))
+**Schema Version:** `2.0` ([`card/schemas/design-loop-card.v2.schema.json`](../../card/schemas/design-loop-card.v2.schema.json))
 **Validation Command:** `./arch2 validate card nanochip/cards/nano-kpu-study-card.yaml`
 **Replay Command:** `python3 nanochip/cards/replay.py verify-all`
 

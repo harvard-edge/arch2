@@ -156,7 +156,7 @@ def test_tool_subsite_rewrites_all_root_navigation_targets() -> None:
 
 
 def test_local_build_guide_activates_its_documented_environment() -> None:
-    guide = (arch2_cli.ROOT / "CONTRIBUTING.md").read_text()
+    guide = (arch2_cli.ROOT / ".github" / "CONTRIBUTING.md").read_text()
     activation = guide.index("source .venv/bin/activate")
     build = guide.index("SKIP_BOOK=1 .github/scripts/build_site.sh")
     assert activation < build
@@ -168,8 +168,11 @@ def test_site_build_does_not_bypass_generated_asset_cleanliness() -> None:
         arch2_cli.ROOT / ".github" / "scripts" / "build_site.sh"
     ).read_text()
 
-    assert "ARCH2_SKIP_ASSET_DRIFT=1 ./arch2" not in build_script
-    assert "./arch2 render --no-layout" in build_script
+    assert (
+        "ARCH2_SKIP_ASSET_DRIFT=1"
+        not in build_script.split("render --no-layout")[0].splitlines()[-1]
+    )
+    assert "python3 -m cli render --no-layout" in build_script
 
 
 def test_html_title_strip_uses_release_language() -> None:

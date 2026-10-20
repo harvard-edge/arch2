@@ -120,7 +120,44 @@ An empirical measurement cannot enter an architectural comparison until its reco
 
 [^fn-constraint-auditing-c07]: **Timing constraint integrity and waiver auditing**: Automated design loops optimizing for timing slack face a subtle reward-hacking failure mode: relaxing constraints to falsely clear violations. Beyond crude `set_false_path` additions, an agent can subtly relax clock uncertainty, artificially increase maximum transition limits, alter on-chip variation derating tables, or declare optimistic multicycle path exceptions. Constraint files (SDC) must be cryptographically hashed and diff-audited against immutable baseline constraints, with all multicycle exceptions formally verified against pipeline hazard logic.
 
-Meeting these seven admission criteria makes a metric eligible for comparison, but does not by itself validate the comparison.[^fn-constraint-auditing-c07] Comparing two candidates requires evaluating the full experimental delta under matched operating conditions, as developed in @sec-evidence-specific-to-claim-and-scope. Even before comparing candidates, however, the architect must distinguish an empirical measurement from a formal proof that a candidate obeys a required contract: a cache's measured average latency and a proof that its controller preserves transaction ordering answer different questions, even when both arrive through the same execution harness.
+```{python}
+#| echo: false
+import csv as _csv7ib
+import json as _json7ib
+from pathlib import Path as _Path7ib
+import _python.plots as _ap7ib
+
+_root7ib = _Path7ib(_ap7ib.__file__).resolve().parents[2]
+_s16_dir = _root7ib / "data" / "studies" / "16-regression-records"
+_s16 = _json7ib.loads((_s16_dir / "summary.json").read_text(encoding="utf-8"))
+_s16_rows = {r["test_name"]: r for r in _csv7ib.DictReader((_s16_dir / "derived" / "test_summary.csv").open(encoding="utf-8"))}
+s16_pass = f"{_s16['passing_runs']:,}"
+s16_total = f"{_s16['total_runs']:,}"
+s16_pct = f"{_s16['aggregate_pass_percentage']:.1f}"
+s16_groups = _s16["test_groups"]
+s16_nonpass_groups = _s16["groups_with_nonpassing_records"]
+s16_dbg_pass = int(_s16_rows["riscv_debug_triggers_test"]["passing_runs"])
+s16_dbg_tot = int(_s16_rows["riscv_debug_triggers_test"]["total_runs"])
+s16_ill_pass = int(_s16_rows["riscv_illegal_instr_test"]["passing_runs"])
+s16_ill_tot = int(_s16_rows["riscv_illegal_instr_test"]["total_runs"])
+
+_s22_dir = _root7ib / "data" / "studies" / "22-ibex-triage"
+_s22_runs = list(_csv7ib.DictReader((_s22_dir / "run-results.csv").open(encoding="utf-8")))
+_s22_maps = list(_csv7ib.DictReader((_s22_dir / "issue-explicit-mappings.csv").open(encoding="utf-8")))
+_s22_r1 = [r for r in _s22_runs if r["run"] == "first"]
+_s22_r2 = [r for r in _s22_runs if r["run"] == "second"]
+s22_r1_fail = sum(r["status"] == "FAIL" for r in _s22_r1)
+s22_r1_tot = f"{len(_s22_r1):,}"
+s22_r2_fail = sum(r["status"] == "FAIL" for r in _s22_r2)
+s22_r2_tot = f"{len(_s22_r2):,}"
+s22_mapped_n = len(_s22_maps)
+s22_rtl_n = sum("Ibex" in r["reported_explanation"] and "low concern" in r["reported_explanation"] for r in _s22_maps)
+s22_non_rtl_n = s22_mapped_n - s22_rtl_n
+```
+
+Public RTL regression logs show why these admission records must separate aggregate pass rates and testbench artifacts from hardware defects before any result steers search. In one retained OpenTitan Ibex nightly regression report [@LowRISCIbex2026OpenTitanRegression], `{python} s16_pass` of `{python} s16_total` test runs pass (`{python} s16_pct`%) across `{python} s16_groups` named test groups, yet `{python} s16_nonpass_groups` groups record failures, including `{python} s16_dbg_pass` of `{python} s16_dbg_tot` passing runs in `debug_triggers` and `{python} s16_ill_pass` of `{python} s16_ill_tot` in `illegal_instr`. Nor is a recorded regression failure automatically an RTL defect: across two regression reports attached to Ibex issue 2187 (`{python} s22_r1_fail` failures in `{python} s22_r1_tot` runs and `{python} s22_r2_fail` in `{python} s22_r2_tot` runs on a later commit and seed range) [@LowRISCIbex2024Issue2187], the issue author's `{python} s22_mapped_n` explicit case-to-signature mappings attribute `{python} s22_non_rtl_n` cases to random-instruction generator wall-clock timeouts, stale testbench privilege-mode checkers, co-simulation configuration, or transient host timeouts and only `{python} s22_rtl_n` to a low-concern RTL behavior.
+
+Meeting all seven admission criteria makes a metric eligible for comparison, but does not by itself validate the comparison.[^fn-constraint-auditing-c07] Comparing two candidates requires evaluating the full experimental delta under matched operating conditions, as developed in @sec-evidence-specific-to-claim-and-scope. Even before comparing candidates, the architect must also distinguish an empirical measurement from a formal proof that a candidate obeys a required contract: a cache's measured average latency and a proof that its controller preserves transaction ordering answer different questions, even when both arrive through the same execution harness.
 
 ::: {.callout-lighthouse title="A returned value must qualify before it becomes feedback"}
 **Context.** Consider a hypothetical return from evaluating a prospective L2 cache configuration for the Lighthouse XR subsystem under a 3\ W thermal design power envelope. Suppose static UPF checks pass, but a bounded model checking (BMC) run encounters a setup failure, and a thermal report omits raw trace lineage. These statuses illustrate routing; the Lighthouse study has not executed.
@@ -303,9 +340,9 @@ assert int(_mut7[3]["mutants_surviving"]) == 0
 assert int(_mut7[2]["mutants_entering"]) == mut_survivors
 ```
 
-Published verification records show why a verification suite needs both diverse checkers and direct fault-detection tests (@fig-ch07-defect-discovery-modalities). When the OpenHW Group identified and resolved `{python} cv_total` RTL issues in its CV32E40P RISC-V core between the start of verification in February 2020 and RTL freeze, it recorded the method that found each one [@OpenHW2026CV32E40PManual]. Simulation found `{python} cv_sim` of those issues (`{python} cv_directed` through directed self-checking tests, `{python} cv_step` through step-and-compare against an instruction-set simulator, and `{python} cv_random` through constrained-random stimulus), whereas formal verification and human inspection found `{python} cv_formal` each, lint found `{python} cv_lint`, and one has no recorded source. Methods other than simulation therefore account for `{python} cv_nonsim` of the `{python} cv_total` issues ($`{python} cv_nonsim_pct`\%$). Although these counts come from one core's campaign without reporting the effort, compute, execution ordering, or overlapping coverage needed to rank the methods by efficiency or determine which other checks could have caught each defect, they show that no single method was credited with finding all the issues in the campaign.
+Published verification records show why a verification suite needs both diverse checkers and direct fault-detection tests (@fig-ch07-defect-discovery-modalities). When the OpenHW Group identified and resolved `{python} cv_total` RTL issues in its CV32E40P RISC-V core between the start of verification in February 2020 and RTL freeze, it recorded the method that found each one [@OpenHW2026CV32E40PManual]. Simulation found `{python} cv_sim` of those issues (`{python} cv_directed` through directed self-checking tests, `{python} cv_step` through step-and-compare against an instruction-set simulator, and `{python} cv_random` through constrained-random stimulus), whereas formal verification and human inspection found `{python} cv_formal` each, lint found `{python} cv_lint`, and one has no recorded source. Methods other than simulation therefore account for `{python} cv_nonsim` of the `{python} cv_total` issues (`{python} cv_nonsim_pct`%). Although these counts come from one core's campaign without reporting the effort, compute, execution ordering, or overlapping coverage needed to rank the methods by efficiency or determine which other checks could have caught each defect, they show that no single method was credited with finding all the issues in the campaign.
 
-The second panel of @fig-ch07-defect-discovery-modalities turns from the design to the test suite itself. When @HerdtEtAl2021MutationCompliance seeded `{python} mut_seeded` single mutations across nine mutation classes into a reference RISC-V instruction-set simulator, the official compliance suite killed `{python} mut_official_killed` of them ($`{python} mut_official_pct`\%$); a specification-based suite of about `{python} mut_spec_tests` further tests then killed `{python} mut_spec_killed` of the `{python} mut_survivors` survivors, and symbolic execution generated `{python} mut_symbolic_tests` targeted tests that killed the remainder. Because those surviving mutants included shift instructions that used unmasked upper bits of the shift-amount register and jumps that wrote the destination register even when a misaligned target should have trapped without side effects, they show that a suite that every conforming simulator passes can still fail to distinguish faulty ones.
+The second panel of @fig-ch07-defect-discovery-modalities turns from the design to the test suite itself. When @HerdtEtAl2021MutationCompliance seeded `{python} mut_seeded` single mutations across nine mutation classes into a reference RISC-V instruction-set simulator, the official compliance suite killed `{python} mut_official_killed` of them (`{python} mut_official_pct`%); a specification-based suite of about `{python} mut_spec_tests` further tests then killed `{python} mut_spec_killed` of the `{python} mut_survivors` survivors, and symbolic execution generated `{python} mut_symbolic_tests` targeted tests that killed the remainder. Because those surviving mutants included shift instructions that used unmasked upper bits of the shift-amount register and jumps that wrote the destination register even when a misaligned target should have trapped without side effects, they show that a suite that every conforming simulator passes can still fail to distinguish faulty ones.
 
 ![**Different checks find different defects, and a passing suite can leave detectable faults alive.** (a) Method that found each of the `{python} cv_total` RTL issues resolved before CV32E40P RTL freeze; non-simulation methods account for `{python} cv_nonsim` [@OpenHW2026CV32E40PManual]. (b) Mutants seeded into a reference RISC-V instruction-set simulator, with each suite run on the previous suite's survivors; the official compliance tests leave `{python} mut_survivors` of `{python} mut_seeded` alive [@HerdtEtAl2021MutationCompliance].](images/fig-ch07-defect-discovery-modalities){#fig-ch07-defect-discovery-modalities width="100%" fig-alt="Two-panel bar chart. The left panel counts the 47 CV32E40P RTL issues by the method that found them, with formal verification and inspection at 13 each, directed simulation 10, step-and-compare 6, constrained-random simulation 2, lint 2, and one unknown. The right panel shows three test suites applied in turn to seeded simulator mutants, killing 2,263 of 2,455, then 91 of 192, then all remaining 101."}
 
@@ -397,7 +434,7 @@ sa_writes_base = _Raw7(f"{_base7['dram_writes']:,}")
 sa_writes_wide = _Raw7(f"{_wide7['dram_writes']:,}")
 ```
 
-**Case study: scalar compression and masked write traffic.** In our retained study of systolic array aspect ratios under SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3], compressing multi-dimensional behavior into a single figure of merit hid a large difference in memory traffic. The $32 \times 32$ baseline and a $16 \times 64$ candidate returned an identical sum of reported cycles excluding prefetch (`{python} sa_cycles` cycles, taken from the report's `Total Cycles` column rather than `Total Cycles (incl. prefetch)` and therefore distinct from full workload elapsed time) and an identical unweighted mean of the three layers' reported overall utilization (`{python} sa_util_pct`%). Under the preregistered scalar score ($S = C_{\text{excl. prefetch}}/\bar{U}_{\text{frac}} = `{python} sa_score`$), the two designs tied.
+**Case study: scalar compression and masked write traffic.** In our retained study of systolic array aspect ratios under SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3], compressing multi-dimensional behavior into a single figure of merit hid a large difference in memory traffic. The $32 \times 32$ baseline and a $16 \times 64$ candidate returned an identical sum of reported cycles excluding prefetch (`{python} sa_cycles` cycles, taken from the report's `Total Cycles` column rather than `Total Cycles (incl. prefetch)` and therefore distinct from full workload elapsed time) and an identical unweighted mean of the three layers' reported overall utilization (`{python} sa_util_pct`%). Under the preregistered scalar score ($S = C_{\text{excl. prefetch}}/\bar{U}_{\text{frac}} =$ `{python} sa_score`), the two designs tied.
 
 A quantity that the scalar score omits separates them (@fig-proxy-mismatch). The $16 \times 64$ candidate reported `{python} sa_writes_wide` modeled DRAM-word writes against `{python} sa_writes_base` for the baseline, twice as many. Across these two retained SCALE-Sim quantities, the baseline dominates the candidate, delivering equal reported cycles excluding prefetch with half the modeled writes, whereas a scalar evaluator that omits write traffic treats the two designs as interchangeable. Because SCALE-Sim write counts are modeled quantities rather than measured physical bus traffic, this run alone cannot answer whether the extra writes would degrade wall-clock timing, energy, or thermals through bus contention; @sec-cross-stack-pattern-transfer bounds the energy question with a labeled derived estimate.
 
@@ -415,7 +452,7 @@ import json
 from pathlib import Path
 import matplotlib.pyplot as plt
 import _python.plots as _ap
-from _python.plots import COLORS, apply_style
+from _python.plots import COLORS, FONT_SIZES, apply_style
 
 apply_style()
 
@@ -430,8 +467,8 @@ fig, ax = plt.subplots(figsize=(4.8, 3.4))
 fig.subplots_adjust(left=0.18, right=0.95, top=0.95, bottom=0.15)
 annotation_box = dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.95)
 
-ax.set_xlabel("SCALE-Sim cycles excluding prefetch (lower is better)", fontsize=8.5)
-ax.set_ylabel("Modeled DRAM-word writes (lower is better)", fontsize=8.5)
+ax.set_xlabel("SCALE-Sim cycles excluding prefetch (lower is better)", fontsize=FONT_SIZES["label"])
+ax.set_ylabel("Modeled DRAM-word writes (lower is better)", fontsize=FONT_SIZES["label"])
 
 seen = set()
 for r in arm_runs:
@@ -447,13 +484,13 @@ for r in arm_runs:
 
     if "32x32" in label:
         ax.plot(cycles, dram_writes, marker="o", markersize=5, color=COLORS["blue"])
-        ax.text(cycles + 300, dram_writes - 12000, f"Baseline {label}", color=COLORS["ink"], fontsize=8, ha="left", va="top", bbox=annotation_box, zorder=5)
+        ax.text(cycles + 300, dram_writes - 12000, f"Baseline {label}", color=COLORS["ink"], fontsize=FONT_SIZES["annotation"], ha="left", va="top", bbox=annotation_box, zorder=5)
     elif "16x64" in label:
         ax.plot(cycles, dram_writes, marker="X", markersize=5, color=COLORS["red"])
-        ax.text(cycles + 300, dram_writes + 15000, f"Shared candidate\n{label}", color=COLORS["ink"], fontsize=8, ha="left", va="bottom", bbox=annotation_box, zorder=5)
+        ax.text(cycles + 300, dram_writes + 15000, f"Shared candidate\n{label}", color=COLORS["ink"], fontsize=FONT_SIZES["annotation"], ha="left", va="bottom", bbox=annotation_box, zorder=5)
     else:
         ax.plot(cycles, dram_writes, marker="s", markersize=4, color=COLORS["orange"], alpha=0.6)
-        ax.text(cycles + 300, dram_writes, label, color=COLORS["ink"], fontsize=7.8, ha="left", va="center", alpha=0.7, bbox=annotation_box, zorder=5)
+        ax.text(cycles + 300, dram_writes, label, color=COLORS["ink"], fontsize=FONT_SIZES["annotation"], ha="left", va="center", alpha=0.7, bbox=annotation_box, zorder=5)
 
 baseline_cycles = next(
     r["metrics"]["total_cycles"]
@@ -466,7 +503,7 @@ ax.axvline(x=baseline_cycles, color=COLORS["grid"], linestyle="--", linewidth=0.
 ax.set_xlim(12800, 27800)
 ax.set_ylim(60000, 950000)
 
-ax.tick_params(axis="both", labelsize=8, length=2.5, width=0.6, pad=2)
+ax.tick_params(axis="both", labelsize=FONT_SIZES["tick"], length=2.5, width=0.6, pad=2)
 ax.grid(True, color=COLORS["grid"], linewidth=0.55, zorder=0)
 for spine in ["top", "right"]:
     ax.spines[spine].set_visible(False)
@@ -494,7 +531,42 @@ In the cache example above, an architect can separate the two explanations by co
 
 The prospective Lighthouse L2 cache configuration shows what such a test has to separate. Enlarging the L2 cache might cut off-chip DRAM traffic enough to improve 99th-percentile frame latency, yet evaluating that benefit also requires counting added SRAM area, leakage, tag-array lookup delay, and network-on-chip (NoC) queue pressure. The same capacity increase that raises the hit rate can lengthen tag lookups or serialize NoC packets and make tail latency worse. Queue-occupancy profiles and latency distributions help distinguish a genuine capacity benefit from a queuing bottleneck in a way that a hit-rate delta on its own cannot.
 
-Because these Lighthouse trade-offs are hypotheses rather than measured results, the telemetry also needs checks for simulator artifacts. A fixed-latency queueing model, omitted DRAM refresh cycles, or an unconstrained register-file assumption in the compiler backend can each manufacture an apparent mechanism that exists only inside the model. Even when controlled contrasts and model checks support a proposed mechanism, that conclusion remains scoped to the model and its identification assumptions. Otherwise, the mechanism remains contradicted, unresolved, or untested according to the evidence in @tbl-outcome-mechanism, even when a supported top-line outcome can still be retained separately.
+```{python}
+#| echo: false
+import csv as _csv7ka
+from pathlib import Path as _Path7ka
+import _python.plots as _ap7ka
+
+_ka11_rows = list(
+    _csv7ka.DictReader(
+        (_Path7ka(_ap7ka.__file__).resolve().parents[2]
+         / "data" / "studies" / "11-kernelagent-feedback" / "paired_metrics.csv").open(encoding="utf-8")
+    )
+)
+_ka11 = {(r["label"], r["state"]): r for r in _ka11_rows}
+ka11_n = len(_ka11_rows) // 2
+ka11_mp_t1 = f"{float(_ka11[('MaxPool 3D', 'first')]['time_ms']):.2f}"
+ka11_mp_tb = f"{float(_ka11[('MaxPool 3D', 'best')]['time_ms']):.2f}"
+ka11_mp_rel = f"{float(_ka11[('MaxPool 3D', 'best')]['relative_time']):.2f}"
+ka11_mp_occ1 = f"{float(_ka11[('MaxPool 3D', 'first')]['occupancy_pct']):.1f}"
+ka11_mp_occb = f"{float(_ka11[('MaxPool 3D', 'best')]['occupancy_pct']):.1f}"
+ka11_mp_dram1 = f"{float(_ka11[('MaxPool 3D', 'first')]['dram_throughput_pct']):.1f}"
+ka11_mp_dramb = f"{float(_ka11[('MaxPool 3D', 'best')]['dram_throughput_pct']):.1f}"
+ka11_mv_t1 = f"{float(_ka11[('Matrix–vector', 'first')]['time_ms']):.2f}"
+ka11_mv_tb = f"{float(_ka11[('Matrix–vector', 'best')]['time_ms']):.2f}"
+ka11_mv_occ1 = f"{float(_ka11[('Matrix–vector', 'first')]['occupancy_pct']):.1f}"
+ka11_mv_occb = f"{float(_ka11[('Matrix–vector', 'best')]['occupancy_pct']):.1f}"
+ka11_mv_dram1 = f"{float(_ka11[('Matrix–vector', 'first')]['dram_throughput_pct']):.1f}"
+ka11_mv_dramb = f"{float(_ka11[('Matrix–vector', 'best')]['dram_throughput_pct']):.1f}"
+ka11_tc_occ1 = f"{float(_ka11[('Transposed conv. 3D', 'first')]['occupancy_pct']):.1f}"
+ka11_tc_occb = f"{float(_ka11[('Transposed conv. 3D', 'best')]['occupancy_pct']):.1f}"
+```
+
+Because these Lighthouse trade-offs are hypotheses rather than measured results, the telemetry also needs checks for simulator artifacts. A fixed-latency queueing model, omitted DRAM refresh cycles, or an unconstrained register-file assumption in the compiler backend can each manufacture an apparent mechanism that exists only inside the model. Even on real hardware, paired profiler counters show why a single intermediate metric such as warp occupancy cannot serve as a universal causal story for kernel speedups (@fig-ch07-kernelagent-ncu-counterfactual).
+
+![**Faster retained GPU kernels do not move intermediate profiler counters in one uniform direction.** Paired Round 1 (open circles) and fastest retained round (filled squares) across `{python} ka11_n` KernelBench tasks profiled with NVIDIA Nsight Compute in the KernelAgent artifacts [@Cheng2025KernelAgentArtifacts]: (a) kernel execution time relative to Round 1, (b) achieved warp occupancy, and (c) sustained DRAM throughput. In MaxPool 3D and 3D transposed convolution, the fastest retained kernel achieves lower execution time alongside *lower* achieved occupancy, whereas in matrix–vector multiplication both occupancy and DRAM throughput rise steeply.](images/fig-ch07-kernelagent-ncu-counterfactual){#fig-ch07-kernelagent-ncu-counterfactual width="100%" fig-alt="Three-panel dumbbell chart comparing Round 1 and the fastest retained optimization round across five KernelBench tasks on relative kernel time, achieved occupancy, and DRAM throughput. Latency drops or holds nearly steady across all five tasks, while occupancy rises sharply for matrix-vector multiplication but falls for MaxPool 3D and transposed 3D convolution."}
+
+Across those `{python} ka11_n` paired Nsight Compute profiles [@Cheng2025KernelAgentArtifacts], matrix–vector multiplication lowers execution time from `{python} ka11_mv_t1`\ ms to `{python} ka11_mv_tb`\ ms while raising achieved warp occupancy from `{python} ka11_mv_occ1`% to `{python} ka11_mv_occb`% and DRAM throughput from `{python} ka11_mv_dram1`% to `{python} ka11_mv_dramb`%. In MaxPool 3D, by contrast, the fastest retained round cuts execution time from `{python} ka11_mp_t1`\ ms to `{python} ka11_mp_tb`\ ms (`{python} ka11_mp_rel` of Round 1 time) while achieved occupancy *falls* from `{python} ka11_mp_occ1`% to `{python} ka11_mp_occb`% and DRAM throughput rises from `{python} ka11_mp_dram1`% to `{python} ka11_mp_dramb`%; in 3D transposed convolution, occupancy similarly drops from `{python} ka11_tc_occ1`% to `{python} ka11_tc_occb`% as latency nearly halves. A post-hoc narrative that attributes every kernel speedup to higher warp occupancy would be contradicted by two of the five tasks, yet these paired endpoint profiles still observe co-movement across distinct kernel implementations rather than isolating a single mechanism. Even when controlled contrasts and model checks support a proposed mechanism, that conclusion remains scoped to the model and its identification assumptions. Otherwise, the mechanism remains contradicted, unresolved, or untested according to the evidence in @tbl-outcome-mechanism, even when a supported top-line outcome can still be retained separately.
 
 ## Combining Independent Checks to Catch Blind Spots {#sec-independent-checks-and-correlated-errors}
 

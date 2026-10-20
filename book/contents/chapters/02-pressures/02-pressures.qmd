@@ -370,7 +370,27 @@ Deciding whether such a shift invalidates an earlier hardware choice requires tr
 
 ![**Specialization depends on assumptions about the target workload.** The six groups identify changes that may affect the value of a specialized design. A change calls for checking the affected assumptions; it need not invalidate the design or require repeating every evaluation.](images/fig-domain-specificity-shapes){#fig-domain-specificity-shapes width="80%" fig-alt="Diagram in which six source-to-target conditions surround the specialization scope: kernel family, data and precision, memory behavior, program interface, deployment and quality of service, and operating change. A separate bar states that changes in any condition can increase the verification burden."}
 
-When a workload shift crosses one of those boundaries, earlier efficiency conclusions can fail quickly. An expanded working set that overflows scratchpad capacity triggers costly unmodeled DRAM spill traffic, just as a smaller serving batch size can shrink the payload per invocation below the break-even threshold $g^*$. Even when operational intensity, data reuse, and numerical semantics remain unchanged, shifts in compiler scheduling, synchronization, or runtime overhead can still alter delivered performance, so tracking the assumptions behind a design decision tells the team which measurements an update requires.
+```{python}
+#| echo: false
+import json as _json2ml
+from pathlib import Path as _Path2ml
+import _python.plots as _ap2ml
+
+_ml12 = _json2ml.loads(
+    (_Path2ml(_ap2ml.__file__).resolve().parents[2]
+     / "data" / "studies" / "12-mlperf-latency-contract" / "summary.json").read_text(encoding="utf-8")
+)
+ml12_pairs = _ml12["pairs"]
+ml12_std_ttft = f"{round(_ml12['latency_contract_ms']['standard_ttft_ms']):,}"
+ml12_std_tpot = f"{round(_ml12['latency_contract_ms']['standard_tpot_ms']):,}"
+ml12_int_ttft = f"{round(_ml12['latency_contract_ms']['interactive_ttft_ms']):,}"
+ml12_int_tpot = f"{round(_ml12['latency_contract_ms']['interactive_tpot_ms']):,}"
+ml12_min_pct = f"{100 * _ml12['minimum_interactive_fraction']:.1f}"
+ml12_max_pct = f"{100 * _ml12['maximum_interactive_fraction']:.1f}"
+ml12_med_pct = f"{100 * _ml12['median_interactive_fraction']:.1f}"
+```
+
+When a workload shift crosses one of those boundaries, earlier efficiency conclusions can fail quickly. An expanded working set that overflows scratchpad capacity triggers costly unmodeled DRAM spill traffic, while a smaller serving batch size can shrink the payload per invocation below the break-even threshold $g^*$. Stricter deployment quality-of-service targets cut delivered throughput just as sharply. Across `{python} ml12_pairs` matched single-node, eight-accelerator Llama 2 70B server submissions in MLPerf Inference v5.0 [@MLCommons2025InferenceV50Results], tightening 99th-percentile latency bounds from `{python} ml12_std_ttft`\ ms time to first token and `{python} ml12_std_tpot`\ ms time per output token (Standard) to `{python} ml12_int_ttft`\ ms and `{python} ml12_int_tpot`\ ms (Interactive) restricts interactive server throughput to `{python} ml12_min_pct`% to `{python} ml12_max_pct`% of standard throughput on the same hardware (median `{python} ml12_med_pct`%; @sec-loop-patterns-across-stack examines how that contract change alters transfer and ranking). Even when operational intensity, data reuse, and numerical semantics remain unchanged, shifts in service-level targets, compiler scheduling, synchronization, or runtime overhead can still alter delivered performance, so tracking the assumptions behind a design decision tells the team which measurements an update requires.
 
 Recent AI workloads illustrate how quickly both model structure and compute scale can cross those boundaries. Whereas convolutional inference with fixed frame sizes follows a regular schedule, autoregressive Transformer serving introduces dynamic control and memory behavior through growing KV caches [@KwonEtAl2023PagedAttention], variable sequence lengths, sparse mixture-of-experts routing,[^fn-mixture-of-experts-c02] and separate prefill and decode phases [@AgrawalEtAl2024SarathiServe]. At the same time, the compute scale of frontier models has expanded rapidly. Epoch AI reported a four- to fivefold annual increase in training compute for notable models through May 2024 [@SevillaRoldan2024ComputeGrowth], and an unweighted least-squares fit to a frozen July 2026 snapshot of the same database yields roughly 4.4-fold annual growth across entries that combine published figures with estimates of varying confidence (@fig-training-compute-growth) [@EpochAI2025AIModels]. Larger training runs do not automatically change the underlying kernel mix, but performance measured at one model scale or serving regime does not transfer to another without re-evaluating memory traffic and software assumptions.
 
@@ -504,7 +524,7 @@ Comparing that pace of model change with hardware schedules requires care, becau
 #| fig-alt: "Timeline plot of first public announcement dates for Apple M1 through M5 and NVIDIA A100, H100, B200, and Rubin, with elapsed intervals marked between consecutive parts. Apple intervals range from 6.2 to 18.8 months. NVIDIA intervals are 22.2 and 23.9 months, followed by 2.5 months from B200 to Rubin."
 
 import matplotlib.pyplot as plt
-from _python.plots import COLORS, apply_style
+from _python.plots import COLORS, FONT_SIZES, apply_style
 
 apply_style()
 
@@ -540,20 +560,20 @@ for fam, y, edge, _ in lanes:
         elif i > 0 and x - xs[i - 1] < 8:
             ha = "left"
         ax.text(x, y + 0.18, f"{r['part']}\n{r['date'].strftime('%b %Y')}", ha=ha, va="bottom",
-                fontweight="bold", color=COLORS["ink"], fontsize=7.8)
+                fontweight="bold", color=COLORS["ink"], fontsize=FONT_SIZES["annotation"])
     for a, b, gap in zip(xs, xs[1:], cadence_gaps[fam]):
         if b - a > 5:
             ax.annotate("", xy=(b - 0.8, y - 0.12), xytext=(a + 0.8, y - 0.12),
                         arrowprops=dict(arrowstyle="<->", color=COLORS["magenta"], linewidth=1.2))
         ax.text((a + b) / 2, y - 0.25, f"{gap:.1f} mo", ha="center", va="top",
-                color=COLORS["decision_ink"], fontweight="bold", fontsize=7.8)
+                color=COLORS["decision_ink"], fontweight="bold", fontsize=FONT_SIZES["annotation"])
 
 ax.set_yticks([y for _, y, _, _ in lanes])
-ax.set_yticklabels([lab for _, _, _, lab in lanes], fontsize=7.8, fontweight="bold", color=COLORS["ink"])
+ax.set_yticklabels([lab for _, _, _, lab in lanes], fontsize=FONT_SIZES["body"], fontweight="bold", color=COLORS["ink"])
 ax.set_ylim(-1.1, 1.7)
 ax.set_xlim(x_lo - 2, x_hi)
-ax.set_xlabel(f"Months from M1 announcement ({_origin.strftime('%b %Y')})", fontsize=8.0, color=COLORS["ink"])
-ax.tick_params(axis="x", labelsize=7.8)
+ax.set_xlabel(f"Months from M1 announcement ({_origin.strftime('%b %Y')})", fontsize=FONT_SIZES["label"], color=COLORS["ink"])
+ax.tick_params(axis="x", labelsize=FONT_SIZES["tick"])
 ax.tick_params(axis="y", length=0)
 ax.grid(True, axis="x", color=COLORS["grid"], linewidth=0.45, zorder=0)
 for spine in ["top", "right", "left", "bottom"]:

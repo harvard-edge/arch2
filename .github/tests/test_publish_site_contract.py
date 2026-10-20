@@ -14,12 +14,27 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "publish-site.yml"
 VALIDATE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "validate.yml"
 REPLAY_ASSETS = (
-    "examples/design-loop-cards/array-study-v2.yaml",
-    "examples/design-loop-cards/replay-environment.json",
-    "examples/design-loop-cards/replay.py",
-    "examples/design-loop-cards/workloads/illustrative-conv-layer-set-v1.json",
-    "examples/design-loop-cards/evidence/illustrative-array-summary-16x16.json",
-    "examples/design-loop-cards/evidence/illustrative-array-summary-32x8.json",
+    (
+        "card/examples/array-study-v2.yaml",
+        "examples/design-loop-cards/array-study-v2.yaml",
+    ),
+    (
+        "card/examples/replay-environment.json",
+        "examples/design-loop-cards/replay-environment.json",
+    ),
+    ("card/examples/replay.py", "examples/design-loop-cards/replay.py"),
+    (
+        "card/examples/workloads/illustrative-conv-layer-set-v1.json",
+        "examples/design-loop-cards/workloads/illustrative-conv-layer-set-v1.json",
+    ),
+    (
+        "card/examples/evidence/illustrative-array-summary-16x16.json",
+        "examples/design-loop-cards/evidence/illustrative-array-summary-16x16.json",
+    ),
+    (
+        "card/examples/evidence/illustrative-array-summary-32x8.json",
+        "examples/design-loop-cards/evidence/illustrative-array-summary-32x8.json",
+    ),
 )
 REGISTRY_SNAPSHOT = "tools/snapshots/registry-2026-07-14.yml"
 
@@ -63,9 +78,9 @@ class PublishSiteContractTests(unittest.TestCase):
             if step["name"] == "Validate Pages payload"
         )
 
-        for relative_path in REPLAY_ASSETS:
-            self.assertIn(f"test -f {relative_path}", source_script)
-            self.assertIn(f"test -f _site/{relative_path}", publish_script)
+        for source_path, site_path in REPLAY_ASSETS:
+            self.assertIn(f"test -f {source_path}", source_script)
+            self.assertIn(f"test -f _site/{site_path}", publish_script)
         self.assertNotIn("scale-sim-summary", source_script)
         self.assertNotIn("scale-sim-summary", publish_script)
 

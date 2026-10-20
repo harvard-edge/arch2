@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style
+from book._python.plots import COLORS, FONT_SIZES, apply_style, inject_svg_font_stack
 
 CPU_CSV = REPO_ROOT / "data" / "datasets" / "chapter1-micro-trend.csv"
 ACC_CSV = (
@@ -201,7 +201,7 @@ def generate_figure(out_dir: Path | None = None):
             transform=ax.get_xaxis_transform(),
             ha="center",
             va="bottom",
-            fontsize=6.8,
+            fontsize=FONT_SIZES["annotation"],
             color=ink,
         )
     ax.text(
@@ -210,7 +210,7 @@ def generate_figure(out_dir: Path | None = None):
         "AI-native\ndesign era?",
         ha="center",
         va="center",
-        fontsize=7.3,
+        fontsize=FONT_SIZES["body"],
         fontweight="bold",
         color=decision,
     )
@@ -219,7 +219,7 @@ def generate_figure(out_dir: Path | None = None):
         1.5e4,
         "Hypothesis",
         ha="center",
-        fontsize=7.0,
+        fontsize=FONT_SIZES["annotation"],
         color=decision,
         style="italic",
     )
@@ -230,13 +230,13 @@ def generate_figure(out_dir: Path | None = None):
     ax.set_yticklabels(
         [r"$10^0$", r"$10^2$", r"$10^4$", r"$10^6$", r"$10^8$", r"$10^{10}$"]
     )
-    ax.set_xlabel("Release year", fontsize=7.2, labelpad=4)
+    ax.set_xlabel("Release year", fontsize=FONT_SIZES["label"], labelpad=4)
     ax.grid(axis="y", color="#E8EAED", lw=0.5)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
         ax.spines[side].set_color("#DADCE0")
-    ax.tick_params(labelsize=7.0, colors=ink, pad=2, length=2.5)
+    ax.tick_params(labelsize=FONT_SIZES["tick"], colors=ink, pad=2, length=2.5)
 
     # The wafer label wraps within its column rather than enlarging the canvas.
     handles[-1].set_label(
@@ -248,7 +248,7 @@ def generate_figure(out_dir: Path | None = None):
         loc="upper left",
         bbox_to_anchor=(0.06, 0.477),
         ncol=2,
-        fontsize=7.0,
+        fontsize=FONT_SIZES["legend"],
         frameon=False,
         handlelength=2.0,
         columnspacing=1.1,
@@ -260,21 +260,21 @@ def generate_figure(out_dir: Path | None = None):
         0.075,
         0.323,
         "CPU: 4-year sample maxima, 1971–2021 (Rupp).",
-        fontsize=7.0,
+        fontsize=FONT_SIZES["annotation"],
         color=grey,
     )
     fig.text(
         0.075,
         0.302,
         "Accelerators: packaged-part frontier, 2012–2026.",
-        fontsize=7.0,
+        fontsize=FONT_SIZES["annotation"],
         color=grey,
     )
     fig.text(
         0.075,
         0.281,
         "2005: Dennard scaling ends; 2016: specialization turn.",
-        fontsize=7.0,
+        fontsize=FONT_SIZES["annotation"],
         color=grey,
     )
 
@@ -284,7 +284,7 @@ def generate_figure(out_dir: Path | None = None):
         0.075,
         0.249,
         "AI-assisted design reports",
-        fontsize=8.1,
+        fontsize=FONT_SIZES["title"],
         fontweight="bold",
         color=decision,
     )
@@ -292,7 +292,7 @@ def generate_figure(out_dir: Path | None = None):
         0.075,
         0.228,
         "Report dates; rail spacing is not to scale.",
-        fontsize=7.0,
+        fontsize=FONT_SIZES["annotation"],
         color=grey,
     )
     short = {
@@ -328,9 +328,21 @@ def generate_figure(out_dir: Path | None = None):
                 mew=0.5,
             )
         )
-        fig.text(0.112, y, row["date"], va="center", fontsize=7.1, color=grey)
         fig.text(
-            0.268, y, short[row["milestone"]], va="center", fontsize=7.1, color=ink
+            0.112,
+            y,
+            row["date"],
+            va="center",
+            fontsize=FONT_SIZES["annotation"],
+            color=grey,
+        )
+        fig.text(
+            0.268,
+            y,
+            short[row["milestone"]],
+            va="center",
+            fontsize=FONT_SIZES["annotation"],
+            color=ink,
         )
 
     out_png = out_dir / "fig-microprocessor-trends.png"
@@ -340,9 +352,7 @@ def generate_figure(out_dir: Path | None = None):
     fig.savefig(out_png, dpi=300)
     fig.savefig(out_pdf)
     fig.savefig(out_svg)
-    out_svg.write_text(
-        "\n".join(line.rstrip() for line in out_svg.read_text().splitlines()) + "\n"
-    )
+    inject_svg_font_stack(out_svg)
     plt.close(fig)
     print(f"Generated {out_png}, {out_pdf}, and {out_svg}")
 

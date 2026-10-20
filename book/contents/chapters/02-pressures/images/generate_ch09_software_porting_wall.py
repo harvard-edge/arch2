@@ -17,7 +17,7 @@ repo_root = Path(__file__).resolve().parents[5]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-from book._python.plots import COLORS, apply_style
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 
 
 def load(name):
@@ -51,14 +51,11 @@ def stacked(ax, rows, series, title):
         )
         bottom += vals
     ax.set_xticks(x)
-    ax.set_xticklabels(ticks(rows), fontsize=7.8)
-    ax.set_ylabel("Source lines (thousands)", fontsize=8.2)
-    ax.set_title(title, fontsize=9.2, fontweight="bold", loc="left", pad=6)
+    ax.set_xticklabels(ticks(rows))
+    ax.set_ylabel("Source lines (thousands)")
+    ax.set_title(title, loc="left", pad=6)
     ax.set_ylim(0, bottom.max() * 1.55)
-    ax.tick_params(axis="y", labelsize=7.8)
-    ax.grid(axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
+    ax.grid(axis="y", color=COLORS["grid"], linewidth=0.55, zorder=0)
     return x
 
 
@@ -85,6 +82,9 @@ def generate_figure(out_dir: Path) -> None:
         "(a) CUTLASS headers",
     )
     tw = a1.twinx()
+    tw.spines["right"].set_visible(True)
+    tw.spines["right"].set_color(COLORS["ink"])
+    tw.spines["right"].set_linewidth(0.7)
     tw.plot(
         x,
         [int(r["inline_ptx_asm_volatile"]) for r in cut],
@@ -98,18 +98,20 @@ def generate_figure(out_dir: Path) -> None:
     tw.set_ylim(0, 5000)
     tw.set_ylabel(
         "Inline asm statements",
-        fontsize=8.2,
+        fontsize=FONT_SIZES["label"],
         color=COLORS["constraints_ink"],
         labelpad=4,
     )
-    tw.tick_params(axis="y", labelsize=7.8, labelcolor=COLORS["constraints_ink"])
+    tw.tick_params(
+        axis="y", labelsize=FONT_SIZES["tick"], labelcolor=COLORS["constraints_ink"]
+    )
     h1, l1 = a1.get_legend_handles_labels()
     h2, l2 = tw.get_legend_handles_labels()
     a1.legend(
         h1 + h2,
         l1 + l2,
         loc="upper left",
-        fontsize=7.5,
+        fontsize=FONT_SIZES["legend"],
         frameon=False,
         ncol=2,
         columnspacing=0.9,
@@ -142,13 +144,13 @@ def generate_figure(out_dir: Path) -> None:
         ],
         "(b) Triton source-tree footprint",
     )
-    a2.legend(loc="upper left", fontsize=7.8, frameon=False)
+    a2.legend(loc="upper left", fontsize=FONT_SIZES["legend"], frameon=False)
     a2.text(
         0.03,
         0.78,
         "Includes vendored headers,\nexamples, and tests",
         transform=a2.transAxes,
-        fontsize=7.5,
+        fontsize=FONT_SIZES["annotation"],
         va="top",
         color=COLORS["muted"],
         bbox=dict(
@@ -170,7 +172,7 @@ def generate_figure(out_dir: Path) -> None:
     )
     a3.legend(
         loc="upper left",
-        fontsize=7.8,
+        fontsize=FONT_SIZES["legend"],
         frameon=False,
         ncol=2,
         columnspacing=1.0,
@@ -178,14 +180,7 @@ def generate_figure(out_dir: Path) -> None:
         handletextpad=0.4,
     )
 
-    for ext, kw in (("png", {"dpi": 300}), ("svg", {}), ("pdf", {})):
-        fig.savefig(
-            out_dir / f"fig-ch09-software-porting-wall.{ext}", bbox_inches="tight", **kw
-        )
-    svg = out_dir / "fig-ch09-software-porting-wall.svg"
-    svg.write_text(
-        "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
-    )
+    save_figure_bundle(fig, out_dir / "fig-ch09-software-porting-wall")
     plt.close(fig)
     print("Generated fig-ch09-software-porting-wall")
 

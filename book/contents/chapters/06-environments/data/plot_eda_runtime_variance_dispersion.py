@@ -30,26 +30,13 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from book._python.plots import COLORS, apply_style
-
-
-def _declare_font_stack(svg_path: Path) -> None:
-    text = svg_path.read_text()
-    if '<style type="text/css">' not in text:
-        text = text.replace(
-            "<defs>",
-            '<defs>\n  <style type="text/css">*{font-family: Arial, Helvetica, sans-serif;}</style>',
-            1,
-        )
-        svg_path.write_text(text)
+from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bundle
 
 
 def main():
     chapter_dir = Path(__file__).resolve().parent.parent
     csv_file = chapter_dir / "data" / "fig-eda-runtime-variance-dispersion.csv"
-    out_svg = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.svg"
-    out_png = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.png"
-    out_pdf = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion.pdf"
+    out_base = chapter_dir / "images" / "fig-eda-runtime-variance-dispersion"
 
     # Load dataset
     data = defaultdict(
@@ -82,14 +69,6 @@ def main():
         "SHA-\n256",
         "GCD",
     ]
-
-    domain_labels = {
-        "picorv32": "PicoRV32 core",
-        "dynamic_node": "NoC router",
-        "aes_cipher_top": "AES-128",
-        "sha256_core": "SHA-256",
-        "gcd": "GCD",
-    }
 
     palette = [
         COLORS["blue"],  # RV32 Core -> teal
@@ -140,10 +119,10 @@ def main():
 
     ax1.axhline(0, color=COLORS["muted"], linestyle=":", linewidth=0.7, zorder=1)
     ax1.set_xticks(np.arange(len(design_order)))
-    ax1.set_xticklabels(display_names, fontsize=7.6, color=COLORS["ink"])
-    ax1.set_ylabel("Mapped area vs. design median (%)", fontsize=8.6)
+    ax1.set_xticklabels(display_names, fontsize=FONT_SIZES["body"], color=COLORS["ink"])
+    ax1.set_ylabel("Mapped area vs. design median (%)")
     ax1.set_yticks([-5, 0, 5, 10])
-    ax1.grid(True, axis="y", color=COLORS["grid"], linewidth=0.5, zorder=0)
+    ax1.grid(True, axis="y", color=COLORS["grid"], linewidth=0.55, zorder=0)
 
     # Spread (max - min) as a percentage of the median, computed from the data
     top = max(max(v) for v in norm_area_data)
@@ -156,7 +135,7 @@ def main():
             f"{spread:.1f}%",
             ha="center",
             va="bottom",
-            fontsize=7.4,
+            fontsize=FONT_SIZES["annotation"],
             color=COLORS["ink"],
             zorder=5,
         )
@@ -166,30 +145,23 @@ def main():
         "Spread across 25 recipes (% of median)",
         ha="left",
         va="bottom",
-        fontsize=7.2,
+        fontsize=FONT_SIZES["annotation"],
         color=COLORS["muted"],
     )
     ax1.set_ylim(bottom - 1.5, top + 6.8)
     ax1.set_title(
         "Mapped area across 25 ABC pass sequences",
-        fontsize=8.8,
-        fontweight="bold",
         pad=5,
         color=COLORS["ink"],
     )
 
-    for ax in [ax1]:
-        for spine in ["top", "right"]:
-            ax.spines[spine].set_visible(False)
-        ax.spines["left"].set_color(COLORS["ink"])
-        ax.spines["bottom"].set_color(COLORS["ink"])
-        ax.tick_params(axis="both", labelsize=7.4, length=2.5, width=0.6, pad=2)
+    ax1.tick_params(
+        axis="both", labelsize=FONT_SIZES["tick"], length=2.5, width=0.6, pad=2
+    )
 
-    plt.savefig(out_svg, format="svg", bbox_inches="tight")
-    plt.savefig(out_png, format="png", dpi=300, bbox_inches="tight")
-    plt.savefig(out_pdf, format="pdf", bbox_inches="tight")
-    _declare_font_stack(out_svg)
-    print(f"Generated {out_svg}, {out_png}, and {out_pdf}")
+    save_figure_bundle(fig, out_base)
+    plt.close(fig)
+    print(f"Generated {out_base}.{{svg,png,pdf}}")
 
 
 if __name__ == "__main__":

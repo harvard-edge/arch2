@@ -201,6 +201,51 @@ if SYNTHETIC.exists():
         "data/synthetic/ exists. Generated data is deleted, not quarantined."
     )
 
+# --- rule 4: study bundles with build_receipt.json must match retained hashes
+import hashlib
+import json
+
+for receipt_file in sorted(STUDIES.glob("*/build_receipt.json")):
+    study_dir = receipt_file.parent
+    if not (study_dir / "provenance.yml").is_file():
+        problems.append(f"{study_dir.relative_to(ROOT)} missing provenance.yml")
+    manifest_file = study_dir / "source_manifest.json"
+    if manifest_file.is_file():
+        manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        for item in manifest_data.get("files", []):
+            if not isinstance(item, dict) or "path" not in item or "sha256" not in item:
+                continue
+            target = study_dir / item["path"]
+            if target.is_file():
+                actual = hashlib.sha256(target.read_bytes()).hexdigest()
+                if actual != item["sha256"]:
+                    problems.append(
+                        f"{study_dir.name}/source_manifest.json hash mismatch for {item['path']}"
+                    )
+    receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+    files_field = receipt_data.get("files", {})
+    if isinstance(files_field, dict):
+        for rel_path, expected_sha in files_field.items():
+            target = study_dir / rel_path
+            if target.is_file():
+                actual = hashlib.sha256(target.read_bytes()).hexdigest()
+                if actual != expected_sha:
+                    problems.append(
+                        f"{study_dir.name}/build_receipt.json hash mismatch for {rel_path}"
+                    )
+    elif isinstance(files_field, list):
+        for item in files_field:
+            if isinstance(item, dict) and "path" in item and "sha256" in item:
+                target = ROOT / item["path"]
+                if not target.is_file():
+                    target = study_dir / item["path"]
+                if target.is_file():
+                    actual = hashlib.sha256(target.read_bytes()).hexdigest()
+                    if actual != item["sha256"]:
+                        problems.append(
+                            f"{study_dir.name}/build_receipt.json hash mismatch for {item['path']}"
+                        )
+
 site = ROOT / "www" / "data" / "observatory"
 if site.is_dir():
     readers = [ROOT / "www", ROOT / "data" / "notebooks"]
