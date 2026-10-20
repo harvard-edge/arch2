@@ -16,6 +16,36 @@ from rich.table import Table
 
 console = Console()
 
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "5. Interpret",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): Causal Credit Router maps multi-modal Stage 4 telemetry across "
+        "the Three Return Arrows (Turn 1 -> 3. Implement, Turn 2 -> 2. Explore, Turn 3 -> 1. Formulate) "
+        "and advances Turn 4 -> 6. Commit once perf-model error reaches 2.33% (<= 5%)."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "AgentDSE Self-Ablation & Bottleneck Attribution",
+            "connection": (
+                "Distinguishes implementation bugs from microarchitectural queue/banking hazards and "
+                "representation rooflines so the search policy modifies the true bottleneck variable."
+            ),
+        },
+        {
+            "instrument": "MLPerf Agents (Joules & Simulator Calls per Verified Outcome)",
+            "connection": (
+                "Accounts for the full trajectory cost of agentic design: routing via the Three Return "
+                "Arrows converges in 4 directed turns (~1.92 kJ total EDA+LLM energy) vs. 42+ blind Stage-3 "
+                "retries (~20.16 kJ wasted without converging)."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "In both RTL synthesis loops and fleet-scale agentic benchmarks, Stage 5 Interpret turns raw "
+        "referee failures into causal credit assignment—slashing joules-per-verified-outcome by >10x."
+    ),
+}
+
 
 def diagnose_turn(telemetry: dict[str, Any]) -> dict[str, Any]:
     """Architecture 2.0 Stage 5 Causal Credit Router:
@@ -127,9 +157,8 @@ def run_break() -> dict[str, Any]:
     }
 
 
-def run_verify() -> dict[str, Any]:
-    """Run the Architecture 2.0 Diagnostic Router across the 4 turns of the nano-kpu trajectory."""
-    turns_input = [
+def _canonical_turns() -> list[dict[str, Any]]:
+    return [
         {
             "turn": 1,
             "name": "Turn 1: Unaligned Shift / Zero-Point & Static Audit Failure",
@@ -197,6 +226,11 @@ def run_verify() -> dict[str, Any]:
         },
     ]
 
+
+def run_verify() -> dict[str, Any]:
+    """Run the Architecture 2.0 Diagnostic Router across the 4 turns of the nano-kpu trajectory."""
+    turns_input = _canonical_turns()
+
     routed_turns = []
     for t in turns_input:
         diag = diagnose_turn(t["telemetry"])
@@ -219,7 +253,184 @@ def run_verify() -> dict[str, Any]:
         "stage": "5. Interpret",
         "passed": all(rt["correct_route"] for rt in routed_turns),
         "turns": routed_turns,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _normalize_stage_choice(raw: str, default_stage: str) -> str:
+    s = raw.strip().lower()
+    if not s:
+        return default_stage
+    if "1" in s or "form" in s:
+        return "1. Formulate"
+    if "2" in s or "expl" in s:
+        return "2. Explore"
+    if "3" in s or "impl" in s:
+        return "3. Implement"
+    if "6" in s or "comm" in s:
+        return "6. Commit"
+    return raw.strip()
+
+
+def _score_routing_policy(
+    label: str,
+    chosen_routes: list[str],
+    turns: list[dict[str, Any]],
+    total_eval_calls: int,
+    converged: bool,
+) -> dict[str, Any]:
+    # MLPerf Agents energy model: ~180 J per LLM reasoning step + ~300 J per full Verilator+Yosys evaluation = 480 J/call
+    joules_per_call = 480.0
+    total_joules = round(total_eval_calls * joules_per_call, 1)
+    expected = [t["expected_target"] for t in turns]
+    matches = [c == e for c, e in zip(chosen_routes, expected)]
+    accuracy = round(sum(matches) / len(expected), 2)
+    passed = all(matches) and converged
+
+    return {
+        "policy_label": label,
+        "chosen_routes": chosen_routes,
+        "expected_routes": expected,
+        "routing_accuracy": accuracy,
+        "total_evaluator_calls": total_eval_calls,
+        "total_energy_joules": total_joules,
+        "total_energy_kj": round(total_joules / 1000.0, 2),
+        "converged_to_verified_outcome": converged,
+        "joules_per_verified_outcome": total_joules if converged else None,
+        "passed": passed,
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The Causal Credit Router & MLPerf Agents Energy Ledger Challenge."""
+    turns = _canonical_turns()
+
+    naive_policy = _score_routing_policy(
+        label="Blind Stage-3 Retry Policy (Routes all failures to 3. Implement)",
+        chosen_routes=["3. Implement", "3. Implement", "3. Implement", "3. Implement"],
+        turns=turns,
+        total_eval_calls=42,
+        converged=False,
+    )
+
+    if auto or not sys.stdin.isatty():
+        chosen = ["3. Implement", "2. Explore", "1. Formulate", "6. Commit"]
+        label = "Architect Causal Credit Router (Three Return Arrows + Stage 6 Advance)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 05 INTERACTIVE CHALLENGE: THE CAUSAL CREDIT ROUTER & MLPerf Agents ENERGY LEDGER[/bold yellow]\n"
+                "Route each of the 4 Stage-4 telemetry signatures to its causal target stage:\n"
+                "  Options: [bold]1. Formulate[/bold] | [bold]2. Explore[/bold] | [bold]3. Implement[/bold] | [bold]6. Commit[/bold]",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        chosen = []
+        for t in turns:
+            console.print(f"[cyan]{t['name']}[/cyan]\n  Symptom: {t['telemetry']['symptom']}")
+            raw = console.input(
+                f"[bold cyan]  Route Turn {t['turn']} [default={t['expected_target']}]: [/bold cyan]"
+            )
+            chosen.append(_normalize_stage_choice(raw, t["expected_target"]))
+        label = "Student Interactive Causal Routing"
+
+    winning_policy = _score_routing_policy(
+        label=label,
+        chosen_routes=chosen,
+        turns=turns,
+        total_eval_calls=4,
+        converged= chosen == ["3. Implement", "2. Explore", "1. Formulate", "6. Commit"],
+    )
+
+    energy_saving_ratio = round(
+        naive_policy["total_energy_joules"] / winning_policy["total_energy_joules"], 2
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "5. Interpret",
+        "challenge_name": "The Causal Credit Router & MLPerf Agents Energy Ledger Challenge",
+        "auto_mode": auto,
+        "mlperf_agents_ledger": {
+            "joules_per_eval_turn": 480.0,
+            "directed_4turn_joules": winning_policy["total_energy_joules"],
+            "blind_42turn_wasted_joules": naive_policy["total_energy_joules"],
+            "energy_efficiency_ratio_x": energy_saving_ratio,
+        },
+        "naive_policy": naive_policy,
+        "winning_policy": winning_policy,
+        "passed": bool((not naive_policy["passed"]) and winning_policy["passed"]),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 5: Interpret[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    led = data["mlperf_agents_ledger"]
+    console.print(
+        Panel(
+            "[bold yellow]LAB 05 (--mode challenge): THE CAUSAL CREDIT ROUTER & MLPerf Agents ENERGY LEDGER[/bold yellow]\n"
+            "Comparing a blind Stage-3 retry loop (42 eval calls = "
+            f"[bold red]{led['blind_42turn_wasted_joules']:,.0f} J[/bold red] wasted, 0 verified outcomes) against the "
+            "Architecture 2.0 Three-Return-Arrow router (4 directed calls = "
+            f"[bold green]{led['directed_4turn_joules']:,.0f} J[/bold green] per verified outcome, "
+            f"[bold]{led['energy_efficiency_ratio_x']}x energy reduction[/bold]).",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="Causal Credit Routing & MLPerf Agents Trajectory Cost Ledger",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Routing Policy", style="bold cyan", width=28)
+    tbl.add_column("Turn 1..4 Routes", style="white", width=32)
+    tbl.add_column("Route Accuracy", justify="right", width=14)
+    tbl.add_column("Eval Calls & Energy", justify="right", width=20)
+    tbl.add_column("Joules / Verified Outcome", justify="right", width=22)
+
+    for pol in (data["naive_policy"], data["winning_policy"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if pol["passed"]
+            else "[bold red]FAILED[/bold red]"
+        )
+        jpv = (
+            f"[bold green]{pol['joules_per_verified_outcome']:,.0f} J (1.92 kJ)[/bold green]"
+            if pol["joules_per_verified_outcome"] is not None
+            else "[bold red]INF (Did Not Converge)[/bold red]"
+        )
+        tbl.add_row(
+            f"{pol['policy_label']}\n({status})",
+            " -> ".join(pol["chosen_routes"]),
+            f"{pol['routing_accuracy'] * 100:.0f}%",
+            f"{pol['total_evaluator_calls']} calls\n({pol['total_energy_kj']:.2f} kJ)",
+            jpv,
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -288,6 +499,7 @@ def render_verify(data: dict[str, Any]) -> None:
             rt["prescribed_action"],
         )
     console.print(tbl)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -296,15 +508,25 @@ def main() -> int:
         description="Lab 05: Stage 5 Interpret — Causal Credit Assignment & Return Arrows"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates blind vs causal routing policies)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -318,6 +540,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["blind_loop_failed_on_structural_walls"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -327,18 +558,26 @@ def main() -> int:
         return 0 if res["passed"] else 1
 
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "05-interpret",
         "stage": "5. Interpret",
-        "passed": b_res["blind_loop_failed_on_structural_walls"] and v_res["passed"],
+        "passed": (
+            b_res["blind_loop_failed_on_structural_walls"]
+            and c_res["passed"]
+            and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 

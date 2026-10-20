@@ -1,37 +1,18 @@
-"""Nanochip: Closed-loop Architecture 2.0 research engine for Moonshot AI's Kimi K3 nano-kpu."""
-
-from .engine import (
-    CANONICAL_STAGES,
-    STAGE_SHORT_NAMES,
-    CommitRecord,
-    EvaluationRecord,
-    ExecutionRecord,
-    FormulationRecord,
-    InterpretationRecord,
-    NanochipProposer,
-    ProposalRecord,
-    SUPPORTED_PROPOSERS,
-    TurnTrajectory,
-    audit_verilog_file,
-    check_deq_bit_exactness,
-    check_frozen_integrity,
-    compute_tensor_breakdown,
-    evaluate_rooflines,
-    resolve_proposer,
-    run_kpu_evaluate,
-    synthesize_module_yosys,
-)
-
+"""Nanochip: a cumulative laboratory for AI-native architecture."""
 
 def __getattr__(name: str):
-    if name == "NanochipLoopRunner":
-        from .engine.runner import NanochipLoopRunner
+    # Import the historical workbench only when it is requested. The new
+    # laboratory contracts and CLI do not require NumPy or the old harness.
+    if name in __all__ and name != "__version__":
+        from . import engine
 
-        return NanochipLoopRunner
+        value = getattr(engine, name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__version__ = "2.0.0"
+__version__ = "0.1.0a0"
 
 __all__ = [
     "__version__",

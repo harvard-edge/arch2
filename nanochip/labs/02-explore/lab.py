@@ -35,6 +35,36 @@ DRAM_BYTES_PER_CYCLE = 16
 CLOCK_MHZ = 100.0
 CLOCK_HZ = CLOCK_MHZ * 1e6
 
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "2. Explore",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): Conservation-of-bytes (76,109 B/tok -> 4,757 cyc/tok floor; "
+        "60,013 B/tok -> 3,751 cyc/tok with 16 KiB hq shadow cache) and Little's Law "
+        "(L = lambda * W = 1 req/cyc * 48 cyc = 48 credits minimum -> 256-deep msh_fetch FIFO) "
+        "prune impossible proposals in <1 ms and calibrate the 11,200 cyc/tok bet (2.33% error)."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "AgentDSE (Sample-Efficient Design Space Exploration)",
+            "connection": (
+                "Replaces 1,000+ blind cycle-accurate simulator sweeps with analytical roofline "
+                "and Little's Law pruning, converging in 5 guided simulator calls (200x fewer simulations)."
+            ),
+        },
+        {
+            "instrument": "MLPerf 512-GPU Interconnect Energy & Bandwidth Wall",
+            "connection": (
+                "Applies the identical conservation-of-bytes and Little's Law credit-depth equations "
+                "across scale-out NVLink/RoCE fabrics where widening tensor cores cannot hide bisection bandwidth bottlenecks."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "Analytical rooflines and Little's Law queue sizing govern both a 16 B/cycle KPU DRAM port "
+        "and a 512-GPU cluster fabric—pruning infeasible candidates before a single cycle of simulation runs."
+    ),
+}
+
 
 def compute_active_elements(cfg) -> dict[str, int]:
     """Count active weight elements and packed INT4 bytes per token by subsystem."""
@@ -211,7 +241,228 @@ def run_verify() -> dict[str, Any]:
         "subsystem_byte_breakdown": breakdown,
         "rooflines": rooflines,
         "perf_model": perf_model,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _score_explore_bet(
+    label: str,
+    precision: str,
+    bus_bytes_per_cyc: int,
+    fifo_credits: int,
+    predicted_cpt: float,
+    sim_calls_used: int,
+) -> dict[str, Any]:
+    prec_map = {
+        "fp32": 608896,
+        "fp16": 304448,
+        "int8": 152224,
+        "int4": 76109,
+        "int4_hq": 60013,
+    }
+    p_key = precision.strip().lower()
+    active_bytes = prec_map.get(p_key, 76109)
+    bw = max(1, bus_bytes_per_cyc)
+    dram_floor_cyc = math.ceil(active_bytes / bw)
+    max_tok_s = round(CLOCK_HZ / dram_floor_cyc, 1)
+
+    # Little's Law at 2x DRAM latency (48 cycles) at 1 req/cycle -> L = 48 credits min
+    littles_law_min_credits = 48
+    littles_law_ok = fifo_credits >= littles_law_min_credits
+
+    # Must respect 16 B/cyc contract pin limit
+    contract_bw_ok = bw == 16
+    # Predicted cycles/token must be >= physical DRAM floor and within 5% of measured 11,467.125
+    measured_cpt = 11467.125
+    respects_floor = predicted_cpt >= dram_floor_cyc
+    rel_err_pct = round(abs(predicted_cpt - measured_cpt) / measured_cpt * 100.0, 2)
+    calibrated = respects_floor and rel_err_pct <= 5.0 and max_tok_s >= 8720.0
+
+    passed = contract_bw_ok and littles_law_ok and calibrated
+    notes = []
+    if not contract_bw_ok:
+        notes.append(f"Illegal bus width {bw} B/cyc (contract locks 16 B/cyc)")
+    if not respects_floor:
+        notes.append(
+            f"Violates conservation of bytes: bet {predicted_cpt:,.0f} < floor {dram_floor_cyc:,} cyc/tok"
+        )
+    elif max_tok_s < 8720.0:
+        notes.append(
+            f"Precision {precision} ceiling {max_tok_s:,.1f} tok/s cannot reach 8,720 tok/s"
+        )
+    else:
+        notes.append(
+            f"Roofline valid (floor {dram_floor_cyc:,} cyc/tok, bet error {rel_err_pct}%)"
+        )
+    if littles_law_ok:
+        notes.append(
+            f"Little's Law satisfied: FIFO {fifo_credits} >= {littles_law_min_credits} credits (L = 1 req/cyc * 48 cyc)"
+        )
+    else:
+        notes.append(
+            f"Stalls under 2x DRAM latency: FIFO {fifo_credits} < {littles_law_min_credits} credits required by Little's Law"
+        )
+
+    return {
+        "bet_label": label,
+        "precision": precision,
+        "bus_bytes_per_cycle": bw,
+        "active_bytes_per_token": active_bytes,
+        "dram_floor_cycles_per_token": dram_floor_cyc,
+        "roofline_ceiling_tok_s": max_tok_s,
+        "fifo_credit_depth": fifo_credits,
+        "littles_law_min_credits_at_48cyc": littles_law_min_credits,
+        "predicted_cycles_per_token": predicted_cpt,
+        "measured_cycles_per_token": measured_cpt,
+        "prediction_error_pct": rel_err_pct,
+        "simulator_calls_used": sim_calls_used,
+        "passed": passed,
+        "diagnosis": " | ".join(notes),
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The Roofline & Little's Law Challenge."""
+    naive_bet = _score_explore_bet(
+        label="Brute-Force / Uncalibrated Bet (FP16 + 1-Deep FIFO + 5,000 cyc/tok claim)",
+        precision="fp16",
+        bus_bytes_per_cyc=16,
+        fifo_credits=1,
+        predicted_cpt=5000.0,
+        sim_calls_used=1000,
+    )
+
+    if auto or not sys.stdin.isatty():
+        prec = "int4"
+        bw = 16
+        fifo = 256
+        bet_cpt = 11200.0
+        label = "Architect Winning Bet (INT4 Group-128 + 256-Credit FIFO + 11,200 cyc/tok)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 02 INTERACTIVE CHALLENGE: THE ROOFLINE & LITTLE'S LAW CHALLENGE[/bold yellow]\n"
+                "Place an analytical performance bet for [cyan]msh_chip_top[/cyan] (@ 100 MHz, 16 B/cyc DRAM, 48-cyc 2x chaos latency):\n"
+                "  1. Weight precision ([bold]fp32[/bold], [bold]fp16[/bold], [bold]int8[/bold], or [bold]int4[/bold])\n"
+                "  2. DRAM bus width in B/cycle (contract = [bold]16[/bold])\n"
+                "  3. Fetch FIFO credit depth (Little's Law L = 1 req/cyc * 48 cyc = [bold]>= 48[/bold], e.g. [bold]256[/bold])\n"
+                "  4. Pre-committed steady-state cycles/token bet (e.g. [bold]11200[/bold])",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        raw_p = console.input(
+            "[bold cyan]1. Weight precision (fp32/fp16/int8/int4) [default=int4]: [/bold cyan]"
+        ).strip()
+        raw_bw = console.input(
+            "[bold cyan]2. DRAM bus width B/cycle [default=16]: [/bold cyan]"
+        ).strip()
+        raw_fifo = console.input(
+            "[bold cyan]3. Fetch FIFO credit depth [default=256]: [/bold cyan]"
+        ).strip()
+        raw_cpt = console.input(
+            "[bold cyan]4. Predicted cycles/token [default=11200]: [/bold cyan]"
+        ).strip()
+        prec = raw_p if raw_p else "int4"
+        try:
+            bw = int(raw_bw) if raw_bw else 16
+        except ValueError:
+            bw = 16
+        try:
+            fifo = int(raw_fifo) if raw_fifo else 256
+        except ValueError:
+            fifo = 256
+        try:
+            bet_cpt = float(raw_cpt) if raw_cpt else 11200.0
+        except ValueError:
+            bet_cpt = 11200.0
+        label = "Student Interactive Roofline Bet"
+
+    winning_bet = _score_explore_bet(
+        label=label,
+        precision=prec,
+        bus_bytes_per_cyc=bw,
+        fifo_credits=fifo,
+        predicted_cpt=bet_cpt,
+        sim_calls_used=5,
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "2. Explore",
+        "challenge_name": "The Roofline & Little's Law Challenge",
+        "auto_mode": auto,
+        "agentdse_efficiency": {
+            "guided_simulator_calls": 5,
+            "brute_force_simulator_calls": 1000,
+            "sample_efficiency_gain_x": 200.0,
+        },
+        "naive_bet": naive_bet,
+        "winning_bet": winning_bet,
+        "passed": bool((not naive_bet["passed"]) and winning_bet["passed"]),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 2: Explore[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    dse = data["agentdse_efficiency"]
+    console.print(
+        Panel(
+            "[bold yellow]LAB 02 (--mode challenge): THE ROOFLINE & LITTLE'S LAW CHALLENGE[/bold yellow]\n"
+            "Scoring candidate architecture bets against Conservation of Bytes (4,757 cyc/tok raw INT4 floor; "
+            "3,751 cyc/tok with 16 KiB hq cache), Little's Law ($L = \\lambda W = 1 \\times 48 = 48$ credits min), "
+            f"and AgentDSE sample efficiency ([bold]{dse['guided_simulator_calls']} guided calls vs. {dse['brute_force_simulator_calls']:,} brute-force sweeps = {dse['sample_efficiency_gain_x']:.0f}x fewer sims[/bold]).",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="Stage 2 Roofline & Little's Law Betting Scorecard",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Candidate Bet", style="bold cyan", width=26)
+    tbl.add_column("Precision & Floor", justify="right", width=20)
+    tbl.add_column("FIFO Credits (Little's Law)", justify="right", width=18)
+    tbl.add_column("Predicted vs Measured", justify="right", width=22)
+    tbl.add_column("Referee Diagnosis", style="white", width=34)
+
+    for b in (data["naive_bet"], data["winning_bet"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if b["passed"]
+            else "[bold red]REJECTED[/bold red]"
+        )
+        tbl.add_row(
+            f"{b['bet_label']}\n({status}, {b['simulator_calls_used']} sims)",
+            f"{b['precision'].upper()} @ {b['bus_bytes_per_cycle']} B/cyc\nFloor: {b['dram_floor_cycles_per_token']:,} cyc",
+            f"{b['fifo_credit_depth']} credits\n(min >= {b['littles_law_min_credits_at_48cyc']})",
+            f"Bet: {b['predicted_cycles_per_token']:,.1f} cyc\nMeas: {b['measured_cycles_per_token']:,.1f} ({b['prediction_error_pct']}%)",
+            b["diagnosis"],
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -321,6 +572,7 @@ def render_verify(data: dict[str, Any]) -> None:
         f"[bold green]{pm['speedup_over_baseline']:,.2f}x[/bold green] over {pm['baseline_tokens_per_sec']} tok/s baseline",
     )
     console.print(t2)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -329,15 +581,25 @@ def main() -> int:
         description="Lab 02: Stage 2 Explore — Roofline Betting & Candidate Generation"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates naive and winning bets)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -351,6 +613,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["rejected_before_rtl_sim"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -360,18 +631,24 @@ def main() -> int:
         return 0 if res["passed"] else 1
 
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "02-explore",
         "stage": "2. Explore",
-        "passed": b_res["rejected_before_rtl_sim"] and v_res["passed"],
+        "passed": (
+            b_res["rejected_before_rtl_sim"] and c_res["passed"] and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 

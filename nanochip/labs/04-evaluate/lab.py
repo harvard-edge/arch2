@@ -26,6 +26,37 @@ from harness import audit, scoring  # noqa: E402
 
 console = Console()
 
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "4. Evaluate",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): Orthogonal referee stack combining static RTL cheat auditing "
+        "(audit.py), Verilator random-reset (+verilator+rand+reset+2) + 2x DRAM latency chaos (1.0457x elasticity), "
+        "and two-pass buffered Yosys/ABC Nangate45 synthesis (18,331.39 um^2, 1,478.99 ps on msh_deq.v; "
+        "3.610342 mm^2, 6.166 ns full chip)."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "ArchEval (L1 Lookup vs. L3 Counter-Factual Sensitivity)",
+            "connection": (
+                "Tests whether an architect can predict physical sensitivity before running EDA—"
+                "e.g., why a 16-way parallel byte demux explodes by +96,000 gates and why unbuffered wireload "
+                "STA reports 266,515 ps until two-pass ABC buffering reduces delay 180.2x to 1,479 ps."
+            ),
+        },
+        {
+            "instrument": "ASTRA-sim 16-Node All-to-All Collective Congestion Referee",
+            "connection": (
+                "Applies the fleet-scale equivalent of our 2x DRAM latency chaos testbench: injecting "
+                "link-latency jitter and incast congestion to expose rigid, non-credit-tracked collectives."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "A single nominal simulation is gameable at both the RTL module level and the 16-node cluster level; "
+        "Stage 4 requires orthogonal static, chaos-timing, and physical synthesis referees."
+    ),
+}
+
 
 def audit_rogue_verilog_snippet() -> dict[str, Any]:
     """Run harness/audit.py's exact regex rules against a simulated rogue Verilog snippet
@@ -230,7 +261,201 @@ def run_verify() -> dict[str, Any]:
         },
         "msh_deq_live_synthesis": deq_synth,
         "full_chip_evaluation_summary": full_chip_metrics,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _score_evaluate_challenge(
+    label: str,
+    demux_topology: str,
+    abc_pass_mode: str,
+    max_elasticity_threshold: float,
+    synth_probe: dict[str, Any],
+) -> dict[str, Any]:
+    is_serial = demux_topology.strip().lower() in ("serial", "byte_serial", "byte-serial")
+    is_buffered = abc_pass_mode.strip().lower() in ("buffered", "two_pass", "pass2", "2")
+
+    gates = (
+        synth_probe["buffered_gates"]
+        if (is_serial and is_buffered)
+        else (
+            synth_probe["prebuf_gates"]
+            if is_serial
+            else synth_probe["naive_16way_demux_gate_bloat"]
+            + synth_probe["prebuf_gates"]
+        )
+    )
+    delay_ps = (
+        synth_probe["buffered_delay_ps"]
+        if (is_serial and is_buffered)
+        else synth_probe["unbuffered_delay_ps"]
+    )
+    measured_elasticity = 1.0457 if is_serial else 1.88
+    elasticity_gate_tight = 1.0457 <= max_elasticity_threshold <= 1.15
+
+    timing_ok = delay_ps <= 10000.0  # 10 ns period (100 MHz)
+    area_ok = gates < 20000
+    passed = is_serial and is_buffered and timing_ok and area_ok and elasticity_gate_tight
+
+    diag = []
+    if is_serial:
+        diag.append(f"Byte-serial msh_deq ({gates:,} gates, {synth_probe['mapped_area_um2']:,.2f} um^2)")
+    else:
+        diag.append(f"16-way parallel demux bloats msh_deq to ~{gates:,} gates (+96K gate penalty)")
+    if is_buffered:
+        diag.append(
+            f"Two-pass ABC (buffer;upsize;dnsize) achieves {delay_ps:,.2f} ps ({synth_probe['buffering_speedup_ratio']}x faster than 266.5 ns unbuffered)"
+        )
+    else:
+        diag.append(
+            f"Unbuffered 5K_hvratio_1_1 wireload STA reports {delay_ps:,.2f} ps (violates 10,000 ps clock by 26.6x!)"
+        )
+    if elasticity_gate_tight:
+        diag.append(
+            f"Chaos 2x-DRAM elasticity gate <= {max_elasticity_threshold:.2f}x passes Kimi K3 ({measured_elasticity:.4f}x) & rejects rigid FSM (1.88x)"
+        )
+    else:
+        diag.append(
+            f"Elasticity threshold {max_elasticity_threshold:.2f}x is too loose to catch non-pipelined memory stalls"
+        )
+
+    return {
+        "attempt_label": label,
+        "demux_topology": demux_topology,
+        "abc_pass_mode": abc_pass_mode,
+        "mapped_gates": gates,
+        "critical_path_ps": delay_ps,
+        "max_elasticity_threshold": max_elasticity_threshold,
+        "measured_elasticity_ratio": measured_elasticity,
+        "passed": passed,
+        "diagnosis": " | ".join(diag),
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The ArchEval L3 Predict-First & Chaos Referee Challenge."""
+    synth_probe = run_yosys_msh_deq_probe()
+
+    naive_attempt = _score_evaluate_challenge(
+        label="Naive L1 Attempt (16-Way Parallel Demux + Unbuffered STA + Loose 2.0x Chaos Gate)",
+        demux_topology="parallel_16way",
+        abc_pass_mode="unbuffered",
+        max_elasticity_threshold=2.0,
+        synth_probe=synth_probe,
+    )
+
+    if auto or not sys.stdin.isatty():
+        topo = "byte_serial"
+        abc_mode = "buffered"
+        elast_thresh = 1.15
+        label = "Architect L3 Predict-First Selection (Byte-Serial + Buffered Two-Pass STA + <=1.15x Chaos Gate)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 04 INTERACTIVE CHALLENGE: THE ArchEval L3 PREDICT-FIRST & CHAOS REFEREE CHALLENGE[/bold yellow]\n"
+                "Predict the physical synthesis & chaos-test behavior of [cyan]rtl/msh_deq.v[/cyan] and [cyan]rtl/msh_fetch.v[/cyan]:\n"
+                "  1. Dequantizer byte emitter topology ([bold]byte_serial[/bold] = 13,037 gates vs [bold]parallel_16way[/bold] = ~107,888 gates)\n"
+                "  2. ABC timing pass ([bold]buffered[/bold] = `buffer;upsize;dnsize` 1,479 ps vs [bold]unbuffered[/bold] = 266,515 ps)\n"
+                "  3. Max allowable 2x DRAM latency elasticity ratio (e.g. [bold]1.15[/bold] to pass 1.0457x and reject 1.88x)",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        raw_topo = console.input(
+            "[bold cyan]1. Demux topology (byte_serial / parallel_16way) [default=byte_serial]: [/bold cyan]"
+        ).strip()
+        raw_abc = console.input(
+            "[bold cyan]2. ABC timing pass (buffered / unbuffered) [default=buffered]: [/bold cyan]"
+        ).strip()
+        raw_el = console.input(
+            "[bold cyan]3. Max 2x-DRAM latency elasticity threshold [default=1.15]: [/bold cyan]"
+        ).strip()
+        topo = raw_topo if raw_topo else "byte_serial"
+        abc_mode = raw_abc if raw_abc else "buffered"
+        try:
+            elast_thresh = float(raw_el) if raw_el else 1.15
+        except ValueError:
+            elast_thresh = 1.15
+        label = "Student Interactive ArchEval L3 Prediction"
+
+    winning_attempt = _score_evaluate_challenge(
+        label=label,
+        demux_topology=topo,
+        abc_pass_mode=abc_mode,
+        max_elasticity_threshold=elast_thresh,
+        synth_probe=synth_probe,
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "4. Evaluate",
+        "challenge_name": "The ArchEval L3 Predict-First & Chaos Referee Challenge",
+        "auto_mode": auto,
+        "live_yosys_msh_deq": synth_probe,
+        "naive_attempt": naive_attempt,
+        "winning_attempt": winning_attempt,
+        "passed": bool((not naive_attempt["passed"]) and winning_attempt["passed"]),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 4: Evaluate[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    console.print(
+        Panel(
+            "[bold yellow]LAB 04 (--mode challenge): THE ArchEval L3 PREDICT-FIRST & CHAOS REFEREE CHALLENGE[/bold yellow]\n"
+            "Evaluating counter-factual hardware sensitivity: byte-serial vs. 16-way parallel demux (+96K gates), "
+            "two-pass ABC cell buffering (1,479 ps vs. 266,515 ps unbuffered wireload), and 2x DRAM latency elasticity (<= 1.15x).",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="ArchEval L3 Predict-First & Chaos Referee Scorecard",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Candidate Prediction", style="bold cyan", width=28)
+    tbl.add_column("Topology & Gates", justify="right", width=20)
+    tbl.add_column("ABC Delay (ps)", justify="right", width=18)
+    tbl.add_column("Chaos Elasticity", justify="right", width=18)
+    tbl.add_column("Referee Diagnosis", style="white", width=36)
+
+    for att in (data["naive_attempt"], data["winning_attempt"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if att["passed"]
+            else "[bold red]REJECTED[/bold red]"
+        )
+        tbl.add_row(
+            f"{att['attempt_label']}\n({status})",
+            f"{att['demux_topology']}\n({att['mapped_gates']:,} gates)",
+            f"{att['critical_path_ps']:,.2f} ps\n({att['abc_pass_mode']})",
+            f"Meas: {att['measured_elasticity_ratio']:.4f}x\n(Gate <= {att['max_elasticity_threshold']:.2f}x)",
+            att["diagnosis"],
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -408,6 +633,7 @@ def render_verify(data: dict[str, Any]) -> None:
         "[bold green]PASS[/bold green]",
     )
     console.print(tbl)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -416,15 +642,25 @@ def main() -> int:
         description="Lab 04: Stage 4 Evaluate — Adversarial Referees & Synthesis"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates naive and winning predictions)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -438,6 +674,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["all_adversarial_checks_verified"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -447,18 +692,26 @@ def main() -> int:
         return 0 if res["passed"] else 1
 
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "04-evaluate",
         "stage": "4. Evaluate",
-        "passed": b_res["all_adversarial_checks_verified"] and v_res["passed"],
+        "passed": (
+            b_res["all_adversarial_checks_verified"]
+            and c_res["passed"]
+            and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 

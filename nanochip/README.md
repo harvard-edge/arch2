@@ -1,112 +1,71 @@
-# `nanochip`: The *Architecture 2.0* AI-Native Chip Design Curriculum
+# Nanochip: an AI-native architecture laboratory
 
-> *"Everyone looking at `nano-kpu` stares at `rtl/`. They are looking at the wrong directory. The revolution is `harness/`—and how the 6-stage loop forces an AI agent to co-design math, memory, and silicon together."*
+Nanochip turns the Kimi nano-KPU example into a complete laboratory for
+learning AI-native architecture, from workload through checked GDSII. Students
+build one experimental system that prepares data, trains a small design model,
+proposes hardware changes, executes them through engineering tools, and learns
+from the returned measurements. The chip gives these components a concrete
+destination.
 
-Welcome to **`nanochip`**, the flagship hands-on laboratory and governance case study for ***Architecture 2.0: Principles of AI-Native System and Chip Design***.
+The current complete-workload path trains and adapts real model parameters,
+executes the selected RTL, and compares frozen learned and conventional methods
+on held-out cases. It has passed functional validation in the prepared offline
+container. Complete-core physical acceptance and the final cumulative capstone
+remain under validation; a successful functional run does not establish them.
 
-Built around **Moonshot AI's `nano-kpu`** ([`nanochip/kpu/`](kpu/) — see [`CREDIT.md`](CREDIT.md) for full attribution), `nanochip` deconstructs how **Kimi K3** autonomously designed, verified, and closed timing on a **1.46-million-cell hybrid-attention Mixture-of-Experts (MoE) inference chip (`msh_chip_top`)** in 48 hours, accelerating decode throughput from **`4.0 tok/s` to `8,720.6 tok/s`** (**2,180x**).
-
-Instead of treating autonomous chip design as "prompting an LLM to write Verilog," `nanochip` teaches you **how to architect the automated 6-stage design loop itself**: locking the cryptographic specification boundary, pruning impossible designs via byte-traffic rooflines, bridging floating-point semantics to RTL via a bit-exact fixed-point representation sandwich, stress-testing hardware with adversarial referees, routing failures along three distinct diagnostic return arrows, and auditing pre-layout proxy gaps with a formal **Design-Loop Card v2.0**.
-
----
-
-## Quickstart Commands
-
-Run the interactive curriculum and verification suite from the repository root (`/Users/VJ/GitHub/Arch2-nanochip`):
-
-```bash
-# 1. Interactive guided walkthrough of the 6-stage nano-kpu design loop
-./arch2 tutorial
-
-# 2. List all 6 progressive lifecycle labs and their physical contracts
-./arch2 lab list
-
-# 3. Execute all 6 progressive labs (both --mode break and --mode verify)
-./arch2 lab run all
-# (or run directly via Python: python3 nanochip/labs/run_all.py)
-
-# 4. Launch the live Architecture 2.0 terminal cockpit
-./arch2 cockpit
-
-# 5. Validate the publication-grade Design-Loop Card v2.0 and SHA-256 evidence packets
-./arch2 validate card nanochip/cards/nano-kpu-study-card.yaml
-```
-
-You can also run any individual lab in three modes (`verify`, `break`, or `summary`):
+With PyTorch, NumPy, Verilator, Make, and a C++ compiler already installed, run
+the functional comparison from the repository root:
 
 ```bash
-python3 nanochip/labs/01-formulate/lab.py --mode break
-python3 nanochip/labs/01-formulate/lab.py --mode verify
-python3 nanochip/labs/01-formulate/lab.py --mode summary --json
+python3 -m nanochip.laboratory doctor
+python3 -m nanochip.laboratory system --functional-only \
+  --output output/nanochip/system-001
 ```
 
----
+Each run needs a new output directory. Its `report.md` and `report.json` connect
+the data, checkpoints, candidate sources, tool results, and measured costs.
+The first complete functional comparison reached the same best design with
+adapted inference, unchanged inference, enumeration, and a constant policy.
+It demonstrates the working learning loop without establishing a design
+advantage from adaptation.
 
-## Why `harness/` Is the Real Revolution
+The [system guide](docs/SYSTEM_GUIDE.md) explains the information flow and its
+two feedback paths. The [full runtime guide](containers/FULL_RUNTIME.md)
+records the prepared container, exact commands, and validation boundary.
+Packages and images remain local; no registry publication or package-name
+ownership is claimed.
 
-When an unguarded LLM agent is asked to optimize a hardware design, it reliably discovers the path of least resistance:
-- It relaxes the clock period in the synthesis script or lowers the cosine accuracy threshold (**Reward Hacking**, caught in **Lab 01**).
-- It proposes widening MAC arrays while streaming uncompressed weights across a narrow pin interface (**Roofline Hallucination**, caught in **Lab 02**).
-- It tries to debug floating-point drift and Verilog pipeline stalls simultaneously without an intermediate fixed-point oracle (**Representation Collapse**, caught in **Lab 03**).
-- It uses simulation-only `$fread` calls, relies on Verilator zero-initialization of unreset flip-flops, or builds 96K-gate parallel barrel demuxes with 266 ns unbuffered wireload delay (**Simulation-Only Escapes & Physical Bloat**, caught in **Lab 04**).
-- It feeds synthesis area violations, bus deadlocks, and bandwidth ceilings into the same blind retry prompt (**Credit-Assignment Blindness**, caught in **Lab 05**).
-- It mistakes a pre-layout Yosys/ABC wireload estimate with blackboxed SRAMs for tapeout-ready silicon (**Proxy-to-Purpose Conflation**, caught in **Lab 06**).
+## Components and teaching plan
 
-Moonshot AI's `nano-kpu` succeeded because its **frozen harness (`nanochip/kpu/harness/`)** made every single one of those shortcuts impossible, while Kimi K3 used **self-imposed representations (`fxmodel.py` and `perf-model`)** to navigate the legal design space $\Theta$.
+The [cumulative student guide](laboratory/course/README.md) defines nine labs.
+Students construct data handling, numerical representations, a harness, model
+training, inference and retrieval, prediction and search, an RTL transformation,
+physical interpretation, and the final comparison. Editable modules and retained
+artifacts connect the labs. Instructor recovery is explicit, and an upstream
+change invalidates dependent completion records.
 
-```mermaid
-flowchart LR
-    S1["1. Formulate<br/>(Frozen Manifest & Budgets)"] --> S2["2. Explore<br/>(Roofline & Perf-Model)"]
-    S2 --> S3["3. Implement<br/>(float32 ↔ fxmodel ↔ RTL)"]
-    S3 --> S4["4. Evaluate<br/>(Audit, Chaos TB, Yosys/ABC)"]
-    S4 --> S5["5. Interpret<br/>(Causal Credit Router)"]
-    S5 -->|"All Referees Green"| S6["6. Commit<br/>(Design-Loop Card v2.0)"]
+To install the local Python entrypoint with existing build tools, then create a
+student workspace:
 
-    S5 -.->|"Turn 1: Bit-Mismatch / Lint<br/>(Implementation Defect)"| S3
-    S5 -.->|"Turn 2: 2x DRAM Stall / 96K Demux<br/>(Microarchitectural Bottleneck)"| S2
-    S5 -.->|"Turn 3: FP16 Pin Bandwidth Wall<br/>(Cross-Layer Co-Design)"| S1
+```bash
+python3 -m pip install --no-index --no-deps --no-build-isolation -e ./nanochip
+nanochip course init my-nanochip --mode student
+nanochip course status --workspace my-nanochip
 ```
 
----
+The Python package supplies the interfaces and exercises; the prepared container
+supplies learning dependencies and the EDA toolchain. The small model students
+train proposes design actions. The chip executes a separate reduced Kimi-derived
+mathematical workload, using generated test weights and independent numerical
+references. The [modular laboratory guide](laboratory/README.md) describes these
+components and their boundaries. The earlier
+[demo walkthrough](docs/DEMO_WALKTHROUGH.md) and
+[first exercise](laboratory/exercises/FIRST_SYSTEM.md) remain useful development
+records. Their results do not establish complete-core acceptance.
 
-## Mapping the 6 Labs to the *Architecture 2.0* Book
+## Historical workbench
 
-Each lab in [`nanochip/labs/`](labs/) corresponds to one canonical stage of the **Architecture 2.0 Life Cycle** (Chapter 3) and grounds the concepts across all four parts of the monograph:
-
-| Lab | Lifecycle Stage | Book Part & Chapters | Target `nano-kpu` Mechanics | `--mode break` (What Fails Without It) | `--mode verify` (What the Loop Enforces) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **[`01-formulate`](labs/01-formulate/)** | **Stage 1: Formulate** | **Part I: Foundations**<br/>Ch. 1 (*The Architecture Moonshot*)<br/>Ch. 2 (*Compounding Pressures*)<br/>Ch. 3 (*The AI-Native Design Life Cycle*) | `harness/manifest.json`<br/>`harness/check_integrity.py`<br/>`harness/resource_budgets.json`<br/>`harness/scoring.py` | Simulates an unguarded agent reward-hacking `resource_budgets.json` (`target_freq_mhz: 100 -> 25`, `COS_PASS: 0.98 -> 0.50`); caught immediately by SHA-256 manifest verification. | Verifies all 35 frozen files in `manifest.json` and emits the formal `FormulationRecord` separating immutable constraints from the mutable design space $\Theta$. |
-| **[`02-explore`](labs/02-explore/)** | **Stage 2: Explore** | **Part II: Loop Mechanics**<br/>Ch. 4 (*Data, Knowledge, and Representation*)<br/>Ch. 5 (*Prediction, Generation, and Optimization*) | `reference/gen_weights.py`<br/>`active_weight_bytes()`<br/>`floor_weight_bytes()`<br/>`REPORT.md` `perf-model` | Evaluates a typical LLM hallucination ("`20,000 tok/s` by widening MACs with uncompressed FP16 weights over `16 B/cycle` DRAM") and proves via conservation of bytes (`19,028 cyc/tok` floor $\rightarrow$ `5,255 tok/s` max) that it violates physics. | Computes exact byte-traffic rooflines across FP32, FP16, and INT4 group-128 (`76,109 B/tok` active $\rightarrow$ `4,757 cyc/tok` floor) and audits Kimi K3's pre-committed `11,200 cyc/tok` analytical prediction. |
-| **[`03-implement`](labs/03-implement/)** | **Stage 3: Implement** | **Part II: Loop Mechanics**<br/>Ch. 4 (*Data, Knowledge, and Representation*)<br/>Ch. 7 (*Verification, Feedback, and Learning*) | `reference/model.py` (`float32`)<br/>`rtl/selfmodel/fxmodel.py` (`Q4.26`)<br/>`rtl/msh_deq.v` & `rtl/msh_gemv.v` | Injects a 1-bit shift discrepancy (`<< 13` vs. `<< 14`) and missing zero-point fold ($\sum (q-z)x = \sum qx - z\sum x$) and shows how the implementation boundary catches row 0 immediately without full-chip synthesis. | Runs `reference/selftest.py`, `harness/selfcheck.py`, and verifies the two-boundary Representation Sandwich (`float32` $\leftrightarrow$ `fxmodel.py` $\leftrightarrow$ `rtl/`). |
-| **[`04-evaluate`](labs/04-evaluate/)** | **Stage 4: Evaluate** | **Part II: Loop Mechanics**<br/>Ch. 5 (*Prediction, Generation, and Optimization*)<br/>Ch. 6 (*Execution Harnesses and Tool Isolation*) | `harness/audit.py`<br/>`harness/tb/tb_main.cpp`<br/>`harness/synth_tech.ys`<br/>`rtl/msh_deq.v` | Runs 3 adversarial checks: (a) `audit.py` catching `$fread` / illegal `$readmemh` / `msh_sram` redefinition, (b) `randreset` + `2x DRAM latency` (`24 -> 48` cyc) catching a rigid pipeline, and (c) Yosys Nangate45 synthesis comparing a naive 16-way parallel demux (+96K gates) and unbuffered wireload timing (`266,515 ps`) vs. byte-serial buffered `msh_deq.v` (`18,331 um^2`, `1,479 ps`). | Executes real `audit.py`, `verilator --lint-only`, and real `yosys` Nangate45 two-pass synthesis on `msh_deq.v`, plus full-chip evaluation metrics inspection. |
-| **[`05-interpret`](labs/05-interpret/)** | **Stage 5: Interpret** | **Part III: Loop in Action**<br/>Ch. 3 (*The AI-Native Design Life Cycle*)<br/>Ch. 6 (*Execution Harnesses*)<br/>Ch. 9 (*Pattern Transferability*) | Diagnostic Credit Router across Kimi K3's 4-Turn Trajectory (`msh_fetch`, `msh_gemv`, `msh_deq`) | Demonstrates how a naive "blind retry" loop burns compute and oscillates when RTL bugs, $2\times$ DRAM stalls, and bandwidth walls are fed into an undifferentiated retry prompt. | Runs the **Architecture 2.0 Diagnostic Router** across 4 turns: Turn 1 $\rightarrow$ `3. Implement`, Turn 2 $\rightarrow$ `2. Explore`, Turn 3 $\rightarrow$ `1. Formulate`, Turn 4 (`11,467.1 cyc/tok` vs. `11,200` predicted = `2.33%` error) $\rightarrow$ `6. Commit`. |
-| **[`06-commit`](labs/06-commit/)** | **Stage 6: Commit** | **Part IV: Governance**<br/>Ch. 3 (*The AI-Native Design Life Cycle*)<br/>Ch. 10 (*System Evaluation and Red-Teaming*)<br/>Ch. 11 (*What the Architect Owns*)<br/>Ch. 12 (*Bootstrapping an Ecosystem*) | `cards/nano-kpu-study-card.yaml`<br/>`schemas/design-loop-card.v2.schema.json` | Audits a flawed "rubber-stamp" signoff card that claims full tapeout readiness from pre-layout Yosys synthesis (ignoring blackboxed `msh_sram`/`msh_rom` timing arcs, statistical `5K_hvratio_1_1` wireload vs. routed RC parasitics, and single-corner STA). | Validates `nanochip/cards/nano-kpu-study-card.yaml` against `design-loop-card.v2.schema.json` via `./arch2 validate card`, verifying SHA-256 evidence bindings, rejection gates, and explicit proxy-gap disclosures. |
-
----
-
-## Directory Layout
-
-```text
-nanochip/
-├── README.md                  # This curriculum guide and architectural overview
-├── CREDIT.md                  # Academic & engineering credit to Moonshot AI (Kimi K3) & open EDA
-├── kpu/                       # Frozen upstream MoonshotAI/nano-kpu repository (35 SHA-256 locked files)
-│   ├── docs/                  # Normative task specification, architecture, interface, quantization
-│   ├── reference/             # Float32 golden model (model.py), weight generator, selftest.py
-│   ├── rtl/                   # Kimi K3's 10 Verilog modules (msh_chip_top .. msh_vec) + selfmodel/fxmodel.py
-│   └── harness/               # Evaluation engine (evaluate.py, audit.py, check_integrity.py, synth_*.ys, tb/)
-├── labs/                      # The 6 Progressive Architecture 2.0 Lifecycle Labs
-│   ├── run_all.py             # Master runner executing all 6 labs and emitting workbench_summary.json
-│   ├── 01-formulate/          # Stage 1: Locking the Study Contract & Integrity Boundary
-│   ├── 02-explore/            # Stage 2: Roofline Betting & Candidate Generation
-│   ├── 03-implement/          # Stage 3: The Multi-Fidelity Representation Sandwich
-│   ├── 04-evaluate/           # Stage 4: Adversarial Referees, Chaos Testing & Silicon Synthesis
-│   ├── 05-interpret/          # Stage 5: Causal Credit Assignment & The Three Return Arrows
-│   └── 06-commit/             # Stage 6: Signoff Governance, Proxy Gaps & Design-Loop Card v2.0
-└── cards/                     # Formal Governance & Auditability Artifacts
-    ├── nano-kpu-study-card.yaml   # Schema v2.0 Design-Loop Card (all 6 profiles complete)
-    ├── nano-kpu-study-card.md     # Human-readable companion audit report
-    ├── replay.py                  # Deterministic verifier for bound evidence packets
-    ├── replay-environment.json    # Pinned toolchain & manifest environment binding
-    └── evidence/                  # SHA-256 bound evidence packets for claims, gates, and rejected turns
-```
+The [historical workbench](docs/HISTORICAL_WORKBENCH.md) preserves the earlier
+six-stage forensic walkthrough, lab mapping, and upstream nano-KPU study.
+Its numeric claims and pre-layout physical scope remain historical records;
+they do not establish acceptance of the current complete-core course.

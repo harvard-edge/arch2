@@ -1,0 +1,39 @@
+# Full native runtime; the successful smaller learning image remains separate.
+FROM hpretl/iic-osic-tools@sha256:ae380e2b0b96bd57b91f5864623ed488d00f78eaf58caf7f7d9d3754d315df38 AS dependencies
+ARG TARGETARCH
+USER 0:0
+ENV PATH="/opt/nanochip-venv/bin:${PATH}" \
+    USER=nanochip TORCHINDUCTOR_CACHE_DIR=/tmp/nanochip-torch-inductor \
+    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+    NANOCHIP_PHYSICAL_MODE=native \
+    NANOCHIP_PHYSICAL_IMAGE=hpretl/iic-osic-tools@sha256:ae380e2b0b96bd57b91f5864623ed488d00f78eaf58caf7f7d9d3754d315df38
+COPY containers/requirements-full.lock containers/full-runtime-constraints.txt containers/requirements-full-amd64.lock containers/full-runtime-constraints-amd64.txt /opt/nanochip-runtime/locks/
+COPY containers/select_full_runtime.py containers/verify_full_runtime.py /opt/nanochip-runtime/
+RUN /usr/bin/python3 /opt/nanochip-runtime/select_full_runtime.py --target-arch "$TARGETARCH" \
+    && /usr/bin/python3 -m venv --system-site-packages --without-pip /opt/nanochip-venv \
+    && /opt/nanochip-venv/bin/python -I -m pip install --no-cache-dir --timeout 30 --retries 1 \
+       --no-deps --require-hashes --index-url https://download.pytorch.org/whl/cpu \
+       --extra-index-url https://pypi.org/simple -r /opt/nanochip-runtime/requirements-full.lock \
+    && /opt/nanochip-venv/bin/python -I /opt/nanochip-runtime/verify_full_runtime.py
+
+FROM dependencies AS full
+LABEL org.nanochip.runtime=full-native-v1 \
+      org.nanochip.physical-base=hpretl/iic-osic-tools@sha256:ae380e2b0b96bd57b91f5864623ed488d00f78eaf58caf7f7d9d3754d315df38
+WORKDIR /opt/nanochip-source
+COPY pyproject.toml __init__.py ./
+COPY engine ./engine
+COPY laboratory ./laboratory
+COPY kpu ./kpu
+COPY trajectories/variants ./trajectories/variants
+RUN /opt/nanochip-venv/bin/python -I -m pip install --no-build-isolation --no-deps --no-compile . \
+    && /opt/nanochip-venv/bin/python -I /opt/nanochip-runtime/verify_full_runtime.py --package \
+    && rm -rf /opt/nanochip-source
+COPY containers/full-entrypoint.sh /usr/local/bin/nanochip-full-entrypoint
+COPY containers/capture_resources.py /opt/nanochip-runtime/capture_resources.py
+COPY containers/validate_course_student_extension.py /opt/nanochip-runtime/validate_course_student_extension.py
+COPY containers/validate_course_extension_capstone.py /opt/nanochip-runtime/validate_course_extension_capstone.py
+RUN chmod 755 /usr/local/bin/nanochip-full-entrypoint
+WORKDIR /work
+USER 1000:1000
+ENTRYPOINT ["/usr/local/bin/nanochip-full-entrypoint"]
+CMD ["doctor"]

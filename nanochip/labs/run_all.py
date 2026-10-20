@@ -45,7 +45,20 @@ def _load_lab_module(slug: str, script_path: Path):
     return mod
 
 
-def run_all_labs(mode: str = "summary", emit_json: bool = False) -> int:
+def _break_passed(b_res: dict[str, Any]) -> bool:
+    return bool(
+        b_res.get("all_tampering_caught")
+        or b_res.get("rejected_before_rtl_sim")
+        or b_res.get("all_bugs_caught_on_row_0")
+        or b_res.get("all_adversarial_checks_verified")
+        or b_res.get("blind_loop_failed_on_structural_walls")
+        or b_res.get("rubber_stamp_rejected")
+    )
+
+
+def run_all_labs(
+    mode: str = "summary", emit_json: bool = False, auto: bool = True
+) -> int:
     results: list[dict[str, Any]] = []
     t0_all = time.time()
 
@@ -74,15 +87,18 @@ def run_all_labs(mode: str = "summary", emit_json: bool = False) -> int:
             b_res = mod.run_break()
             if not emit_json:
                 mod.render_break(b_res)
-            ok = bool(
-                b_res.get("all_tampering_caught")
-                or b_res.get("rejected_before_rtl_sim")
-                or b_res.get("all_bugs_caught_on_row_0")
-                or b_res.get("all_adversarial_checks_verified")
-                or b_res.get("blind_loop_failed_on_structural_walls")
-                or b_res.get("rubber_stamp_rejected")
-            )
+            ok = _break_passed(b_res)
             payload: dict[str, Any] = b_res
+        elif mode == "challenge":
+            c_res = mod.run_challenge(
+                auto=auto or emit_json or (not sys.stdin.isatty())
+            )
+            if not emit_json:
+                mod.render_challenge(c_res)
+                if hasattr(mod, "render_sightline") and "cross_stack_sightline" in c_res:
+                    mod.render_sightline(c_res["cross_stack_sightline"])
+            ok = bool(c_res.get("passed"))
+            payload = c_res
         elif mode == "verify":
             v_res = mod.run_verify()
             if not emit_json:
@@ -91,25 +107,24 @@ def run_all_labs(mode: str = "summary", emit_json: bool = False) -> int:
             payload = v_res
         else:
             b_res = mod.run_break()
+            c_res = mod.run_challenge(auto=True)
             v_res = mod.run_verify()
             if not emit_json:
                 mod.render_break(b_res)
+                mod.render_challenge(c_res)
                 mod.render_verify(v_res)
-            b_ok = bool(
-                b_res.get("all_tampering_caught")
-                or b_res.get("rejected_before_rtl_sim")
-                or b_res.get("all_bugs_caught_on_row_0")
-                or b_res.get("all_adversarial_checks_verified")
-                or b_res.get("blind_loop_failed_on_structural_walls")
-                or b_res.get("rubber_stamp_rejected")
-            )
-            ok = b_ok and bool(v_res.get("passed"))
+            b_ok = _break_passed(b_res)
+            c_ok = bool(c_res.get("passed"))
+            v_ok = bool(v_res.get("passed"))
+            ok = b_ok and c_ok and v_ok
             payload = {
                 "lab": slug,
                 "stage": contract.get("stage"),
                 "passed": ok,
                 "break_test": b_res,
+                "challenge_test": c_res,
                 "verify_test": v_res,
+                "cross_stack_sightline": getattr(mod, "CROSS_STACK_SIGHTLINE", {}),
             }
 
         dt = round(time.time() - t0, 2)
@@ -175,7 +190,19 @@ def run_all_labs(mode: str = "summary", emit_json: bool = False) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run all 6 Architecture 2.0 nanochip labs")
-    ap.add_argument("--mode", choices=["verify", "break", "summary"], default="summary")
+    ap.add_argument(
+        "--mode",
+        choices=["verify", "break", "challenge", "summary"],
+        default="summary",
+    )
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively across all 6 labs",
+    )
     ap.add_argument("--json", action="store_true", help="Emit JSON summary to stdout")
     ap.add_argument(
         "--no-visual", action="store_true", help="Compatibility flag for CLI runners"
@@ -184,7 +211,8 @@ def main() -> int:
         "--demo", action="store_true", help="Compatibility flag for demo mode"
     )
     args = ap.parse_args()
-    return run_all_labs(mode=args.mode, emit_json=args.json)
+    mode = getattr(args, "mode_flag", None) or args.mode
+    return run_all_labs(mode=mode, emit_json=args.json, auto=args.auto)
 
 
 if __name__ == "__main__":

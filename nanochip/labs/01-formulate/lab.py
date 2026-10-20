@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -25,6 +26,35 @@ if str(KPU_ROOT) not in sys.path:
 from harness import check_integrity, scoring  # noqa: E402
 
 console = Console()
+
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "1. Formulate",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): 35 SHA-256 frozen contract files in harness/manifest.json; "
+        "conservation-of-bytes proves Layer-2 hardware-only FP16 (19,028 cyc/tok = 5,255.4 tok/s) "
+        "cannot reach >8,000 tok/s, forcing Layer-3 INT4 group-128 co-design (<= 1.31 B/weight)."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "QuArch (Cross-Layer Reasoning Benchmark)",
+            "connection": (
+                "Tests whether an architect or agent can diagnose when a target violates single-layer "
+                "(Layer 2 RTL-only) physical bounds and must escalate to Layer 3 (numeric + hardware co-design)."
+            ),
+        },
+        {
+            "instrument": "Lighthouse XR SoC Formulation",
+            "connection": (
+                "Locks multi-sensor XR glasses latency, power, and memory-bandwidth envelopes before "
+                "any accelerator microarchitecture is explored, preventing reward-hacked contract drift."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "From a 3.61 mm^2 edge KPU to an XR SoC or datacenter cluster, Stage 1 Formulate locks C and M "
+        "cryptographically and uses conservation laws to set the legal cross-layer boundary Theta."
+    ),
+}
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -167,7 +197,198 @@ def run_verify() -> dict[str, Any]:
         "stage": "1. Formulate",
         "passed": bool(integrity["ok"]) and len(manifest["files"]) == 35,
         "formulation_record": formulation_record,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _score_formulate_attempt(
+    label: str,
+    bytes_per_weight: float,
+    co_design_layer: int,
+    budgets_boundary: str,
+) -> dict[str, Any]:
+    active_weights = 152224
+    dram_bw = 16
+    clock_hz = 100.0e6
+    target_tok_s = 8000.0
+    max_cycles_for_8k = clock_hz / target_tok_s  # 12,500 cyc/tok
+    max_bytes_for_8k = max_cycles_for_8k * dram_bw  # 200,000 B/tok
+    max_allowable_bpw = round(max_bytes_for_8k / active_weights, 2)  # 1.31 B/weight
+
+    stream_bytes = int(round(active_weights * bytes_per_weight))
+    min_dram_cycles = math.ceil(stream_bytes / dram_bw)
+    ceiling_tok_s = round(clock_hz / min_dram_cycles, 1)
+
+    bpw_ok = bytes_per_weight <= max_allowable_bpw and ceiling_tok_s >= target_tok_s
+    layer_ok = co_design_layer == 3
+    boundary_ok = budgets_boundary.strip().upper() in ("C", "FROZEN", "FROZEN_CONTRACT")
+    passed = bpw_ok and layer_ok and boundary_ok
+
+    reasons = []
+    if bpw_ok:
+        reasons.append(
+            f"{bytes_per_weight:.2f} B/w <= {max_allowable_bpw:.2f} B/w ceiling ({min_dram_cycles:,} cyc/tok floor = {ceiling_tok_s:,.1f} tok/s >= 8,000 tok/s)"
+        )
+    else:
+        reasons.append(
+            f"FAILS pin wall: {bytes_per_weight:.2f} B/w streams {stream_bytes:,} B/tok -> {min_dram_cycles:,} cyc/tok floor ({ceiling_tok_s:,.1f} tok/s < 8,000 tok/s)"
+        )
+    if layer_ok:
+        reasons.append("Layer 3 (Numeric + Microarchitecture Co-Design) selected")
+    else:
+        reasons.append(
+            f"Layer {co_design_layer} cannot compress below 2.0 B/w without changing representation"
+        )
+    if boundary_ok:
+        reasons.append("resource_budgets.json locked in Frozen Contract (C)")
+    else:
+        reasons.append(
+            "REWARD HACKING: placing resource_budgets.json in Theta violates manifest SHA-256 lock"
+        )
+
+    return {
+        "attempt_label": label,
+        "bytes_per_weight": bytes_per_weight,
+        "active_stream_bytes_per_tok": stream_bytes,
+        "min_dram_cycles_per_tok": min_dram_cycles,
+        "roofline_ceiling_tok_s": ceiling_tok_s,
+        "max_allowable_bytes_per_weight_for_8k": max_allowable_bpw,
+        "co_design_layer": co_design_layer,
+        "budgets_boundary": budgets_boundary,
+        "passed": passed,
+        "diagnosis": " | ".join(reasons),
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The QuArch Coupling & Boundary Challenge."""
+    naive_attempt = _score_formulate_attempt(
+        label="Naive Layer-2 Attempt (FP16 RTL-only + Mutable Budgets)",
+        bytes_per_weight=2.0,
+        co_design_layer=2,
+        budgets_boundary="Theta",
+    )
+
+    if auto or not sys.stdin.isatty():
+        student_bpw = 0.50  # INT4 group-128 (~76,109 B / 152,224 params = 0.50 B/w)
+        student_layer = 3
+        student_boundary = "C"
+        label = "Architect Winning Calculation (INT4 Group-128 Layer-3 Co-Design + Frozen C)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 01 INTERACTIVE CHALLENGE: THE QuArch COUPLING & BOUNDARY CHALLENGE[/bold yellow]\n"
+                "Given 152,224 active weights/token, a 16 B/cycle DRAM port @ 100 MHz, and a >8,000 tok/s "
+                "(<=12,500 cyc/tok = 200,000 B/tok) target:\n"
+                "  1. Choose bytes/weight (e.g., 2.0 for FP16, 0.50 for INT4 group-128; max allowable is 1.31 B/w)\n"
+                "  2. Choose co-design layer (2 = Hardware-only RTL, 3 = Numeric + Hardware Co-Design)\n"
+                "  3. Assign [cyan]harness/resource_budgets.json[/cyan] to Frozen Contract ([bold]C[/bold]) or Mutable Space ([bold]Theta[/bold])",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        raw_bpw = console.input(
+            "[bold cyan]1. Effective bytes per weight [default=0.50]: [/bold cyan]"
+        ).strip()
+        raw_layer = console.input(
+            "[bold cyan]2. Co-design layer (2 or 3) [default=3]: [/bold cyan]"
+        ).strip()
+        raw_bound = console.input(
+            "[bold cyan]3. Boundary for resource_budgets.json (C or Theta) [default=C]: [/bold cyan]"
+        ).strip()
+        try:
+            student_bpw = float(raw_bpw) if raw_bpw else 0.50
+        except ValueError:
+            student_bpw = 0.50
+        try:
+            student_layer = int(raw_layer) if raw_layer else 3
+        except ValueError:
+            student_layer = 3
+        student_boundary = raw_bound if raw_bound else "C"
+        label = "Student Interactive Submission"
+
+    winning_attempt = _score_formulate_attempt(
+        label=label,
+        bytes_per_weight=student_bpw,
+        co_design_layer=student_layer,
+        budgets_boundary=student_boundary,
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "1. Formulate",
+        "challenge_name": "The QuArch Coupling & Boundary Challenge",
+        "auto_mode": auto,
+        "max_allowable_bytes_per_weight_for_8000_tok_s": 1.31,
+        "fp16_min_dram_cycles_per_token": 19028,
+        "int4_active_dram_cycles_per_token": 4757,
+        "naive_attempt": naive_attempt,
+        "winning_attempt": winning_attempt,
+        "passed": bool(
+             (not naive_attempt["passed"]) and winning_attempt["passed"]
+        ),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 1: Formulate[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    console.print(
+        Panel(
+            "[bold yellow]LAB 01 (--mode challenge): THE QuArch COUPLING & BOUNDARY CHALLENGE[/bold yellow]\n"
+            "Proving why >8,000 tok/s (<12,500 cyc/tok = 200,000 B/tok across 152,224 active weights -> "
+            "[bold]<= 1.31 B/weight[/bold]) cannot be solved in Layer 2 (FP16 = 19,028 cyc/tok floor) and why "
+            "[cyan]resource_budgets.json[/cyan] must stay in Frozen Contract [bold]C[/bold].",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="QuArch Cross-Layer Formulation & Boundary Scorecard",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Attempt", style="bold cyan", width=28)
+    tbl.add_column("Bytes/Weight & Layer", justify="right", width=20)
+    tbl.add_column("DRAM Floor & Ceiling", justify="right", width=22)
+    tbl.add_column("Budgets Boundary", justify="center", width=14)
+    tbl.add_column("Referee Diagnosis", style="white", width=36)
+
+    for att in (data["naive_attempt"], data["winning_attempt"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if att["passed"]
+            else "[bold red]REJECTED[/bold red]"
+        )
+        tbl.add_row(
+            f"{att['attempt_label']}\n({status})",
+            f"{att['bytes_per_weight']:.2f} B/w\n(Layer {att['co_design_layer']})",
+            f"{att['min_dram_cycles_per_tok']:,} cyc/tok\n({att['roofline_ceiling_tok_s']:,.1f} tok/s)",
+            att["budgets_boundary"],
+            att["diagnosis"],
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -276,6 +497,7 @@ def render_verify(data: dict[str, Any]) -> None:
         + ", ".join(os.path.basename(m) for m in th["rtl_modules"]),
     )
     console.print(t2)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -284,15 +506,25 @@ def main() -> int:
         description="Lab 01: Stage 1 Formulate — Locking the Study Contract"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates naive and winning attempts)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -306,6 +538,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["all_tampering_caught"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -314,20 +555,26 @@ def main() -> int:
             render_verify(res)
         return 0 if res["passed"] else 1
 
-    # summary mode runs both break and verify
+    # summary mode runs break, challenge (auto), and verify
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "01-formulate",
         "stage": "1. Formulate",
-        "passed": b_res["all_tampering_caught"] and v_res["passed"],
+        "passed": (
+            b_res["all_tampering_caught"] and c_res["passed"] and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 

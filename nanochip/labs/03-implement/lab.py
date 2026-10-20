@@ -36,6 +36,35 @@ from rtl.selfmodel.fxmodel import FxModel, sat32_np  # noqa: E402
 
 console = Console()
 
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "3. Implement",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): Three-layer Representation Sandwich "
+        "float32 (reference/model.py) <--Cosine >= 0.99999999--> Q4.26 (fxmodel.py) <--0 ULP Bit-Exact--> "
+        "14 Verilog modules (rtl/msh_*.v). Catches <<13 vs <<14 scale bugs and missing zero-point folds at Row 0 in 50 ms."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "SWE-fficiency (Performance-Preserving Software/Kernel Engineering)",
+            "connection": (
+                "Enforces fast executable reference equivalence checks before expensive end-to-end "
+                "benchmark suites run, preventing optimization edits from introducing subtle semantic drift."
+            ),
+        },
+        {
+            "instrument": "Hawkeye (Multi-Fidelity GPU Kernel & Tensor-Core Lowering)",
+            "connection": (
+                "Uses the same Representation Sandwich pattern for Triton/CUDA FP8/INT4 kernels: "
+                "PyTorch FP32 <--Cosine--> Bit-Accurate Quantized Emulator <--Bit-Exact--> PTX/SASS Kernel."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "Never bridge a floating-point specification directly to low-level RTL or CUDA PTX in one leap; "
+        "insert a bit-exact software twin so numeric quantization loss and implementation bugs never alias."
+    ),
+}
+
 
 def run_break() -> dict[str, Any]:
     """Inject two classic RTL vs Fixed-Point Twin discrepancies (in-memory, never
@@ -175,7 +204,233 @@ def run_verify() -> dict[str, Any]:
         "selfcheck_ok": p_selfcheck.returncode == 0,
         "selfcheck_stdout": p_selfcheck.stdout.strip(),
         "sandwich_runs": sandwich_runs,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _evaluate_implement_candidate(
+    label: str,
+    deq_shift: int,
+    enable_z_fold: bool,
+    emb_golden: np.ndarray,
+    logits_golden: np.ndarray,
+    logits_no_zfold: np.ndarray,
+    g_float: dict[str, Any],
+    am_golden: np.ndarray,
+    am_no_zfold: np.ndarray,
+) -> dict[str, Any]:
+    diff_shift = 14 - deq_shift
+    if diff_shift >= 0:
+        emb_cand = emb_golden >> diff_shift
+    else:
+        emb_cand = sat32_np(emb_golden.astype(np.int64) << (-diff_shift))
+
+    isolated_emb_cos = float(row_cosines(emb_cand[None, :], emb_golden[None, :])[0])
+    emb_exact = bool(np.array_equal(emb_cand, emb_golden))
+
+    if deq_shift == 14 and enable_z_fold:
+        cand_logits = logits_golden
+        cand_am = am_golden
+    elif not enable_z_fold:
+        cand_logits = logits_no_zfold
+        cand_am = am_no_zfold
+    else:
+        cand_logits = logits_golden >> max(1, abs(diff_shift))
+        cand_am = am_golden
+
+    met = run_metrics(cand_logits, cand_am, g_float["logits"], g_float["argmax"])
+    bit_exact_row0 = emb_exact and enable_z_fold
+    max_ulp_row0 = int(
+        np.max(np.abs(cand_logits[0].astype(np.int64) - logits_golden[0].astype(np.int64)))
+        if enable_z_fold
+        else np.max(
+            np.abs(logits_no_zfold[0].astype(np.int64) - logits_golden[0].astype(np.int64))
+        )
+    )
+    if not emb_exact and max_ulp_row0 == 0:
+        max_ulp_row0 = int(
+            np.max(np.abs(emb_cand.astype(np.int64) - emb_golden.astype(np.int64)))
+        )
+
+    passed = deq_shift == 14 and enable_z_fold and bit_exact_row0 and max_ulp_row0 == 0
+    diag = []
+    if deq_shift == 14:
+        diag.append("msh_deq shift << 14 matches Q4.26 contract")
+    else:
+        diag.append(
+            f"Shift << {deq_shift} has isolated emb cos={isolated_emb_cos:.6f} (scale-blind!) but FAILS fxmodel==rtl at Row 0, Col 0"
+        )
+    if enable_z_fold:
+        diag.append("Algebraic zero-point fold (- z * sum(x)) active")
+    else:
+        diag.append(
+            f"Missing - z * sum(x) fold collapses end-to-end cos_min to {met['cos_min']:.4f}"
+        )
+
+    return {
+        "candidate_label": label,
+        "deq_shift": deq_shift,
+        "zero_point_fold_enabled": enable_z_fold,
+        "isolated_emb_cosine": round(isolated_emb_cos, 6),
+        "end_to_end_cos_min": round(met["cos_min"], 8),
+        "end_to_end_argmax_agree": round(met["argmax_agree"], 4),
+        "fxmodel_row0_bit_exact": bit_exact_row0,
+        "row0_max_ulp_diff": max_ulp_row0,
+        "passed": passed,
+        "diagnosis": " | ".join(diag),
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The Q4.26 Representation Sandwich & Zero-Point Fold Challenge."""
+    cfg = CONFIGS["nano"]
+    seed = 20260706
+    img_bundle = build_image(cfg, gen_weights(cfg, seed), gen_tokens(cfg, seed, 0))
+    img = img_bundle["image"]
+    g_float = golden("nano", seed, 0)
+
+    fx_golden = FxModel(img)
+    tok0 = int(gen_tokens(cfg, seed, 0)[0])
+    emb_golden = fx_golden.emb_row(tok0)
+    logits_golden, am_golden = FxModel(img).run()
+
+    class NoZeroFoldFx(FxModel):
+        def _load_tensors(self):
+            super()._load_tensors()
+            self.qz["head"] = (self.qz["head"] + 8).astype(np.int16)
+
+    logits_no_zfold, am_no_zfold = NoZeroFoldFx(img).run()
+
+    naive_cand = _evaluate_implement_candidate(
+        label="Naive RTL Candidate (<< 13 shift + Missing -z*sum(x) Fold)",
+        deq_shift=13,
+        enable_z_fold=False,
+        emb_golden=emb_golden,
+        logits_golden=logits_golden,
+        logits_no_zfold=logits_no_zfold,
+        g_float=g_float,
+        am_golden=am_golden,
+        am_no_zfold=am_no_zfold,
+    )
+
+    if auto or not sys.stdin.isatty():
+        shift_val = 14
+        zfold_val = True
+        label = "Architect Winning Implementation (<< 14 Q4.26 Shift + Algebraic -z*sum(x) Fold)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 03 INTERACTIVE CHALLENGE: THE Q4.26 REPRESENTATION SANDWICH & ZERO-POINT FOLD CHALLENGE[/bold yellow]\n"
+                "Configure the fixed-point contract between [cyan]rtl/selfmodel/fxmodel.py[/cyan] and [cyan]rtl/msh_deq.v[/cyan] / [cyan]rtl/msh_gemv.v[/cyan]:\n"
+                "  1. Dequantization shift in [cyan]msh_deq.v[/cyan]: `(q - z) * scale_f16 << SHIFT` (14 for Q4.26 vs. buggy 13)\n"
+                "  2. Enable algebraic zero-point fold `sum(q * x) - z * sum(x)` in [cyan]msh_gemv.v[/cyan]? (yes/no)",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        raw_sh = console.input(
+            "[bold cyan]1. Enter msh_deq.v shift amount [default=14]: [/bold cyan]"
+        ).strip()
+        raw_zf = (
+            console.input(
+                "[bold cyan]2. Enable algebraic zero-point fold -z*sum(x)? (yes/no) [default=yes]: [/bold cyan]"
+            )
+            .strip()
+            .lower()
+        )
+        try:
+            shift_val = int(raw_sh) if raw_sh else 14
+        except ValueError:
+            shift_val = 14
+        zfold_val = False if raw_zf in ("n", "no", "false", "0") else True
+        label = "Student Interactive Implementation Config"
+
+    winning_cand = _evaluate_implement_candidate(
+        label=label,
+        deq_shift=shift_val,
+        enable_z_fold=zfold_val,
+        emb_golden=emb_golden,
+        logits_golden=logits_golden,
+        logits_no_zfold=logits_no_zfold,
+        g_float=g_float,
+        am_golden=am_golden,
+        am_no_zfold=am_no_zfold,
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "3. Implement",
+        "challenge_name": "The Q4.26 Representation Sandwich & Zero-Point Fold Challenge",
+        "auto_mode": auto,
+        "naive_candidate": naive_cand,
+        "winning_candidate": winning_cand,
+        "passed": bool((not naive_cand["passed"]) and winning_cand["passed"]),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 3: Implement[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    console.print(
+        Panel(
+            "[bold yellow]LAB 03 (--mode challenge): THE Q4.26 REPRESENTATION SANDWICH & ZERO-POINT FOLD CHALLENGE[/bold yellow]\n"
+            "Comparing a naive RTL configuration (`<< 13` shift + missing `- z * sum(x)` fold) against the "
+            "bit-exact Q4.26 Representation Sandwich (`<< 14` + algebraic zero-point fold).",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="Live Row-0 Representation Sandwich Challenge Scorecard",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Candidate Configuration", style="bold cyan", width=28)
+    tbl.add_column("Isolated Emb Cosine", justify="right", width=18)
+    tbl.add_column("End-to-End cos_min", justify="right", width=18)
+    tbl.add_column("Row-0 Twin Match", justify="center", width=20)
+    tbl.add_column("Referee Diagnosis", style="white", width=36)
+
+    for c in (data["naive_candidate"], data["winning_candidate"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if c["passed"]
+            else "[bold red]REJECTED[/bold red]"
+        )
+        twin_str = (
+            "[bold green]0 ULP (BIT-EXACT)[/bold green]"
+            if c["fxmodel_row0_bit_exact"]
+            else f"[bold red]FAIL ({c['row0_max_ulp_diff']:,} ULP)[/bold red]"
+        )
+        tbl.add_row(
+            f"{c['candidate_label']}\n({status})",
+            f"{c['isolated_emb_cosine']:.6f}",
+            f"{c['end_to_end_cos_min']:.8f}",
+            twin_str,
+            c["diagnosis"],
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -250,6 +505,7 @@ def render_verify(data: dict[str, Any]) -> None:
             f"{r['max_ulp_diff_fxmodel_vs_rtl']} ULP",
         )
     console.print(tbl)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -258,15 +514,25 @@ def main() -> int:
         description="Lab 03: Stage 3 Implement — Multi-Fidelity Representation Sandwich"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates naive and winning configs)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -280,6 +546,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["all_bugs_caught_on_row_0"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -289,18 +564,24 @@ def main() -> int:
         return 0 if res["passed"] else 1
 
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "03-implement",
         "stage": "3. Implement",
-        "passed": b_res["all_bugs_caught_on_row_0"] and v_res["passed"],
+        "passed": (
+            b_res["all_bugs_caught_on_row_0"] and c_res["passed"] and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 

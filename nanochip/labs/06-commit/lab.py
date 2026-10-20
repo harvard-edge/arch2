@@ -29,6 +29,36 @@ console = Console()
 CARD_PATH = REPO_ROOT / "nanochip" / "cards" / "nano-kpu-study-card.yaml"
 REPLAY_SCRIPT = REPO_ROOT / "nanochip" / "cards" / "replay.py"
 
+CROSS_STACK_SIGHTLINE: dict[str, Any] = {
+    "stage": "6. Commit",
+    "node_level_anchor": (
+        "nano-kpu (msh_chip_top): Design-Loop Card v2.0 (nano-kpu-study-card.yaml) normalizes "
+        "8,720.58 tok/s (2,180.15x over 4.0 tok/s scalar FP32 baseline = 41.5% of the 21,021.7 tok/s "
+        "raw INT4 DRAM pin roofline), discloses pre-layout Nangate45 proxy gaps (5K_hvratio_1_1 wireload, "
+        "39 blackboxed SRAM/ROM macros, single-corner STA), and separates model proposal from human commit."
+    ),
+    "fleet_and_ecosystem_instruments": [
+        {
+            "instrument": "MLPerf Matched Baselines & Roofline-Normalized Reporting",
+            "connection": (
+                "Prevents 'Claim Bomb' denominator inflation by requiring every headline speedup (2,180.15x) "
+                "to be paired with its physical roofline utilization (4,757 / 11,467.125 = 41.5% of pin bandwidth)."
+            ),
+        },
+        {
+            "instrument": "wakeword-rv32 SKY130 Post-Route GDSII & Antenna Signoff",
+            "connection": (
+                "Demonstrates what lies beyond nano-kpu's pre-layout Yosys gate: OpenROAD placement, CTS, "
+                "detailed routing, SPEF parasitic extraction, multi-corner STA, and diode insertion for SKY130 antenna signoff."
+            ),
+        },
+    ],
+    "sightline_takeaway": (
+        "Stage 6 Commit is the governance firewall: an AI model may propose and recommend, the frozen "
+        "harness may execute and reject, but only a human authority can commit after proxy gaps and denominators are audited."
+    ),
+}
+
 
 def run_break() -> dict[str, Any]:
     """Construct an unguarded 'rubber-stamp' card in a temporary file that:
@@ -218,7 +248,192 @@ def run_verify() -> dict[str, Any]:
         "arch2_validate_card_stdout": p_cli.stdout.strip(),
         "replay_verify_ok": p_replay.returncode == 0,
         "card_summary": summary,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
+
+
+def _score_commit_audit(
+    label: str,
+    normalize_denominator: bool,
+    authorized_scope_mode: str,
+    commit_holder_type: str,
+) -> dict[str, Any]:
+    measured_tok_s = 100.0e6 / 11467.125
+    scalar_baseline_tok_s = 4.0
+    int4_roofline_tok_s = 21021.7  # 100 MHz / 4,757 cyc/tok
+    headline_speedup = 2180.15  # 8,720.58 tok/s / 4.0 tok/s baseline
+    roofline_utilization_pct = round(
+        (4757.0 / 11467.125) * 100.0, 2
+    )  # 41.48% of raw INT4 DRAM pin roofline
+
+    scope_clean = authorized_scope_mode.strip().lower() in (
+        "pre_layout",
+        "pre-layout",
+        "rtl_and_prelayout",
+        "pre_layout_only",
+    )
+    holder_clean = commit_holder_type.strip().lower() in ("person", "human")
+    passed = normalize_denominator and scope_clean and holder_clean
+
+    diag = []
+    if normalize_denominator:
+        diag.append(
+            f"Normalized 2,180.15x (vs 4.0 tok/s scalar FP32) to {roofline_utilization_pct}% of the 4,757 cyc/tok INT4 DRAM roofline"
+        )
+    else:
+        diag.append(
+            "CLAIM BOMB: Reports un-normalized 2,180x headline without disclosing 4.0 tok/s scalar denominator or 4,757 cyc/tok roofline floor"
+        )
+    if scope_clean:
+        diag.append(
+            "Scope bounded to pre-layout RTL & Nangate45 STA (discloses 5K_hvratio_1_1 wireload, 39 blackbox SRAMs, and wakeword-rv32 SKY130 P&R/antenna reopen gates)"
+        )
+    else:
+        diag.append(
+            "SIGNOFF WALL VIOLATION: Claims commercial GDSII tapeout from pre-layout wireload STA with 39 blackboxed SRAMs"
+        )
+    if holder_clean:
+        diag.append("Commit right held by human authority (holder_type: person)")
+    else:
+        diag.append(
+            f"GOVERNANCE VIOLATION: Generator model ({commit_holder_type}) cannot self-authorize commit"
+        )
+
+    return {
+        "audit_label": label,
+        "headline_speedup_vs_4tok_s": headline_speedup,
+        "int4_roofline_floor_cycles": 4757,
+        "measured_cycles_per_token": 11467.125,
+        "int4_roofline_utilization_pct": roofline_utilization_pct,
+        "normalize_denominator": normalize_denominator,
+        "authorized_scope_mode": authorized_scope_mode,
+        "commit_holder_type": commit_holder_type,
+        "passed": passed,
+        "diagnosis": " | ".join(diag),
+    }
+
+
+def run_challenge(auto: bool = True) -> dict[str, Any]:
+    """Interactive / Auto Challenge: The Claim Bomb & Signoff Wall Audit Challenge."""
+    naive_audit = _score_commit_audit(
+        label="Rubber-Stamp Claim Bomb (Un-normalized 2,180x + Commercial Tapeout + holder_type: model)",
+        normalize_denominator=False,
+        authorized_scope_mode="commercial_tapeout",
+        commit_holder_type="model",
+    )
+
+    if auto or not sys.stdin.isatty():
+        norm_denom = True
+        scope_mode = "pre_layout_only"
+        holder = "person"
+        label = "Architect Signoff Audit (Roofline-Normalized 41.48% + Pre-Layout Scope + Human Commit)"
+    else:
+        console.print(
+            Panel(
+                "[bold yellow]LAB 06 INTERACTIVE CHALLENGE: THE CLAIM BOMB & SIGNOFF WALL AUDIT CHALLENGE[/bold yellow]\n"
+                "Audit a proposed card claiming: [italic]'2,180x speedup ready for commercial foundry tapeout, committed by holder_type: model'[/italic]:\n"
+                "  1. Normalize 2,180.15x (vs 4.0 tok/s scalar FP32) against the 4,757 cyc/tok INT4 DRAM roofline (41.48% utilization)? (yes/no)\n"
+                "  2. Authorized commitment scope ([bold]pre_layout_only[/bold] vs [bold]commercial_tapeout[/bold])\n"
+                "  3. Required `holder_type` for `commit` decision right ([bold]person[/bold] vs [bold]model[/bold])",
+                box=box.ROUNDED,
+                border_style="yellow",
+            )
+        )
+        raw_norm = (
+            console.input(
+                "[bold cyan]1. Require roofline-normalized denominator disclosure? (yes/no) [default=yes]: [/bold cyan]"
+            )
+            .strip()
+            .lower()
+        )
+        raw_scope = console.input(
+            "[bold cyan]2. Authorized scope (pre_layout_only / commercial_tapeout) [default=pre_layout_only]: [/bold cyan]"
+        ).strip()
+        raw_holder = console.input(
+            "[bold cyan]3. Commit holder_type (person / model) [default=person]: [/bold cyan]"
+        ).strip()
+        norm_denom = False if raw_norm in ("n", "no", "false", "0") else True
+        scope_mode = raw_scope if raw_scope else "pre_layout_only"
+        holder = raw_holder if raw_holder else "person"
+        label = "Student Interactive Governance Audit"
+
+    winning_audit = _score_commit_audit(
+        label=label,
+        normalize_denominator=norm_denom,
+        authorized_scope_mode=scope_mode,
+        commit_holder_type=holder,
+    )
+
+    return {
+        "mode": "challenge",
+        "stage": "6. Commit",
+        "challenge_name": "The Claim Bomb & Signoff Wall Audit Challenge",
+        "auto_mode": auto,
+        "naive_audit": naive_audit,
+        "winning_audit": winning_audit,
+        "passed": bool((not naive_audit["passed"]) and winning_audit["passed"]),
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
+    }
+
+
+def render_sightline(sightline: dict[str, Any]) -> None:
+    lines = [
+        f"[bold cyan]Node-Level Anchor (nano-kpu):[/bold cyan] {sightline['node_level_anchor']}"
+    ]
+    for inst in sightline["fleet_and_ecosystem_instruments"]:
+        lines.append(
+            f"[bold yellow]• {inst['instrument']}:[/bold yellow] {inst['connection']}"
+        )
+    lines.append(
+        f"[bold green]Sightline Takeaway:[/bold green] {sightline['sightline_takeaway']}"
+    )
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold magenta]Cross-Stack Sightline (Node to Fleet) — Stage 6: Commit[/bold magenta]",
+            box=box.ROUNDED,
+            border_style="magenta",
+        )
+    )
+
+
+def render_challenge(data: dict[str, Any]) -> None:
+    console.print(
+        Panel(
+            "[bold yellow]LAB 06 (--mode challenge): THE CLAIM BOMB & SIGNOFF WALL AUDIT CHALLENGE[/bold yellow]\n"
+            "Auditing headline speedup normalization (`2,180.15x` over `4.0 tok/s` scalar FP32 vs. `41.48%` of the "
+            "`4,757 cyc/tok` INT4 DRAM roofline), pre-layout Nangate45 proxy gaps vs. `wakeword-rv32` SKY130 post-route "
+            "signoff, and human-only `commit` authority (`holder_type: person`).",
+            box=box.ROUNDED,
+            border_style="yellow",
+        )
+    )
+    tbl = Table(
+        title="Claim Bomb & Signoff Wall Governance Audit Scorecard",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    tbl.add_column("Governance Audit", style="bold cyan", width=28)
+    tbl.add_column("Speedup & Roofline Norm", justify="right", width=20)
+    tbl.add_column("Authorized Scope", justify="center", width=18)
+    tbl.add_column("Commit Holder", justify="center", width=14)
+    tbl.add_column("Referee Diagnosis", style="white", width=38)
+
+    for aud in (data["naive_audit"], data["winning_audit"]):
+        status = (
+            "[bold green]PASS[/bold green]"
+            if aud["passed"]
+            else "[bold red]REJECTED[/bold red]"
+        )
+        tbl.add_row(
+            f"{aud['audit_label']}\n({status})",
+            f"{aud['headline_speedup_vs_4tok_s']:,.2f}x headline\n({aud['int4_roofline_utilization_pct']}% of INT4 floor)",
+            aud["authorized_scope_mode"],
+            aud["commit_holder_type"],
+            aud["diagnosis"],
+        )
+    console.print(tbl)
+    console.print()
 
 
 def render_break(data: dict[str, Any]) -> None:
@@ -307,6 +522,7 @@ def render_verify(data: dict[str, Any]) -> None:
         " • " + "\n • ".join(cs["accountable_decision"]["reopen_conditions"]),
     )
     console.print(t)
+    render_sightline(data["cross_stack_sightline"])
     console.print()
 
 
@@ -315,15 +531,25 @@ def main() -> int:
         description="Lab 06: Stage 6 Commit — Signoff Governance & Design-Loop Card v2.0"
     )
     ap.add_argument(
-        "--mode", choices=["verify", "break", "summary", "inspect"], default="summary"
+        "--mode",
+        choices=["verify", "break", "challenge", "summary", "inspect"],
+        default="summary",
     )
     ap.add_argument("--verify", action="store_const", const="verify", dest="mode_flag")
     ap.add_argument("--break", action="store_const", const="break", dest="mode_flag")
+    ap.add_argument(
+        "--challenge", action="store_const", const="challenge", dest="mode_flag"
+    )
     ap.add_argument(
         "--summary", action="store_const", const="summary", dest="mode_flag"
     )
     ap.add_argument(
         "--inspect", action="store_const", const="inspect", dest="mode_flag"
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run challenge mode non-interactively (evaluates rubber-stamp vs architect signoff audit)",
     )
     ap.add_argument("--json", action="store_true", help="Emit JSON output to stdout")
     args = ap.parse_args()
@@ -337,6 +563,15 @@ def main() -> int:
             render_break(res)
         return 0 if res["rubber_stamp_rejected"] else 1
 
+    if mode == "challenge":
+        res = run_challenge(auto=args.auto or args.json or (not sys.stdin.isatty()))
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            render_challenge(res)
+            render_sightline(res["cross_stack_sightline"])
+        return 0 if res["passed"] else 1
+
     if mode in ("verify", "inspect"):
         res = run_verify()
         if args.json:
@@ -346,18 +581,24 @@ def main() -> int:
         return 0 if res["passed"] else 1
 
     b_res = run_break()
+    c_res = run_challenge(auto=True)
     v_res = run_verify()
     combined = {
         "lab": "06-commit",
         "stage": "6. Commit",
-        "passed": b_res["rubber_stamp_rejected"] and v_res["passed"],
+        "passed": (
+            b_res["rubber_stamp_rejected"] and c_res["passed"] and v_res["passed"]
+        ),
         "break_test": b_res,
+        "challenge_test": c_res,
         "verify_test": v_res,
+        "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
     if args.json:
         print(json.dumps(combined, indent=2))
     else:
         render_break(b_res)
+        render_challenge(c_res)
         render_verify(v_res)
     return 0 if combined["passed"] else 1
 
