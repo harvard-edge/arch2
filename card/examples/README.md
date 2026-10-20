@@ -15,8 +15,8 @@ and support only the synthetic estimator result stated in the claim.
 Validate the v2 card and then execute its recorded replay command.
 
 ```console
-./arch2 validate card examples/design-loop-cards/array-study-v2.yaml
-cd examples/design-loop-cards
+./arch2 validate card card/examples/array-study-v2.yaml
+cd card/examples
 python3 replay.py verify-all
 ```
 
@@ -48,7 +48,7 @@ decision rights.
 Create a deterministic migration draft without inventing missing semantics.
 
 ```console
-./arch2 migrate card examples/design-loop-cards/level-3-independent.yaml \
+./arch2 migrate card card/examples/level-3-independent.yaml \
   --output /tmp/array-study.v2-migration-draft.yaml
 ```
 

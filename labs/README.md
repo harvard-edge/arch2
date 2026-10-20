@@ -85,7 +85,7 @@ The container bundles Yosys, Icarus Verilog, a RISC-V cross-compiler, QEMU, and 
 ./arch2 docker lab 04
 ```
 
-See [`docker/README.md`](../docker/README.md) for details.
+See [`labs/docker/README.md`](docker/README.md) for details.
 
 ### Local Python
 

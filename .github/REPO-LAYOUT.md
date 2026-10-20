@@ -32,19 +32,15 @@ Arch2/
 ├── book/                 # Synthesis lecture (Quarto book)
 ├── www/                  # Hub site (Quarto website)
 ├── tools/                # Tool registry
-├── labs/                 # Companion practice and empirical study data
+├── labs/                 # Companion practice, empirical study data, & Docker workbench (labs/docker/)
+├── card/                 # Design-loop card templates, schemas, examples, & requirements
 ├── slides/               # Talk and workshop decks
-├── design-loop-card/     # Human templates
-├── schemas/              # Machine contracts
-├── examples/             # Filled cards / demo artifacts
-├── data/                 # Figure source receipts
-├── cli/ + arch2          # Build, validate, release tooling
-├── tests/
-├── compliance/
-├── constraints/
-├── _global/
-├── .github/
-└── README, LICENSE, …
+├── data/                 # Figure source receipts, datasets, studies, & figure-bank
+├── cli/                  # Modular CLI package (`book`, `card`, `workbench`)
+├── tests/                # Repository contract test suite
+├── _global/              # Shared Quarto theme and navbar
+├── .github/              # Workflows, constraints, CONTRIBUTING, CODE_OF_CONDUCT, REPO-LAYOUT
+└── README, LICENSE, CITATION.cff, AWESOME.md, pyproject.toml
 ```
 
 **Site assembly contract:**
@@ -54,7 +50,7 @@ Arch2/
 | `www/` | `_site/` (site root) |
 | `book/_build/` | `_site/book/` |
 | `tools/_site/` | `_site/tools/` |
-| shared assets | `_site/images/`, `_site/schemas/`, … |
+| `card/{schemas,templates,examples}/` | `_site/schemas/`, `_site/design-loop-card/`, `_site/examples/design-loop-cards/` |
 
 ## 3. Surfaces
 
@@ -63,9 +59,9 @@ Arch2/
 | **book** | Synthesis lecture | Quarto book via `arch2` | `book/contents/` |
 | **www** | Hub site | Quarto website | `www/*.qmd` (optional later: `www/contents/`) |
 | **tools** | Tool registry | Quarto + `registry/` | page at project root; data in `registry/` |
-| **labs** | Practice and empirical data | Markdown + study references | `README.md`, `examples/` |
+| **labs** | Practice and empirical data | Markdown + study references + Docker (`labs/docker/`) | `README.md`, `01-04*/` |
 | **slides** | Decks | LaTeX / Makefile | `slides/` |
-| **card** | Study record | templates + schema | `design-loop-card/`, `schemas/`, `examples/` |
+| **card** | Study record | templates + schema + examples | `card/templates/`, `card/schemas/`, `card/examples/` |
 
 ## 4. Book project
 

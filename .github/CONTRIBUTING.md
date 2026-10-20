@@ -65,7 +65,7 @@ physical design, or agent workflow infrastructure.
 You can validate the registry locally with:
 
 ```bash
-./arch2 validate registries
+arch2 validate registries
 ```
 
 ### Add a workshop or venue
@@ -85,7 +85,7 @@ architecture?
 Validate the workshop registry locally with:
 
 ```bash
-./arch2 validate registries
+arch2 validate registries
 ```
 
 ### Add a reading or resource
@@ -128,12 +128,12 @@ EPUB validator. Then create and activate the Python environment:
 ```bash
 python3.11 -m venv .venv
 .venv/bin/python -m pip install pip==26.1.2
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
 source .venv/bin/activate
 ```
 
 CI uses Python 3.11.15 and Quarto 1.9.36. The reviewed Linux dependency
-resolution is recorded in `constraints/py311-linux.txt`; local environments may
+resolution is recorded in `.github/constraints/py311-linux.txt`; local environments may
 resolve platform-specific wheels from the direct requirements.
 
 ```bash

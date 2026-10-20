@@ -38,9 +38,9 @@ cp book/images/arch2-card.png _site/images/
 cp book/images/site.webmanifest _site/images/
 
 echo "==> Copying public design-loop card artifacts"
-cp -R schemas/. _site/schemas/
-cp -R design-loop-card/. _site/design-loop-card/
-cp -R examples/design-loop-cards/. _site/examples/design-loop-cards/
+cp -R card/schemas/. _site/schemas/
+cp -R card/templates/. _site/design-loop-card/
+cp -R card/examples/. _site/examples/design-loop-cards/
 
 echo "==> Copying interactive provenance notebooks"
 cp -R www/notebooks/. _site/notebooks/
@@ -59,7 +59,7 @@ if [[ "${SKIP_BOOK:-0}" != "1" ]]; then
   # render still enforces generated-asset cleanliness so a release cannot publish
   # figures that disagree with their tracked sources. A local uncommitted review
   # may opt out explicitly with ARCH2_SKIP_ASSET_DRIFT=1.
-  ./arch2 render --no-layout
+  python3 -m cli render --no-layout
   cp -r book/_build/* _site/book/
 else
   echo "==> Skipping book render (SKIP_BOOK=1)"

@@ -11,6 +11,9 @@ import data.validate_figure_provenance as provenance
 def figure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setattr(provenance, "ROOT", tmp_path)
     monkeypatch.setattr(provenance, "bibliography_keys", lambda: {"Primary2026"})
+    monkeypatch.setattr(
+        provenance, "recorded_receipt_paths", lambda: {"observations.csv"}
+    )
     chapter = tmp_path / "chapter.qmd"
     chapter.write_text("")
     images = tmp_path / "images"

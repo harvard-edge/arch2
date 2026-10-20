@@ -187,7 +187,7 @@ def expected_commands(packet_path: Path) -> dict[str, str]:
     return {
         "render": f"python3 replay.py render {quoted_packet}",
         "verify": f"python3 replay.py verify {quoted_packet}",
-        "working_directory": "examples/design-loop-cards",
+        "working_directory": "card/examples",
     }
 
 

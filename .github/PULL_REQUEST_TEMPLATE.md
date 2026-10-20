@@ -25,7 +25,7 @@
 | Inputs / outputs / evidence |  |
 
 ## Checklist
-- [ ] I have read the [CONTRIBUTING.md](../CONTRIBUTING.md) guide.
+- [ ] I have read the [CONTRIBUTING.md](CONTRIBUTING.md) guide.
 - [ ] I edited the source file, not a generated index (`tools/registry/*.yml`, `www/resources/*.yml`, or `www/workshops/*.yml`).
 - [ ] The generated index was rebuilt when a registry source changed.
 - [ ] The short public summary is concise enough to fit on a card.

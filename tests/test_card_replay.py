@@ -15,7 +15,7 @@ import yaml
 from cli.arch2 import ROOT
 
 
-EXAMPLE_ROOT = ROOT / "examples" / "design-loop-cards"
+EXAMPLE_ROOT = ROOT / "card" / "examples"
 PACKET_PATHS = sorted((EXAMPLE_ROOT / "evidence").glob("*.json"))
 CARD_PATHS = [
     EXAMPLE_ROOT / "level-2-replayable.yaml",

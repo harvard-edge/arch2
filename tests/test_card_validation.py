@@ -12,7 +12,7 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from cli.card_migration import migrate_v1_1_to_v2_draft
+from cli.card import migrate_v1_1_to_v2_draft
 from cli.arch2 import (
     CARD_SCHEMA_PATHS,
     CARD_SCHEMA_VERSION,
@@ -20,7 +20,7 @@ from cli.arch2 import (
     card_validation_findings,
 )
 
-VALID_CARD_DIR = ROOT / "examples" / "design-loop-cards"
+VALID_CARD_DIR = ROOT / "card" / "examples"
 INVALID_CARD_DIR = ROOT / "tests" / "fixtures" / "cards"
 
 
@@ -172,7 +172,7 @@ def test_explicit_legacy_contract_reports_its_own_version() -> None:
 def test_context_template_validates_without_claiming_other_profiles(
     tmp_path: Path,
 ) -> None:
-    template_path = ROOT / "design-loop-card" / "template.yaml"
+    template_path = ROOT / "card" / "templates" / "template.yaml"
     document = yaml.safe_load(template_path.read_text(encoding="utf-8"))
     card = document["design_loop_card"]
     assert set(card) == {
@@ -222,14 +222,14 @@ def test_start_workflow_uses_minimal_version_bounded_requirements() -> None:
     start = (ROOT / "www" / "start.qmd").read_text(encoding="utf-8")
     setup = """python3 -m venv .venv-card
 .venv-card/bin/python -m pip install --upgrade pip==26.1.2
-.venv-card/bin/python -m pip install -r requirements-card.txt
+.venv-card/bin/python -m pip install -r card/requirements.txt
 .venv-card/bin/python cli/arch2.py validate card my-card.yaml"""
     assert setup in start
-    assert "pip install -r requirements-card.txt" in start
+    assert "pip install -r card/requirements.txt" in start
     assert "pip install -r requirements.txt" not in start
     assert ".venv-card/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
 
-    requirements = (ROOT / "requirements-card.txt").read_text(encoding="utf-8")
+    requirements = (ROOT / "card" / "requirements.txt").read_text(encoding="utf-8")
     for package in ("typer", "rich", "PyYAML", "jsonschema", "referencing"):
         line = next(
             line for line in requirements.splitlines() if line.startswith(package)
