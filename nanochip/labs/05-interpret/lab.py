@@ -328,7 +328,9 @@ def run_challenge(auto: bool = True) -> dict[str, Any]:
         )
         chosen = []
         for t in turns:
-            console.print(f"[cyan]{t['name']}[/cyan]\n  Symptom: {t['telemetry']['symptom']}")
+            console.print(
+                f"[cyan]{t['name']}[/cyan]\n  Symptom: {t['telemetry']['symptom']}"
+            )
             raw = console.input(
                 f"[bold cyan]  Route Turn {t['turn']} [default={t['expected_target']}]: [/bold cyan]"
             )
@@ -340,7 +342,7 @@ def run_challenge(auto: bool = True) -> dict[str, Any]:
         chosen_routes=chosen,
         turns=turns,
         total_eval_calls=4,
-        converged= chosen == ["3. Implement", "2. Explore", "1. Formulate", "6. Commit"],
+        converged=chosen == ["3. Implement", "2. Explore", "1. Formulate", "6. Commit"],
     )
 
     energy_saving_ratio = round(

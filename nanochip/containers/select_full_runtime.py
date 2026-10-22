@@ -27,23 +27,40 @@ PLATFORMS = {
 
 def select(directory: Path, target_arch: str, machine: str):
     if target_arch not in PLATFORMS:
-        raise ValueError(f"Unsupported BuildKit TARGETARCH {target_arch!r}; use arm64 or amd64")
+        raise ValueError(
+            f"Unsupported BuildKit TARGETARCH {target_arch!r}; use arm64 or amd64"
+        )
     chosen = PLATFORMS[target_arch]
     if machine.lower() not in chosen["machines"]:
-        raise ValueError(f"Base machine {machine!r} differs from BuildKit TARGETARCH {target_arch!r}")
-    selections = {"requirements-full.lock": chosen["requirements"],
-                  "full-runtime-constraints.txt": chosen["constraints"]}
+        raise ValueError(
+            f"Base machine {machine!r} differs from BuildKit TARGETARCH {target_arch!r}"
+        )
+    selections = {
+        "requirements-full.lock": chosen["requirements"],
+        "full-runtime-constraints.txt": chosen["constraints"],
+    }
     # Validate both sources before replacing either effective file.
-    sources = {output: (directory / "locks" / source).read_bytes()
-               for output, source in selections.items()}
-    receipt = {"schema": "nanochip-runtime-platform/v1", "target_architecture": target_arch,
-               "machine": machine, "physical_base_index": BASE_INDEX,
-               "physical_platform_image": chosen["image"], "effective_files": {}}
+    sources = {
+        output: (directory / "locks" / source).read_bytes()
+        for output, source in selections.items()
+    }
+    receipt = {
+        "schema": "nanochip-runtime-platform/v1",
+        "target_architecture": target_arch,
+        "machine": machine,
+        "physical_base_index": BASE_INDEX,
+        "physical_platform_image": chosen["image"],
+        "effective_files": {},
+    }
     for output, source in selections.items():
         shutil.copyfile(directory / "locks" / source, directory / output)
-        receipt["effective_files"][output] = {"source": f"locks/{source}",
-            "sha256": hashlib.sha256(sources[output]).hexdigest()}
-    (directory / "platform.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        receipt["effective_files"][output] = {
+            "source": f"locks/{source}",
+            "sha256": hashlib.sha256(sources[output]).hexdigest(),
+        }
+    (directory / "platform.json").write_text(
+        json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+    )
     return receipt
 
 
@@ -51,7 +68,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target-arch", required=True)
     args = parser.parse_args(argv)
-    receipt = select(Path(__file__).resolve().parent, args.target_arch, platform.machine())
+    receipt = select(
+        Path(__file__).resolve().parent, args.target_arch, platform.machine()
+    )
     print(json.dumps(receipt, sort_keys=True))
 
 

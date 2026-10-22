@@ -32,8 +32,10 @@ def split_by_group(
     ratios = dict(fractions or {"train": 0.6, "dev": 0.2, "test": 0.2})
     if set(ratios) != {"train", "dev", "test"}:
         raise ContractError("Fractions must declare train, dev, and test")
-    if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0
-           for value in ratios.values()) or not math.isclose(sum(ratios.values()), 1.0):
+    if any(
+        type(value) not in (int, float) or not math.isfinite(value) or value <= 0
+        for value in ratios.values()
+    ) or not math.isclose(sum(ratios.values()), 1.0):
         raise ContractError("Split fractions must be finite, positive, and sum to one")
     group_rows: dict[str, list[int]] = {}
     for index, row in enumerate(records):
@@ -44,13 +46,24 @@ def split_by_group(
             raise ContractError("Every record needs a nonempty group_id")
         group_rows.setdefault(group_id, []).append(index)
     if len(group_rows) < 3:
-        raise ContractError("At least three independent groups are needed for three splits")
+        raise ContractError(
+            "At least three independent groups are needed for three splits"
+        )
 
     source_split = {}
     for group_id, indices in group_rows.items():
-        partitions = {records[index].get("original_split", "train") for index in indices}
-        if len(partitions) != 1 or next(iter(partitions)) not in ("train", "dev", "development", "test"):
-            raise ContractError("Related records need one valid original_split assignment")
+        partitions = {
+            records[index].get("original_split", "train") for index in indices
+        }
+        if len(partitions) != 1 or next(iter(partitions)) not in (
+            "train",
+            "dev",
+            "development",
+            "test",
+        ):
+            raise ContractError(
+                "Related records need one valid original_split assignment"
+            )
         source_split[group_id] = next(iter(partitions))
     movable = [group for group in group_rows if source_split[group] == "train"]
     if not movable:
@@ -64,22 +77,36 @@ def split_by_group(
     count = len(ordered_groups)
     assignment: dict[str, str] = {
         group: ("dev" if source_split[group] == "development" else source_split[group])
-        for group in group_rows if source_split[group] in ("dev", "development", "test")
+        for group in group_rows
+        if source_split[group] in ("dev", "development", "test")
     }
     for rank, group_id in enumerate(ordered_groups):
         # Midpoint allocation avoids placing a group exactly on a split edge.
         position = (rank + 0.5) / count
-        split = "train" if position < cuts[0] else "dev" if position < cuts[1] else "test"
+        split = (
+            "train" if position < cuts[0] else "dev" if position < cuts[1] else "test"
+        )
         assignment[group_id] = split
     # A small corpus can otherwise leave one partition empty. Move the final
     # group from the largest occupied partition while preserving group unity.
     for missing in ("train", "dev", "test"):
         if missing not in assignment.values():
-            counts = {name: list(assignment.values()).count(name) for name in ("train", "dev", "test")}
-            movable_assigned = [group for group in ordered_groups if group in assignment]
-            donor = max((assignment[group] for group in movable_assigned),
-                        key=lambda name: counts[name])
-            move = next(group for group in reversed(ordered_groups) if assignment.get(group) == donor)
+            counts = {
+                name: list(assignment.values()).count(name)
+                for name in ("train", "dev", "test")
+            }
+            movable_assigned = [
+                group for group in ordered_groups if group in assignment
+            ]
+            donor = max(
+                (assignment[group] for group in movable_assigned),
+                key=lambda name: counts[name],
+            )
+            move = next(
+                group
+                for group in reversed(ordered_groups)
+                if assignment.get(group) == donor
+            )
             assignment[move] = missing
     return tuple(dict(row, split=assignment[row["group_id"]]) for row in records)
 
@@ -90,9 +117,17 @@ def validate_group_splits(records: Sequence[Mapping[str, Any]]) -> None:
     group_split: dict[str, str] = {}
     allowed = {"train", "dev", "test"}
     for row in records:
-        record_id, group_id, split = row.get("record_id"), row.get("group_id"), row.get("split")
-        if (not isinstance(record_id, str) or not record_id.strip()
-                or not isinstance(group_id, str) or not group_id.strip()):
+        record_id, group_id, split = (
+            row.get("record_id"),
+            row.get("group_id"),
+            row.get("split"),
+        )
+        if (
+            not isinstance(record_id, str)
+            or not record_id.strip()
+            or not isinstance(group_id, str)
+            or not group_id.strip()
+        ):
             raise ContractError("Records need record and group identities")
         if record_id in seen_ids:
             raise ContractError("Duplicate record identity")
@@ -112,7 +147,9 @@ def pack_int4(values: Sequence[int]) -> bytes:
         raise ContractError("Packed int4 values must be nonempty and have even length")
     if any(type(value) is not int or not 0 <= value <= 15 for value in values):
         raise ContractError("Each int4 value must be an integer from 0 through 15")
-    return bytes(values[index] | (values[index + 1] << 4) for index in range(0, len(values), 2))
+    return bytes(
+        values[index] | (values[index + 1] << 4) for index in range(0, len(values), 2)
+    )
 
 
 def unpack_int4(packed: bytes | bytearray | Sequence[int]) -> tuple[int, ...]:
@@ -127,25 +164,38 @@ def unpack_int4(packed: bytes | bytearray | Sequence[int]) -> tuple[int, ...]:
     return tuple(output)
 
 
-def adapt_receipt(raw: Mapping[str, Any], task: Task, candidate: Candidate) -> RunReceipt:
+def adapt_receipt(
+    raw: Mapping[str, Any], task: Task, candidate: Candidate
+) -> RunReceipt:
     """Parse and identity-check one serialized receipt before scoring it."""
     if not isinstance(raw, Mapping):
         raise ContractError("Receipt must be an object")
-    if raw.get("task_id") != task.task_id or raw.get("candidate_digest") != candidate.digest:
+    if (
+        raw.get("task_id") != task.task_id
+        or raw.get("candidate_digest") != candidate.digest
+    ):
         raise ContractError("Receipt task or candidate identity does not match")
     if candidate.task_id != task.task_id or candidate.task_digest != task.digest:
         raise ContractError("Candidate does not belong to this frozen task")
     try:
         checks = tuple(CheckResult(**item) for item in raw.get("checks", ()))
-        metrics = {name: value if isinstance(value, Metric) else Metric(**value)
-                   for name, value in raw.get("metrics", {}).items()}
+        metrics = {
+            name: value if isinstance(value, Metric) else Metric(**value)
+            for name, value in raw.get("metrics", {}).items()
+        }
         cost_raw = raw.get("cost", {})
         cost = cost_raw if isinstance(cost_raw, Cost) else Cost(**cost_raw)
         receipt = RunReceipt(
-            task_id=raw["task_id"], candidate_digest=raw["candidate_digest"],
-            mode=raw["mode"], execution_status=raw["execution_status"],
-            tool=raw["tool"], tool_version=raw["tool_version"], checks=checks,
-            metrics=metrics, cost=cost, details=raw.get("details", ""),
+            task_id=raw["task_id"],
+            candidate_digest=raw["candidate_digest"],
+            mode=raw["mode"],
+            execution_status=raw["execution_status"],
+            tool=raw["tool"],
+            tool_version=raw["tool_version"],
+            checks=checks,
+            metrics=metrics,
+            cost=cost,
+            details=raw.get("details", ""),
             output_root=raw.get("output_root"),
             output_artifacts=tuple(
                 value if isinstance(value, Artifact) else Artifact(**value)
@@ -174,7 +224,9 @@ def summarize_cost(receipts: Sequence[RunReceipt]) -> dict[str, Any]:
     return {
         "scope": "recorded wall time only; excludes unrecorded setup and human time",
         "total_wall_seconds": sum(row["wall_seconds"] for row in rows),
-        "fresh_wall_seconds": sum(row["wall_seconds"] for row in rows if row["mode"] == "fresh"),
+        "fresh_wall_seconds": sum(
+            row["wall_seconds"] for row in rows if row["mode"] == "fresh"
+        ),
         "rows": rows,
     }
 
@@ -190,13 +242,17 @@ class FirstUntriedSearch:
         return next((action for action in legal if action.name not in tried), None)
 
 
-def search_to_proposer(policy: FirstUntriedSearch, proposal_factory, task_actions: Sequence[Action]):
+def search_to_proposer(
+    policy: FirstUntriedSearch, proposal_factory, task_actions: Sequence[Action]
+):
     """Adapt the shared SearchPolicy boundary to the campaign Proposer API."""
     from ..contracts import Budget
 
     class _Proposer:
         def propose(self, task, history, budget: Budget):
-            proposals = proposal_factory(task, history) if proposal_factory else task_actions
+            proposals = (
+                proposal_factory(task, history) if proposal_factory else task_actions
+            )
             return policy.choose(task, proposals, history, budget)
 
     return _Proposer()

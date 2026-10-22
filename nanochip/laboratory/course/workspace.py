@@ -19,7 +19,9 @@ COURSE_SCHEMA = "nanochip-cumulative-course/v1"
 
 def _json(path: Path, value: Any) -> None:
     with path.open("x", encoding="utf-8") as stream:
-        stream.write(json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n")
+        stream.write(
+            json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n"
+        )
 
 
 def _tree_hash(path: Path) -> str:
@@ -49,7 +51,12 @@ def init_workspace(path: str | Path, *, mode: str = "student") -> dict[str, Any]
         source = starter_root / lab.student_file
         destination = root / "labs" / lab.student_file
         shutil.copyfile(source, destination)
-        files.append({"path": destination.relative_to(root).as_posix(), "sha256": file_sha256(destination)})
+        files.append(
+            {
+                "path": destination.relative_to(root).as_posix(),
+                "sha256": file_sha256(destination),
+            }
+        )
     manifest = {
         "schema": COURSE_SCHEMA,
         "course_id": "nanochip-cumulative-v1",
@@ -119,15 +126,21 @@ def record_lab_result(
     for check in checks:
         row = dict(check)
         if row.get("status") not in ("pass", "fail", "unresolved", "not_run"):
-            raise ContractError("Course checks need an explicit pass/fail/unresolved/not_run status")
+            raise ContractError(
+                "Course checks need an explicit pass/fail/unresolved/not_run status"
+            )
         if not isinstance(row.get("name"), str) or not row["name"]:
             raise ContractError("Course checks need names")
         normalized_checks.append(row)
     if all(item["status"] == "pass" for item in normalized_checks):
         required = lab.integration_check
-        if not any(item["name"] == required and item["status"] == "pass"
-                   for item in normalized_checks):
-            raise ContractError(f"A passing run must include the declared integration check: {required}")
+        if not any(
+            item["name"] == required and item["status"] == "pass"
+            for item in normalized_checks
+        ):
+            raise ContractError(
+                f"A passing run must include the declared integration check: {required}"
+            )
     output_rows = []
     resolved_outputs = []
     for item in outputs:
@@ -137,16 +150,27 @@ def record_lab_result(
         if path.is_dir() and not any(path.iterdir()):
             raise ContractError("A retained course output directory cannot be empty")
         resolved_outputs.append(path)
-        output_rows.append({"path": path.relative_to(root).as_posix(), "sha256": _tree_hash(path)})
+        output_rows.append(
+            {"path": path.relative_to(root).as_posix(), "sha256": _tree_hash(path)}
+        )
     if all(item["status"] == "pass" for item in normalized_checks):
         # Artifact paths are relative to the attempt directory; find the attempt
         # root from the retained output whose path is named attempt-NNN.
-        attempt_roots = [path for path in resolved_outputs if path.name.startswith("attempt-")]
+        attempt_roots = [
+            path for path in resolved_outputs if path.name.startswith("attempt-")
+        ]
         if len(attempt_roots) != 1:
-            raise ContractError("A completed lab must retain one unique attempt directory")
+            raise ContractError(
+                "A completed lab must retain one unique attempt directory"
+            )
         evidence_path = (attempt_roots[0] / lab.artifact).resolve()
-        if not evidence_path.is_relative_to(attempt_roots[0]) or not evidence_path.exists():
-            raise ContractError(f"Completed lab is missing its declared artifact: {lab.artifact}")
+        if (
+            not evidence_path.is_relative_to(attempt_roots[0])
+            or not evidence_path.exists()
+        ):
+            raise ContractError(
+                f"Completed lab is missing its declared artifact: {lab.artifact}"
+            )
         if evidence_path.is_dir() and not any(evidence_path.iterdir()):
             raise ContractError("Declared lab artifact directory is empty")
     student_file = root / "labs" / lab.student_file
@@ -155,25 +179,37 @@ def record_lab_result(
     elif mode == "student":
         if not student_file.is_file():
             raise ContractError("Student component file is missing")
-        implementation = {"path": student_file.relative_to(root).as_posix(), "sha256": file_sha256(student_file)}
+        implementation = {
+            "path": student_file.relative_to(root).as_posix(),
+            "sha256": file_sha256(student_file),
+        }
     else:
         ref = Path(__file__).with_name("reference") / lab.student_file
-        implementation = {"path": str(ref), "sha256": file_sha256(ref)} if ref.is_file() else {
-            "path": "existing-reference-not-yet-bound", "sha256": None,
-        }
+        implementation = (
+            {"path": str(ref), "sha256": file_sha256(ref)}
+            if ref.is_file()
+            else {
+                "path": "existing-reference-not-yet-bound",
+                "sha256": None,
+            }
+        )
     event = {
         "schema": "nanochip-course-run/v1",
         "lab": lab_number,
         "title": lab.title,
         "mode": mode,
-        "status": "complete" if all(item["status"] == "pass" for item in normalized_checks) else "incomplete",
+        "status": "complete"
+        if all(item["status"] == "pass" for item in normalized_checks)
+        else "incomplete",
         "implementation": implementation,
         "inputs": dict(inputs or {}),
         "outputs": output_rows,
         "checks": normalized_checks,
         "details": details,
     }
-    event["run_digest"] = hashlib.sha256(canonical_json(event).encode("utf-8")).hexdigest()
+    event["run_digest"] = hashlib.sha256(
+        canonical_json(event).encode("utf-8")
+    ).hexdigest()
     progress_path = root / "progress.jsonl"
     with progress_path.open("a", encoding="utf-8") as stream:
         stream.write(canonical_json(event) + "\n")
@@ -187,7 +223,11 @@ def course_status(workspace: str | Path) -> dict[str, Any]:
     if manifest.get("schema") != COURSE_SCHEMA:
         raise ContractError("Unknown course workspace schema")
     path = root / manifest.get("progress_path", "progress.jsonl")
-    events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    events = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
     latest: dict[int, dict[str, Any]] = {}
     for event in events:
         lab_number = event.get("lab")
@@ -200,13 +240,20 @@ def course_status(workspace: str | Path) -> dict[str, Any]:
         state = "not_started"
         if event:
             state = event.get("status", "incomplete")
-            digest_payload = {key: value for key, value in event.items() if key != "run_digest"}
-            if hashlib.sha256(canonical_json(digest_payload).encode("utf-8")).hexdigest() != event.get("run_digest"):
+            digest_payload = {
+                key: value for key, value in event.items() if key != "run_digest"
+            }
+            if hashlib.sha256(
+                canonical_json(digest_payload).encode("utf-8")
+            ).hexdigest() != event.get("run_digest"):
                 state = "stale"
             if event.get("status") == "complete":
                 for artifact in event.get("outputs", []):
                     artifact_path = root / artifact["path"]
-                    if not artifact_path.exists() or _tree_hash(artifact_path) != artifact["sha256"]:
+                    if (
+                        not artifact_path.exists()
+                        or _tree_hash(artifact_path) != artifact["sha256"]
+                    ):
                         state = "stale"
                         break
                 implementation = event.get("implementation", {})
@@ -215,20 +262,35 @@ def course_status(workspace: str | Path) -> dict[str, Any]:
                 else:
                     implementation_path = Path(implementation.get("path", ""))
                 if implementation.get("sha256") is not None and (
-                        not implementation_path.is_file()
-                        or file_sha256(implementation_path) != implementation["sha256"]):
+                    not implementation_path.is_file()
+                    or file_sha256(implementation_path) != implementation["sha256"]
+                ):
                     state = "stale"
                 for upstream in lab.upstream:
                     parent = latest.get(upstream)
                     expected = (event.get("inputs") or {}).get(f"lab{upstream:02d}")
-                    if (not parent or resolved_status.get(upstream) != "complete"
-                            or expected != parent.get("run_digest")):
+                    if (
+                        not parent
+                        or resolved_status.get(upstream) != "complete"
+                        or expected != parent.get("run_digest")
+                    ):
                         state = "stale"
                         break
         resolved_status[lab.number] = state
-        states.append({"lab": lab.number, "title": lab.title, "status": state,
-                       "run_digest": event.get("run_digest") if event else None,
-                       "outputs": event.get("outputs", []) if event else []})
+        states.append(
+            {
+                "lab": lab.number,
+                "title": lab.title,
+                "status": state,
+                "run_digest": event.get("run_digest") if event else None,
+                "outputs": event.get("outputs", []) if event else [],
+            }
+        )
     complete = all(item["status"] == "complete" for item in states)
-    return {"schema": COURSE_SCHEMA, "workspace": str(root), "labs": states,
-            "course_complete": complete, "run_count": len(events)}
+    return {
+        "schema": COURSE_SCHEMA,
+        "workspace": str(root),
+        "labs": states,
+        "course_complete": complete,
+        "run_count": len(events),
+    }

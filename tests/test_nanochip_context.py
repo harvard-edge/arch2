@@ -7,8 +7,13 @@ from nanochip.laboratory.contracts import ContractError
 
 
 def source(text="weights scale zero point", partition="train"):
-    return dict(source_id="example", text=text, partition=partition,
-                source="test-fixture", text_sha256=hashlib.sha256(text.encode()).hexdigest())
+    return dict(
+        source_id="example",
+        text=text,
+        partition=partition,
+        source="test-fixture",
+        text_sha256=hashlib.sha256(text.encode()).hexdigest(),
+    )
 
 
 def test_retrieval_preserves_source_and_budget():
@@ -16,7 +21,10 @@ def test_retrieval_preserves_source_and_budget():
     assert result[0]["text"] == "weights scale"
     assert result[0]["source_id"] == "example"
     assert result[0]["truncated"] and result[0]["retrieved_words"] == 2
-    assert result[0]["text_sha256"] == hashlib.sha256(result[0]["text"].encode()).hexdigest()
+    assert (
+        result[0]["text_sha256"]
+        == hashlib.sha256(result[0]["text"].encode()).hexdigest()
+    )
     assert result[0]["full_text_sha256"] == source()["text_sha256"]
     assert with_context("observed", result).endswith("OBSERVATION\nobserved")
 

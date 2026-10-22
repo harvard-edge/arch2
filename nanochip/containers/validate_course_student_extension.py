@@ -26,7 +26,7 @@ from nanochip.laboratory.course.checks import validate_student_context
 from nanochip.laboratory.context import specification_sources
 
 
-_STUDENT_SPLITTER = '''
+_STUDENT_SPLITTER = """
 import hashlib
 
 def split_records(records, *, seed, fractions=None):
@@ -53,10 +53,10 @@ def split_records(records, *, seed, fractions=None):
             moved = next(group for group in reversed(ordered) if assignment[group] == donor)
             assignment[moved] = missing
     return [dict(row, split=assignment[row["group_id"]]) for row in records]
-'''.lstrip()
+""".lstrip()
 
 
-_STUDENT_INFERENCE = '''
+_STUDENT_INFERENCE = """
 import hashlib
 import json
 import re
@@ -120,7 +120,7 @@ def parse_action(text, allowed_actions):
     if action not in tuple(allowed_actions):
         raise ValueError("action is outside the declared interface")
     return action
-'''.lstrip()
+""".lstrip()
 
 
 def _summary(report: dict[str, Any], path: Path) -> dict[str, Any]:
@@ -130,8 +130,10 @@ def _summary(report: dict[str, Any], path: Path) -> dict[str, Any]:
     core = next(row for row in receipt["output_artifacts"] if row["path"] == "core.v")
     core_path = output_root / core["path"]
     contexts = report["model_input"]["retrieved_context"]
-    checks = [{"name": row["name"], "scope": row["scope"], "status": row["status"]}
-              for row in receipt["checks"]]
+    checks = [
+        {"name": row["name"], "scope": row["scope"], "status": row["status"]}
+        for row in receipt["checks"]
+    ]
     return {
         "report": str(path),
         "action": observation["action"]["name"],
@@ -142,24 +144,41 @@ def _summary(report: dict[str, Any], path: Path) -> dict[str, Any]:
         "model_input_bytes": len(report["model_input"]["text"].encode("utf-8")),
         "context_word_budget": report["model_input"]["context_word_budget"],
         "context_words": sum(len(row["text"].split()) for row in contexts),
-        "contexts": [{key: row[key] for key in
-                      ("source_id", "partition", "source", "file_sha256", "text_sha256", "text")}
-                     for row in contexts],
+        "contexts": [
+            {
+                key: row[key]
+                for key in (
+                    "source_id",
+                    "partition",
+                    "source",
+                    "file_sha256",
+                    "text_sha256",
+                    "text",
+                )
+            }
+            for row in contexts
+        ],
         "candidate_digest": observation["candidate_digest"],
         "candidate_core_sha256": core["sha256"],
         "candidate_core_hash_verified": file_sha256(core_path) == core["sha256"],
         "receipt_mode": receipt["mode"],
         "checks": checks,
-        "all_core_checks_pass": all(row["scope"] == "accelerator:nanochip_teaching_core"
-                                     and row["status"] == "pass" for row in checks),
+        "all_core_checks_pass": all(
+            row["scope"] == "accelerator:nanochip_teaching_core"
+            and row["status"] == "pass"
+            for row in checks
+        ),
         "cycles": receipt["metrics"]["cycles"]["value"],
     }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("workspace", type=Path,
-                        help="new output directory for this smoke; it must not already exist")
+    parser.add_argument(
+        "workspace",
+        type=Path,
+        help="new output directory for this smoke; it must not already exist",
+    )
     args = parser.parse_args(argv)
     root = args.workspace.resolve()
     init_workspace(root, mode="student")
@@ -169,42 +188,63 @@ def main(argv: list[str] | None = None) -> int:
     events.append(run_lab(root, 1, mode="student"))
     events.append(run_lab(root, 2, mode="instructor"))
     events.append(run_lab(root, 3, mode="instructor"))
-    events.append(run_lab(root, 4, mode="instructor",
-                          inputs={"budget": {"max_steps": 3, "max_seconds": 30, "seed": 91}}))
+    events.append(
+        run_lab(
+            root,
+            4,
+            mode="instructor",
+            inputs={"budget": {"max_steps": 3, "max_seconds": 30, "seed": 91}},
+        )
+    )
     model_inputs = {"seed": 23, "prompt_index": 0, "tokens": [7], "context_limit": 24}
     baseline_event = run_lab(root, 5, mode="instructor", inputs=model_inputs)
     events.append(baseline_event)
-    baseline_path = root / baseline_event["outputs"][0]["path"] / "inference/inference-check.json"
+    baseline_path = (
+        root / baseline_event["outputs"][0]["path"] / "inference/inference-check.json"
+    )
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
     (root / "labs/lab05_inference.py").write_text(_STUDENT_INFERENCE, encoding="utf-8")
     student_event = run_lab(root, 5, mode="student", inputs=model_inputs)
     events.append(student_event)
-    student_path = root / student_event["outputs"][0]["path"] / "inference/inference-check.json"
+    student_path = (
+        root / student_event["outputs"][0]["path"] / "inference/inference-check.json"
+    )
     student = json.loads(student_path.read_text(encoding="utf-8"))
 
     baseline_summary = _summary(baseline, baseline_path)
     student_summary = _summary(student, student_path)
     verified_context = validate_student_context(
-        specification_sources(), student["model_input"]["retrieved_context"], word_budget=24)
+        specification_sources(),
+        student["model_input"]["retrieved_context"],
+        word_budget=24,
+    )
     comparisons = {
         "student_hook_executed": student_event["mode"] == "student",
-        "same_development_task": baseline_summary["task_id"] == student_summary["task_id"]
-            and "development" in student_summary["task_id"],
-        "same_checkpoint": baseline_summary["checkpoint_sha256"] == student_summary["checkpoint_sha256"],
+        "same_development_task": baseline_summary["task_id"]
+        == student_summary["task_id"]
+        and "development" in student_summary["task_id"],
+        "same_checkpoint": baseline_summary["checkpoint_sha256"]
+        == student_summary["checkpoint_sha256"],
         "recorded_model_input_changed": baseline_summary["model_input_sha256"]
-            != student_summary["model_input_sha256"],
+        != student_summary["model_input_sha256"],
         "retrieval_attribution_revalidated": len(verified_context) == 1
-            and verified_context[0]["source_id"] == student_summary["contexts"][0]["source_id"],
+        and verified_context[0]["source_id"]
+        == student_summary["contexts"][0]["source_id"],
         "within_word_and_byte_budgets": student_summary["context_words"] <= 24
-            and student_summary["model_input_bytes"] <= 768,
-        "exact_rtl_source_hash_matches_receipt": student_summary["candidate_core_hash_verified"],
+        and student_summary["model_input_bytes"] <= 768,
+        "exact_rtl_source_hash_matches_receipt": student_summary[
+            "candidate_core_hash_verified"
+        ],
         "fresh_complete_core_checks_pass": student_summary["receipt_mode"] == "fresh"
-            and student_summary["all_core_checks_pass"] and student_summary["eligible"],
+        and student_summary["all_core_checks_pass"]
+        and student_summary["eligible"],
         "no_physical_run": True,
     }
     if not all(comparisons.values()):
-        raise RuntimeError(f"Student extension smoke failed its independent summary: {comparisons}")
+        raise RuntimeError(
+            f"Student extension smoke failed its independent summary: {comparisons}"
+        )
     receipt = {
         "schema": "nanochip-course-student-extension-evidence/v1",
         "workspace": str(root),
@@ -212,9 +252,15 @@ def main(argv: list[str] | None = None) -> int:
             "lab01_data.py": events[0]["implementation"]["sha256"],
             "lab05_inference.py": student_event["implementation"]["sha256"],
         },
-        "event_digests": [{"lab": event["lab"], "mode": event["mode"],
-                           "status": event["status"], "run_digest": event["run_digest"]}
-                          for event in events],
+        "event_digests": [
+            {
+                "lab": event["lab"],
+                "mode": event["mode"],
+                "status": event["status"],
+                "run_digest": event["run_digest"],
+            }
+            for event in events
+        ],
         "reference": baseline_summary,
         "student_extension": student_summary,
         "comparisons": comparisons,
@@ -222,10 +268,19 @@ def main(argv: list[str] | None = None) -> int:
     }
     path = root / "extension-comparison.json"
     path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"status": "pass", "workspace": str(root),
-                      "receipt": str(path), "comparisons": comparisons,
-                      "reference_action": baseline_summary["action"],
-                      "student_action": student_summary["action"]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": "pass",
+                "workspace": str(root),
+                "receipt": str(path),
+                "comparisons": comparisons,
+                "reference_action": baseline_summary["action"],
+                "student_action": student_summary["action"],
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

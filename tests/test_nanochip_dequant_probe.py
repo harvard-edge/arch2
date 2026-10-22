@@ -31,15 +31,21 @@ def test_actual_rtl_distinguishes_known_fault_and_retains_artifacts(tmp_path):
     for name, result in [("baseline", good), ("fault", bad)]:
         saved = json.loads((tmp_path / name / "receipt.json").read_text())
         assert saved == result
-        assert result["candidate_sha256"] == hashlib.sha256(
-            (tmp_path / name / "candidate.v").read_bytes()).hexdigest()
+        assert (
+            result["candidate_sha256"]
+            == hashlib.sha256(
+                (tmp_path / name / "candidate.v").read_bytes()
+            ).hexdigest()
+        )
         assert result["build"]["returncode"] == 0
         assert result["simulation"]["elapsed_s"] > 0
         assert (tmp_path / name / "simulation.log").is_file()
 
 
 def test_missing_tool_cannot_pass_or_reuse_output(tmp_path, monkeypatch):
-    monkeypatch.setattr("nanochip.laboratory.dequant_probe.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        "nanochip.laboratory.dequant_probe.shutil.which", lambda _: None
+    )
     output = tmp_path / "missing"
     result = run_probe(BASELINE, output)
     assert not result["ok"] and result["status"] == "unavailable"

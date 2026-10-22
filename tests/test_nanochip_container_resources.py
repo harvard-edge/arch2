@@ -10,16 +10,31 @@ import time
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "nanochip/containers/capture_resources.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[1] / "nanochip/containers/capture_resources.py"
+)
 
 
 @pytest.mark.parametrize("code", [0, 7])
 def test_child_argv_output_and_exit_status_are_preserved(tmp_path, code):
     report = tmp_path / "resources.json"
     argument = "literal $(never-execute) ; with spaces"
-    result = subprocess.run([sys.executable, str(SCRIPT), str(report), "--",
-        sys.executable, "-c", "import sys; print(sys.argv[1]); sys.exit(int(sys.argv[2]))",
-        argument, str(code)], capture_output=True, text=True, timeout=10)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            str(report),
+            "--",
+            sys.executable,
+            "-c",
+            "import sys; print(sys.argv[1]); sys.exit(int(sys.argv[2]))",
+            argument,
+            str(code),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     assert result.returncode == code
     assert result.stdout == argument + "\n"
     receipt = json.loads(report.read_text())
@@ -29,13 +44,28 @@ def test_child_argv_output_and_exit_status_are_preserved(tmp_path, code):
 
 
 def test_interrupt_reaches_child_and_its_exit_status_is_retained(tmp_path):
-    report, ready, interrupted = (tmp_path / name for name in ("resources.json", "ready", "interrupted"))
-    child = ("import pathlib,signal,sys,time; "
-             "signal.signal(signal.SIGINT, lambda *args: "
-             "(pathlib.Path(sys.argv[2]).write_text('received'), sys.exit(23))); "
-             "pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(30)")
-    process = subprocess.Popen([sys.executable, str(SCRIPT), str(report), "--",
-        sys.executable, "-c", child, str(ready), str(interrupted)])
+    report, ready, interrupted = (
+        tmp_path / name for name in ("resources.json", "ready", "interrupted")
+    )
+    child = (
+        "import pathlib,signal,sys,time; "
+        "signal.signal(signal.SIGINT, lambda *args: "
+        "(pathlib.Path(sys.argv[2]).write_text('received'), sys.exit(23))); "
+        "pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(30)"
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(SCRIPT),
+            str(report),
+            "--",
+            sys.executable,
+            "-c",
+            child,
+            str(ready),
+            str(interrupted),
+        ]
+    )
     try:
         deadline = time.monotonic() + 5
         while not ready.exists() and time.monotonic() < deadline:
@@ -54,9 +84,20 @@ def test_interrupt_reaches_child_and_its_exit_status_is_retained(tmp_path):
 @pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGKILL])
 def test_signal_terminated_child_preserves_signal_status(tmp_path, signum):
     report = tmp_path / "resources.json"
-    result = subprocess.run([sys.executable, str(SCRIPT), str(report), "--",
-        sys.executable, "-c", "import os,sys; os.kill(os.getpid(), int(sys.argv[1]))",
-        str(signum)], capture_output=True, timeout=10)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            str(report),
+            "--",
+            sys.executable,
+            "-c",
+            "import os,sys; os.kill(os.getpid(), int(sys.argv[1]))",
+            str(signum),
+        ],
+        capture_output=True,
+        timeout=10,
+    )
     assert result.returncode == -signum
     assert json.loads(report.read_text())["child_returncode"] == -signum
 

@@ -25,7 +25,15 @@ import shutil
 
 from . import dequant_probe
 from .adapters import BLOCK_SCOPE
-from .contracts import Action, Artifact, Candidate, CheckRequirement, ContractError, Task, file_sha256
+from .contracts import (
+    Action,
+    Artifact,
+    Candidate,
+    CheckRequirement,
+    ContractError,
+    Task,
+    file_sha256,
+)
 
 
 REFERENCE_SOURCE = Path(__file__).resolve().parents[1] / "kpu/rtl/msh_deq.v"
@@ -48,23 +56,32 @@ def apply_design_change(source_text: str, action_name: str) -> str:
     if action_name not in DESIGN_ACTIONS:
         raise ContractError(f"Unknown design action: {action_name}")
     if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != REFERENCE_SHA256:
-        raise ContractError("Design change requires the exact reviewed reference source hash")
+        raise ContractError(
+            "Design change requires the exact reviewed reference source hash"
+        )
     for anchor in (_INDEXED_READ, _WRITE_STEP):
         if source_text.count(anchor) != 1:
             raise ContractError("Design change anchor must occur exactly once")
     if action_name == "retain_indexed_read":
         return source_text
-    return source_text.replace(_INDEXED_READ, _STREAMING_READ).replace(_WRITE_STEP, _STREAMING_STEP)
+    return source_text.replace(_INDEXED_READ, _STREAMING_READ).replace(
+        _WRITE_STEP, _STREAMING_STEP
+    )
 
 
 def _hardware_tokens(source: str) -> tuple[str, ...]:
     """Ignore comments/formatting while preserving Verilog tokens and strings."""
     lexemes = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.DOTALL)
-    uncommented = lexemes.sub(lambda match: match[0] if match[0].startswith('"') else " ", source)
-    return tuple(re.findall(
-        r'"(?:\\.|[^"\\])*"|\\\S+|(?:\d+)?\'[sS]?[bBoOdDhH][0-9a-fA-F_xXzZ?]+'
-        r'|[A-Za-z_$][A-Za-z0-9_$]*|\d+|===|!==|>>>|<<<|==|!=|<=|>=|&&|\|\||<<|>>|\+:|-:|\S',
-        uncommented))
+    uncommented = lexemes.sub(
+        lambda match: match[0] if match[0].startswith('"') else " ", source
+    )
+    return tuple(
+        re.findall(
+            r'"(?:\\.|[^"\\])*"|\\\S+|(?:\d+)?\'[sS]?[bBoOdDhH][0-9a-fA-F_xXzZ?]+'
+            r"|[A-Za-z_$][A-Za-z0-9_$]*|\d+|===|!==|>>>|<<<|==|!=|<=|>=|&&|\|\||<<|>>|\+:|-:|\S",
+            uncommented,
+        )
+    )
 
 
 def _is_right_four_literal(token: str) -> bool:
@@ -90,30 +107,44 @@ def validate_action_conformance(original: str, changed: str, action_name: str) -
         raise ContractError("Transformation must return nonempty RTL text")
     if action_name == "retain_indexed_read":
         if changed != original:
-            raise ContractError("retain_indexed_read must return the exact original source")
+            raise ContractError(
+                "retain_indexed_read must return the exact original source"
+            )
         return
     tokens = _hardware_tokens(changed)
     if tokens == _hardware_tokens(original):
-        raise ContractError("stream_quantized_row must change hardware; comments/formatting do not count")
+        raise ContractError(
+            "stream_quantized_row must change hardware; comments/formatting do not count"
+        )
     # Normalize the admitted alternate spelling of this one assignment. Final
     # whole-module comparison also constrains its position and surrounding FSM.
     canonical_shift = _hardware_tokens("qrow_v <= {4'b0, qrow_v[1023:4]};")
     normalized = []
     index = 0
     while index < len(tokens):
-        if (tokens[index:index + 4] == ("qrow_v", "<=", "qrow_v", ">>")
-                and index + 5 < len(tokens) and tokens[index + 5] == ";"
-                and _is_right_four_literal(tokens[index + 4])):
+        if (
+            tokens[index : index + 4] == ("qrow_v", "<=", "qrow_v", ">>")
+            and index + 5 < len(tokens)
+            and tokens[index + 5] == ";"
+            and _is_right_four_literal(tokens[index + 4])
+        ):
             normalized.extend(canonical_shift)
             index += 6
         else:
             normalized.append(tokens[index])
             index += 1
-    admitted = [expected, expected.replace(
-        _STREAMING_READ, "\n".join(_INDEXED_READ.splitlines()[:2]) + "\n" + _STREAMING_READ)]
+    admitted = [
+        expected,
+        expected.replace(
+            _STREAMING_READ,
+            "\n".join(_INDEXED_READ.splitlines()[:2]) + "\n" + _STREAMING_READ,
+        ),
+    ]
     if tuple(normalized) not in tuple(_hardware_tokens(text) for text in admitted):
-        raise ContractError("stream_quantized_row requires the admitted low-nibble read and "
-                            "nonblocking right-four shift in S_WR; unsupported active RTL edit")
+        raise ContractError(
+            "stream_quantized_row requires the admitted low-nibble read and "
+            "nonblocking right-four shift in S_WR; unsupported active RTL edit"
+        )
 
 
 def design_change_task(source: Path | None = None) -> Task:
@@ -121,9 +152,11 @@ def design_change_task(source: Path | None = None) -> Task:
     source = Path(source) if source is not None else REFERENCE_SOURCE
     apply_design_change(source.read_text(), "retain_indexed_read")
     return Task(
-        task_id="nanochip-dequant-design-change-v1", allowed_actions=DESIGN_ACTIONS,
+        task_id="nanochip-dequant-design-change-v1",
+        allowed_actions=DESIGN_ACTIONS,
         required_checks=(CheckRequirement("dequant_vectors", BLOCK_SCOPE),),
-        max_proposals=2, max_attempts=2,
+        max_proposals=2,
+        max_attempts=2,
         specification={
             "purpose": "explicit RTL transformation with finite block-level verification",
             "source_sha256": file_sha256(source),
@@ -131,10 +164,16 @@ def design_change_task(source: Path | None = None) -> Task:
             "bench_sha256": file_sha256(dequant_probe.BENCH),
             "probe_sha256": file_sha256(Path(dequant_probe.__file__)),
             "vector_seed": dequant_probe.VECTOR_SEED,
-            "design_features": {"row_values": 256, "quant_bits": 4,
-                                "access_order": "ascending", "index_step": 1,
-                                "start_index": 0, "passes": 1, "revisit": False,
-                                "reload_per_row": True},
+            "design_features": {
+                "row_values": 256,
+                "quant_bits": 4,
+                "access_order": "ascending",
+                "index_step": 1,
+                "start_index": 0,
+                "passes": 1,
+                "revisit": False,
+                "reload_per_row": True,
+            },
             "equivalence_scope": "legal complete rows; controls and valid Y writes; not exhaustive",
         },
     )
@@ -148,17 +187,34 @@ class DesignChangeMaterializer:
         self.transformer = transformer
 
     def materialize(self, task: Task, action: Action, workspace: Path) -> Candidate:
-        if action.name not in DESIGN_ACTIONS or action.name not in task.allowed_actions or action.parameters:
-            raise ContractError("Design actions accept only the two named actions without parameters")
-        bound_inputs = ((self.source, "source_sha256"), (Path(__file__), "transformer_sha256"),
-                        (dequant_probe.BENCH, "bench_sha256"),
-                        (Path(dequant_probe.__file__), "probe_sha256"))
+        if (
+            action.name not in DESIGN_ACTIONS
+            or action.name not in task.allowed_actions
+            or action.parameters
+        ):
+            raise ContractError(
+                "Design actions accept only the two named actions without parameters"
+            )
+        bound_inputs = (
+            (self.source, "source_sha256"),
+            (Path(__file__), "transformer_sha256"),
+            (dequant_probe.BENCH, "bench_sha256"),
+            (Path(dequant_probe.__file__), "probe_sha256"),
+        )
         for path, key in bound_inputs:
             if file_sha256(path) != task.specification.get(key):
-                raise ContractError(f"Design input changed after task construction: {key}")
+                raise ContractError(
+                    f"Design input changed after task construction: {key}"
+                )
         original = self.source.read_text()
-        extension_path = Path(inspect.getsourcefile(self.transformer)).resolve() if self.transformer else None
-        if extension_path and file_sha256(extension_path) != task.specification.get("extension_sha256"):
+        extension_path = (
+            Path(inspect.getsourcefile(self.transformer)).resolve()
+            if self.transformer
+            else None
+        )
+        if extension_path and file_sha256(extension_path) != task.specification.get(
+            "extension_sha256"
+        ):
             raise ContractError("Student extension changed after task construction")
         changed = (self.transformer or apply_design_change)(original, action.name)
         validate_action_conformance(original, changed, action.name)
@@ -166,47 +222,101 @@ class DesignChangeMaterializer:
         root.mkdir(parents=True)
         (root / "msh_deq.v").write_text(changed)
         (root / "reference.v").write_text(original)
-        (root / "change.diff").write_text("".join(difflib.unified_diff(
-            original.splitlines(keepends=True), changed.splitlines(keepends=True),
-            fromfile="reference/msh_deq.v", tofile=f"{action.name}/msh_deq.v")))
+        (root / "change.diff").write_text(
+            "".join(
+                difflib.unified_diff(
+                    original.splitlines(keepends=True),
+                    changed.splitlines(keepends=True),
+                    fromfile="reference/msh_deq.v",
+                    tofile=f"{action.name}/msh_deq.v",
+                )
+            )
+        )
         shutil.copyfile(dequant_probe.BENCH, root / "dequant_tb.cpp")
         shutil.copyfile(dequant_probe.__file__, root / "probe.py")
         shutil.copyfile(Path(__file__), root / "design_changes.py")
         (root / "task.json").write_text(json.dumps(asdict(task), indent=2) + "\n")
-        names = ["msh_deq.v", "reference.v", "change.diff", "dequant_tb.cpp", "probe.py",
-                 "design_changes.py", "task.json"]
+        names = [
+            "msh_deq.v",
+            "reference.v",
+            "change.diff",
+            "dequant_tb.cpp",
+            "probe.py",
+            "design_changes.py",
+            "task.json",
+        ]
         if extension_path:
             shutil.copyfile(extension_path, root / "student_extension.py")
             names.append("student_extension.py")
-        return Candidate(action.name, task.task_id, str(root), action,
-                         tuple(Artifact.from_file(root, name) for name in names), task_digest=task.digest)
+        return Candidate(
+            action.name,
+            task.task_id,
+            str(root),
+            action,
+            tuple(Artifact.from_file(root, name) for name in names),
+            task_digest=task.digest,
+        )
 
 
 def _equivalence_miter(reference: str, candidate: str) -> str:
     """Compare controls continuously after reset, data only on valid writes."""
     header = reference.split("    localparam S_IDLE", 1)[0]
-    header = header.replace("    output wire         done\n", "    output wire         done,\n"
-                            "    output wire         equivalent\n")
-    inputs = ("clk", "rst_n", "job_valid", "job_d", "job_gsz", "job_ybuf", "ws_valid",
-              "ws_data", "ws_count", "ws_shift", "ws_last")
-    widths = {"job_ready": "", "ws_ready": "", "y_we": "", "y_addr": "[11:0] ",
-              "y_data": "[127:0] ", "y_buf": "[3:0] ", "done": ""}
-    declarations = "".join(f"    wire {width}ref_{name};\n" for name, width in widths.items())
+    header = header.replace(
+        "    output wire         done\n",
+        "    output wire         done,\n" "    output wire         equivalent\n",
+    )
+    inputs = (
+        "clk",
+        "rst_n",
+        "job_valid",
+        "job_d",
+        "job_gsz",
+        "job_ybuf",
+        "ws_valid",
+        "ws_data",
+        "ws_count",
+        "ws_shift",
+        "ws_last",
+    )
+    widths = {
+        "job_ready": "",
+        "ws_ready": "",
+        "y_we": "",
+        "y_addr": "[11:0] ",
+        "y_data": "[127:0] ",
+        "y_buf": "[3:0] ",
+        "done": "",
+    }
+    declarations = "".join(
+        f"    wire {width}ref_{name};\n" for name, width in widths.items()
+    )
+
     def instance(module: str, prefix: str) -> str:
         connections = [f".{name}({name})" for name in inputs]
         connections += [f".{name}({prefix}{name})" for name in widths]
         return f"    {module} u_{module} (" + ", ".join(connections) + ");\n"
-    compare = " && ".join(f"({name} == ref_{name})" for name in widths if name != "y_data")
+
+    compare = " && ".join(
+        f"({name} == ref_{name})" for name in widths if name != "y_data"
+    )
     # Addr and buf are defined on idle cycles in this source and identical;
     # uninitialized data storage is intentionally checked only on valid writes.
     compare += " && (!y_we || (y_data == ref_y_data))"
-    wrapper = (header + declarations + instance("reference_deq", "ref_")
-               + instance("candidate_deq", "") + f"    assign equivalent = {compare};\nendmodule\n")
-    return (wrapper + reference.replace("module msh_deq (", "module reference_deq (", 1)
-            + candidate.replace("module msh_deq (", "module candidate_deq (", 1))
+    wrapper = (
+        header
+        + declarations
+        + instance("reference_deq", "ref_")
+        + instance("candidate_deq", "")
+        + f"    assign equivalent = {compare};\nendmodule\n"
+    )
+    return (
+        wrapper
+        + reference.replace("module msh_deq (", "module reference_deq (", 1)
+        + candidate.replace("module msh_deq (", "module candidate_deq (", 1)
+    )
 
 
-_STRESS_BENCH = r'''// Dual-RTL differential check, deterministic seed, legal complete rows.
+_STRESS_BENCH = r"""// Dual-RTL differential check, deterministic seed, legal complete rows.
 #include "Vmsh_deq.h"
 #include "verilated.h"
 #include <algorithm>
@@ -303,11 +413,16 @@ int main(int argc, char** argv) {
               << ",\"cycles_checked\":" << stress.cycles << ",\"valid_writes\":" << stress.writes
               << ",\"resets\":" << stress.resets << ",\"stream_stall_cycles\":" << stress.stalls << "}\n";
 }
-'''
+"""
 
 
-def run_sequential_equivalence(candidate: Path, output_dir: Path, timeout_s: float = 120,
-                               *, reference: Path | None = None) -> dict:
+def run_sequential_equivalence(
+    candidate: Path,
+    output_dir: Path,
+    timeout_s: float = 120,
+    *,
+    reference: Path | None = None,
+) -> dict:
     """Fresh bounded differential RTL execution; never an exhaustive proof.
 
     Tests all supported sizes and group counts with three nonperiodic payload
@@ -335,50 +450,92 @@ def run_sequential_equivalence(candidate: Path, output_dir: Path, timeout_s: flo
     shutil.copyfile(Path(__file__), output_dir / "checker.py")
     started = time.perf_counter()
     deadline = started + timeout_s
-    result = {"mode": "fresh", "status": "unavailable", "ok": False,
-              "scope": "bounded sequential differential RTL simulation",
-              "limits": ["Not exhaustive equivalence", "Legal complete row protocol",
-                         "Output data compared only when y_we is asserted"],
-              "seed": 20261017,
-              "candidate_sha256": file_sha256(output_dir / "candidate.v"),
-              "reference_sha256": file_sha256(output_dir / "reference.v"),
-              "miter_sha256": file_sha256(output_dir / "miter.v"),
-              "bench_sha256": file_sha256(output_dir / "stress.cpp"),
-              "checker_sha256": file_sha256(output_dir / "checker.py")}
+    result = {
+        "mode": "fresh",
+        "status": "unavailable",
+        "ok": False,
+        "scope": "bounded sequential differential RTL simulation",
+        "limits": [
+            "Not exhaustive equivalence",
+            "Legal complete row protocol",
+            "Output data compared only when y_we is asserted",
+        ],
+        "seed": 20261017,
+        "candidate_sha256": file_sha256(output_dir / "candidate.v"),
+        "reference_sha256": file_sha256(output_dir / "reference.v"),
+        "miter_sha256": file_sha256(output_dir / "miter.v"),
+        "bench_sha256": file_sha256(output_dir / "stress.cpp"),
+        "checker_sha256": file_sha256(output_dir / "checker.py"),
+    }
     compiler = shutil.which("verilator")
     if compiler:
-        version = dequant_probe._run([compiler, "--version"], output_dir,
-                                    output_dir / "version.log", min(5, timeout_s))
+        version = dequant_probe._run(
+            [compiler, "--version"],
+            output_dir,
+            output_dir / "version.log",
+            min(5, timeout_s),
+        )
         result["tool_version"] = (output_dir / "version.log").read_text().strip()
         result["version_probe"] = version
         if version["returncode"] == 0 and not version["timed_out"]:
             build = dequant_probe._run(
-                [compiler, "--cc", "--exe", "--build", "-j", "2", "-O1", "-Wno-fatal",
-                 "--top-module", "msh_deq", "--Mdir", str(output_dir / "obj"),
-                 "-o", "equivalence_probe", str(output_dir / "miter.v"),
-                 str(output_dir / "stress.cpp")], output_dir, output_dir / "build.log",
-                max(.001, deadline - time.perf_counter()))
+                [
+                    compiler,
+                    "--cc",
+                    "--exe",
+                    "--build",
+                    "-j",
+                    "2",
+                    "-O1",
+                    "-Wno-fatal",
+                    "--top-module",
+                    "msh_deq",
+                    "--Mdir",
+                    str(output_dir / "obj"),
+                    "-o",
+                    "equivalence_probe",
+                    str(output_dir / "miter.v"),
+                    str(output_dir / "stress.cpp"),
+                ],
+                output_dir,
+                output_dir / "build.log",
+                max(0.001, deadline - time.perf_counter()),
+            )
             result["build"] = build
             result["status"] = "timeout" if build["timed_out"] else "build_failed"
             if build["returncode"] == 0 and not build["timed_out"]:
                 binary = output_dir / "obj/equivalence_probe"
-                simulation = dequant_probe._run([str(binary)], output_dir,
-                    output_dir / "simulation.log", max(.001, deadline - time.perf_counter()))
+                simulation = dequant_probe._run(
+                    [str(binary)],
+                    output_dir,
+                    output_dir / "simulation.log",
+                    max(0.001, deadline - time.perf_counter()),
+                )
                 result["simulation"] = simulation
                 result["binary_sha256"] = file_sha256(binary)
                 for line in (output_dir / "simulation.log").read_text().splitlines():
                     if line.startswith("EQUIVALENCE_JSON "):
                         try:
-                            result["checks"] = json.loads(line[len("EQUIVALENCE_JSON "):])
+                            result["checks"] = json.loads(
+                                line[len("EQUIVALENCE_JSON ") :]
+                            )
                         except json.JSONDecodeError:
                             result["parse_error"] = "malformed simulation summary"
                 checks = result.get("checks", {})
-                result["ok"] = (simulation["returncode"] == 0 and not simulation["timed_out"]
-                                and checks.get("ok") is True and checks.get("jobs_completed") == 409
-                                and checks.get("resets") == 15 and checks.get("valid_writes", 0) > 0
-                                and checks.get("stream_stall_cycles", 0) > 0)
-                result["status"] = "passed" if result["ok"] else (
-                    "timeout" if simulation["timed_out"] else "check_failed")
+                result["ok"] = (
+                    simulation["returncode"] == 0
+                    and not simulation["timed_out"]
+                    and checks.get("ok") is True
+                    and checks.get("jobs_completed") == 409
+                    and checks.get("resets") == 15
+                    and checks.get("valid_writes", 0) > 0
+                    and checks.get("stream_stall_cycles", 0) > 0
+                )
+                result["status"] = (
+                    "passed"
+                    if result["ok"]
+                    else ("timeout" if simulation["timed_out"] else "check_failed")
+                )
         else:
             result["status"] = "timeout" if version["timed_out"] else "tool_failed"
     result["elapsed_s"] = time.perf_counter() - started
@@ -386,15 +543,22 @@ def run_sequential_equivalence(candidate: Path, output_dir: Path, timeout_s: flo
     return result
 
 
-def run_design_checks(candidate_source: Path, output: Path, timeout_s: float = 120) -> dict:
+def run_design_checks(
+    candidate_source: Path, output: Path, timeout_s: float = 120
+) -> dict:
     """Public integration boundary for the bounded unchanged-RTL oracle check."""
     result = run_sequential_equivalence(candidate_source, output, timeout_s)
     result["source_sha256"] = result["candidate_sha256"]
     result["total_elapsed_s"] = result["elapsed_s"]
     output = Path(output).resolve()
-    names = [str(path.relative_to(output)) for path in sorted(output.rglob("*"))
-             if path.is_file() and path.name != "receipt.json"]
-    result["output_artifacts"] = [asdict(Artifact.from_file(output, name)) for name in names]
+    names = [
+        str(path.relative_to(output))
+        for path in sorted(output.rglob("*"))
+        if path.is_file() and path.name != "receipt.json"
+    ]
+    result["output_artifacts"] = [
+        asdict(Artifact.from_file(output, name)) for name in names
+    ]
     result["output_root"] = str(output)
     (output / "receipt.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

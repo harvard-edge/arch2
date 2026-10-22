@@ -5,19 +5,40 @@ from copy import deepcopy
 import pytest
 
 from nanochip.laboratory.contracts import ContractError
-from nanochip.laboratory.design_feedback import compare_outcomes, _selected_physical_metrics
+from nanochip.laboratory.design_feedback import (
+    compare_outcomes,
+    _selected_physical_metrics,
+)
 
 
 def outcome(source, area):
-    return dict(source_sha256=source, complete_design_eligible=False,
-        metrics=dict(cell_area_um2=area), config_sha256="fixture", image="fixture",
-        pdk_revision="fixture", cores=1, runner_sha256="fixture", coverage_script_sha256="fixture",
-        checks=[dict(name=name, scope="block:msh_deq", status=status) for name,status in (
-            ("dequant_vectors", "pass"), ("sequential_rtl_differential", "pass"),
-            ("routed_timing", "pass"), ("electrical_constraints", "fail"),
-            ("postroute_antenna", "fail"), ("gds_generated", "pass"),
-            ("detailed_route_drc", "pass"), ("magic_drc", "pass"), ("klayout_drc", "pass"),
-            ("physical_drc", "pass"), ("physical_lvs", "pass"))])
+    return dict(
+        source_sha256=source,
+        complete_design_eligible=False,
+        metrics=dict(cell_area_um2=area),
+        config_sha256="fixture",
+        image="fixture",
+        pdk_revision="fixture",
+        cores=1,
+        runner_sha256="fixture",
+        coverage_script_sha256="fixture",
+        checks=[
+            dict(name=name, scope="block:msh_deq", status=status)
+            for name, status in (
+                ("dequant_vectors", "pass"),
+                ("sequential_rtl_differential", "pass"),
+                ("routed_timing", "pass"),
+                ("electrical_constraints", "fail"),
+                ("postroute_antenna", "fail"),
+                ("gds_generated", "pass"),
+                ("detailed_route_drc", "pass"),
+                ("magic_drc", "pass"),
+                ("klayout_drc", "pass"),
+                ("physical_drc", "pass"),
+                ("physical_lvs", "pass"),
+            )
+        ],
+    )
 
 
 def test_area_preference_never_turns_failed_checks_into_acceptance():
@@ -35,18 +56,34 @@ def test_same_design_with_rerun_area_variation_is_not_learning_improvement():
     assert not result["accepted_design_improvement"]
 
 
-@pytest.mark.parametrize("name", ["dequant_vectors", "sequential_rtl_differential", "routed_timing", "physical_lvs", "magic_drc", "electrical_constraints"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "dequant_vectors",
+        "sequential_rtl_differential",
+        "routed_timing",
+        "physical_lvs",
+        "magic_drc",
+        "electrical_constraints",
+    ],
+)
 def test_area_is_not_rewarded_without_functional_and_timing_checks(name):
     control, adapted = outcome("one", 120), outcome("two", 100)
     for row in (control, adapted):
-        next(check for check in row["checks"] if check["name"] == name)["status"] = "unresolved"
+        next(check for check in row["checks"] if check["name"] == name)[
+            "status"
+        ] = "unresolved"
     assert not compare_outcomes(control, adapted)["exploration_area_improved"]
 
 
 def test_different_failed_families_cannot_earn_area_preference():
     adapted = outcome("two", 100)
-    adapted["checks"].append(dict(name="physical_lvs", scope="block:msh_deq", status="fail"))
-    assert not compare_outcomes(outcome("one", 120), adapted)["exploration_area_improved"]
+    adapted["checks"].append(
+        dict(name="physical_lvs", scope="block:msh_deq", status="fail")
+    )
+    assert not compare_outcomes(outcome("one", 120), adapted)[
+        "exploration_area_improved"
+    ]
 
 
 def test_partial_run_does_not_produce_numeric_improvement():
@@ -74,9 +111,12 @@ def test_feedback_metrics_follow_stages_after_flow_inserts_repairs(tmp_path):
         "40-openroad-detailedrouting": {"route__drc_errors": 0},
         "42-openroad-checkantennas-1": {"route__antenna_violation__count": 7},
         "51-openroad-stapostpnr": {
-            "design__instance__area": 123.0, "design__instance__count": 40,
-            "timing__setup__ws": 2.0, "timing__hold__ws": 0.1,
-            "timing__setup_vio__count": 0, "timing__hold_vio__count": 0,
+            "design__instance__area": 123.0,
+            "design__instance__count": 40,
+            "timing__setup__ws": 2.0,
+            "timing__hold__ws": 0.1,
+            "timing__setup_vio__count": 0,
+            "timing__hold_vio__count": 0,
             "timing__unconstrained__count": 0,
             "design__max_slew_violation__count": 98,
             "design__max_cap_violation__count": 1,

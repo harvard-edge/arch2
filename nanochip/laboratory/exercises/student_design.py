@@ -9,4 +9,6 @@ def transform(source: str, action: str) -> str:
     Keep intake, fixed-point arithmetic, packing, and protocol behavior intact.
     Inspect the complete diff, then use the unchanged checkers to evaluate it.
     """
-    raise NotImplementedError("Implement the design transformation in exercises/student_design.py")
+    raise NotImplementedError(
+        "Implement the design transformation in exercises/student_design.py"
+    )

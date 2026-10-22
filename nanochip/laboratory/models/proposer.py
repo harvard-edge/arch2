@@ -15,24 +15,43 @@ class LearnedProposer:
     explicit error; no conventional proposer is consulted.
     """
 
-    def __init__(self, checkpoint_dir: str | Path,
-                 format_input: Callable[[Task, tuple[Observation, ...]], str], *, stop_action: str = "stop",
-                 model_io_contract: ModelIOContract | None = None):
-        self.decoder = load_model(checkpoint_dir, expected_model_io_contract=model_io_contract)
+    def __init__(
+        self,
+        checkpoint_dir: str | Path,
+        format_input: Callable[[Task, tuple[Observation, ...]], str],
+        *,
+        stop_action: str = "stop",
+        model_io_contract: ModelIOContract | None = None,
+    ):
+        self.decoder = load_model(
+            checkpoint_dir, expected_model_io_contract=model_io_contract
+        )
         self.decoder.require_input_contract(model_io_contract)
         self.model_io_contract = model_io_contract
         self.format_input = format_input
         self.stop_action = stop_action
         self.predictions: list[dict] = []
 
-    def propose(self, task: Task, history: tuple[Observation, ...], budget: Budget) -> Action | None:
+    def propose(
+        self, task: Task, history: tuple[Observation, ...], budget: Budget
+    ) -> Action | None:
         if budget.proposals_remaining <= 0:
             return None
-        allowed = [action for action in self.decoder.actions
-                   if action in task.allowed_actions or action == self.stop_action]
+        allowed = [
+            action
+            for action in self.decoder.actions
+            if action in task.allowed_actions or action == self.stop_action
+        ]
         if not allowed:
             raise ContractError("Task and checkpoint share no legal action")
-        prediction = self.decoder.predict(self.format_input(task, history), allowed_actions=allowed,
-                                          model_io_contract=self.model_io_contract)
+        prediction = self.decoder.predict(
+            self.format_input(task, history),
+            allowed_actions=allowed,
+            model_io_contract=self.model_io_contract,
+        )
         self.predictions.append(prediction)
-        return None if prediction["action"] == self.stop_action else Action(prediction["action"])
+        return (
+            None
+            if prediction["action"] == self.stop_action
+            else Action(prediction["action"])
+        )

@@ -25,8 +25,14 @@ def _sha256(path):
 def _local_file(value, directory):
     path = Path(value)
     root = Path(directory).resolve(strict=True)
-    if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
-        raise ValueError("Magic output must be a regular file in its executing step: " + str(path))
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or not path.resolve().is_relative_to(root)
+    ):
+        raise ValueError(
+            "Magic output must be a regular file in its executing step: " + str(path)
+        )
     return path
 
 
@@ -56,19 +62,30 @@ def validate_lef_completion(lef_path, log_path, top, directory):
                 ends.append(index)
             if tokens == ["END", "LIBRARY"]:
                 library_ends.append(index)
-    if (len(macros) != 1 or macros[0][1] != ["MACRO", top]
-            or len(ends) != 1 or len(library_ends) != 1
-            or not macros[0][0] < ends[0] < library_ends[0]
-            or last_tokens != ["END", "LIBRARY"]):
-        raise ValueError("Magic LEF lacks one complete top macro and library terminator")
+    if (
+        len(macros) != 1
+        or macros[0][1] != ["MACRO", top]
+        or len(ends) != 1
+        or len(library_ends) != 1
+        or not macros[0][0] < ends[0] < library_ends[0]
+        or last_tokens != ["END", "LIBRARY"]
+    ):
+        raise ValueError(
+            "Magic LEF lacks one complete top macro and library terminator"
+        )
     with log.open(encoding="utf-8") as stream:
         completions = sum(line.strip() == LEF_COMPLETE for line in stream)
     if completions != 1:
         raise ValueError("Magic LEF completion marker is missing or repeated")
-    return {"lef": str(lef), "lef_sha256": _sha256(lef),
-            "size_bytes": lef.stat().st_size, "top": top,
-            "log": str(log), "log_sha256": _sha256(log),
-            "completion_markers": completions}
+    return {
+        "lef": str(lef),
+        "lef_sha256": _sha256(lef),
+        "size_bytes": lef.stat().st_size,
+        "top": top,
+        "log": str(log),
+        "log_sha256": _sha256(log),
+        "completion_markers": completions,
+    }
 
 
 def build_magic_exit_step(base, *, step_error):
@@ -79,6 +96,7 @@ def build_magic_exit_step(base, *, step_error):
     parsing of that output. Zero exit status does not replace those native
     checks: a completed process can still report DRC or LVS errors.
     """
+
     class CheckedMagicExit(base):
         def run_subprocess(self, *args, **kwargs):
             kwargs["check"] = True
@@ -110,33 +128,45 @@ def build_write_lef_step(magic, *, step_error):
 
         def run_subprocess(self, *args, **kwargs):
             result = super().run_subprocess(*args, **kwargs)
-            self._nanochip_magic_invocations.append({
-                "returncode": result["returncode"], "log_path": result["log_path"]})
+            self._nanochip_magic_invocations.append(
+                {"returncode": result["returncode"], "log_path": result["log_path"]}
+            )
             return result
 
         def run(self, state_in, **kwargs):
             self._nanochip_magic_invocations = []
-            receipt = {"schema": "nanochip-magic-lef-producer/v1", "status": "error",
-                       "scope": "LEF producer completion only; downstream physical checks remain required",
-                       "script_sha256": LEF_SCRIPT_SHA256}
+            receipt = {
+                "schema": "nanochip-magic-lef-producer/v1",
+                "status": "error",
+                "scope": "LEF producer completion only; downstream physical checks remain required",
+                "script_sha256": LEF_SCRIPT_SHA256,
+            }
             try:
                 views, metrics = super().run(state_in, **kwargs)
                 if len(self._nanochip_magic_invocations) != 1:
-                    raise step_error("Magic LEF requires exactly one recorded subprocess")
+                    raise step_error(
+                        "Magic LEF requires exactly one recorded subprocess"
+                    )
                 if lef_format not in views:
                     raise step_error("Magic LEF producer returned no LEF view")
                 invocation = self._nanochip_magic_invocations[0]
                 receipt["output"] = validate_lef_completion(
-                    views[lef_format], invocation["log_path"],
-                    self.config["DESIGN_NAME"], self.step_dir)
+                    views[lef_format],
+                    invocation["log_path"],
+                    self.config["DESIGN_NAME"],
+                    self.step_dir,
+                )
                 receipt.update(status="pass", returncode=invocation["returncode"])
                 return views, metrics
             except Exception as exc:
-                receipt.update(error=str(exc), returncode=getattr(exc, "returncode", None))
+                receipt.update(
+                    error=str(exc), returncode=getattr(exc, "returncode", None)
+                )
                 raise
             finally:
                 receipt["invocations"] = self._nanochip_magic_invocations
                 (Path(self.step_dir) / "nanochip-lef-producer.json").write_text(
-                    json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+                    json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+                )
 
     return CheckedWriteLEF

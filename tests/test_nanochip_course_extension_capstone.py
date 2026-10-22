@@ -9,8 +9,13 @@ from nanochip.laboratory.contracts import ContractError, file_sha256
 
 
 def _helper():
-    path = Path(__file__).resolve().parents[1] / "nanochip/containers/validate_course_extension_capstone.py"
-    spec = importlib.util.spec_from_file_location("nanochip_course_extension_capstone", path)
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "nanochip/containers/validate_course_extension_capstone.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "nanochip_course_extension_capstone", path
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -27,7 +32,9 @@ def test_capstone_admission_rejects_stale_extension_lab(tmp_path):
 def test_capstone_admission_rejects_missing_instructor_lab8(tmp_path):
     helper = _helper()
     with pytest.raises(ContractError, match="Labs 1–8"):
-        helper._assert_lab_status_current({number: "complete" for number in range(1, 8)}, 8)
+        helper._assert_lab_status_current(
+            {number: "complete" for number in range(1, 8)}, 8
+        )
 
 
 def test_capstone_requires_instructor_mode_for_reference_only_extension_labs():
@@ -40,13 +47,23 @@ def test_capstone_requires_instructor_mode_for_reference_only_extension_labs():
 
 def test_capstone_cli_uses_physical_runtime_modes_and_nested_proof_path():
     helper = _helper()
-    args = helper._parser().parse_args(["extension", "instructor", "sidecar", "--physical-mode", "native"])
+    args = helper._parser().parse_args(
+        ["extension", "instructor", "sidecar", "--physical-mode", "native"]
+    )
     assert args.physical_mode == "native"
     with pytest.raises(SystemExit):
-        helper._parser().parse_args(["extension", "instructor", "sidecar", "--physical-mode", "strict"])
+        helper._parser().parse_args(
+            ["extension", "instructor", "sidecar", "--physical-mode", "strict"]
+        )
     assert helper._mapped_proof_path(Path("/new/sidecar/evaluation")) == Path(
-        "/new/sidecar/evaluation/evaluation/mapped-netlist-workload/receipt.json")
-    assert helper._parser().parse_args(["extension", "instructor", "sidecar"]).correspondence_timeout == 3600
+        "/new/sidecar/evaluation/evaluation/mapped-netlist-workload/receipt.json"
+    )
+    assert (
+        helper._parser()
+        .parse_args(["extension", "instructor", "sidecar"])
+        .correspondence_timeout
+        == 3600
+    )
 
 
 def test_capstone_output_must_be_new_and_outside_course_workspaces(tmp_path):
@@ -88,24 +105,32 @@ def test_capstone_binds_lab8_receipt_to_exact_lab7_rtl_and_config(tmp_path):
     config = candidate / "physical-config.json"
     core.write_text("module core; endmodule\n")
     config.write_text('{"platform":"fixture"}\n')
-    (candidate / "candidate.json").write_text(json.dumps({"action": {"name": "serial_mul2"}}))
+    (candidate / "candidate.json").write_text(
+        json.dumps({"action": {"name": "serial_mul2"}})
+    )
 
     core_hash, config_hash = file_sha256(core), file_sha256(config)
     flow_path = lab8 / "physical-0001/receipt.json"
     flow_path.parent.mkdir()
     manifest = [{"path": "core.v", "sha256": core_hash}]
-    flow_path.write_text(json.dumps({"status": "pass", "source_manifest": manifest}) + "\n")
+    flow_path.write_text(
+        json.dumps({"status": "pass", "source_manifest": manifest}) + "\n"
+    )
     flow_hash = file_sha256(flow_path)
-    raw = {"physical_flow_receipt_sha256": flow_hash,
-           "config_sha256": config_hash,
-           "candidate_action": "serial_mul2",
-           "source_manifest": manifest}
-    summary = {"physical_receipt_sha256": flow_hash,
-               "candidate_core_sha256": core_hash,
-               "candidate_config_sha256": config_hash,
-               "candidate_action": "serial_mul2",
-               "source_manifest": manifest,
-               "raw_receipt": raw}
+    raw = {
+        "physical_flow_receipt_sha256": flow_hash,
+        "config_sha256": config_hash,
+        "candidate_action": "serial_mul2",
+        "source_manifest": manifest,
+    }
+    summary = {
+        "physical_receipt_sha256": flow_hash,
+        "candidate_core_sha256": core_hash,
+        "candidate_config_sha256": config_hash,
+        "candidate_action": "serial_mul2",
+        "source_manifest": manifest,
+        "raw_receipt": raw,
+    }
     (lab8 / "physical/receipt-summary.json").parent.mkdir()
     (lab8 / "physical/receipt-summary.json").write_text(json.dumps(summary) + "\n")
     events = {

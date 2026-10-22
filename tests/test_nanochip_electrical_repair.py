@@ -6,8 +6,10 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).parents[1] / "nanochip/laboratory/physical/electrical_repair.tcl"
-MOCK = r'''
+SCRIPT = (
+    Path(__file__).parents[1] / "nanochip/laboratory/physical/electrical_repair.tcl"
+)
+MOCK = r"""
 set ::block block
 set ::direction OUTPUT
 set ::sigtype SIGNAL
@@ -60,7 +62,7 @@ namespace eval sta {
  proc check_slew_limits {args} {return [list out]}
  proc check_capacitance_limits {args} {return [list]}
 }
-'''
+"""
 
 
 @unittest.skipUnless(shutil.which("tclsh"), "Tcl interpreter required")
@@ -68,22 +70,42 @@ class ElectricalOutputTests(unittest.TestCase):
     def run_case(self, setup, *, accepted):
         with tempfile.TemporaryDirectory() as tmp:
             script = Path(tmp) / "case.tcl"
-            script.write_text('source {' + str(SCRIPT) + '}\n' + MOCK +
-                              '\nset ::nanochip_dir {' + tmp + '}\n' + setup + r'''
+            script.write_text(
+                "source {"
+                + str(SCRIPT)
+                + "}\n"
+                + MOCK
+                + "\nset ::nanochip_dir {"
+                + tmp
+                + "}\n"
+                + setup
+                + r"""
 set code [catch {nanochip_resize_fresh_drivers} message]
 puts "RESULT=$code,$::replacements,$::master"
 puts $message
-''')
-            result = subprocess.run(["tclsh", str(script)], capture_output=True, text=True, timeout=5)
+"""
+            )
+            result = subprocess.run(
+                ["tclsh", str(script)], capture_output=True, text=True, timeout=5
+            )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("RESULT=0,1,NEW" if accepted else "RESULT=1,0,OLD", result.stdout)
+            self.assertIn(
+                "RESULT=0,1,NEW" if accepted else "RESULT=1,0,OLD", result.stdout
+            )
 
     def test_output_port_resolves_its_internal_driver(self):
         self.run_case("", accepted=True)
 
     def test_external_or_invalid_ports_cannot_be_resized(self):
-        for setup in ("set ::direction INPUT", "set ::direction INOUT", "set ::sigtype POWER",
-                      "set ::connected 0", "set ::drivers 0", "set ::drivers 2", "set ::inout 1"):
+        for setup in (
+            "set ::direction INPUT",
+            "set ::direction INOUT",
+            "set ::sigtype POWER",
+            "set ::connected 0",
+            "set ::drivers 0",
+            "set ::drivers 2",
+            "set ::inout 1",
+        ):
             with self.subTest(setup=setup):
                 self.run_case(setup, accepted=False)
 

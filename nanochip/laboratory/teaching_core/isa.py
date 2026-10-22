@@ -32,8 +32,9 @@ class Op(IntEnum):
     SAT32 = 18
 
 
-def encode(op: int | Op, rd: int = 0, ra: int = 0, rb: int = 0,
-           imm: int = 0, flags: int = 0) -> int:
+def encode(
+    op: int | Op, rd: int = 0, ra: int = 0, rb: int = 0, imm: int = 0, flags: int = 0
+) -> int:
     op = Op(op)
     if any(type(r) is not int or not 0 <= r < REGISTER_COUNT for r in (rd, ra, rb)):
         raise ValueError("Register indices must be in range")
@@ -41,7 +42,14 @@ def encode(op: int | Op, rd: int = 0, ra: int = 0, rb: int = 0,
         raise ValueError("Flags must fit four bits")
     if type(imm) is not int or not -(1 << 63) <= imm < (1 << 63):
         raise ValueError("Immediate must be a signed64 integer")
-    return int(op) | rd << 8 | ra << 12 | rb << 16 | flags << 20 | (imm & ((1 << 64) - 1)) << 32
+    return (
+        int(op)
+        | rd << 8
+        | ra << 12
+        | rb << 16
+        | flags << 20
+        | (imm & ((1 << 64) - 1)) << 32
+    )
 
 
 def decode(word: int) -> dict:
@@ -52,9 +60,14 @@ def decode(word: int) -> dict:
     immediate = (word >> 32) & ((1 << 64) - 1)
     if immediate & (1 << 63):
         immediate -= 1 << 64
-    return {"op": Op(word & 0xFF), "rd": (word >> 8) & 15,
-            "ra": (word >> 12) & 15, "rb": (word >> 16) & 15,
-            "flags": (word >> 20) & 15, "imm": immediate}
+    return {
+        "op": Op(word & 0xFF),
+        "rd": (word >> 8) & 15,
+        "ra": (word >> 12) & 15,
+        "rb": (word >> 16) & 15,
+        "flags": (word >> 20) & 15,
+        "imm": immediate,
+    }
 
 
 def signed(value: int, width: int = WORD_BITS) -> int:

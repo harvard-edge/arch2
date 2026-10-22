@@ -15,7 +15,7 @@ def place_labels(
     fontsize=5.0,
     color="#20252B",
     radius=(12, 20),
-    leader_color="#8A95A0"
+    leader_color="#8A95A0",
 ):
     """items: list of (x_data, y_data, text). Greedily choose an offset direction
     for each label that minimizes overlap with already-placed labels and with the

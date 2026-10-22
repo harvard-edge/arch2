@@ -30,7 +30,11 @@ def main():
     cfg = ModelConfig(**target["configuration"])
     weights = gen_weights(cfg, seed)
     requested_tokens = json.loads((output / "request.json").read_text())["tokens"]
-    tokens = gen_tokens(cfg, seed, prompt) if requested_tokens is None else np.asarray(requested_tokens, np.int64)
+    tokens = (
+        gen_tokens(cfg, seed, prompt)
+        if requested_tokens is None
+        else np.asarray(requested_tokens, np.int64)
+    )
     packed = build_image(cfg, weights, tokens)
     (output / "image.bin").write_bytes(packed["image"])
     floating = RefModel(cfg, weights)
@@ -48,33 +52,95 @@ def main():
     cosine = row_cosines(fixed_logits, float_logits)
     floating64 = float_logits.astype(np.float64)
     chosen = floating64[np.arange(len(tokens)), np.asarray(fixed_argmax, np.int64)]
-    near_tie_agree = chosen >= floating64.max(axis=1) - ARGMAX_TIE_REL * floating64.std(axis=1)
+    near_tie_agree = chosen >= floating64.max(axis=1) - ARGMAX_TIE_REL * floating64.std(
+        axis=1
+    )
     near_tie_rate = float(near_tie_agree.mean())
-    np.savez(output / "goldens.npz", tokens=tokens, float_logits=float_logits,
-             float_argmax=float_argmax, fixed_logits=fixed_logits, fixed_argmax=fixed_argmax)
+    np.savez(
+        output / "goldens.npz",
+        tokens=tokens,
+        float_logits=float_logits,
+        float_argmax=float_argmax,
+        fixed_logits=fixed_logits,
+        fixed_argmax=fixed_argmax,
+    )
     np.savez(output / "float_intermediates.npz", **floating.dump)
     np.savez(output / "fixed_intermediates.npz", **fixed_dump)
     sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
-    sources = [kpu / p for p in ("reference/config.py", "reference/model.py", "reference/gen_weights.py",
-               "reference/prng.py", "harness/memmap.py", "harness/scoring.py", "rtl/selfmodel/fxmodel.py", "rtl/selfmodel/fxluts.py")]
+    sources = [
+        kpu / p
+        for p in (
+            "reference/config.py",
+            "reference/model.py",
+            "reference/gen_weights.py",
+            "reference/prng.py",
+            "harness/memmap.py",
+            "harness/scoring.py",
+            "rtl/selfmodel/fxmodel.py",
+            "rtl/selfmodel/fxluts.py",
+        )
+    ]
     sources += sorted((kpu / "rtl/roms").glob("*.hex"))
-    sources += [package / "contract.py", package / "fixtures.py", package / "reference_worker.py"]
+    sources += [
+        package / "contract.py",
+        package / "fixtures.py",
+        package / "reference_worker.py",
+    ]
     receipt = {
-        "schema": "nanochip-teaching-core-reference/v0", "scope": "software-reference:complete-teaching-workload",
-        "seed": seed, "prompt_index": prompt, "tokens": tokens.tolist(),
-        "status": "pass" if np.all(cosine >= COS_PASS) and near_tie_rate >= ARGMAX_PASS else "fail",
+        "schema": "nanochip-teaching-core-reference/v0",
+        "scope": "software-reference:complete-teaching-workload",
+        "seed": seed,
+        "prompt_index": prompt,
+        "tokens": tokens.tolist(),
+        "status": "pass"
+        if np.all(cosine >= COS_PASS) and near_tie_rate >= ARGMAX_PASS
+        else "fail",
         "per_row_cosine": cosine.tolist(),
-        "float_fixed_argmax_agreement": (np.asarray(float_argmax) == np.asarray(fixed_argmax)).tolist(),
-        "near_tie_argmax_agreement": near_tie_agree.tolist(), "near_tie_argmax_rate": near_tie_rate,
-        "numerical_thresholds": {"cosine": COS_PASS, "argmax_agreement": ARGMAX_PASS, "tie_relative_std": ARGMAX_TIE_REL},
-        "layout": packed["layout"], "tensor_count": len(tensor_list(cfg)),
-        "tensor_bytes": sum(int(np.asarray(weights[nm]).size) * (1 if tag in ("q4", "z8") else 2) for nm, _, tag in tensor_list(cfg)),
-        "source_artifacts": [{"path": str(p.relative_to(root)), "sha256": sha(p)} for p in sources],
-        "outputs": [{"path": p.name, "sha256": sha(p)} for p in sorted(output.iterdir()) if p.is_file()],
-        "rtl_execution": False, "physical_execution": False, "complete_core_ready": False,
+        "float_fixed_argmax_agreement": (
+            np.asarray(float_argmax) == np.asarray(fixed_argmax)
+        ).tolist(),
+        "near_tie_argmax_agreement": near_tie_agree.tolist(),
+        "near_tie_argmax_rate": near_tie_rate,
+        "numerical_thresholds": {
+            "cosine": COS_PASS,
+            "argmax_agreement": ARGMAX_PASS,
+            "tie_relative_std": ARGMAX_TIE_REL,
+        },
+        "layout": packed["layout"],
+        "tensor_count": len(tensor_list(cfg)),
+        "tensor_bytes": sum(
+            int(np.asarray(weights[nm]).size) * (1 if tag in ("q4", "z8") else 2)
+            for nm, _, tag in tensor_list(cfg)
+        ),
+        "source_artifacts": [
+            {"path": str(p.relative_to(root)), "sha256": sha(p)} for p in sources
+        ],
+        "outputs": [
+            {"path": p.name, "sha256": sha(p)}
+            for p in sorted(output.iterdir())
+            if p.is_file()
+        ],
+        "rtl_execution": False,
+        "physical_execution": False,
+        "complete_core_ready": False,
     }
-    (output / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({k: receipt[k] for k in ("status", "tensor_count", "tensor_bytes", "per_row_cosine", "float_fixed_argmax_agreement")}))
+    (output / "receipt.json").write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+    )
+    print(
+        json.dumps(
+            {
+                k: receipt[k]
+                for k in (
+                    "status",
+                    "tensor_count",
+                    "tensor_bytes",
+                    "per_row_cosine",
+                    "float_fixed_argmax_agreement",
+                )
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

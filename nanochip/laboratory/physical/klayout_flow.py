@@ -12,15 +12,31 @@ import re
 
 
 DRC_DECK_SHA256 = "caf4a6b08cb12f78d6bb2d120737424c786b3bae8d6489234b9b269e91107bfc"
-ARGUMENT_NAMES = {"topcell": "top_cell", "floating_metal": "floating_met", "threads": "thr"}
-NATIVE_ARGUMENTS = {"input", "topcell", "report", "feol", "beol", "floating_metal",
-                    "offgrid", "seal", "threads"}
+ARGUMENT_NAMES = {
+    "topcell": "top_cell",
+    "floating_metal": "floating_met",
+    "threads": "thr",
+}
+NATIVE_ARGUMENTS = {
+    "input",
+    "topcell",
+    "report",
+    "feol",
+    "beol",
+    "floating_metal",
+    "offgrid",
+    "seal",
+    "threads",
+}
 
 
 def adapt_sky130_drc_command(command, *, runset, top):
     """Return a copied native command with the pinned deck's argument names."""
-    if (not isinstance(command, (list, tuple)) or len(command) < 5
-            or list(command[:4]) != ["klayout", "-b", "-zz", "-r"]):
+    if (
+        not isinstance(command, (list, tuple))
+        or len(command) < 5
+        or list(command[:4]) != ["klayout", "-b", "-zz", "-r"]
+    ):
         raise ValueError("Unexpected pinned KLayout DRC command")
     script = Path(runset)
     if Path(command[4]).resolve() != script.resolve():
@@ -49,18 +65,23 @@ def adapt_sky130_drc_command(command, *, runset, top):
     return adapted, {
         "schema": "nanochip-klayout-drc-arguments/v1",
         "scope": "Argument compatibility only; native DRC results and checks remain required",
-        "deck_path": str(script), "deck_sha256": DRC_DECK_SHA256,
+        "deck_path": str(script),
+        "deck_sha256": DRC_DECK_SHA256,
         "original_command": [str(part) for part in command],
         "adapted_command": [str(part) for part in adapted],
         "renamed_arguments": ARGUMENT_NAMES,
-        "threads": int(arguments["threads"]), "top": top,
-        "rule_values": {key: arguments[key] for key in
-                        ("feol", "beol", "floating_metal", "offgrid", "seal")},
+        "threads": int(arguments["threads"]),
+        "top": top,
+        "rule_values": {
+            key: arguments[key]
+            for key in ("feol", "beol", "floating_metal", "offgrid", "seal")
+        },
     }
 
 
 def build_klayout_drc_step(base, *, step_error):
     """Wrap the installed DRC producer without importing EDA tools on the host."""
+
     class CompatibleKLayoutDRC(base):
         def run_sky130(self, state_in, **kwargs):
             self._nanochip_drc_invocations = 0
@@ -75,8 +96,10 @@ def build_klayout_drc_step(base, *, step_error):
                 raise step_error("Unexpected additional KLayout DRC subprocess")
             try:
                 adapted, receipt = adapt_sky130_drc_command(
-                    command, runset=self.config["KLAYOUT_DRC_RUNSET"],
-                    top=self.config["DESIGN_NAME"])
+                    command,
+                    runset=self.config["KLAYOUT_DRC_RUNSET"],
+                    top=self.config["DESIGN_NAME"],
+                )
             except (OSError, TypeError, ValueError) as exc:
                 raise step_error(str(exc)) from exc
             receipt["status"] = "prepared"
@@ -85,13 +108,21 @@ def build_klayout_drc_step(base, *, step_error):
             try:
                 kwargs["check"] = True
                 result = super().run_subprocess(adapted, *args, **kwargs)
-                if type(result.get("returncode")) is not int or result["returncode"] != 0:
-                    raise step_error("KLayout DRC subprocess did not report a successful exit")
+                if (
+                    type(result.get("returncode")) is not int
+                    or result["returncode"] != 0
+                ):
+                    raise step_error(
+                        "KLayout DRC subprocess did not report a successful exit"
+                    )
                 receipt.update(status="subprocess_completed", returncode=0)
                 return result
             except Exception as exc:
-                receipt.update(status="error", error=str(exc),
-                               returncode=getattr(exc, "returncode", None))
+                receipt.update(
+                    status="error",
+                    error=str(exc),
+                    returncode=getattr(exc, "returncode", None),
+                )
                 raise
             finally:
                 path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")

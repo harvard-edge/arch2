@@ -10,7 +10,10 @@ from .contracts import Action, Budget, Observation, Task
 
 class StudentProposer:
     def propose(
-        self, task: Task, history: tuple[Observation, ...], budget: Budget,
+        self,
+        task: Task,
+        history: tuple[Observation, ...],
+        budget: Budget,
     ) -> Action | None:
         """Start with the teaching fault; use a failed numerical check to repair.
 

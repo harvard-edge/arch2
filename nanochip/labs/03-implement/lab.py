@@ -241,10 +241,14 @@ def _evaluate_implement_candidate(
     met = run_metrics(cand_logits, cand_am, g_float["logits"], g_float["argmax"])
     bit_exact_row0 = emb_exact and enable_z_fold
     max_ulp_row0 = int(
-        np.max(np.abs(cand_logits[0].astype(np.int64) - logits_golden[0].astype(np.int64)))
+        np.max(
+            np.abs(cand_logits[0].astype(np.int64) - logits_golden[0].astype(np.int64))
+        )
         if enable_z_fold
         else np.max(
-            np.abs(logits_no_zfold[0].astype(np.int64) - logits_golden[0].astype(np.int64))
+            np.abs(
+                logits_no_zfold[0].astype(np.int64) - logits_golden[0].astype(np.int64)
+            )
         )
     )
     if not emb_exact and max_ulp_row0 == 0:

@@ -22,7 +22,9 @@ def test_document_corpus_is_attributed_grouped_and_reconstructs_source(tmp_path)
     assert all(len(splits) == 1 for splits in groups.values())
     assert {row["split"] for row in rows} == {"train", "dev", "test"}
     for name in language_data.DOCUMENT_SPLITS:
-        text = "".join(row["input_text"] for row in rows if row["group_id"] == f"document:{name}")
+        text = "".join(
+            row["input_text"] for row in rows if row["group_id"] == f"document:{name}"
+        )
         assert text == (root / "sources" / name).read_text()
 
 
@@ -53,8 +55,10 @@ def test_constructed_architecture_rows_are_not_reported_as_measurements(tmp_path
 
 def test_measured_feedback_helper_calls_strict_evidence_loader(tmp_path, monkeypatch):
     from nanochip.laboratory import design_feedback_data
+
     def reject(path):
         raise ContractError("invalid measured source bundle")
+
     monkeypatch.setattr(design_feedback_data, "load_feedback", reject)
     with pytest.raises(ContractError, match="invalid measured source bundle"):
         language_data.measured_feedback_examples(tmp_path / "invalid.json")

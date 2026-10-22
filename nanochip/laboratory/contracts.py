@@ -63,12 +63,16 @@ class Task:
 
     def __post_init__(self) -> None:
         if not self.task_id or not self.allowed_actions or not self.required_checks:
-            raise ContractError("Task identity, allowed actions, and required checks are required")
+            raise ContractError(
+                "Task identity, allowed actions, and required checks are required"
+            )
         if self.max_proposals < 0 or self.max_attempts < 0:
             raise ContractError("Budgets cannot be negative")
         keys = [(check.name, check.scope) for check in self.required_checks]
         if len(set(keys)) != len(keys) or any(not all(key) for key in keys):
-            raise ContractError("Required checks need distinct, nonempty names and scopes")
+            raise ContractError(
+                "Required checks need distinct, nonempty names and scopes"
+            )
         if len(set(self.allowed_actions)) != len(self.allowed_actions):
             raise ContractError("Allowed action names must be distinct")
         canonical_json(dict(self.specification))
@@ -90,8 +94,12 @@ class Artifact:
         path = Path(self.path)
         if not self.path or path.is_absolute() or ".." in path.parts:
             raise ContractError("Artifact paths must stay relative to their root")
-        if len(self.sha256) != 64 or any(c not in "0123456789abcdef" for c in self.sha256):
-            raise ContractError("Artifact SHA-256 must be 64 lowercase hexadecimal characters")
+        if len(self.sha256) != 64 or any(
+            c not in "0123456789abcdef" for c in self.sha256
+        ):
+            raise ContractError(
+                "Artifact SHA-256 must be 64 lowercase hexadecimal characters"
+            )
 
     @classmethod
     def from_file(cls, root: Path | str, path: str) -> Artifact:
@@ -126,7 +134,9 @@ class Candidate:
 
     def __post_init__(self) -> None:
         if not self.candidate_id or not self.task_id or not self.artifacts:
-            raise ContractError("A candidate needs identities and a nonempty artifact manifest")
+            raise ContractError(
+                "A candidate needs identities and a nonempty artifact manifest"
+            )
         paths = [artifact.path for artifact in self.artifacts]
         if len(set(paths)) != len(paths):
             raise ContractError("Candidate artifact paths must be distinct")
@@ -138,7 +148,9 @@ class Candidate:
             "task_digest": self.task_digest,
             "action": asdict(self.action),
             "parent_id": self.parent_id,
-            "artifacts": [asdict(item) for item in sorted(self.artifacts, key=lambda a: a.path)],
+            "artifacts": [
+                asdict(item) for item in sorted(self.artifacts, key=lambda a: a.path)
+            ],
         }
         return hashlib.sha256(canonical_json(manifest).encode("utf-8")).hexdigest()
 
@@ -201,11 +213,20 @@ class RunReceipt:
             raise ContractError(f"Unknown evidence mode: {self.mode}")
         if self.execution_status not in ("success", "error", "timeout", "not_run"):
             raise ContractError(f"Unknown execution status: {self.execution_status}")
-        if not self.task_id or not self.candidate_digest or not self.tool or not self.tool_version:
-            raise ContractError("Receipts need task/candidate and tool/version identities")
+        if (
+            not self.task_id
+            or not self.candidate_digest
+            or not self.tool
+            or not self.tool_version
+        ):
+            raise ContractError(
+                "Receipts need task/candidate and tool/version identities"
+            )
         keys = [(check.name, check.scope) for check in self.checks]
         if len(set(keys)) != len(keys):
-            raise ContractError("A receipt cannot contain duplicate checks at the same scope")
+            raise ContractError(
+                "A receipt cannot contain duplicate checks at the same scope"
+            )
         if self.output_artifacts and self.output_root is None:
             raise ContractError("Output artifacts need an explicit root")
 

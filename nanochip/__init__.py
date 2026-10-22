@@ -1,5 +1,6 @@
 """Nanochip: a cumulative laboratory for AI-native architecture."""
 
+
 def __getattr__(name: str):
     # Import the historical workbench only when it is requested. The new
     # laboratory contracts and CLI do not require NumPy or the old harness.

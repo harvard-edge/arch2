@@ -10,38 +10,69 @@ import sys
 
 import pytest
 
-from nanochip.laboratory.contracts import Action, Budget, CheckRequirement, ContractError, Task
+from nanochip.laboratory.contracts import (
+    Action,
+    Budget,
+    CheckRequirement,
+    ContractError,
+    Task,
+)
 from nanochip.laboratory.models import LearnedProposer, load_model, train
 from nanochip.laboratory.models.sequence import ACTION_OFFSET, EOS
 
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
-requires_torch = pytest.mark.skipif(not HAS_TORCH, reason="optional CPU PyTorch is not installed")
+requires_torch = pytest.mark.skipif(
+    not HAS_TORCH, reason="optional CPU PyTorch is not installed"
+)
 
 
 def fixture_row(index, text, action, split="train"):
     digest = hashlib.sha256(f"constructed-unit-fixture-{index}".encode()).hexdigest()
-    return dict(record_id=f"fixture-{index}", group_id=f"fixture-group-{index}", split=split,
-                input_text=text, target_action=action,
-                source_receipt={"path": f"unit-fixture-{index}.json", "sha256": digest},
-                source_sha256=digest, label_origin="constructed unit fixture, no empirical performance claim")
+    return dict(
+        record_id=f"fixture-{index}",
+        group_id=f"fixture-group-{index}",
+        split=split,
+        input_text=text,
+        target_action=action,
+        source_receipt={"path": f"unit-fixture-{index}.json", "sha256": digest},
+        source_sha256=digest,
+        label_origin="constructed unit fixture, no empirical performance claim",
+    )
 
 
 @pytest.fixture
 def tiny_checkpoint(tmp_path):
     if not HAS_TORCH:
         pytest.skip("optional CPU PyTorch is not installed")
-    rows = [fixture_row(0, 'check=numerics; status=fail', "repair"),
-            fixture_row(1, 'check=numerics; status=pass', "stop")]
-    metadata = train(rows, tmp_path / "base", seed=7, max_steps=45, max_seconds=15,
-                     action_vocabulary=("repair", "stop"), embedding_dim=8, hidden_dim=16)
+    rows = [
+        fixture_row(0, "check=numerics; status=fail", "repair"),
+        fixture_row(1, "check=numerics; status=pass", "stop"),
+    ]
+    metadata = train(
+        rows,
+        tmp_path / "base",
+        seed=7,
+        max_steps=45,
+        max_seconds=15,
+        action_vocabulary=("repair", "stop"),
+        embedding_dim=8,
+        hidden_dim=16,
+    )
     return tmp_path / "base", metadata, rows
 
 
 def test_core_import_does_not_import_optional_torch():
     result = subprocess.run(
-        [sys.executable, "-c", "import sys; import nanochip.laboratory.models; assert 'torch' not in sys.modules"],
-        cwd=Path(__file__).resolve().parents[1], env=os.environ.copy(), capture_output=True, text=True,
+        [
+            sys.executable,
+            "-c",
+            "import sys; import nanochip.laboratory.models; assert 'torch' not in sys.modules",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, result.stderr
 
@@ -80,17 +111,29 @@ def test_training_rejects_final_test_and_input_truncation(tmp_path):
     with pytest.raises(ContractError, match="Final-test"):
         train([row], tmp_path / "no-retagged-test")
     with pytest.raises(ContractError, match="no truncation"):
-        train([fixture_row(3, "oversized", "repair")], tmp_path / "no-truncation", max_input_bytes=2)
+        train(
+            [fixture_row(3, "oversized", "repair")],
+            tmp_path / "no-truncation",
+            max_input_bytes=2,
+        )
     assert not (tmp_path / "no-test").exists()
     assert not (tmp_path / "no-truncation").exists()
 
 
 @requires_torch
-def test_adaptation_starts_same_checkpoint_and_retains_ancestry(tiny_checkpoint, tmp_path):
+def test_adaptation_starts_same_checkpoint_and_retains_ancestry(
+    tiny_checkpoint, tmp_path
+):
     path, evidence, rows = tiny_checkpoint
     fresh = fixture_row(2, "new development observation", "repair")
-    adapted = train([fresh], tmp_path / "adapted", base_checkpoint=path,
-                    max_steps=3, max_seconds=15, seed=8)
+    adapted = train(
+        [fresh],
+        tmp_path / "adapted",
+        base_checkpoint=path,
+        max_steps=3,
+        max_seconds=15,
+        seed=8,
+    )
     assert adapted["base_checkpoint_sha256"] == evidence["artifacts"]["checkpoint.pt"]
     assert adapted["initial_parameter_sha256"] == evidence["final_parameter_sha256"]
     assert adapted["parameters_changed"]

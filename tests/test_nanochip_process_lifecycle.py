@@ -16,12 +16,16 @@ from nanochip.laboratory.physical import flow
 def _running(pid):
     result = subprocess.run(
         ["ps", "-p", str(pid), "-o", "stat="],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     )
     return bool(result.stdout.strip()) and not result.stdout.strip().startswith("Z")
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Physical tools use POSIX process sessions")
+@pytest.mark.skipif(
+    os.name != "posix", reason="Physical tools use POSIX process sessions"
+)
 @pytest.mark.parametrize("interruption", ["signal", "timeout"])
 def test_execute_stops_child_and_detached_grandchild(tmp_path, interruption):
     child_pid = tmp_path / "child.pid"
@@ -48,15 +52,25 @@ def test_execute_stops_child_and_detached_grandchild(tmp_path, interruption):
         "  raise RuntimeError('Expected interruption did not propagate')\n"
     )
     parent = subprocess.Popen(
-        [sys.executable, "-c", parent_code], cwd=Path(__file__).resolve().parents[1],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+        [sys.executable, "-c", parent_code],
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
     )
     owned = []
     try:
         until = time.monotonic() + 5
-        while not grandchild_pid.exists() and parent.poll() is None and time.monotonic() < until:
+        while (
+            not grandchild_pid.exists()
+            and parent.poll() is None
+            and time.monotonic() < until
+        ):
             time.sleep(0.02)
-        assert child_pid.exists() and grandchild_pid.exists(), "Probe children must actually execute"
+        assert (
+            child_pid.exists() and grandchild_pid.exists()
+        ), "Probe children must actually execute"
         owned = [int(child_pid.read_text()), int(grandchild_pid.read_text())]
         if interruption == "signal":
             parent.send_signal(signal.SIGINT)
@@ -67,7 +81,9 @@ def test_execute_stops_child_and_detached_grandchild(tmp_path, interruption):
         until = time.monotonic() + 2
         while any(_running(pid) for pid in owned) and time.monotonic() < until:
             time.sleep(0.02)
-        assert not any(_running(pid) for pid in owned), "Interrupted tools must not remain running"
+        assert not any(
+            _running(pid) for pid in owned
+        ), "Interrupted tools must not remain running"
     finally:
         for pid in owned:
             if _running(pid):
@@ -80,7 +96,9 @@ def test_execute_stops_child_and_detached_grandchild(tmp_path, interruption):
         parent.communicate(timeout=5)
 
 
-def test_interrupted_physical_flow_removes_its_container_and_retains_failure(tmp_path, monkeypatch):
+def test_interrupted_physical_flow_removes_its_container_and_retains_failure(
+    tmp_path, monkeypatch
+):
     source = tmp_path / "core.v"
     source.write_text("module core(input clk); endmodule\n")
     commands = []
@@ -97,9 +115,14 @@ def test_interrupted_physical_flow_removes_its_container_and_retains_failure(tmp
     monkeypatch.setattr(flow, "_execute", execute)
     output = tmp_path / "run"
     with pytest.raises(KeyboardInterrupt):
-        flow.run_physical_design({"core.v": source}, output,
-                                 config={"DESIGN_NAME": "core", "VERILOG_FILES": ["dir::core.v"]},
-                                 scope="test:core", boundary="constructed lifecycle test", mode="docker")
+        flow.run_physical_design(
+            {"core.v": source},
+            output,
+            config={"DESIGN_NAME": "core", "VERILOG_FILES": ["dir::core.v"]},
+            scope="test:core",
+            boundary="constructed lifecycle test",
+            mode="docker",
+        )
     launched = next(command for command in commands if command[1:2] == ["run"])
     name = launched[launched.index("--name") + 1]
     assert commands[-1] == ["/test/docker", "rm", "-f", name]
@@ -111,7 +134,9 @@ def test_interrupted_physical_flow_removes_its_container_and_retains_failure(tmp
     assert all(check["status"] != "pass" for check in receipt["checks"])
 
 
-def test_interrupted_coverage_retains_partial_receipt_and_removes_container(tmp_path, monkeypatch):
+def test_interrupted_coverage_retains_partial_receipt_and_removes_container(
+    tmp_path, monkeypatch
+):
     stage = tmp_path / "runs/physical/01-openroad-stapostpnr"
     stage.mkdir(parents=True)
     corner = "nom_tt_025C_1v80"
@@ -125,9 +150,15 @@ def test_interrupted_coverage_retains_partial_receipt_and_removes_container(tmp_
     inputs["spef"] = {"*": inputs["spef"]}
     (stage / "state_in.json").write_text(json.dumps(inputs))
     (stage / "state_out.json").write_text(json.dumps({"metrics": {}}))
-    (stage / "config.json").write_text(json.dumps({
-        "STA_CORNERS": [corner], "DESIGN_NAME": "core", "LIB": {"*": ["/foss/constructed.lib"]},
-    }))
+    (stage / "config.json").write_text(
+        json.dumps(
+            {
+                "STA_CORNERS": [corner],
+                "DESIGN_NAME": "core",
+                "LIB": {"*": ["/foss/constructed.lib"]},
+            }
+        )
+    )
     launched, cleaned = [], []
 
     def execute(args, stream, timeout, **kwargs):
@@ -157,8 +188,10 @@ def test_interrupted_coverage_retains_partial_receipt_and_removes_container(tmp_
 def test_rtl_interrupt_stops_compiler_group_and_retains_partial_receipt(tmp_path):
     """Exercise the actual runner with a deliberately sleeping compiler fixture."""
     tool_pid, child_pid = tmp_path / "tool.pid", tmp_path / "child.pid"
-    child_code = ("import os,time; from pathlib import Path; "
-                  f"Path({str(child_pid)!r}).write_text(str(os.getpid())); time.sleep(60)")
+    child_code = (
+        "import os,time; from pathlib import Path; "
+        f"Path({str(child_pid)!r}).write_text(str(os.getpid())); time.sleep(60)"
+    )
     tool = tmp_path / "verilator"
     tool.write_text(
         f"#!{sys.executable}\nimport os,subprocess,sys,time\nfrom pathlib import Path\n"
@@ -183,13 +216,23 @@ def test_rtl_interrupt_stops_compiler_group_and_retains_partial_receipt(tmp_path
         "else:\n raise RuntimeError('Expected SIGINT')\n"
     )
     env = dict(os.environ, PATH=str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
-    parent = subprocess.Popen([sys.executable, "-c", parent_code], env=env,
-                              cwd=Path(__file__).resolve().parents[1], start_new_session=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    parent = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        env=env,
+        cwd=Path(__file__).resolve().parents[1],
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     owned = []
     try:
         until = time.monotonic() + 5
-        while not child_pid.exists() and parent.poll() is None and time.monotonic() < until:
+        while (
+            not child_pid.exists()
+            and parent.poll() is None
+            and time.monotonic() < until
+        ):
             time.sleep(0.02)
         assert tool_pid.exists() and child_pid.exists()
         owned = [int(tool_pid.read_text()), int(child_pid.read_text())]
@@ -200,8 +243,12 @@ def test_rtl_interrupt_stops_compiler_group_and_retains_partial_receipt(tmp_path
         receipt = json.loads((output / "receipt.json").read_text())
         assert receipt["status"] == "interrupted" and receipt["ok"] is False
         assert receipt["profiles"] == []
-        assert (output / "interrupted-command.log").read_text() == "partial compiler output\n"
-        assert "interrupted-command.log" in {item["path"] for item in receipt["outputs"]}
+        assert (
+            output / "interrupted-command.log"
+        ).read_text() == "partial compiler output\n"
+        assert "interrupted-command.log" in {
+            item["path"] for item in receipt["outputs"]
+        }
         until = time.monotonic() + 2
         while any(_running(pid) for pid in owned) and time.monotonic() < until:
             time.sleep(0.02)

@@ -4,7 +4,15 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import Candidate, CheckResult, ContractError, Observation, RunReceipt, Task, canonical_json
+from .contracts import (
+    Candidate,
+    CheckResult,
+    ContractError,
+    Observation,
+    RunReceipt,
+    Task,
+    canonical_json,
+)
 
 
 def assess(task: Task, candidate: Candidate, receipt: RunReceipt) -> Observation:
@@ -26,7 +34,9 @@ def assess(task: Task, candidate: Candidate, receipt: RunReceipt) -> Observation
     required = tuple(
         returned.get(
             (item.name, item.scope),
-            CheckResult(item.name, "unresolved", item.scope, "Required check has no result"),
+            CheckResult(
+                item.name, "unresolved", item.scope, "Required check has no result"
+            ),
         )
         for item in task.required_checks
     )

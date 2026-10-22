@@ -17,21 +17,33 @@ class DatasetBoundaryTests(unittest.TestCase):
         path = self.root / (name + ".json")
         path.write_text(json.dumps({"name": name, "mode": mode}))
         artifact = Artifact.from_file(self.root, path.name)
-        return dict(record_id=name, group_id=group, split=split, evidence_mode=mode,
-                    construction="constructed_fault", source="unit-test-only",
-                    receipt=dict(path=artifact.path, sha256=artifact.sha256))
+        return dict(
+            record_id=name,
+            group_id=group,
+            split=split,
+            evidence_mode=mode,
+            construction="constructed_fault",
+            source="unit-test-only",
+            receipt=dict(path=artifact.path, sha256=artifact.sha256),
+        )
 
     def manifest(self, rows):
         path = self.root / "dataset.json"
-        path.write_text(json.dumps(dict(schema_version=1, dataset_id="test", records=rows)))
+        path.write_text(
+            json.dumps(dict(schema_version=1, dataset_id="test", records=rows))
+        )
         return path
 
     def test_learner_only_receives_training_rows(self):
-        path = self.manifest([self.entry("a", "one", "train"), self.entry("b", "two", "test")])
+        path = self.manifest(
+            [self.entry("a", "one", "train"), self.entry("b", "two", "test")]
+        )
         self.assertEqual([r.record_id for r in training_records(path)], ["a"])
 
     def test_group_leakage_rejected_before_filtering(self):
-        path = self.manifest([self.entry("a", "one", "train"), self.entry("b", "one", "test")])
+        path = self.manifest(
+            [self.entry("a", "one", "train"), self.entry("b", "one", "test")]
+        )
         with self.assertRaises(ContractError):
             training_records(path)
 

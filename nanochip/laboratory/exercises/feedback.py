@@ -20,9 +20,17 @@ class PolicyCheck:
 
 
 def _observed(*checks: CheckResult, status: str = "success") -> tuple[Observation, ...]:
-    return (Observation(Action("teaching_fault"), "constructed-case", None,
-                        status, checks=checks, eligible=False,
-                        details="Constructed exercise input; no simulator ran"),)
+    return (
+        Observation(
+            Action("teaching_fault"),
+            "constructed-case",
+            None,
+            status,
+            checks=checks,
+            eligible=False,
+            details="Constructed exercise input; no simulator ran",
+        ),
+    )
 
 
 def check_feedback(factory: Callable[[], Proposer]) -> tuple[PolicyCheck, ...]:
@@ -34,18 +42,37 @@ def check_feedback(factory: Callable[[], Proposer]) -> tuple[PolicyCheck, ...]:
     """
     cases = (
         ("start with the constructed fault", (), Action("teaching_fault")),
-        ("respond to an observed block mismatch",
-         _observed(CheckResult("dequant_vectors", "fail", BLOCK_SCOPE)), Action("reference")),
-        ("stop on a tool error even if a failure field is present",
-         _observed(CheckResult("dequant_vectors", "fail", BLOCK_SCOPE), status="error"), None),
-        ("stop after a passing block without accepting the whole accelerator",
-         _observed(CheckResult("dequant_vectors", "pass", BLOCK_SCOPE),
-                   CheckResult("physical_drc", "unresolved", CORE_SCOPE)), None),
+        (
+            "respond to an observed block mismatch",
+            _observed(CheckResult("dequant_vectors", "fail", BLOCK_SCOPE)),
+            Action("reference"),
+        ),
+        (
+            "stop on a tool error even if a failure field is present",
+            _observed(
+                CheckResult("dequant_vectors", "fail", BLOCK_SCOPE), status="error"
+            ),
+            None,
+        ),
+        (
+            "stop after a passing block without accepting the whole accelerator",
+            _observed(
+                CheckResult("dequant_vectors", "pass", BLOCK_SCOPE),
+                CheckResult("physical_drc", "unresolved", CORE_SCOPE),
+            ),
+            None,
+        ),
         ("do not repair from a missing block check", _observed(), None),
-        ("do not confuse another scope with the dequantizer",
-         _observed(CheckResult("dequant_vectors", "fail", CORE_SCOPE)), None),
-        ("do not treat unresolved evidence as a numerical failure",
-         _observed(CheckResult("dequant_vectors", "unresolved", BLOCK_SCOPE)), None),
+        (
+            "do not confuse another scope with the dequantizer",
+            _observed(CheckResult("dequant_vectors", "fail", CORE_SCOPE)),
+            None,
+        ),
+        (
+            "do not treat unresolved evidence as a numerical failure",
+            _observed(CheckResult("dequant_vectors", "unresolved", BLOCK_SCOPE)),
+            None,
+        ),
     )
     results = []
     for name, history, expected in cases:
@@ -62,7 +89,9 @@ def check_feedback(factory: Callable[[], Proposer]) -> tuple[PolicyCheck, ...]:
         if task.digest != before:
             results.append(PolicyCheck(name, "fail", "Policy changed the frozen task"))
         elif actual != expected:
-            results.append(PolicyCheck(name, "fail", f"Expected {expected!r}; received {actual!r}"))
+            results.append(
+                PolicyCheck(name, "fail", f"Expected {expected!r}; received {actual!r}")
+            )
         else:
             results.append(PolicyCheck(name, "pass", "Constructed policy case only"))
     return tuple(results)

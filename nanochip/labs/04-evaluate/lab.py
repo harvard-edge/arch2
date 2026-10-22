@@ -272,8 +272,17 @@ def _score_evaluate_challenge(
     max_elasticity_threshold: float,
     synth_probe: dict[str, Any],
 ) -> dict[str, Any]:
-    is_serial = demux_topology.strip().lower() in ("serial", "byte_serial", "byte-serial")
-    is_buffered = abc_pass_mode.strip().lower() in ("buffered", "two_pass", "pass2", "2")
+    is_serial = demux_topology.strip().lower() in (
+        "serial",
+        "byte_serial",
+        "byte-serial",
+    )
+    is_buffered = abc_pass_mode.strip().lower() in (
+        "buffered",
+        "two_pass",
+        "pass2",
+        "2",
+    )
 
     gates = (
         synth_probe["buffered_gates"]
@@ -295,13 +304,19 @@ def _score_evaluate_challenge(
 
     timing_ok = delay_ps <= 10000.0  # 10 ns period (100 MHz)
     area_ok = gates < 20000
-    passed = is_serial and is_buffered and timing_ok and area_ok and elasticity_gate_tight
+    passed = (
+        is_serial and is_buffered and timing_ok and area_ok and elasticity_gate_tight
+    )
 
     diag = []
     if is_serial:
-        diag.append(f"Byte-serial msh_deq ({gates:,} gates, {synth_probe['mapped_area_um2']:,.2f} um^2)")
+        diag.append(
+            f"Byte-serial msh_deq ({gates:,} gates, {synth_probe['mapped_area_um2']:,.2f} um^2)"
+        )
     else:
-        diag.append(f"16-way parallel demux bloats msh_deq to ~{gates:,} gates (+96K gate penalty)")
+        diag.append(
+            f"16-way parallel demux bloats msh_deq to ~{gates:,} gates (+96K gate penalty)"
+        )
     if is_buffered:
         diag.append(
             f"Two-pass ABC (buffer;upsize;dnsize) achieves {delay_ps:,.2f} ps ({synth_probe['buffering_speedup_ratio']}x faster than 266.5 ns unbuffered)"

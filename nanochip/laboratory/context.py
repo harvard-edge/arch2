@@ -15,16 +15,23 @@ def specification_sources() -> tuple[dict, ...]:
     result = []
     for name in ("interface.md", "quantization.md"):
         path = root / name
-        for index, text in enumerate(re.split(r"\n\s*\n", path.read_text(encoding="utf-8"))):
+        for index, text in enumerate(
+            re.split(r"\n\s*\n", path.read_text(encoding="utf-8"))
+        ):
             if not text.strip():
                 continue
-            result.append(dict(
-                source_id=f"{name}:paragraph-{index}", text=text.strip(),
-                partition="specification", kind="specification", source=str(path),
-                file_sha256=file_sha256(path),
-                text_sha256=hashlib.sha256(text.strip().encode()).hexdigest(),
-                license="Apache-2.0; see nanochip/kpu/LICENSE",
-            ))
+            result.append(
+                dict(
+                    source_id=f"{name}:paragraph-{index}",
+                    text=text.strip(),
+                    partition="specification",
+                    kind="specification",
+                    source=str(path),
+                    file_sha256=file_sha256(path),
+                    text_sha256=hashlib.sha256(text.strip().encode()).hexdigest(),
+                    license="Apache-2.0; see nanochip/kpu/LICENSE",
+                )
+            )
     return tuple(result)
 
 
@@ -39,17 +46,25 @@ class KeywordContext:
     demonstrates the interface; it makes no retrieval-quality claim.
     """
 
-    def retrieve(self, query: str, allowed_sources: Sequence[Mapping], *, max_words: int = 80):
+    def retrieve(
+        self, query: str, allowed_sources: Sequence[Mapping], *, max_words: int = 80
+    ):
         if type(max_words) is not int or max_words < 0:
             raise ContractError("Context word budget must be a nonnegative integer")
         ranked = []
         seen = set()
         for item in allowed_sources:
             if item.get("partition") not in ("train", "dev", "specification"):
-                raise ContractError("Retrieval cannot consume final-test or undeclared sources")
-            if not all(isinstance(item.get(key), str) and item[key] for key in
-                       ("source_id", "text", "text_sha256", "source")):
-                raise ContractError("Context records need text, source identity, and content hash")
+                raise ContractError(
+                    "Retrieval cannot consume final-test or undeclared sources"
+                )
+            if not all(
+                isinstance(item.get(key), str) and item[key]
+                for key in ("source_id", "text", "text_sha256", "source")
+            ):
+                raise ContractError(
+                    "Context records need text, source identity, and content hash"
+                )
             if item["source_id"] in seen:
                 raise ContractError("Duplicate knowledge-source identity")
             seen.add(item["source_id"])
@@ -66,15 +81,27 @@ class KeywordContext:
             words = item["text"].split()
             excerpt = words[:remaining]
             excerpt_text = " ".join(excerpt)
-            output.append(dict(item, text=excerpt_text, retrieved_words=len(excerpt),
-                               text_sha256=hashlib.sha256(excerpt_text.encode()).hexdigest(),
-                               truncated=len(excerpt) < len(words), score=score,
-                               full_text_sha256=item["text_sha256"]))
+            output.append(
+                dict(
+                    item,
+                    text=excerpt_text,
+                    retrieved_words=len(excerpt),
+                    text_sha256=hashlib.sha256(excerpt_text.encode()).hexdigest(),
+                    truncated=len(excerpt) < len(words),
+                    score=score,
+                    full_text_sha256=item["text_sha256"],
+                )
+            )
             remaining -= len(excerpt)
         return tuple(output)
 
-    def build(self, task: Task, history: tuple[Observation, ...],
-              allowed_sources: Sequence[Mapping], budget: int):
+    def build(
+        self,
+        task: Task,
+        history: tuple[Observation, ...],
+        allowed_sources: Sequence[Mapping],
+        budget: int,
+    ):
         query = json.dumps(dict(task.specification), sort_keys=True)
         if history:
             query += " " + history[-1].details

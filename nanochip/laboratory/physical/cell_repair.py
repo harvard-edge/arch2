@@ -19,8 +19,10 @@ _DELAY = re.compile(r"sky130_fd_sc_hd__(?:clkdlybuf|dlygate|dlymetal)")
 
 
 def _output_limits(path):
-    text = _COMMENTS.sub(lambda match: match.group(0) if match.group(0).startswith('"') else " ",
-                         Path(path).read_text())
+    text = _COMMENTS.sub(
+        lambda match: match.group(0) if match.group(0).startswith('"') else " ",
+        Path(path).read_text(),
+    )
     libraries = [body for kind, _, body in _groups(text) if kind == "library"]
     if len(libraries) != 1:
         raise ValueError("Expected exactly one Liberty library")
@@ -56,9 +58,20 @@ def equivalent_drive_table(liberty_paths):
         schema = schemas[0][master]
         if match is None or _DELAY.match(master) or schema["sequential"]:
             continue
-        inputs = [pin for pin, info in schema["pins"].items() if info["direction"] == "input"]
-        outputs = [pin for pin, info in schema["pins"].items() if info["direction"] == "output"]
-        if not inputs or len(outputs) != 1 or any(info["direction"] not in {"input", "output"} for info in schema["pins"].values()):
+        inputs = [
+            pin for pin, info in schema["pins"].items() if info["direction"] == "input"
+        ]
+        outputs = [
+            pin for pin, info in schema["pins"].items() if info["direction"] == "output"
+        ]
+        if (
+            not inputs
+            or len(outputs) != 1
+            or any(
+                info["direction"] not in {"input", "output"}
+                for info in schema["pins"].values()
+            )
+        ):
             continue
         if any(schema != corner[master] for corner in schemas[1:]):
             continue
@@ -69,24 +82,43 @@ def equivalent_drive_table(liberty_paths):
         candidates = []
         for candidate in names:
             alternative = _DRIVE.fullmatch(candidate)
-            if alternative is None or alternative[1] != match[1] or int(alternative[2]) < minimum:
+            if (
+                alternative is None
+                or alternative[1] != match[1]
+                or int(alternative[2]) < minimum
+            ):
                 continue
             if any(corner[candidate] != schema for corner in schemas):
                 continue
             old_caps = [corner[master].get(output) for corner in limits]
             new_caps = [corner[candidate].get(output) for corner in limits]
-            if any(old is None or new is None or new <= old for old, new in zip(old_caps, new_caps)):
+            if any(
+                old is None or new is None or new <= old
+                for old, new in zip(old_caps, new_caps)
+            ):
                 continue
             candidates.append((int(alternative[2]), candidate))
         if candidates:
             table[master] = min(candidates)[1]
-    return {"schema": "nanochip-equivalent-drive-table/v1", "eligible": False,
-            "selection": "Same family with at least doubled numeric drive label; identical digital/PG schema and increased output cap bound at all three PVTs",
-            "limitations": "Candidate choices only; unsupported masters must fail explicitly; fresh full electrical/setup/hold checks determine acceptance",
-            "libraries": [{"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in paths],
-            "sources": {Path(__file__).name: hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                        "cell_models.py": hashlib.sha256(Path(__file__).with_name("cell_models.py").read_bytes()).hexdigest()},
-            "table": table}
+    return {
+        "schema": "nanochip-equivalent-drive-table/v1",
+        "eligible": False,
+        "selection": "Same family with at least doubled numeric drive label; identical digital/PG schema and increased output cap bound at all three PVTs",
+        "limitations": "Candidate choices only; unsupported masters must fail explicitly; fresh full electrical/setup/hold checks determine acceptance",
+        "libraries": [
+            {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in paths
+        ],
+        "sources": {
+            Path(__file__)
+            .name: hashlib.sha256(Path(__file__).read_bytes())
+            .hexdigest(),
+            "cell_models.py": hashlib.sha256(
+                Path(__file__).with_name("cell_models.py").read_bytes()
+            ).hexdigest(),
+        },
+        "table": table,
+    }
 
 
 def write_drive_table(liberty_paths, output):
@@ -94,7 +126,11 @@ def write_drive_table(liberty_paths, output):
     output = Path(output)
     plan = equivalent_drive_table(liberty_paths)
     rows = [f"    {{{old}}} {{{new}}}" for old, new in plan["table"].items()]
-    output.write_text("set ::nanochip_stronger_cells [dict create \\\n" + " \\\n".join(rows) + "]\n")
+    output.write_text(
+        "set ::nanochip_stronger_cells [dict create \\\n" + " \\\n".join(rows) + "]\n"
+    )
     plan["tcl_sha256"] = hashlib.sha256(output.read_bytes()).hexdigest()
-    output.with_suffix(".json").write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    output.with_suffix(".json").write_text(
+        json.dumps(plan, indent=2, sort_keys=True) + "\n"
+    )
     return plan

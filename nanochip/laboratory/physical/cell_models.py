@@ -85,14 +85,19 @@ def _groups(text):
             brace += 1
         if brace < len(text) and text[brace] == "{":
             close = _end(text, brace, "{", "}")
-            yield match.group("kind"), text[start + 1:end], text[brace + 1:close]
+            yield match.group("kind"), text[start + 1 : end], text[brace + 1 : close]
             cursor = close + 1
         else:
             cursor = end + 1
 
 
 def _value(text, name):
-    match = re.search(r"(?:^|[;\n])\s*" + re.escape(name) + r"\s*:\s*(\"(?:\\.|[^\"\\])*\"|[^;]+)\s*;", text)
+    match = re.search(
+        r"(?:^|[;\n])\s*"
+        + re.escape(name)
+        + r"\s*:\s*(\"(?:\\.|[^\"\\])*\"|[^;]+)\s*;",
+        text,
+    )
     if match is None:
         return None
     value = match.group(1).strip()
@@ -109,7 +114,10 @@ def _name(argument):
 
 def inspect_liberty(path):
     """Extract actual digital/PG pins and sequential declarations, never timing."""
-    text = _COMMENTS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ", Path(path).read_text())
+    text = _COMMENTS.sub(
+        lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+        Path(path).read_text(),
+    )
     libraries = [body for kind, _, body in _groups(text) if kind == "library"]
     if len(libraries) != 1:
         raise ValueError("Expected one Liberty library")
@@ -123,11 +131,33 @@ def inspect_liberty(path):
         pins, pg, sequential = {}, {}, []
         for child, args, contents in _groups(body):
             if child == "pin":
-                pins[_name(args)] = {"direction": _value(contents, "direction"), "function": _value(contents, "function")}
+                pins[_name(args)] = {
+                    "direction": _value(contents, "direction"),
+                    "function": _value(contents, "function"),
+                }
             elif child == "pg_pin":
-                pg[_name(args)] = {"pg_type": _value(contents, "pg_type"), "voltage_name": _value(contents, "voltage_name")}
+                pg[_name(args)] = {
+                    "pg_type": _value(contents, "pg_type"),
+                    "voltage_name": _value(contents, "voltage_name"),
+                }
             elif child in ("ff", "latch", "ff_bank", "latch_bank"):
-                sequential.append({"kind": child, "state_arguments": args.strip(), **{key: _value(contents, key) for key in ("clocked_on", "next_state", "clear", "preset", "data_in", "enable")}})
+                sequential.append(
+                    {
+                        "kind": child,
+                        "state_arguments": args.strip(),
+                        **{
+                            key: _value(contents, key)
+                            for key in (
+                                "clocked_on",
+                                "next_state",
+                                "clear",
+                                "preset",
+                                "data_in",
+                                "enable",
+                            )
+                        },
+                    }
+                )
         cells[name] = {"pins": pins, "pg_pins": pg, "sequential": sequential}
     if not cells:
         raise ValueError("Liberty has no cells")
@@ -141,7 +171,15 @@ def _quote(path):
     return json.dumps(text)
 
 
-def write_model_script(liberty_path, netlist_path, output_dir, *, top, physical_only_cells=None, power_ports=None):
+def write_model_script(
+    liberty_path,
+    netlist_path,
+    output_dir,
+    *,
+    top,
+    physical_only_cells=None,
+    power_ports=None,
+):
     """Write a Yosys normalization plan. Run it, then validate_model_audit(plan).
 
     ``physical_only_cells`` maps recognized no-output masters to their allowed
@@ -152,9 +190,18 @@ def write_model_script(liberty_path, netlist_path, output_dir, *, top, physical_
     """
     if not _NAME.fullmatch(top):
         raise ValueError("Invalid top module")
-    if power_ports is not None and (not isinstance(power_ports, dict) or not power_ports
-            or any(not isinstance(pin, str) or not _NAME.fullmatch(pin) or type(value) is not int or value not in (0, 1) for pin, value in power_ports.items())
-            or set(power_ports.values()) != {0, 1}):
+    if power_ports is not None and (
+        not isinstance(power_ports, dict)
+        or not power_ports
+        or any(
+            not isinstance(pin, str)
+            or not _NAME.fullmatch(pin)
+            or type(value) is not int
+            or value not in (0, 1)
+            for pin, value in power_ports.items()
+        )
+        or set(power_ports.values()) != {0, 1}
+    ):
         raise ValueError("Declare named one-bit nominal power and ground ports")
     liberty = Path(liberty_path).resolve(strict=True)
     netlist = Path(netlist_path).resolve(strict=True)
@@ -164,19 +211,33 @@ def write_model_script(liberty_path, netlist_path, output_dir, *, top, physical_
     physical = dict(physical_only_cells or {})
     all_pg = {pin for cell in cells.values() for pin in cell["pg_pins"]}
     for master, pins in physical.items():
-        expected = [] if _PHYSICAL.fullmatch(master) else ["DIODE"] if _DIODE.fullmatch(master) else None
+        expected = (
+            []
+            if _PHYSICAL.fullmatch(master)
+            else ["DIODE"]
+            if _DIODE.fullmatch(master)
+            else None
+        )
         if expected is None or pins != expected:
             raise ValueError(f"Unrecognized no-output physical cell/pins: {master}")
         if any(pin not in all_pg for pin in _CANONICAL_PG):
-            raise ValueError("Physical-only cell supply pins lack Liberty PG provenance")
+            raise ValueError(
+                "Physical-only cell supply pins lack Liberty PG provenance"
+            )
         if master in cells:
             actual = cells[master]["pins"]
-            if set(actual) != set(pins) or any(actual[pin]["direction"] != "input" for pin in pins):
-                raise ValueError(f"Physical override would discard a digital output: {master}")
+            if set(actual) != set(pins) or any(
+                actual[pin]["direction"] != "input" for pin in pins
+            ):
+                raise ValueError(
+                    f"Physical override would discard a digital output: {master}"
+                )
     stub_lines = []
     for master, pins in sorted(physical.items()):
         power = sorted(_physical_pg_pins(master, cells))
-        declarations = [f"input {pin}" for pin in pins] + [f"inout {pin}" for pin in power]
+        declarations = [f"input {pin}" for pin in pins] + [
+            f"inout {pin}" for pin in power
+        ]
         stub_lines.append(f"module {master}({', '.join(declarations)}); endmodule")
     stubs = output / "physical-only.v"
     stubs.write_text("\n".join(stub_lines) + "\n")
@@ -195,14 +256,66 @@ def write_model_script(liberty_path, netlist_path, output_dir, *, top, physical_
     # Preserve the full hierarchy/rail audit before removing unused flattened
     # aliases. Public cell-internal names otherwise inflate the simulator's AST
     # without adding digital behavior; the final check still rejects bad logic.
-    commands.extend([f"read_verilog -sv {_quote(netlist)}", f"hierarchy -check -top {top}", "proc", f"write_json {_quote(audit)}", "flatten", "opt_clean -purge", "check -assert", f"write_verilog -noattr {_quote(normalized)}"])
+    commands.extend(
+        [
+            f"read_verilog -sv {_quote(netlist)}",
+            f"hierarchy -check -top {top}",
+            "proc",
+            f"write_json {_quote(audit)}",
+            "flatten",
+            "opt_clean -purge",
+            "check -assert",
+            f"write_verilog -noattr {_quote(normalized)}",
+        ]
+    )
     script.write_text("\n".join(commands) + "\n")
     metadata_path = output / "model-metadata.json"
-    pg_sources = {master: _TAP_LEF_SCHEMA for master in physical if master not in cells and master == _TAP_LEF_SCHEMA["master"]}
-    metadata = {"schema": "nanochip-pinned-liberty-digital-models/v0", "top": top, "liberty_path": str(liberty), "liberty_sha256": _sha(liberty), "netlist_path": str(netlist), "netlist_sha256": _sha(netlist), "cells": cells, "physical_only_cells": physical, "physical_only_pg_sources": pg_sources, "script_path": str(script), "script_sha256": _sha(script), "audit_path": str(audit), "normalized_path": str(normalized), "physical_models_sha256": _sha(stubs), "audit_required": True, "power_ports": power_ports, "simulation_source_path": str(simulation),
-                "assumptions": ["Ideal nominally powered supplies; explicit PG connections retained as ports, without analog power behavior", "Liberty Boolean/FF/latch functions; zero delays; no four-state UDP or power-loss correspondence claim", "Recognized fill/decap/tap/diode physical cells have no digital outputs", "Every used functional cell must survive hierarchy/check and independent audit; imported missing-function cells are never silently substituted"], "physical_only_missing_liberty": sorted(set(physical)-set(cells))}
+    pg_sources = {
+        master: _TAP_LEF_SCHEMA
+        for master in physical
+        if master not in cells and master == _TAP_LEF_SCHEMA["master"]
+    }
+    metadata = {
+        "schema": "nanochip-pinned-liberty-digital-models/v0",
+        "top": top,
+        "liberty_path": str(liberty),
+        "liberty_sha256": _sha(liberty),
+        "netlist_path": str(netlist),
+        "netlist_sha256": _sha(netlist),
+        "cells": cells,
+        "physical_only_cells": physical,
+        "physical_only_pg_sources": pg_sources,
+        "script_path": str(script),
+        "script_sha256": _sha(script),
+        "audit_path": str(audit),
+        "normalized_path": str(normalized),
+        "physical_models_sha256": _sha(stubs),
+        "audit_required": True,
+        "power_ports": power_ports,
+        "simulation_source_path": str(simulation),
+        "assumptions": [
+            "Ideal nominally powered supplies; explicit PG connections retained as ports, without analog power behavior",
+            "Liberty Boolean/FF/latch functions; zero delays; no four-state UDP or power-loss correspondence claim",
+            "Recognized fill/decap/tap/diode physical cells have no digital outputs",
+            "Every used functional cell must survive hierarchy/check and independent audit; imported missing-function cells are never silently substituted",
+        ],
+        "physical_only_missing_liberty": sorted(set(physical) - set(cells)),
+    }
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
-    return {key: metadata[key] for key in ("script_path", "normalized_path", "simulation_source_path", "audit_path", "liberty_sha256", "netlist_sha256")} | {"model_metadata_path": str(metadata_path), "model_metadata_sha256": _sha(metadata_path)}
+    return {
+        key: metadata[key]
+        for key in (
+            "script_path",
+            "normalized_path",
+            "simulation_source_path",
+            "audit_path",
+            "liberty_sha256",
+            "netlist_sha256",
+        )
+    } | {
+        "model_metadata_path": str(metadata_path),
+        "model_metadata_sha256": _sha(metadata_path),
+    }
 
 
 def _enabled(value):
@@ -221,7 +334,14 @@ def validate_model_audit(plan):
     if _sha(plan["model_metadata_path"]) != plan["model_metadata_sha256"]:
         raise ValueError("Model metadata changed")
     metadata = json.loads(Path(plan["model_metadata_path"]).read_text())
-    for field in ("script_path", "normalized_path", "simulation_source_path", "audit_path", "liberty_sha256", "netlist_sha256"):
+    for field in (
+        "script_path",
+        "normalized_path",
+        "simulation_source_path",
+        "audit_path",
+        "liberty_sha256",
+        "netlist_sha256",
+    ):
         if plan[field] != metadata[field]:
             raise ValueError(f"Model plan differs from audited metadata: {field}")
     for kind in ("liberty", "netlist", "script"):
@@ -233,17 +353,29 @@ def validate_model_audit(plan):
         raise ValueError("Top missing from model audit")
     visited, counts, sequential = set(), Counter(), {}
     physical = metadata["physical_only_cells"]
-    expected_sources = {master: _TAP_LEF_SCHEMA for master in physical if master not in metadata["cells"] and master == _TAP_LEF_SCHEMA["master"]}
+    expected_sources = {
+        master: _TAP_LEF_SCHEMA
+        for master in physical
+        if master not in metadata["cells"] and master == _TAP_LEF_SCHEMA["master"]
+    }
     if metadata.get("physical_only_pg_sources", {}) != expected_sources:
-        raise ValueError("Physical-only PG schema differs from its pinned master declaration")
+        raise ValueError(
+            "Physical-only PG schema differs from its pinned master declaration"
+        )
+
     def visit(name):
         if name in visited:
             return
         visited.add(name)
         module = modules[name]
-        opaque = any(_enabled(module.get("attributes", {}).get(key, 0)) for key in ("blackbox", "whitebox"))
+        opaque = any(
+            _enabled(module.get("attributes", {}).get(key, 0))
+            for key in ("blackbox", "whitebox")
+        )
         if name in physical:
-            if any(port["direction"] == "output" for port in module["ports"].values()) or module.get("cells"):
+            if any(
+                port["direction"] == "output" for port in module["ports"].values()
+            ) or module.get("cells"):
                 raise ValueError(f"Physical-only model has digital behavior: {name}")
             expected_pg = _physical_pg_pins(name, metadata["cells"])
             if set(module["ports"]) != set(physical[name]) | expected_pg:
@@ -256,9 +388,13 @@ def validate_model_audit(plan):
                 raise ValueError(f"Liberty digital/PG port mismatch: {name}")
             for pin, declaration in spec["pins"].items():
                 if module["ports"][pin]["direction"] != declaration["direction"]:
-                    raise ValueError(f"Liberty digital port direction mismatch: {name}/{pin}")
+                    raise ValueError(
+                        f"Liberty digital port direction mismatch: {name}/{pin}"
+                    )
                 if declaration["direction"] == "output" and not declaration["function"]:
-                    raise ValueError(f"Output lacks Liberty function/state binding: {name}/{pin}")
+                    raise ValueError(
+                        f"Output lacks Liberty function/state binding: {name}/{pin}"
+                    )
             driven = {"0", "1"}
             for port in module["ports"].values():
                 if port["direction"] in ("input", "inout"):
@@ -268,7 +404,9 @@ def validate_model_audit(plan):
                     if direction in ("output", "inout"):
                         driven.update(cell["connections"][pin])
             for pin, port in module["ports"].items():
-                if port["direction"] == "output" and any(bit not in driven for bit in port["bits"]):
+                if port["direction"] == "output" and any(
+                    bit not in driven for bit in port["bits"]
+                ):
                     raise ValueError(f"Undriven functional output: {name}/{pin}")
             for pin in spec["pg_pins"]:
                 if module["ports"][pin]["direction"] != "inout":
@@ -280,7 +418,9 @@ def validate_model_audit(plan):
                     raise ValueError(f"Unsupported sequential bank: {name}")
                 target = "DFF" if kind == "ff" else "LATCH"
                 if not any(target in cell.upper() for cell in types):
-                    raise ValueError(f"Missing {kind} functional implementation: {name}")
+                    raise ValueError(
+                        f"Missing {kind} functional implementation: {name}"
+                    )
             if spec["sequential"]:
                 sequential[name] = sorted(types)
         for cell in module.get("cells", {}).values():
@@ -297,12 +437,28 @@ def validate_model_audit(plan):
                 visit(target)
             elif not target.startswith("$"):
                 raise ValueError(f"Unmodeled functional instance: {target}")
+
     visit(top)
     power_audit = None
     if metadata["power_ports"] is not None:
         power_audit = _audit_power_rails(metadata, modules)
         _write_power_wrapper(metadata, modules[top]["ports"])
-    result = {"status": "pass", "used_module_types": sorted(visited), "module_instance_counts": dict(sorted(counts.items())), "sequential_models": sequential, "power_connections_retained": True, "functional_blackboxes": 0, "physical_only_pg_sources": expected_sources, "assumptions": metadata["assumptions"], "audit_sha256": _sha(metadata["audit_path"]), "normalized_sha256": _sha(metadata["normalized_path"]), "power_rail_audit": power_audit, "simulation_source_path": metadata["simulation_source_path"], "simulation_source_sha256": _sha(metadata["simulation_source_path"]), "power_ports": metadata["power_ports"]}
+    result = {
+        "status": "pass",
+        "used_module_types": sorted(visited),
+        "module_instance_counts": dict(sorted(counts.items())),
+        "sequential_models": sequential,
+        "power_connections_retained": True,
+        "functional_blackboxes": 0,
+        "physical_only_pg_sources": expected_sources,
+        "assumptions": metadata["assumptions"],
+        "audit_sha256": _sha(metadata["audit_path"]),
+        "normalized_sha256": _sha(metadata["normalized_path"]),
+        "power_rail_audit": power_audit,
+        "simulation_source_path": metadata["simulation_source_path"],
+        "simulation_source_sha256": _sha(metadata["simulation_source_path"]),
+        "power_ports": metadata["power_ports"],
+    }
     return result
 
 
@@ -327,10 +483,12 @@ def _audit_power_rails(metadata, modules):
     canonical = {"VPWR": 1, "VPB": 1, "VGND": 0, "VNB": 0}
     checked = Counter()
     instances = 0
+
     def resolve(bit, values):
         if bit in ("0", "1"):
             return int(bit)
         return values.get(bit)
+
     def visit(name, values, stack):
         nonlocal instances
         if name in stack:
@@ -346,16 +504,23 @@ def _audit_power_rails(metadata, modules):
                 expected = {}
                 for pin, pg in pins.items():
                     if pg["pg_type"] not in kinds:
-                        raise ValueError(f"Unknown used Liberty PG type: {target}/{pin}")
+                        raise ValueError(
+                            f"Unknown used Liberty PG type: {target}/{pin}"
+                        )
                     expected[pin] = kinds[pg["pg_type"]]
             elif target in metadata["physical_only_cells"]:
-                expected = {pin: canonical[pin] for pin in _physical_pg_pins(target, metadata["cells"])}
+                expected = {
+                    pin: canonical[pin]
+                    for pin in _physical_pg_pins(target, metadata["cells"])
+                }
             else:
                 expected = {}
             for pin, value in expected.items():
                 bits = cell["connections"].get(pin, [])
                 if len(bits) != 1 or resolve(bits[0], values) is None:
-                    raise ValueError(f"Unknown or unconnected PG rail: {name}/{instance}/{pin}")
+                    raise ValueError(
+                        f"Unknown or unconnected PG rail: {name}/{instance}/{pin}"
+                    )
                 if resolve(bits[0], values) != value:
                     raise ValueError(f"Crossed PG rail: {name}/{instance}/{pin}")
                 checked["power" if value else "ground"] += 1
@@ -366,12 +531,21 @@ def _audit_power_rails(metadata, modules):
                     value = resolve(connected, values)
                     if value is not None:
                         if bit in child_values and child_values[bit] != value:
-                            raise ValueError(f"Shorted hierarchical PG rail: {target}/{pin}")
+                            raise ValueError(
+                                f"Shorted hierarchical PG rail: {target}/{pin}"
+                            )
                         child_values[bit] = value
             visit(target, child_values, stack + (name,))
+
     visit(top, rails, ())
-    return {"status": "pass", "top_power_ports": powers, "checked_connections": dict(checked),
-            "hierarchical_instances": instances, "method": "Exact preflatten JSON bit aliases; Liberty primary_power/nwell=1, primary_ground/pwell=0; exact missing-Liberty tap uses its pinned LEF POWER/GROUND declaration", "unknown_or_crossed_rails": 0}
+    return {
+        "status": "pass",
+        "top_power_ports": powers,
+        "checked_connections": dict(checked),
+        "hierarchical_instances": instances,
+        "method": "Exact preflatten JSON bit aliases; Liberty primary_power/nwell=1, primary_ground/pwell=0; exact missing-Liberty tap uses its pinned LEF POWER/GROUND declaration",
+        "unknown_or_crossed_rails": 0,
+    }
 
 
 def _write_power_wrapper(metadata, ports):
@@ -382,7 +556,12 @@ def _write_power_wrapper(metadata, ports):
     normalized = Path(metadata["normalized_path"]).read_text()
     if re.search(r"\bmodule\s+" + re.escape(inner) + r"\b", normalized):
         raise ValueError("Nominal-supply inner module name already exists")
-    renamed, count = re.subn(r"(^\s*module\s+)" + re.escape(top) + r"(?=\s*\()", lambda match: match.group(1) + inner, normalized, flags=re.M)
+    renamed, count = re.subn(
+        r"(^\s*module\s+)" + re.escape(top) + r"(?=\s*\()",
+        lambda match: match.group(1) + inner,
+        normalized,
+        flags=re.M,
+    )
     if count != 1:
         raise ValueError("Normalized top module cannot be uniquely renamed")
     digital = [(pin, port) for pin, port in ports.items() if pin not in powers]
@@ -394,7 +573,13 @@ def _write_power_wrapper(metadata, ports):
         width = len(port["bits"])
         offset = port.get("offset", 0)
         high = offset + width - 1
-        span = "" if width == 1 and offset == 0 else (f"[{offset}:{high}] " if port.get("upto", 0) else f"[{high}:{offset}] ")
+        span = (
+            ""
+            if width == 1 and offset == 0
+            else (
+                f"[{offset}:{high}] " if port.get("upto", 0) else f"[{high}:{offset}] "
+            )
+        )
         signed = "signed " if port.get("signed", 0) else ""
         declarations.append(f"    {port['direction']} wire {signed}{span}{pin}")
         connections.append(f".{pin}({pin})")
@@ -402,8 +587,15 @@ def _write_power_wrapper(metadata, ports):
     if set(supply_nets.values()) & set(ports):
         raise ValueError("Nominal-supply net name collides with a top port")
     connections.extend(f".{pin}({supply_nets[pin]})" for pin in sorted(powers))
-    wrapper = "\n// Derived nominal-supply wrapper; original benchmark ports preserved.\n"
+    wrapper = (
+        "\n// Derived nominal-supply wrapper; original benchmark ports preserved.\n"
+    )
     wrapper += f"module {top}(\n" + ",\n".join(declarations) + "\n);\n"
-    wrapper += "".join(f"  supply{value} {supply_nets[pin]};\n" for pin, value in sorted(powers.items()))
-    wrapper += f"  {inner} powered_instance (" + ", ".join(connections) + ");\nendmodule\n"
+    wrapper += "".join(
+        f"  supply{value} {supply_nets[pin]};\n"
+        for pin, value in sorted(powers.items())
+    )
+    wrapper += (
+        f"  {inner} powered_instance (" + ", ".join(connections) + ");\nendmodule\n"
+    )
     Path(metadata["simulation_source_path"]).write_text(renamed + wrapper)

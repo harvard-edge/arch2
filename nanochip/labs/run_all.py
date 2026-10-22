@@ -95,7 +95,10 @@ def run_all_labs(
             )
             if not emit_json:
                 mod.render_challenge(c_res)
-                if hasattr(mod, "render_sightline") and "cross_stack_sightline" in c_res:
+                if (
+                    hasattr(mod, "render_sightline")
+                    and "cross_stack_sightline" in c_res
+                ):
                     mod.render_sightline(c_res["cross_stack_sightline"])
             ok = bool(c_res.get("passed"))
             payload = c_res

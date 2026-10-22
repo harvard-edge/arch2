@@ -337,7 +337,9 @@ def run_challenge(auto: bool = True) -> dict[str, Any]:
         bw = 16
         fifo = 256
         bet_cpt = 11200.0
-        label = "Architect Winning Bet (INT4 Group-128 + 256-Credit FIFO + 11,200 cyc/tok)"
+        label = (
+            "Architect Winning Bet (INT4 Group-128 + 256-Credit FIFO + 11,200 cyc/tok)"
+        )
     else:
         console.print(
             Panel(

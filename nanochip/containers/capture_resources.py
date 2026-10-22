@@ -22,17 +22,38 @@ def snapshot(root=Path("/sys/fs/cgroup")):
     # Docker exposes this container's cgroup as the mount root in its cgroup
     # namespace. Never traverse /proc, the host hierarchy, or sibling cgroups.
     if (root / "cgroup.controllers").is_file():
-        files = {name: _read(root, name, integer=name in (
-            "memory.peak", "memory.current", "pids.peak")) for name in (
-            "memory.peak", "memory.current", "memory.max", "memory.events",
-            "cpu.stat", "cpu.max", "pids.peak")}
+        files = {
+            name: _read(
+                root,
+                name,
+                integer=name in ("memory.peak", "memory.current", "pids.peak"),
+            )
+            for name in (
+                "memory.peak",
+                "memory.current",
+                "memory.max",
+                "memory.events",
+                "cpu.stat",
+                "cpu.max",
+                "pids.peak",
+            )
+        }
         peak = files["memory.peak"]
-        return {"version": 2, "root": str(root), "files": files,
-                "peak_memory_bytes": peak.get("value"), "peak_status": peak["status"]}
+        return {
+            "version": 2,
+            "root": str(root),
+            "files": files,
+            "peak_memory_bytes": peak.get("value"),
+            "peak_status": peak["status"],
+        }
     peak = _read(root / "memory", "memory.max_usage_in_bytes", integer=True)
-    return {"version": 1 if peak["status"] == "available" else None,
-            "root": str(root), "files": {"memory/memory.max_usage_in_bytes": peak},
-            "peak_memory_bytes": peak.get("value"), "peak_status": peak["status"]}
+    return {
+        "version": 1 if peak["status"] == "available" else None,
+        "root": str(root),
+        "files": {"memory/memory.max_usage_in_bytes": peak},
+        "peak_memory_bytes": peak.get("value"),
+        "peak_status": peak["status"],
+    }
 
 
 def run(command, output):
@@ -52,12 +73,15 @@ def run(command, output):
         previous[signum] = signal.signal(signum, forward)
     try:
         code = process.wait()
-        report = {"schema": "nanochip-container-resources/v1",
-                  "status": "captured", "child_returncode": code,
-                  "child_elapsed_s": time.monotonic() - started,
-                  "forwarded_signals": forwarded,
-                  "measurement": "own container cgroup, including supervisor and all descendants; final snapshot after child exit",
-                  "resources": snapshot()}
+        report = {
+            "schema": "nanochip-container-resources/v1",
+            "status": "captured",
+            "child_returncode": code,
+            "child_elapsed_s": time.monotonic() - started,
+            "forwarded_signals": forwarded,
+            "measurement": "own container cgroup, including supervisor and all descendants; final snapshot after child exit",
+            "resources": snapshot(),
+        }
         try:
             with Path(output).open("x", encoding="utf-8") as stream:
                 json.dump(report, stream, indent=2, allow_nan=False)

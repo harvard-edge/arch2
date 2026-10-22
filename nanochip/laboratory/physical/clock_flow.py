@@ -21,10 +21,22 @@ import uuid
 
 PROFILE = "NanochipClockRepair"
 STEP_ID = "Nanochip.ClockFanoutRepair"
-CLOCK_BRANCH_CELLS = tuple("sky130_fd_sc_hd__clkbuf_" + str(drive) for drive in (2, 4, 8, 16))
-FLOW_FILES = ("clock_flow.py", "clock_repair.tcl", "clock_repair_step.tcl",
-              "repair_flow.py", "electrical_repair.tcl", "antenna_electrical_step.tcl",
-              "cell_repair.py", "signal_graph.py", "cell_models.py", "magic_flow.py", "klayout_flow.py")
+CLOCK_BRANCH_CELLS = tuple(
+    "sky130_fd_sc_hd__clkbuf_" + str(drive) for drive in (2, 4, 8, 16)
+)
+FLOW_FILES = (
+    "clock_flow.py",
+    "clock_repair.tcl",
+    "clock_repair_step.tcl",
+    "repair_flow.py",
+    "electrical_repair.tcl",
+    "antenna_electrical_step.tcl",
+    "cell_repair.py",
+    "signal_graph.py",
+    "cell_models.py",
+    "magic_flow.py",
+    "klayout_flow.py",
+)
 
 
 def load_flow_helper(name):
@@ -35,14 +47,30 @@ def load_flow_helper(name):
     that exact asset set and separates two staged runs in the same interpreter.
     Producer/task manifests bind the expected file hashes separately.
     """
-    if name not in {"repair_flow", "cell_repair", "signal_graph", "cell_models", "magic_flow", "klayout_flow"}:
+    if name not in {
+        "repair_flow",
+        "cell_repair",
+        "signal_graph",
+        "cell_models",
+        "magic_flow",
+        "klayout_flow",
+    }:
         raise ValueError("Unknown physical flow helper")
     directory = Path(__file__).resolve().parent
     for filename in FLOW_FILES:
         path = directory / filename
-        if not path.is_file() or path.is_symlink() or path.resolve().parent != directory:
-            raise ValueError("Incomplete or redirected physical flow assets: " + filename)
-    namespace = "_nanochip_physical_assets_" + hashlib.sha256(str(directory).encode()).hexdigest()[:20]
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.resolve().parent != directory
+        ):
+            raise ValueError(
+                "Incomplete or redirected physical flow assets: " + filename
+            )
+    namespace = (
+        "_nanochip_physical_assets_"
+        + hashlib.sha256(str(directory).encode()).hexdigest()[:20]
+    )
     if namespace not in sys.modules:
         package = types.ModuleType(namespace)
         package.__path__ = [str(directory)]
@@ -51,38 +79,64 @@ def load_flow_helper(name):
     if Path(module.__file__).resolve().parent != directory:
         raise ValueError("Physical helper escaped its frozen asset directory")
     return module
-MIDPNR_SCRIPT_SHA256 = "56dfd083ad0675d5ece8750172032ee623c4feff7799b1f42feb2a56a23b67d0"
+
+
+MIDPNR_SCRIPT_SHA256 = (
+    "56dfd083ad0675d5ece8750172032ee623c4feff7799b1f42feb2a56a23b67d0"
+)
 MIDPNR_OLD_BRANCH = "} elseif { [rsz::check_corner_wire_cap] } {\n        estimate_parasitics -placement\n    }"
 MIDPNR_NEW_BRANCH = "} else {\n        estimate_parasitics -placement\n    }"
 SKEW_BLOCK_START = 'puts "%OL_CREATE_REPORT skew.min.rpt"'
 SKEW_BLOCK_END = 'puts "%OL_CREATE_REPORT ws.min.rpt"'
 SKEW_BLOCK_SHA256 = "18fcbb5cd6c6d0070fcc8c59900854b8100bf0530ecd7426abec158d9d18bbd7"
-SKEW_REASON = ("Optional whole-register fanout clock-skew diagnostics omitted after measured 266.122532s nominal STA; "
-               "propagated-clock path checks, setup/hold/electrical metrics and complete corner coverage remain mandatory")
+SKEW_REASON = (
+    "Optional whole-register fanout clock-skew diagnostics omitted after measured 266.122532s nominal STA; "
+    "propagated-clock path checks, setup/hold/electrical metrics and complete corner coverage remain mandatory"
+)
 DRT_SCRIPT_SHA256 = "d343af602b32a82512ee568e590af33c7669df4fe65413e6d488c2164b88352b"
 DRT_OLD_COMMAND = "detailed_route\\\n    -bottom_routing_layer $min_layer\\\n    -top_routing_layer $max_layer\\\n"
-DRT_NEW_COMMAND = ('set_routing_layers -signal "$min_layer-$max_layer" -clock "$min_layer-$max_layer"\n'
-                   'detailed_route\\\n')
+DRT_NEW_COMMAND = (
+    'set_routing_layers -signal "$min_layer-$max_layer" -clock "$min_layer-$max_layer"\n'
+    "detailed_route\\\n"
+)
 
 
 def derive_drt_script(upstream, output):
     """Map removed routing-layer flags to their current API, with equal bounds."""
     upstream, output = Path(upstream), Path(output)
     data = upstream.read_bytes()
-    if hashlib.sha256(data).hexdigest() != DRT_SCRIPT_SHA256 or data.decode().count(DRT_OLD_COMMAND) != 1:
-        raise ValueError("Pinned detailed-routing script identity or layer branch differs")
+    if (
+        hashlib.sha256(data).hexdigest() != DRT_SCRIPT_SHA256
+        or data.decode().count(DRT_OLD_COMMAND) != 1
+    ):
+        raise ValueError(
+            "Pinned detailed-routing script identity or layer branch differs"
+        )
     output.write_text(data.decode().replace(DRT_OLD_COMMAND, DRT_NEW_COMMAND))
-    output.with_suffix(".json").write_text(json.dumps({"schema": "nanochip-drt-api-compatibility/v1",
-        "upstream_path": str(upstream), "upstream_sha256": DRT_SCRIPT_SHA256,
-        "derived_path": str(output), "derived_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
-        "change": "Map bottom/top routing flags to set_routing_layers for signal and clock; identical resolved layer bounds",
-        "preserved": "Routing layer bounds, seed, optimization iterations, DRC reporting and final checks"}, indent=2, sort_keys=True) + "\n")
+    output.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "schema": "nanochip-drt-api-compatibility/v1",
+                "upstream_path": str(upstream),
+                "upstream_sha256": DRT_SCRIPT_SHA256,
+                "derived_path": str(output),
+                "derived_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+                "change": "Map bottom/top routing flags to set_routing_layers for signal and clock; identical resolved layer bounds",
+                "preserved": "Routing layer bounds, seed, optimization iterations, DRC reporting and final checks",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     return str(output)
 
 
 def bounded_drt_threads(configured, budget):
     if budget is None or not budget.isdigit() or not 1 <= int(budget) <= 8:
-        raise ValueError("Detailed routing requires the declared NANOCHIP_PHYSICAL_CORES budget")
+        raise ValueError(
+            "Detailed routing requires the declared NANOCHIP_PHYSICAL_CORES budget"
+        )
     if configured is not None and (type(configured) is not int or configured < 1):
         raise ValueError("Detailed routing thread setting must be a positive integer")
     return min(configured or int(budget), int(budget))
@@ -110,21 +164,30 @@ def derive_midpnr_script(upstream, output):
     block = original[start:end]
     if hashlib.sha256(block.encode()).hexdigest() != SKEW_BLOCK_SHA256:
         raise ValueError("Pinned optional clock-skew report block differs")
-    derived = derived.replace(block, 'puts "NANOCHIP_CLOCK_SKEW_DIAGNOSTICS=not_computed"\n\n')
+    derived = derived.replace(
+        block, 'puts "NANOCHIP_CLOCK_SKEW_DIAGNOSTICS=not_computed"\n\n'
+    )
     # Several final STA corners request the same script concurrently. Publish
     # complete immutable content atomically rather than expose a truncated file.
     temporary = output.with_name(output.name + "." + uuid.uuid4().hex)
     temporary.write_text(derived)
     temporary.replace(output)
-    metadata = {"schema": "nanochip-corner-sta-profile/v2", "upstream_path": str(upstream),
-                "upstream_sha256": digest, "derived_path": str(output),
-                "derived_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
-                "parasitic_change": "Use placement parasitics when global routes are absent",
-                "clock_skew_diagnostics": {"status": "not_computed", "reason": SKEW_REASON,
-                    "upstream_block_sha256": SKEW_BLOCK_SHA256,
-                    "opensta_revision": "857316ff001b2a8dbbdc5996944d08a6d38c87ab",
-                    "algorithm_source": "https://raw.githubusercontent.com/The-OpenROAD-Project/OpenSTA/857316ff001b2a8dbbdc5996944d08a6d38c87ab/search/ClkSkew.cc"},
-                "preserved": "All setup/hold/full clock-expanded path reports, violation enumeration, electrical checks, constraints and corner coverage"}
+    metadata = {
+        "schema": "nanochip-corner-sta-profile/v2",
+        "upstream_path": str(upstream),
+        "upstream_sha256": digest,
+        "derived_path": str(output),
+        "derived_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+        "parasitic_change": "Use placement parasitics when global routes are absent",
+        "clock_skew_diagnostics": {
+            "status": "not_computed",
+            "reason": SKEW_REASON,
+            "upstream_block_sha256": SKEW_BLOCK_SHA256,
+            "opensta_revision": "857316ff001b2a8dbbdc5996944d08a6d38c87ab",
+            "algorithm_source": "https://raw.githubusercontent.com/The-OpenROAD-Project/OpenSTA/857316ff001b2a8dbbdc5996944d08a6d38c87ab/search/ClkSkew.cc",
+        },
+        "preserved": "All setup/hold/full clock-expanded path reports, violation enumeration, electrical checks, constraints and corner coverage",
+    }
     temporary = output.with_name(output.name + "." + uuid.uuid4().hex)
     temporary.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
     temporary.replace(output.with_suffix(".json"))
@@ -134,7 +197,13 @@ def derive_midpnr_script(upstream, output):
 def invalidate_inherited_skew(inherited, updates):
     """Explicit null invalidates old diagnostic values; it never means zero."""
     result = dict(updates)
-    result.update({key: None for key in set(inherited) | set(updates) if key.startswith("clock__skew__")})
+    result.update(
+        {
+            key: None
+            for key in set(inherited) | set(updates)
+            if key.startswith("clock__skew__")
+        }
+    )
     return result
 
 
@@ -168,17 +237,23 @@ def validate_clock_repair_config(config):
     """
     master = config.get("NANOCHIP_CLOCK_BRANCH_CELL", CLOCK_BRANCH_CELLS[1])
     if master not in CLOCK_BRANCH_CELLS:
-        raise ValueError("Clock branching requires a verified noninverting clkbuf_2/4/8/16 master")
+        raise ValueError(
+            "Clock branching requires a verified noninverting clkbuf_2/4/8/16 master"
+        )
     value = config.get("NANOCHIP_CLOCK_WORKING_PIN_CAPACITANCE")
     if value is not None:
         if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
-            raise ValueError("Clock working pin capacitance must be a positive finite pF number or null")
+            raise ValueError(
+                "Clock working pin capacitance must be a positive finite pF number or null"
+            )
         try:
             valid = math.isfinite(value) and value > 0
         except (ValueError, OverflowError):
             valid = False
         if not valid:
-            raise ValueError("Clock working pin capacitance must be a positive finite pF number or null")
+            raise ValueError(
+                "Clock working pin capacitance must be a positive finite pF number or null"
+            )
 
 
 def register_flow():
@@ -194,16 +269,36 @@ def register_flow():
         id = STEP_ID
         name = "Repair Clock Fanout After CTS"
         config_vars = OpenROAD.ResizerTimingPostCTS.config_vars + [
-            Variable("NANOCHIP_CLOCK_BRANCH_SIZE", int,
-                     "Maximum actual sinks per added noninverting clock branch; acceptance limits remain unchanged.", default=8),
-            Variable("NANOCHIP_CLOCK_BRANCH_CELL", str,
-                     "Verified noninverting clkbuf_2/4/8/16 master for internal clock branches.", default=CLOCK_BRANCH_CELLS[1]),
-            Variable("NANOCHIP_CLOCK_WORKING_PIN_CAPACITANCE", Optional[Decimal],
-                     "Optional positive finite intrinsic CLOCK pin-load target in pF across every loaded corner; does not replace final total-capacitance acceptance.", default=None),
-            Variable("NANOCHIP_CLOCK_BUFFER_INPUTS", bool,
-                     "Add a noninverting small-input-capacitance buffer before each CTS input root.", default=False),
-            Variable("NANOCHIP_POST_CTS_HOLD_REPAIR", bool,
-                     "Run electrical and hold repair after clock branching; final acceptance stays unchanged.", default=False),
+            Variable(
+                "NANOCHIP_CLOCK_BRANCH_SIZE",
+                int,
+                "Maximum actual sinks per added noninverting clock branch; acceptance limits remain unchanged.",
+                default=8,
+            ),
+            Variable(
+                "NANOCHIP_CLOCK_BRANCH_CELL",
+                str,
+                "Verified noninverting clkbuf_2/4/8/16 master for internal clock branches.",
+                default=CLOCK_BRANCH_CELLS[1],
+            ),
+            Variable(
+                "NANOCHIP_CLOCK_WORKING_PIN_CAPACITANCE",
+                Optional[Decimal],
+                "Optional positive finite intrinsic CLOCK pin-load target in pF across every loaded corner; does not replace final total-capacitance acceptance.",
+                default=None,
+            ),
+            Variable(
+                "NANOCHIP_CLOCK_BUFFER_INPUTS",
+                bool,
+                "Add a noninverting small-input-capacitance buffer before each CTS input root.",
+                default=False,
+            ),
+            Variable(
+                "NANOCHIP_POST_CTS_HOLD_REPAIR",
+                bool,
+                "Run electrical and hold repair after clock branching; final acceptance stays unchanged.",
+                default=False,
+            ),
         ]
 
         def get_script_path(self):
@@ -226,8 +321,10 @@ def register_flow():
 
     class CornerReporting:
         def get_script_path(self):
-            return derive_midpnr_script(super().get_script_path(),
-                                       Path(self.step_dir) / "corner-placement-compat.tcl")
+            return derive_midpnr_script(
+                super().get_script_path(),
+                Path(self.step_dir) / "corner-placement-compat.tcl",
+            )
 
         def run(self, state_in, **kwargs):
             views, metrics = super().run(state_in, **kwargs)
@@ -244,36 +341,65 @@ def register_flow():
 
     class CompatibleDetailedRouting(OpenROAD.DetailedRouting):
         def get_script_path(self):
-            return derive_drt_script(super().get_script_path(), Path(self.step_dir) / "drt-layer-api-compat.tcl")
+            return derive_drt_script(
+                super().get_script_path(),
+                Path(self.step_dir) / "drt-layer-api-compat.tcl",
+            )
 
         def run(self, state_in, **kwargs):
             kwargs, env = self.extract_env(kwargs)
-            env["DRT_THREADS"] = str(bounded_drt_threads(self.config["DRT_THREADS"], os.environ.get("NANOCHIP_PHYSICAL_CORES")))
+            env["DRT_THREADS"] = str(
+                bounded_drt_threads(
+                    self.config["DRT_THREADS"],
+                    os.environ.get("NANOCHIP_PHYSICAL_CORES"),
+                )
+            )
             return super().run(state_in, env=env, **kwargs)
 
         def prepare_env(self, env, state):
             env = super().prepare_env(env, state)
-            env["DRT_THREADS"] = str(bounded_drt_threads(self.config["DRT_THREADS"], os.environ.get("NANOCHIP_PHYSICAL_CORES")))
+            env["DRT_THREADS"] = str(
+                bounded_drt_threads(
+                    self.config["DRT_THREADS"],
+                    os.environ.get("NANOCHIP_PHYSICAL_CORES"),
+                )
+            )
             return env
 
-    CompatibleRepairAntennas = load_flow_helper("repair_flow").build_repair_step(OpenROAD)
+    CompatibleRepairAntennas = load_flow_helper("repair_flow").build_repair_step(
+        OpenROAD
+    )
     magic_helper = load_flow_helper("magic_flow")
     CheckedWriteLEF = magic_helper.build_write_lef_step(Magic, step_error=StepError)
-    CheckedMagicStreamOut = magic_helper.build_magic_exit_step(Magic.StreamOut, step_error=StepError)
-    CheckedMagicDRC = magic_helper.build_magic_exit_step(Magic.DRC, step_error=StepError)
-    CheckedMagicSpiceExtraction = magic_helper.build_magic_exit_step(Magic.SpiceExtraction, step_error=StepError)
+    CheckedMagicStreamOut = magic_helper.build_magic_exit_step(
+        Magic.StreamOut, step_error=StepError
+    )
+    CheckedMagicDRC = magic_helper.build_magic_exit_step(
+        Magic.DRC, step_error=StepError
+    )
+    CheckedMagicSpiceExtraction = magic_helper.build_magic_exit_step(
+        Magic.SpiceExtraction, step_error=StepError
+    )
 
-    CheckedKLayoutDRC = load_flow_helper("klayout_flow").build_klayout_drc_step(KLayout.DRC, step_error=StepError)
+    CheckedKLayoutDRC = load_flow_helper("klayout_flow").build_klayout_drc_step(
+        KLayout.DRC, step_error=StepError
+    )
 
     # Classic normalizes repeated steps with with_id(), creating subclasses.
     # Match their family, and preserve each normalized id. Post must precede
     # Pre because the pinned Post class is itself a Pre subclass.
-    replacements = ((OpenROAD.STAPostPNR, CompatibleSTAPostPNR), (OpenROAD.STAMidPNR, CompatibleSTAMidPNR),
-                    (OpenROAD.STAPrePNR, CompatibleSTAPrePNR), (OpenROAD.DetailedRouting, CompatibleDetailedRouting),
-                    (OpenROAD.RepairAntennas, CompatibleRepairAntennas),
-                    (Magic.WriteLEF, CheckedWriteLEF), (Magic.StreamOut, CheckedMagicStreamOut),
-                    (Magic.DRC, CheckedMagicDRC), (Magic.SpiceExtraction, CheckedMagicSpiceExtraction),
-                    (KLayout.DRC, CheckedKLayoutDRC))
+    replacements = (
+        (OpenROAD.STAPostPNR, CompatibleSTAPostPNR),
+        (OpenROAD.STAMidPNR, CompatibleSTAMidPNR),
+        (OpenROAD.STAPrePNR, CompatibleSTAPrePNR),
+        (OpenROAD.DetailedRouting, CompatibleDetailedRouting),
+        (OpenROAD.RepairAntennas, CompatibleRepairAntennas),
+        (Magic.WriteLEF, CheckedWriteLEF),
+        (Magic.StreamOut, CheckedMagicStreamOut),
+        (Magic.DRC, CheckedMagicDRC),
+        (Magic.SpiceExtraction, CheckedMagicSpiceExtraction),
+        (KLayout.DRC, CheckedKLayoutDRC),
+    )
 
     @Flow.factory.register()
     class NanochipClockRepair(Classic):
@@ -282,9 +408,19 @@ def register_flow():
         # Optional timing repair can legalize and fully reroute. Keep that
         # original Classic step before the final owned antenna repair so it
         # cannot discard antenna jumpers afterward, even when explicitly enabled.
-        timing = [step for step in Steps if issubclass(step, OpenROAD.ResizerTimingPostGRT)]
-        Steps = [step for step in Steps if not issubclass(step, OpenROAD.ResizerTimingPostGRT)]
-        antenna_index = next(i for i, step in enumerate(Steps) if issubclass(step, OpenROAD.RepairAntennas))
+        timing = [
+            step for step in Steps if issubclass(step, OpenROAD.ResizerTimingPostGRT)
+        ]
+        Steps = [
+            step
+            for step in Steps
+            if not issubclass(step, OpenROAD.ResizerTimingPostGRT)
+        ]
+        antenna_index = next(
+            i
+            for i, step in enumerate(Steps)
+            if issubclass(step, OpenROAD.RepairAntennas)
+        )
         Steps[antenna_index:antenna_index] = timing
         Steps.insert(Steps.index(OpenROAD.CTS) + 1, ClockFanoutRepair)
 
@@ -294,4 +430,5 @@ def register_flow():
 if __name__ == "__main__":
     register_flow()
     from librelane.__main__ import cli
+
     cli()

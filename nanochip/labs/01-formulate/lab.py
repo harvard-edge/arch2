@@ -324,9 +324,7 @@ def run_challenge(auto: bool = True) -> dict[str, Any]:
         "int4_active_dram_cycles_per_token": 4757,
         "naive_attempt": naive_attempt,
         "winning_attempt": winning_attempt,
-        "passed": bool(
-             (not naive_attempt["passed"]) and winning_attempt["passed"]
-        ),
+        "passed": bool((not naive_attempt["passed"]) and winning_attempt["passed"]),
         "cross_stack_sightline": CROSS_STACK_SIGHTLINE,
     }
 

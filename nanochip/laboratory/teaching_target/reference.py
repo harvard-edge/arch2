@@ -9,7 +9,9 @@ def word_address(address: int) -> int:
     if type(address) is not int or not 0 <= address < (1 << 14):
         raise ValueError("XBUF address must be an unsigned 14-bit integer")
     source_bits = (0, 1, 2, 3, 4, 9, 10, 11, 12)
-    return sum(((address >> source) & 1) << dest for dest, source in enumerate(source_bits))
+    return sum(
+        ((address >> source) & 1) << dest for dest, source in enumerate(source_bits)
+    )
 
 
 def byte_strobes(lane_mask: int) -> int:

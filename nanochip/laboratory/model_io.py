@@ -32,19 +32,38 @@ class ModelIOContract:
     encoding: str = "utf-8"
 
     def __post_init__(self) -> None:
-        if any(not isinstance(value, str) or not value.strip()
-               for value in (self.schema_id, self.serializer_id)):
-            raise ContractError("Model input schema and serializer identities must be nonempty strings")
+        if any(
+            not isinstance(value, str) or not value.strip()
+            for value in (self.schema_id, self.serializer_id)
+        ):
+            raise ContractError(
+                "Model input schema and serializer identities must be nonempty strings"
+            )
         if type(self.schema_version) is not int or self.schema_version < 1:
             raise ContractError("Model input schema version must be a positive integer")
-        if (not isinstance(self.actions, tuple) or not self.actions
-                or any(not isinstance(action, str) or not action.strip() for action in self.actions)
-                or len(set(self.actions)) != len(self.actions)):
-            raise ContractError("Model input contract actions must be distinct nonempty strings in a tuple")
-        if type(self.max_input_bytes) is not int or not 1 <= self.max_input_bytes <= 8192:
-            raise ContractError("Model input byte limit must be an integer from 1 through 8192")
+        if (
+            not isinstance(self.actions, tuple)
+            or not self.actions
+            or any(
+                not isinstance(action, str) or not action.strip()
+                for action in self.actions
+            )
+            or len(set(self.actions)) != len(self.actions)
+        ):
+            raise ContractError(
+                "Model input contract actions must be distinct nonempty strings in a tuple"
+            )
+        if (
+            type(self.max_input_bytes) is not int
+            or not 1 <= self.max_input_bytes <= 8192
+        ):
+            raise ContractError(
+                "Model input byte limit must be an integer from 1 through 8192"
+            )
         if self.overflow != "reject" or self.encoding != "utf-8":
-            raise ContractError("Model input contracts support UTF-8 and reject overflow; no truncation")
+            raise ContractError(
+                "Model input contracts support UTF-8 and reject overflow; no truncation"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
@@ -55,19 +74,30 @@ class ModelIOContract:
     def from_dict(cls, value: Mapping[str, Any]) -> "ModelIOContract":
         if not isinstance(value, Mapping):
             raise ContractError("Model input contract must be a mapping")
-        required = {"schema_id", "schema_version", "serializer_id", "actions",
-                    "max_input_bytes", "overflow", "encoding"}
+        required = {
+            "schema_id",
+            "schema_version",
+            "serializer_id",
+            "actions",
+            "max_input_bytes",
+            "overflow",
+            "encoding",
+        }
         if set(value) != required or not isinstance(value["actions"], (list, tuple)):
             raise ContractError("Malformed model input contract fields")
         return cls(**(dict(value) | {"actions": tuple(value["actions"])}))
 
     @property
     def digest(self) -> str:
-        return hashlib.sha256(canonical_json(self.to_dict()).encode("utf-8")).hexdigest()
+        return hashlib.sha256(
+            canonical_json(self.to_dict()).encode("utf-8")
+        ).hexdigest()
 
     def require_match(self, supplied: "ModelIOContract | None") -> None:
         if not isinstance(supplied, ModelIOContract) or supplied != self:
-            raise ContractError("Model input contract mismatch: declare the checkpoint's schema, serializer, actions, and byte limit")
+            raise ContractError(
+                "Model input contract mismatch: declare the checkpoint's schema, serializer, actions, and byte limit"
+            )
 
     def validate_text(self, text: str) -> bytes:
         if not isinstance(text, str):
@@ -77,5 +107,7 @@ class ModelIOContract:
         except UnicodeEncodeError as exc:
             raise ContractError("Model input must encode as valid UTF-8") from exc
         if len(data) > self.max_input_bytes:
-            raise ContractError(f"Input has {len(data)} UTF-8 bytes; configured maximum is {self.max_input_bytes}; no truncation applied")
+            raise ContractError(
+                f"Input has {len(data)} UTF-8 bytes; configured maximum is {self.max_input_bytes}; no truncation applied"
+            )
         return data

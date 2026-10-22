@@ -28,14 +28,29 @@ def check_mapping(mapper=mapping, instructor=reference) -> dict:
             try:
                 actual = getattr(mapper, function)(value)
             except Exception as exc:
-                return {"status": "fail", "function": function, "input": value,
-                        "expected": expected, "error": str(exc), "cases_checked": cases}
+                return {
+                    "status": "fail",
+                    "function": function,
+                    "input": value,
+                    "expected": expected,
+                    "error": str(exc),
+                    "cases_checked": cases,
+                }
             cases += 1
             if type(actual) is not int or actual != expected:
-                return {"status": "fail", "function": function, "input": value,
-                        "expected": expected, "actual": actual, "cases_checked": cases}
-    return {"status": "pass", "cases_checked": cases,
-            "scope": "XBUF input bit mapping, including aliases; not workload address legality"}
+                return {
+                    "status": "fail",
+                    "function": function,
+                    "input": value,
+                    "expected": expected,
+                    "actual": actual,
+                    "cases_checked": cases,
+                }
+    return {
+        "status": "pass",
+        "cases_checked": cases,
+        "scope": "XBUF input bit mapping, including aliases; not workload address legality",
+    }
 
 
 def _load(path: Path, name: str):
@@ -61,8 +76,12 @@ def _vectors(path: Path, mapper, instructor=reference, rng_seed: int = 7) -> dic
             old = memory[dest]
             if old is None and mask != 0xF:
                 raise ValueError("Partial write before initialization")
-            memory[dest] = instructor.masked_write(old or 0, wd, mapper.byte_strobes(mask), 128)
-        rows.append(f"{we:x} {wa:x} {wd:x} {mask:x} {a:x} {b:x} {int(compare):x} {(old_a or 0):x} {(old_b or 0):x}\n")
+            memory[dest] = instructor.masked_write(
+                old or 0, wd, mapper.byte_strobes(mask), 128
+            )
+        rows.append(
+            f"{we:x} {wa:x} {wd:x} {mask:x} {a:x} {b:x} {int(compare):x} {(old_a or 0):x} {(old_b or 0):x}\n"
+        )
         comparisons += int(compare)
 
     # Initialize every physical location through the wrapper's legal packed
@@ -85,8 +104,12 @@ def _vectors(path: Path, mapper, instructor=reference, rng_seed: int = 7) -> dic
         wa, a, b = (rng.randrange(1 << 14) for _ in range(3))
         append(rng.randrange(2), wa, rng.getrandbits(128), rng.randrange(1 << 4), a, b)
     path.write_text("".join(rows))
-    return {"cycles": len(rows), "checked_cycles": comparisons, "rng_seed": rng_seed,
-            "initialization": "explicit full writes before comparisons"}
+    return {
+        "cycles": len(rows),
+        "checked_cycles": comparisons,
+        "rng_seed": rng_seed,
+        "initialization": "explicit full writes before comparisons",
+    }
 
 
 def run_memory_check(output: str | Path | None = None, timeout_s: float = 60) -> dict:
@@ -96,7 +119,11 @@ def run_memory_check(output: str | Path | None = None, timeout_s: float = 60) ->
     bind the exercised mapper and RTL. No installation, network, or EDA
     physical flow runs. Temporary mode embeds the logs in its returned receipt.
     """
-    if type(timeout_s) not in (int, float) or not math.isfinite(timeout_s) or timeout_s <= 0:
+    if (
+        type(timeout_s) not in (int, float)
+        or not math.isfinite(timeout_s)
+        or timeout_s <= 0
+    ):
         raise ValueError("Use a positive finite wall-time budget")
     if output is None:
         with tempfile.TemporaryDirectory(prefix="nanochip-memory-check-") as tmp:
@@ -108,15 +135,29 @@ def run_memory_check(output: str | Path | None = None, timeout_s: float = 60) ->
 
 def _run(output: Path, timeout_s: float, retained: bool) -> dict:
     started = time.monotonic()
-    result = {"schema": "nanochip-memory-exercise/v1", "status": "unavailable", "ok": False,
-              "scope": "behavioral SRAM contract and frozen XBUF wrapper; no core or physical claim",
-              "retained": retained, "output_root": str(output) if retained else None,
-              "timeout_s": timeout_s, "commands": [], "complete_core_ready": False}
-    originals = [KPU / "rtl/msh_mem.v", KPU / "harness/macros/msh_sram.v",
-                 PACKAGE / "memory_tb.sv", PACKAGE / "mapping.py", PACKAGE / "reference.py"]
+    result = {
+        "schema": "nanochip-memory-exercise/v1",
+        "status": "unavailable",
+        "ok": False,
+        "scope": "behavioral SRAM contract and frozen XBUF wrapper; no core or physical claim",
+        "retained": retained,
+        "output_root": str(output) if retained else None,
+        "timeout_s": timeout_s,
+        "commands": [],
+        "complete_core_ready": False,
+    }
+    originals = [
+        KPU / "rtl/msh_mem.v",
+        KPU / "harness/macros/msh_sram.v",
+        PACKAGE / "memory_tb.sv",
+        PACKAGE / "mapping.py",
+        PACKAGE / "reference.py",
+    ]
     for source in originals:
         shutil.copyfile(source, output / source.name)
-    result["inputs"] = [{"path": p.name, "sha256": sha256(output / p.name)} for p in originals]
+    result["inputs"] = [
+        {"path": p.name, "sha256": sha256(output / p.name)} for p in originals
+    ]
     result["runner_sha256"] = sha256(Path(__file__))
     tool = shutil.which("verilator")
     try:
@@ -126,16 +167,42 @@ def _run(output: Path, timeout_s: float, retained: bool) -> dict:
         if result["mapping"]["status"] != "pass":
             result["status"] = "fail"
         elif tool is None:
-            result["details"] = "Local Verilator is unavailable; no behavioral pass claimed"
+            result[
+                "details"
+            ] = "Local Verilator is unavailable; no behavioral pass claimed"
         else:
-            result["vectors"] = _vectors(output / "xbuf_vectors.hex", mapper, instructor)
-            result["inputs"].append({"path": "xbuf_vectors.hex", "sha256": sha256(output / "xbuf_vectors.hex")})
-            result["tool"] = subprocess.run([tool, "--version"], capture_output=True, text=True,
-                                             check=True, timeout=min(10, timeout_s)).stdout.strip()
+            result["vectors"] = _vectors(
+                output / "xbuf_vectors.hex", mapper, instructor
+            )
+            result["inputs"].append(
+                {
+                    "path": "xbuf_vectors.hex",
+                    "sha256": sha256(output / "xbuf_vectors.hex"),
+                }
+            )
+            result["tool"] = subprocess.run(
+                [tool, "--version"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=min(10, timeout_s),
+            ).stdout.strip()
             commands = [
-                [tool, "--binary", "--timing", "-Wno-fatal", "--top-module", "memory_tb",
-                 "-j", "1", "--Mdir", str(output / "obj"),
-                 str(output / "memory_tb.sv"), str(output / "msh_mem.v"), str(output / "msh_sram.v")],
+                [
+                    tool,
+                    "--binary",
+                    "--timing",
+                    "-Wno-fatal",
+                    "--top-module",
+                    "memory_tb",
+                    "-j",
+                    "1",
+                    "--Mdir",
+                    str(output / "obj"),
+                    str(output / "memory_tb.sv"),
+                    str(output / "msh_mem.v"),
+                    str(output / "msh_sram.v"),
+                ],
                 [str(output / "obj/Vmemory_tb")],
             ]
             for name, command in zip(("compile", "simulate"), commands):
@@ -145,37 +212,68 @@ def _run(output: Path, timeout_s: float, retained: bool) -> dict:
                     raise subprocess.TimeoutExpired(command, timeout_s)
                 # Kill the compiler's complete process group on timeout,
                 # including any make/C++ children spawned by Verilator.
-                process = subprocess.Popen(command, cwd=output, text=True, stdout=subprocess.PIPE,
-                                           stderr=subprocess.STDOUT, start_new_session=True)
+                process = subprocess.Popen(
+                    command,
+                    cwd=output,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
                 try:
                     log, _ = process.communicate(timeout=remaining)
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     partial, _ = process.communicate()
                     (output / (name + ".log")).write_text(partial)
-                    result[name] = {"returncode": process.returncode, "log": name + ".log",
-                                    "log_sha256": sha256(output / (name + ".log"))}
+                    result[name] = {
+                        "returncode": process.returncode,
+                        "log": name + ".log",
+                        "log_sha256": sha256(output / (name + ".log")),
+                    }
                     if not retained:
                         result[name]["log_text"] = partial
                     raise
                 (output / (name + ".log")).write_text(log)
-                result[name] = {"returncode": process.returncode, "log": name + ".log", "log_sha256": sha256(output / (name + ".log"))}
+                result[name] = {
+                    "returncode": process.returncode,
+                    "log": name + ".log",
+                    "log_sha256": sha256(output / (name + ".log")),
+                }
                 if not retained:
                     result[name]["log_text"] = log
                 if process.returncode:
                     result["status"] = "fail"
                     break
             else:
-                markers = re.findall(r"^NANOCHIP_MEMORY_PASS cycles=(\d+) comparisons=(\d+)$", log, re.M)
-                expected = (str(result["vectors"]["cycles"]), str(result["vectors"]["checked_cycles"]))
+                markers = re.findall(
+                    r"^NANOCHIP_MEMORY_PASS cycles=(\d+) comparisons=(\d+)$", log, re.M
+                )
+                expected = (
+                    str(result["vectors"]["cycles"]),
+                    str(result["vectors"]["checked_cycles"]),
+                )
                 result["status"] = "pass" if markers == [expected] else "unresolved"
                 result["ok"] = result["status"] == "pass"
     except subprocess.TimeoutExpired:
         result["status"] = "timeout"
-    except (OSError, ValueError, SyntaxError, ImportError, AttributeError, subprocess.CalledProcessError) as exc:
+    except (
+        OSError,
+        ValueError,
+        SyntaxError,
+        ImportError,
+        AttributeError,
+        subprocess.CalledProcessError,
+    ) as exc:
         result.update(status="error", details=str(exc))
     result["elapsed_s"] = time.monotonic() - started
     if any(sha256(output / p["path"]) != p["sha256"] for p in result["inputs"]):
-        result.update(status="error", ok=False, details="Checked source or vector changed during execution")
-    (output / "receipt.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+        result.update(
+            status="error",
+            ok=False,
+            details="Checked source or vector changed during execution",
+        )
+    (output / "receipt.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n"
+    )
     return result

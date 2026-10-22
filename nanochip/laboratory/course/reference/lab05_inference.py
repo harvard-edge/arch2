@@ -12,17 +12,33 @@ def serialize(task, history):
         if item.action is None or item.action.name not in task.allowed_actions:
             raise ContractError("History contains no legal action identity")
         metric = item.receipt.metrics.get("cycles") if item.receipt else None
-        failed_mask = sum(1 << checks.index(check.name) for check in item.checks
-                          if check.status != "pass" and check.name in checks)
+        failed_mask = sum(
+            1 << checks.index(check.name)
+            for check in item.checks
+            if check.status != "pass" and check.name in checks
+        )
         action_index = task.allowed_actions.index(item.action.name)
         previous = observations.get(action_index, [0, 0, None, 0])
-        observations[action_index] = [previous[0] + 1,
+        observations[action_index] = [
+            previous[0] + 1,
             previous[1] + int(bool(item.eligible)),
-            int(metric.value) if metric else None, failed_mask]
+            int(metric.value) if metric else None,
+            failed_mask,
+        ]
     payload = {
         "schema": "nanochip.course.task_json/v3",
-        "w": [config["d_model"], config["n_layers"], config["n_experts"], config["top_k"]],
-        "x": [spec["token_count"], spec["seed"], spec["prompt_index"], spec.get("tokens")],
+        "w": [
+            config["d_model"],
+            config["n_layers"],
+            config["n_experts"],
+            config["top_k"],
+        ],
+        "x": [
+            spec["token_count"],
+            spec["seed"],
+            spec["prompt_index"],
+            spec.get("tokens"),
+        ],
         "a": list(task.allowed_actions),
         # One row per action: [action_index, observations, eligible_count,
         # latest_cycles, latest_failed_check_bitset]. This retains measured
@@ -31,6 +47,8 @@ def serialize(task, history):
         "h": [[index, *observations[index]] for index in sorted(observations)],
     }
     return canonical_json(payload)
+
+
 from ...models.language import LanguageProposer
 
 

@@ -9,7 +9,7 @@ import pytest
 from nanochip.laboratory.physical.clock_flow import validate_clock_repair_config
 
 
-MOCK = r'''
+MOCK = r"""
 namespace eval mock {}
 namespace eval ord {}
 namespace eval sta {}
@@ -138,35 +138,71 @@ for {set i 0} {$i<$::load_count} {incr i} {
     dict set ::I sink$i [dict create master sink location [list [expr {$i*1000}] 0]]
     addpin sink$i A INPUT clk $::sink_caps
 }
-'''
+"""
 
 
-def run_tcl(tmp_path, *, loads=8, caps=(.004, .008, .005), new_caps=(.004, .004, .004),
-            target="0.06", group=4, cell="sky130_fd_sc_hd__clkbuf_8", extra="", after=""):
+def run_tcl(
+    tmp_path,
+    *,
+    loads=8,
+    caps=(0.004, 0.008, 0.005),
+    new_caps=(0.004, 0.004, 0.004),
+    target="0.06",
+    group=4,
+    cell="sky130_fd_sc_hd__clkbuf_8",
+    extra="",
+    after="",
+):
     executable = None
-    for candidate in ("/opt/homebrew/opt/tcl-tk/bin/tclsh", "/usr/local/opt/tcl-tk/bin/tclsh", shutil.which("tclsh")):
+    for candidate in (
+        "/opt/homebrew/opt/tcl-tk/bin/tclsh",
+        "/usr/local/opt/tcl-tk/bin/tclsh",
+        shutil.which("tclsh"),
+    ):
         if candidate and Path(candidate).is_file():
-            probe = subprocess.run([candidate], input="if {[info commands lmap] eq {}} {exit 1}\n", text=True, capture_output=True)
+            probe = subprocess.run(
+                [candidate],
+                input="if {[info commands lmap] eq {}} {exit 1}\n",
+                text=True,
+                capture_output=True,
+            )
             if probe.returncode == 0:
                 executable = candidate
                 break
     if executable is None:
-        pytest.skip("Tcl 8.6+ interpreter (lmap) unavailable; native reproduction remains required")
-    source = Path(__file__).resolve().parents[1] / "nanochip/laboratory/physical/clock_repair.tcl"
+        pytest.skip(
+            "Tcl 8.6+ interpreter (lmap) unavailable; native reproduction remains required"
+        )
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "nanochip/laboratory/physical/clock_repair.tcl"
+    )
     script = tmp_path / "check.tcl"
-    initial = (f"set ::load_count {loads}\nset ::sink_caps {{{' '.join(map(str, caps))}}}\n"
-               f"set ::new_caps {{{' '.join(map(str, new_caps))}}}\n")
+    initial = (
+        f"set ::load_count {loads}\nset ::sink_caps {{{' '.join(map(str, caps))}}}\n"
+        f"set ::new_caps {{{' '.join(map(str, new_caps))}}}\n"
+    )
     args = f"10 {group} {cell}" + (f" {{{target}}}" if target is not None else "")
-    script.write_text(initial + MOCK + f"\nsource {{{source}}}\n" + extra + f'''
+    script.write_text(
+        initial
+        + MOCK
+        + f"\nsource {{{source}}}\n"
+        + extra
+        + f"""
 if {{[catch {{set added [nanochip_repair_clock_fanout {args}]
 {after}
 }} error]}} {{puts stderr $error; exit 1}}
 puts "MOCK_RESULT=$::insertions,$::queries,$::unit_changes,[nanochip_clock_max_fanout]"
-''')
-    return subprocess.run([executable, str(script)], text=True, capture_output=True, timeout=5)
+"""
+    )
+    return subprocess.run(
+        [executable, str(script)], text=True, capture_output=True, timeout=5
+    )
 
 
-def test_cap_only_trigger_checks_every_corner_and_branches_below_original_fanout_limit(tmp_path):
+def test_cap_only_trigger_checks_every_corner_and_branches_below_original_fanout_limit(
+    tmp_path,
+):
     result = run_tcl(tmp_path)
     assert result.returncode == 0, result.stderr
     assert "NANOCHIP_CLOCK_TARGET_COUNT=1" in result.stdout
@@ -176,7 +212,9 @@ def test_cap_only_trigger_checks_every_corner_and_branches_below_original_fanout
     assert "NANOCHIP_CLOCK_MAX_SINK_COUNT=4" in result.stdout
 
 
-def test_disabled_option_preserves_legacy_fanout_only_behavior_and_does_not_query_sta(tmp_path):
+def test_disabled_option_preserves_legacy_fanout_only_behavior_and_does_not_query_sta(
+    tmp_path,
+):
     result = run_tcl(tmp_path, target=None)
     assert result.returncode == 0, result.stderr
     assert "MOCK_RESULT=0,0,0,8" in result.stdout
@@ -186,21 +224,26 @@ def test_disabled_option_preserves_legacy_fanout_only_behavior_and_does_not_quer
 
 
 def test_enabled_target_preserves_fanout_only_trigger_and_multilevel_progress(tmp_path):
-    result = run_tcl(tmp_path, loads=11, caps=(.001, .001, .001))
+    result = run_tcl(tmp_path, loads=11, caps=(0.001, 0.001, 0.001))
     assert result.returncode == 0, result.stderr
     assert "NANOCHIP_CLOCK_BUFFER_COUNT=3" in result.stdout
     assert "NANOCHIP_CLOCK_PIN_CAP_TARGET=" not in result.stdout
-    result = run_tcl(tmp_path, loads=21, caps=(.004, .004, .004))
+    result = run_tcl(tmp_path, loads=21, caps=(0.004, 0.004, 0.004))
     assert result.returncode == 0, result.stderr
     assert "NANOCHIP_CLOCK_BUFFER_COUNT=8" in result.stdout
     assert "NANOCHIP_CLOCK_MAX_SINK_COUNT=4" in result.stdout
 
 
-def test_final_network_recheck_catches_later_load_change_and_checks_new_children(tmp_path):
+def test_final_network_recheck_catches_later_load_change_and_checks_new_children(
+    tmp_path,
+):
     result = run_tcl(tmp_path, after="nanochip_check_all_clock_pin_caps 0.06")
     assert result.returncode == 0, result.stderr
     assert "NANOCHIP_CLOCK_PIN_CAP_FINAL_CHECKED=3" in result.stdout
-    result = run_tcl(tmp_path, after="dict set ::P sink0/A caps {.1 .1 .1}\nnanochip_check_all_clock_pin_caps 0.06")
+    result = run_tcl(
+        tmp_path,
+        after="dict set ::P sink0/A caps {.1 .1 .1}\nnanochip_check_all_clock_pin_caps 0.06",
+    )
     assert result.returncode != 0
     assert "Unsupported CLOCK pin-cap target (final)" in result.stderr
     assert "sink0/A" in result.stderr
@@ -214,26 +257,36 @@ dict set ::I data_sink [dict create master sink location {0 0}]
 addpin data_source X OUTPUT data {0 0 0}
 addpin data_sink A INPUT data {1 1 1}
 """
-    result = run_tcl(tmp_path, caps=(.001, .001, .001), extra=extra)
+    result = run_tcl(tmp_path, caps=(0.001, 0.001, 0.001), extra=extra)
     assert result.returncode == 0, result.stderr
     assert "NANOCHIP_CLOCK_TARGET_COUNT=0" in result.stdout
-    result = run_tcl(tmp_path, extra="dict set ::I second [dict create master source location {0 0}]\naddpin second X OUTPUT clk {0 0 0}")
+    result = run_tcl(
+        tmp_path,
+        extra="dict set ::I second [dict create master source location {0 0}]\naddpin second X OUTPUT clk {0 0 0}",
+    )
     assert result.returncode != 0 and "one internal output" in result.stderr
 
 
-@pytest.mark.parametrize("target", ["0", "-0.1", "Inf", "-Inf", "NaN", "not-a-number", "1e-1000"])
+@pytest.mark.parametrize(
+    "target", ["0", "-0.1", "Inf", "-Inf", "NaN", "not-a-number", "1e-1000"]
+)
 def test_bad_tcl_cap_targets_fail_before_mutation(tmp_path, target):
     result = run_tcl(tmp_path, target=target)
     assert result.returncode != 0
     assert "capacitance" in result.stderr
 
 
-@pytest.mark.parametrize("kwargs,phase", [
-    ({"caps": (.02, .02, .02)}, "child"),
-    ({"new_caps": (.04, .04, .04)}, "root"),
-    ({"loads": 4, "caps": (.02, .02, .02)}, "<=group"),
-])
-def test_unmet_child_root_and_unsplittable_targets_fail_explicitly(tmp_path, kwargs, phase):
+@pytest.mark.parametrize(
+    "kwargs,phase",
+    [
+        ({"caps": (0.02, 0.02, 0.02)}, "child"),
+        ({"new_caps": (0.04, 0.04, 0.04)}, "root"),
+        ({"loads": 4, "caps": (0.02, 0.02, 0.02)}, "<=group"),
+    ],
+)
+def test_unmet_child_root_and_unsplittable_targets_fail_explicitly(
+    tmp_path, kwargs, phase
+):
     result = run_tcl(tmp_path, **kwargs)
     assert result.returncode != 0
     assert f"Unsupported CLOCK pin-cap target ({phase}" in result.stderr
@@ -247,13 +300,26 @@ def test_missing_corner_and_arbitrary_branch_cell_reject(tmp_path):
     assert result.returncode != 0 and "verified noninverting" in result.stderr
 
 
-@pytest.mark.parametrize("value", [None, Decimal(".06"), .06, 1])
+@pytest.mark.parametrize("value", [None, Decimal(".06"), 0.06, 1])
 def test_valid_optional_config_preserves_default_or_positive_pf(value):
     validate_clock_repair_config({"NANOCHIP_CLOCK_WORKING_PIN_CAPACITANCE": value})
 
 
-@pytest.mark.parametrize("value", [True, False, "0.06", 0, -.1, float("inf"), float("nan"),
-                                    Decimal("Infinity"), Decimal("sNaN"), 10**1000])
+@pytest.mark.parametrize(
+    "value",
+    [
+        True,
+        False,
+        "0.06",
+        0,
+        -0.1,
+        float("inf"),
+        float("nan"),
+        Decimal("Infinity"),
+        Decimal("sNaN"),
+        10**1000,
+    ],
+)
 def test_invalid_optional_config_rejects(value):
     with pytest.raises(ValueError, match="positive finite"):
         validate_clock_repair_config({"NANOCHIP_CLOCK_WORKING_PIN_CAPACITANCE": value})
@@ -261,4 +327,6 @@ def test_invalid_optional_config_rejects(value):
 
 def test_config_restricts_branch_master_to_verified_clock_family():
     with pytest.raises(ValueError, match="verified noninverting"):
-        validate_clock_repair_config({"NANOCHIP_CLOCK_BRANCH_CELL": "sky130_fd_sc_hd__inv_8"})
+        validate_clock_repair_config(
+            {"NANOCHIP_CLOCK_BRANCH_CELL": "sky130_fd_sc_hd__inv_8"}
+        )

@@ -47,16 +47,28 @@ def _modules(rtlil: str) -> dict:
     for module in re.finditer(r"^module (\S+)\n(.*?)^end$", rtlil, re.M | re.S):
         name, body = module.groups()
         if re.search(r"^  memory ", body, re.M):
-            raise ValueError(f"Uninventoried inferred memory in {name}; explicit mapping is required")
+            raise ValueError(
+                f"Uninventoried inferred memory in {name}; explicit mapping is required"
+            )
         cells = []
-        for cell in re.finditer(r"^  cell (\S+) (\S+)\n(.*?)^  end$", body, re.M | re.S):
+        for cell in re.finditer(
+            r"^  cell (\S+) (\S+)\n(.*?)^  end$", body, re.M | re.S
+        ):
             kind, instance, content = cell.groups()
             if kind.startswith("$mem"):
                 raise ValueError(f"Uninventoried inferred memory cell in {name}")
             params = {}
-            for key, value in re.findall(r"^    parameter(?: signed)? \\(\w+) (.+)$", content, re.M):
+            for key, value in re.findall(
+                r"^    parameter(?: signed)? \\(\w+) (.+)$", content, re.M
+            ):
                 params[key] = _constant(value)
-            cells.append({"type": kind.lstrip("\\"), "name": instance.lstrip("\\"), "parameters": params})
+            cells.append(
+                {
+                    "type": kind.lstrip("\\"),
+                    "name": instance.lstrip("\\"),
+                    "parameters": params,
+                }
+            )
         modules[name.lstrip("\\")] = cells
     if TOP not in modules:
         raise ValueError("Elaboration did not retain the requested top")
@@ -75,19 +87,41 @@ def _inventory(modules: dict, source_root: Path = ROOT) -> list[dict]:
             if kind in ("msh_sram", "msh_rom"):
                 p = cell["parameters"]
                 depth, width = p["DEPTH"], p["WIDTH"]
-                if type(depth) is not int or type(width) is not int or depth <= 0 or width <= 0 or width % 8:
+                if (
+                    type(depth) is not int
+                    or type(width) is not int
+                    or depth <= 0
+                    or width <= 0
+                    or width % 8
+                ):
                     raise ValueError(f"Unsupported memory dimensions at {location}")
-                entry = {"instance": location, "kind": kind, "depth_words": depth,
-                         "width_bits": width, "capacity_bits": depth * width,
-                         "address_bits": (depth - 1).bit_length(),
-                         "physical_realization": "unresolved", "physical_views": {}}
+                entry = {
+                    "instance": location,
+                    "kind": kind,
+                    "depth_words": depth,
+                    "width_bits": width,
+                    "capacity_bits": depth * width,
+                    "address_bits": (depth - 1).bit_length(),
+                    "physical_realization": "unresolved",
+                    "physical_views": {},
+                }
                 if kind == "msh_rom":
                     relative = "nanochip/kpu/" + p["INIT_FILE"]
                     rom = source_root / relative
                     words = rom.read_text().split()
-                    if len(words) != depth or any(not re.fullmatch(r"[0-9a-fA-F]+", w) or int(w, 16) >= (1 << width) for w in words):
-                        raise ValueError(f"ROM content dimensions disagree at {location}")
-                    entry["initialization"] = {"path": relative, "sha256": sha256(rom), "word_count": len(words)}
+                    if len(words) != depth or any(
+                        not re.fullmatch(r"[0-9a-fA-F]+", w)
+                        or int(w, 16) >= (1 << width)
+                        for w in words
+                    ):
+                        raise ValueError(
+                            f"ROM content dimensions disagree at {location}"
+                        )
+                    entry["initialization"] = {
+                        "path": relative,
+                        "sha256": sha256(rom),
+                        "word_count": len(words),
+                    }
                 else:
                     entry["initialization"] = {"kind": "uninitialized; no reset port"}
                 memories.append(entry)
@@ -104,21 +138,38 @@ def _inventory(modules: dict, source_root: Path = ROOT) -> list[dict]:
 
 def derive_target(timeout_s: float = 60) -> dict:
     """Return a fresh, source-hashed inventory; requires local Yosys, no network."""
-    if type(timeout_s) not in (int, float) or not math.isfinite(timeout_s) or timeout_s <= 0:
+    if (
+        type(timeout_s) not in (int, float)
+        or not math.isfinite(timeout_s)
+        or timeout_s <= 0
+    ):
         raise ValueError("Use a positive finite wall-time budget")
     yosys = shutil.which("yosys")
     if yosys is None:
         raise FileNotFoundError("Local Yosys is required for fresh hierarchy inventory")
     filelist = KPU / "rtl/filelist.f"
-    rtl = [KPU / line.strip() for line in filelist.read_text().splitlines() if line.strip()]
-    macros = [KPU / "harness/macros" / name for name in ("msh_sram_bb.v", "msh_rom_bb.v")]
-    source_paths = set(rtl + macros + [filelist, KPU / "reference/configs.json", KPU / "reference/config.py",
-                                      KPU / "harness/macros/msh_sram.v", KPU / "harness/macros/msh_rom.v"])
+    rtl = [
+        KPU / line.strip() for line in filelist.read_text().splitlines() if line.strip()
+    ]
+    macros = [
+        KPU / "harness/macros" / name for name in ("msh_sram_bb.v", "msh_rom_bb.v")
+    ]
+    source_paths = set(
+        rtl
+        + macros
+        + [
+            filelist,
+            KPU / "reference/configs.json",
+            KPU / "reference/config.py",
+            KPU / "harness/macros/msh_sram.v",
+            KPU / "harness/macros/msh_rom.v",
+        ]
+    )
     source_paths.update((KPU / "rtl/roms").glob("*.hex"))
     source_bytes = {p: p.read_bytes() for p in source_paths}
     # The checked-in paths have no whitespace. Quoted paths support relocated
     # repositories; no shell is used to execute the tool.
-    quote = lambda p: '"' + str(p).replace('\\', '\\\\').replace('"', '\\"') + '"'
+    quote = lambda p: '"' + str(p).replace("\\", "\\\\").replace('"', '\\"') + '"'
     with tempfile.TemporaryDirectory(prefix="nanochip-inventory-") as tmp:
         # Tools and the config loader consume copied bytes. Hash those same
         # inputs, rather than hashing potentially changed sources after a run.
@@ -131,48 +182,98 @@ def derive_target(timeout_s: float = 60) -> dict:
         staged_rtl = [staged_kpu / p.relative_to(KPU) for p in rtl]
         staged_macros = [staged_kpu / p.relative_to(KPU) for p in macros]
         output = Path(tmp) / "hierarchy.il"
-        script = ("read_verilog -sv -lib " + " ".join(map(quote, staged_macros)) + "; "
-                  "read_verilog -sv " + " ".join(map(quote, staged_rtl)) + "; "
-                  f"hierarchy -check -top {TOP}; write_rtlil " + quote(output))
-        run = subprocess.run([yosys, "-Q", "-T", "-p", script], cwd=staged_kpu,
-                             text=True, capture_output=True, timeout=timeout_s)
+        script = (
+            "read_verilog -sv -lib " + " ".join(map(quote, staged_macros)) + "; "
+            "read_verilog -sv " + " ".join(map(quote, staged_rtl)) + "; "
+            f"hierarchy -check -top {TOP}; write_rtlil " + quote(output)
+        )
+        run = subprocess.run(
+            [yosys, "-Q", "-T", "-p", script],
+            cwd=staged_kpu,
+            text=True,
+            capture_output=True,
+            timeout=timeout_s,
+        )
         if run.returncode:
             raise ValueError("Yosys hierarchy failed: " + run.stderr[-4000:])
         memories = _inventory(_modules(output.read_text()), staged_root)
-        version = subprocess.run([yosys, "-V"], text=True, capture_output=True, check=True, timeout=10).stdout.strip()
-        config_json = json.loads((staged_kpu / "reference/configs.json").read_text())["nano"]
-        config_py = asdict(runpy.run_path(str(staged_kpu / "reference/config.py"))["CONFIGS"]["nano"])
+        version = subprocess.run(
+            [yosys, "-V"], text=True, capture_output=True, check=True, timeout=10
+        ).stdout.strip()
+        config_json = json.loads((staged_kpu / "reference/configs.json").read_text())[
+            "nano"
+        ]
+        config_py = asdict(
+            runpy.run_path(str(staged_kpu / "reference/config.py"))["CONFIGS"]["nano"]
+        )
     if config_json != json.loads(json.dumps(config_py)):
         raise ValueError("Reference config.py and configs.json disagree")
-    sources = set(rtl + macros + [filelist, KPU / "reference/configs.json", KPU / "reference/config.py",
-                                  KPU / "harness/macros/msh_sram.v", KPU / "harness/macros/msh_rom.v"])
-    sources.update(ROOT / m["initialization"]["path"] for m in memories if m["kind"] == "msh_rom")
+    sources = set(
+        rtl
+        + macros
+        + [
+            filelist,
+            KPU / "reference/configs.json",
+            KPU / "reference/config.py",
+            KPU / "harness/macros/msh_sram.v",
+            KPU / "harness/macros/msh_rom.v",
+        ]
+    )
+    sources.update(
+        ROOT / m["initialization"]["path"] for m in memories if m["kind"] == "msh_rom"
+    )
     totals = Counter()
     for m in memories:
         totals[m["kind"] + "_instances"] += 1
         totals[m["kind"] + "_bits"] += m["capacity_bits"]
     totals["all_memory_bits"] = sum(m["capacity_bits"] for m in memories)
     return {
-        "schema": "nanochip-teaching-target/v1", "target_id": "upstream-nano-inventory-v0",
+        "schema": "nanochip-teaching-target/v1",
+        "target_id": "upstream-nano-inventory-v0",
         "scope": "source-derived complete-core memory inventory; not a realized teaching core",
-        "top": TOP, "configuration": config_json,
-        "source_artifacts": [{"path": str(p.relative_to(ROOT)), "sha256": hashlib.sha256(source_bytes[p]).hexdigest()} for p in sorted(sources)],
-        "derivation": {"tool": version, "passes": ["read_verilog", "hierarchy -check", "write_rtlil"],
-                       "synthesis": False, "physical_execution": False},
+        "top": TOP,
+        "configuration": config_json,
+        "source_artifacts": [
+            {
+                "path": str(p.relative_to(ROOT)),
+                "sha256": hashlib.sha256(source_bytes[p]).hexdigest(),
+            }
+            for p in sorted(sources)
+        ],
+        "derivation": {
+            "tool": version,
+            "passes": ["read_verilog", "hierarchy -check", "write_rtlil"],
+            "synthesis": False,
+            "physical_execution": False,
+        },
         "contracts": {
-            "msh_sram": {"read_ports": 1, "write_ports": 1, "read_latency_cycles": 1,
-                         "write_mask_granularity_bits": 8, "same_address_read_write": "old_data",
-                         "read_enable_false": "hold_previous_output", "reset": "none",
-                         "initial_contents": "unspecified"},
-            "msh_rom": {"read_ports": 2, "write_ports": 0, "read_latency_cycles": 0,
-                        "initialization": "readmemh at simulation time zero; physical implementation unresolved"}},
-        "memories": memories, "totals": dict(sorted(totals.items())),
+            "msh_sram": {
+                "read_ports": 1,
+                "write_ports": 1,
+                "read_latency_cycles": 1,
+                "write_mask_granularity_bits": 8,
+                "same_address_read_write": "old_data",
+                "read_enable_false": "hold_previous_output",
+                "reset": "none",
+                "initial_contents": "unspecified",
+            },
+            "msh_rom": {
+                "read_ports": 2,
+                "write_ports": 0,
+                "read_latency_cycles": 0,
+                "initialization": "readmemh at simulation time zero; physical implementation unresolved",
+            },
+        },
+        "memories": memories,
+        "totals": dict(sorted(totals.items())),
         "complete_core_ready": False,
-        "unresolved": ["SRAM and asynchronous dual-read ROM physical implementations/views",
-                       "Complete workload checks with realized memory wrappers and initialization",
-                       "Functional correspondence through synthesis and physical integration",
-                       "Core constraints, macro-aware coverage, floorplan, routing and extracted timing",
-                       "DRC, LVS, connectivity, antenna and electrical closure"],
+        "unresolved": [
+            "SRAM and asynchronous dual-read ROM physical implementations/views",
+            "Complete workload checks with realized memory wrappers and initialization",
+            "Functional correspondence through synthesis and physical integration",
+            "Core constraints, macro-aware coverage, floorplan, routing and extracted timing",
+            "DRC, LVS, connectivity, antenna and electrical closure",
+        ],
     }
 
 
@@ -185,8 +286,20 @@ def validate_target(target: dict, timeout_s: float = 60) -> dict:
     expected.pop("derivation", None)
     observed.pop("derivation", None)
     if expected != observed:
-        raise ValueError("Target snapshot differs from freshly elaborated source inventory")
-    if target.get("derivation", {}).get("passes") != fresh["derivation"]["passes"] or target.get("derivation", {}).get("synthesis") is not False or target.get("derivation", {}).get("physical_execution") is not False:
+        raise ValueError(
+            "Target snapshot differs from freshly elaborated source inventory"
+        )
+    if (
+        target.get("derivation", {}).get("passes") != fresh["derivation"]["passes"]
+        or target.get("derivation", {}).get("synthesis") is not False
+        or target.get("derivation", {}).get("physical_execution") is not False
+    ):
         raise ValueError("Invalid derivation scope")
-    return {"schema": "nanochip-target-validation/v1", "status": "pass", "tool": fresh["derivation"]["tool"],
-            "scope": fresh["scope"], "totals": fresh["totals"], "complete_core_ready": False}
+    return {
+        "schema": "nanochip-target-validation/v1",
+        "status": "pass",
+        "tool": fresh["derivation"]["tool"],
+        "scope": fresh["scope"],
+        "totals": fresh["totals"],
+        "complete_core_ready": False,
+    }

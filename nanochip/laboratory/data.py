@@ -25,7 +25,9 @@ class DatasetEntry:
     receipt: Artifact
 
 
-def load_dataset(manifest_path: Path | str, *, split: Split) -> tuple[DatasetEntry, ...]:
+def load_dataset(
+    manifest_path: Path | str, *, split: Split
+) -> tuple[DatasetEntry, ...]:
     """Validate the entire manifest before selecting an allowed partition.
 
     Related candidates/conditions must share a curator-assigned group. This
@@ -48,15 +50,24 @@ def load_dataset(manifest_path: Path | str, *, split: Split) -> tuple[DatasetEnt
     for row in rows:
         try:
             entry = DatasetEntry(
-                row["record_id"], row["group_id"], row["split"],
-                row["evidence_mode"], row["construction"], row["source"],
+                row["record_id"],
+                row["group_id"],
+                row["split"],
+                row["evidence_mode"],
+                row["construction"],
+                row["source"],
                 Artifact(**row["receipt"]),
             )
         except (KeyError, TypeError) as exc:
             raise ContractError("Dataset record is incomplete") from exc
-        if not all(isinstance(value, str) and value.strip() for value in (
-            entry.record_id, entry.group_id, entry.source,
-        )):
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (
+                entry.record_id,
+                entry.group_id,
+                entry.source,
+            )
+        ):
             raise ContractError("Records need nonempty identity, group, and source")
         if entry.record_id in record_ids:
             raise ContractError("Duplicate dataset record identity")
@@ -66,13 +77,19 @@ def load_dataset(manifest_path: Path | str, *, split: Split) -> tuple[DatasetEnt
         if entry.evidence_mode != "fresh":
             raise ContractError("Empirical datasets require fresh execution receipts")
         if entry.construction not in ("constructed_fault", "reference", "natural"):
-            raise ContractError("Disclose whether a case is constructed or naturally encountered")
+            raise ContractError(
+                "Disclose whether a case is constructed or naturally encountered"
+            )
         for key, index in ((entry.group_id, groups), (entry.receipt.sha256, receipts)):
             if key in index and index[key] != entry.split:
-                raise ContractError("Related or duplicated evidence crosses dataset partitions")
+                raise ContractError(
+                    "Related or duplicated evidence crosses dataset partitions"
+                )
             index[key] = entry.split
         entry.receipt.validate(path.parent)
-        receipt = json.loads(entry.receipt.resolve(path.parent).read_text(encoding="utf-8"))
+        receipt = json.loads(
+            entry.receipt.resolve(path.parent).read_text(encoding="utf-8")
+        )
         if receipt.get("mode") != "fresh":
             raise ContractError("Receipt origin contradicts the dataset declaration")
         entries.append(entry)

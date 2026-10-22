@@ -6,6 +6,14 @@ def build_model(config):
     raise NotImplementedError("Implement or replace the model construction component")
 
 
-def train(records, output, *, model_io_contract, objective="pretrain", base_checkpoint=None, **budget):
+def train(
+    records,
+    output,
+    *,
+    model_io_contract,
+    objective="pretrain",
+    base_checkpoint=None,
+    **budget,
+):
     """Train real parameters and save a reloadable checkpoint plus record."""
     raise NotImplementedError("Implement training with the Lab 1 training partition")

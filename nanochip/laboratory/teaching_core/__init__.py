@@ -7,4 +7,10 @@ from .contract import contract
 from .fixtures import build_fixture
 from .backend import make_task, TeachingCoreMaterializer, TeachingCoreBackend
 
-__all__ = ["contract", "build_fixture", "make_task", "TeachingCoreMaterializer", "TeachingCoreBackend"]
+__all__ = [
+    "contract",
+    "build_fixture",
+    "make_task",
+    "TeachingCoreMaterializer",
+    "TeachingCoreBackend",
+]
