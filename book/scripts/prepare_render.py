@@ -254,7 +254,7 @@ def prepare_local_images() -> None:
 
 def run_book_integrity_checks() -> None:
     subprocess.run(
-        [str(REPO_ROOT / "arch2"), "validate", "refs"],
+        [sys.executable, str(REPO_ROOT / "cli" / "arch2.py"), "validate", "refs"],
         check=True,
     )
 
