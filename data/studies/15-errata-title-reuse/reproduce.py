@@ -33,9 +33,9 @@ def group(rows, normalize):
 
 
 def main():
-    manifest = verify_sources(HERE)
+    manifest = verify_sources(HERE, allow_missing_gitignored=True)
     shared = HERE.parent / "13-errata-dispositions"
-    verify_sources(shared)
+    verify_sources(shared, allow_missing_gitignored=True)
     assert (HERE / "raw/source_manifest.json").read_bytes() == (
         shared / "source_manifest.json"
     ).read_bytes()

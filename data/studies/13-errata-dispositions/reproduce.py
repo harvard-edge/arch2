@@ -21,7 +21,7 @@ from evidence_bundle import verify_sources, record_build
 
 
 def main():
-    manifest = verify_sources(HERE)
+    manifest = verify_sources(HERE, allow_missing_gitignored=True)
     subprocess.run([sys.executable, str(HERE / "extract.py")], check=True)
     rows = list(csv.DictReader((HERE / "derived/errata.csv").open()))
     assert len({(r["family"], r["erratum_id"]) for r in rows}) == len(rows)

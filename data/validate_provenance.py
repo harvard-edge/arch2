@@ -15,6 +15,7 @@ Exits non-zero on any violation, so it can gate a commit or a build.
 from __future__ import annotations
 
 import csv as csvlib
+import itertools
 import re
 import sys
 from pathlib import Path
@@ -87,7 +88,7 @@ for record in records:
             count = sum(
                 1
                 for _ in csvlib.DictReader(
-                    line for line in handle if not line.startswith("#")
+                    itertools.dropwhile(lambda line: line.startswith("#"), handle)
                 )
             )
         if count != record["rows"]:

@@ -86,3 +86,7 @@ def test_retained_data_path_establishes_inventory_only(figure: dict) -> None:
     verdict, detail, _ = provenance.classify("fig-result", figure, declaration)
     assert verdict == "declared-measured"
     assert detail == "1 retained input(s)"
+
+
+def test_every_active_manuscript_figure_has_complete_provenance_and_yml() -> None:
+    assert provenance.main() == 0

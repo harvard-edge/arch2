@@ -140,9 +140,9 @@ This search for specialized efficiency has produced a remarkably diverse hardwar
 ```{python}
 #| label: fig-accelerator-landscape
 #| fig-cap: |
-#|   **AI accelerators span seven orders of magnitude in operating power.** Each point represents a
-#|   publicly announced accelerator from the MIT Lincoln Laboratory survey, plotted as peak performance against
-#|   peak power on log-log axes; the 180 parts span about $1\ \text{mW}$ to $23\ \text{kW}$ and
+#|   **AI accelerators span seven orders of magnitude in peak power.** Each point represents a
+#|   publicly announced accelerator entry from the MIT Lincoln Laboratory survey, plotted as peak performance against
+#|   peak power on log-log axes; the 180 entries across 170 accelerators span about $1\ \text{mW}$ to $23\ \text{kW}$ and
 #|   $6\ \text{GOps/s}$ to $3.5 \times 10^7\ \text{GOps/s}$ [@ReutherEtAl2025LAICS]. Marker shape and color denote form factor (circle chip, square card, triangle system), filled versus hollow markers
 #|   distinguish training from inference parts, and dashed diagonals trace constant energy-efficiency contours
 #|   from $100\ \text{GOps/W}\text{ to }100\ \text{TOPS/W}$. The resulting design space forms a dense, heterogeneous cloud
@@ -219,7 +219,10 @@ handles += [Line2D([0], [0], marker="o", ls="", markerfacecolor=COLORS["ink"], m
 ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=5.8, handletextpad=0.3, labelspacing=0.3, borderaxespad=0.4)
 curated = ["Maxim", "GAP9", "Jetson1", "Perceive", "A100", "TPU4", "H100",
            "AMD-MI300X", "B200", "Gaudi3", "CS-2", "DGX-H100", "GroqNode", "Tachyum"]
-by_label = {d["label"]: d for d in rows}
+by_label: dict[str, dict] = {}
+for d in rows:
+    if d["label"] not in by_label or d["perf"] > by_label[d["label"]]["perf"]:
+        by_label[d["label"]] = d
 items = [(by_label[n]["power"], by_label[n]["perf"], n) for n in curated if n in by_label]
 place_labels(ax, fig, items, fontsize=5.0, color=COLORS["ink"])
 fig.subplots_adjust(left=0.095, right=0.98, top=0.98, bottom=0.11)
@@ -647,9 +650,12 @@ Plotted on a common logarithmic axis, the three count-based anchors from @tbl-de
 #| out-width: "100%"
 #| fig-alt: "Log-scale strip chart plotting three published search-space anchors: MAESTRO's 480 million candidates, AutoTVM's roughly one billion tensor programs, and a Timeloop loop-ordering and bypass lower bound of 2.6 times ten to the eighteenth arrangements. Filled markers show a reported or computed count; the hollow AutoTVM marker shows an order-of-magnitude estimate."
 
+import csv
 from math import factorial
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import _python.plots as _ap
 from _python.plots import COLORS, apply_style, row_axis, top_log_axis
 
 # Data provenance (values transcribed or computed from the cited publications):
@@ -659,14 +665,23 @@ from _python.plots import COLORS, apply_style, row_axis, top_log_axis
 # - Timeloop loop-ordering and bypass lower bound: (7!)^4 * (2^4)^3 ~= 2.6e18,
 #   computed from the published expression [@ParasharEtAl2019Timeloop].
 # Source statements checked against the primary papers 2026-10-10.
+# Retained receipt: data/datasets/chapter2-search-space-scale.csv
 
 timeloop_mapspace = factorial(7) ** 4 * (2**4) ** 3
-
-rows = [
-    {"label": "MAESTRO accelerator DSE", "note": "480M candidates, stated", "value": 4.8e8, "right": "$4.8\\times10^{8}$", "stated": True},
-    {"label": "AutoTVM tensor programs", "note": "order of billions, approximate", "value": 1e9, "right": "$\\sim\\!10^{9}$", "stated": False},
-    {"label": "Timeloop ordering + bypass", "note": "$(7!)^{4}\\times(2^{4})^{3}$, lower bound", "value": timeloop_mapspace, "right": "$2.6\\times10^{18}$", "stated": True},
-]
+_root = Path(_ap.__file__).resolve().parents[2]
+rows = []
+with open(_root / "data" / "datasets" / "chapter2-search-space-scale.csv", encoding="utf-8") as fh:
+    for d in csv.DictReader(l for l in fh if not l.startswith("#")):
+        rows.append(
+            {
+                "label": d["label"],
+                "note": d["note"],
+                "value": float(d["candidate_count"]),
+                "right": d["right_label"],
+                "stated": d["stated"].strip().lower() == "true",
+            }
+        )
+assert int(rows[2]["value"]) == timeloop_mapspace
 
 apply_style()
 fig, ax = plt.subplots(figsize=(4.95, 2.35))

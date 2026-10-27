@@ -5,6 +5,7 @@ Choquette et al., IEEE Micro 2018 (V100: 815 mm²).
 Squares encode area only; no wafer-containment geometry is implied.
 """
 
+import csv
 import math
 import sys
 from pathlib import Path
@@ -22,8 +23,14 @@ from book._python.plots import COLORS, apply_style
 
 def generate_figure():
     apply_style()
-    wse_area = 46225
-    gpu_area = 815
+    csv_path = REPO_ROOT / "data" / "datasets" / "chapter2-cerebras-wse-scale.csv"
+    with csv_path.open(encoding="utf-8") as fh:
+        by_device = {
+            row["device"]: int(row["area_mm2"])
+            for row in csv.DictReader(l for l in fh if not l.startswith("#"))
+        }
+    wse_area = by_device["Cerebras WSE"]
+    gpu_area = by_device["NVIDIA V100"]
     wse_side = math.sqrt(wse_area)
     gpu_side = math.sqrt(gpu_area)
     fig, ax = plt.subplots(figsize=(6.4, 4.5))
@@ -63,7 +70,13 @@ def generate_figure():
         fontweight="bold",
     )
     ax.text(
-        wse_side / 2, 99, "46,225 mm²", color=ink, ha="center", va="center", fontsize=11
+        wse_side / 2,
+        99,
+        f"{wse_area:,} mm²",
+        color=ink,
+        ha="center",
+        va="center",
+        fontsize=11,
     )
     ax.text(
         gpu_x + gpu_side / 2,
@@ -78,7 +91,7 @@ def generate_figure():
     ax.text(
         gpu_x + gpu_side / 2,
         47,
-        "815 mm²",
+        f"{gpu_area:,} mm²",
         color=ink,
         ha="center",
         va="center",

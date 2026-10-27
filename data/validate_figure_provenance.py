@@ -187,13 +187,47 @@ def classify(
     return f"declared-{kind}", detail, where
 
 
+def data_provenance_yml(rel: str) -> Path | None:
+    """Resolve the local provenance.yml governing a repository-relative data path."""
+    parts = Path(rel).parts
+    if len(parts) >= 2 and parts[:2] == ("data", "datasets"):
+        cand = ROOT / "data" / "datasets" / "provenance.yml"
+        return cand if cand.is_file() else None
+    if len(parts) >= 3 and parts[:2] == ("data", "studies"):
+        cand = ROOT / parts[0] / parts[1] / parts[2] / "provenance.yml"
+        return cand if cand.is_file() else None
+    cand = (ROOT / rel).parent / "provenance.yml"
+    return cand if cand.is_file() else None
+
+
+def check_data_figure_contract(label: str, info: dict, evidence: dict) -> str | None:
+    """Ensure every active manuscript data figure has retained data, a generator, and a local provenance.yml."""
+    kind = evidence.get("evidence_class")
+    if kind not in {"measured", "transcribed", "analytical"}:
+        return None
+    data = evidence.get("data", [])
+    if not data:
+        return f"{kind} figure requires at least one retained data path in data:"
+    if not evidence.get("generator"):
+        return f"{kind} figure requires an explicit generator declaration"
+    for rel in data:
+        if data_provenance_yml(rel) is None:
+            return f"missing provenance.yml for data directory of {rel}"
+    return None
+
+
 def main() -> int:
     manifest = yaml.safe_load(MANIFEST.read_text()).get("figure_evidence", {})
     figs = collect_figures()
-    results = [
-        (label, *classify(label, info, manifest.get(label, {})))
-        for label, info in sorted(figs.items())
-    ]
+    results = []
+    for label, info in sorted(figs.items()):
+        ev = manifest.get(label, {})
+        verdict, detail, where = classify(label, info, ev)
+        if verdict != "VIOLATION":
+            contract_err = check_data_figure_contract(label, info, ev)
+            if contract_err:
+                verdict, detail = "VIOLATION", contract_err
+        results.append((label, verdict, detail, where))
     failures = [r for r in results if r[1] == "VIOLATION"]
     stale = sorted(set(manifest) - set(figs))
     print(f"{len(figs)} active figure declarations\n")
