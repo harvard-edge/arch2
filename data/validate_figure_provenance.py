@@ -145,7 +145,18 @@ def classify(
 
                     receipt_json = json.loads(receipt_file.read_text())
                     rel_in_study = str(path.relative_to(study_dir))
-                    expected_sha = receipt_json.get("files", {}).get(rel_in_study)
+                    files_field = receipt_json.get("files", {})
+                    expected_sha = None
+                    if isinstance(files_field, dict):
+                        expected_sha = files_field.get(rel_in_study)
+                    elif isinstance(files_field, list):
+                        for item in files_field:
+                            if isinstance(item, dict) and item.get("path") in (
+                                rel,
+                                rel_in_study,
+                            ):
+                                expected_sha = item.get("sha256")
+                                break
                     actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
                     if expected_sha and expected_sha != actual_sha:
                         return (

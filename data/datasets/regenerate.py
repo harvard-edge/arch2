@@ -34,7 +34,17 @@ def _num(x):
 
 
 def _write(name, header, rows):
-    with open(HERE / name, "w", newline="", encoding="utf-8") as f:
+    target = HERE / name
+    comment_lines = []
+    if target.is_file():
+        for line in target.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("#"):
+                comment_lines.append(line)
+            else:
+                break
+    with open(target, "w", newline="", encoding="utf-8") as f:
+        for cline in comment_lines:
+            f.write(cline + "\n")
         w = csv.writer(f)
         w.writerow(header)
         w.writerows(rows)
@@ -159,9 +169,9 @@ def simulator_tax():  # ch5 (synthesized from primary sources; no raw file)
         ["Native silicon", "~3 GHz core", 1, "definitional baseline (~3 GHz, IPC ~1)"],
         [
             "Functional / ISA sim",
-            "QEMU / Spike / gem5-Atomic",
+            "QEMU / Spike",
             30,
-            "tens-hundreds MIPS; ZSim IPC=1 up to 90 MIPS (Sanchez & Kozyrakis 2013)",
+            "tens-hundreds MIPS; ZSim IPC=1 up to 90 MIPS (Sanchez & Kozyrakis 2013); gem5-Atomic runs far slower (~1-10 MIPS) and does not belong on this rung",
         ],
         [
             "Cycle-approximate",
@@ -170,7 +180,7 @@ def simulator_tax():  # ch5 (synthesized from primary sources; no raw file)
             "ZSim/Sniper detailed OOO ~1-4 MIPS/core; ZSim reports ~1000x faster than detailed cycle-accurate simulators, so this rung sits well above cycle-accurate (Sanchez & Kozyrakis 2013; Carlson et al. 2011)",
         ],
         [
-            "Cycle-accurate",
+            "Cycle-level",
             "gem5 O3 / Flexus",
             15000,
             "~200 KIPS gem5/Flexus/MARSS class (Sanchez & Kozyrakis 2013)",

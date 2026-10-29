@@ -210,6 +210,38 @@ for receipt_file in sorted(STUDIES.glob("*/build_receipt.json")):
     study_dir = receipt_file.parent
     if not (study_dir / "provenance.yml").is_file():
         problems.append(f"{study_dir.relative_to(ROOT)} missing provenance.yml")
+
+for prov_file in sorted(
+    list(STUDIES.glob("*/provenance.yml"))
+    + list((ROOT / "book" / "contents").rglob("provenance.yml"))
+):
+    prov_dir = prov_file.parent
+    prov_data = yaml.safe_load(prov_file.read_text(encoding="utf-8")) or {}
+    for ds in prov_data.get("datasets", []) or []:
+        if isinstance(ds, dict) and "file" in ds:
+            ds_path = (prov_dir / ds["file"]).resolve()
+            if not ds_path.is_file():
+                problems.append(
+                    f"{prov_file.relative_to(ROOT)} declares missing dataset: {ds['file']}"
+                )
+    prod = prov_data.get("produced_by")
+    if (
+        isinstance(prod, str)
+        and prod.strip().endswith(".py")
+        and "," not in prod
+        and ";" not in prod
+        and " and " not in prod
+    ):
+        prod_path = (ROOT / prod.strip()).resolve()
+        if not prod_path.is_file():
+            prod_path = (prov_dir / prod.strip()).resolve()
+        if not prod_path.is_file():
+            problems.append(
+                f"{prov_file.relative_to(ROOT)} declares missing produced_by script: {prod}"
+            )
+
+for receipt_file in sorted(STUDIES.glob("*/build_receipt.json")):
+    study_dir = receipt_file.parent
     manifest_file = study_dir / "source_manifest.json"
     if manifest_file.is_file():
         manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))

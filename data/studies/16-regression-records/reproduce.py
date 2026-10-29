@@ -120,7 +120,7 @@ def main():
     for y, row in zip(ys, display):
         label = f'{row["passing_runs"]:,} / {row["total_runs"]:,}'
         if y == 0:
-            label += "  (95.7%)"
+            label += f"  ({rates[0] * 100:.1f}%)"
         ax.text(
             1.025,
             y,
