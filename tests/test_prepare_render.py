@@ -135,3 +135,36 @@ def test_non_git_directory_falls_back_to_mtime(tmp_path: Path) -> None:
     os.utime(source, (target_time + 60, target_time + 60))
 
     assert prepare_render.is_stale(source, target, repo_root=tmp_path)
+
+
+def test_prune_keeps_tracked_unreferenced_sources(
+    figure_repo: tuple[Path, Path, Path],
+) -> None:
+    repo, source, target = figure_repo
+    kept = prepare_render.prune_unreferenced_derivatives(repo, [], repo_root=repo)
+    assert source.exists() and target.exists()
+    assert set(kept) == {source, target}
+
+
+def test_prune_removes_only_untracked_derivative(
+    figure_repo: tuple[Path, Path, Path],
+) -> None:
+    repo, _, _ = figure_repo
+    svg = repo / "draft.svg"
+    pdf = repo / "draft.pdf"
+    orphan_pdf = repo / "orphan.pdf"
+    svg.write_text("svg\n", encoding="utf-8")
+    pdf.write_text("pdf\n", encoding="utf-8")
+    orphan_pdf.write_text("pdf\n", encoding="utf-8")
+    prepare_render.prune_unreferenced_derivatives(repo, ["figure"], repo_root=repo)
+    assert svg.exists(), "an untracked SVG is authored source and must survive"
+    assert not pdf.exists(), "an untracked PDF with its SVG twin is regenerable"
+    assert orphan_pdf.exists(), "a PDF without an SVG twin may be authored art"
+
+
+def test_prune_keeps_referenced_files(figure_repo: tuple[Path, Path, Path]) -> None:
+    repo, source, target = figure_repo
+    kept = prepare_render.prune_unreferenced_derivatives(
+        repo, ["figure"], repo_root=repo
+    )
+    assert kept == [] and source.exists() and target.exists()

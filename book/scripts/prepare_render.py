@@ -193,6 +193,30 @@ def convert_refs(refs: list[str], image_dir: Path, source: Path) -> list[str]:
     return missing
 
 
+def prune_unreferenced_derivatives(
+    image_dir: Path, refs: list[str], *, repo_root: Path = REPO_ROOT
+) -> list[Path]:
+    """Remove stale generated PDFs, never authored or tracked files.
+
+    An unreferenced figure's SVG is authored source, and a tracked file is part of
+    the repository: deleting either during a render dirties the checkout, and the
+    next commit then removes figures nobody decided to remove. Only an untracked
+    PDF with its SVG twin beside it is a regenerable derivative, so only that is
+    pruned. Everything else unreferenced is kept and returned for reporting.
+    """
+    referenced = set(refs)
+    kept: list[Path] = []
+    for existing in sorted([*image_dir.glob("*.pdf"), *image_dir.glob("*.svg")]):
+        if existing.stem in referenced:
+            continue
+        derivative = existing.suffix == ".pdf" and existing.with_suffix(".svg").exists()
+        if derivative and _git_tracked(repo_root, existing) is False:
+            existing.unlink()
+        else:
+            kept.append(existing)
+    return kept
+
+
 def prepare_local_images() -> None:
     groups = chapter_sources()
     if not groups:
@@ -217,10 +241,7 @@ def prepare_local_images() -> None:
                 for ref in image_ref_stems(qmd.read_text(encoding="utf-8"))
             }
         )
-        referenced = {f"{ref}{suffix}" for ref in refs for suffix in (".pdf", ".svg")}
-        for existing in [*image_dir.glob("*.pdf"), *image_dir.glob("*.svg")]:
-            if existing.name not in referenced:
-                existing.unlink()
+        prune_unreferenced_derivatives(image_dir, refs)
         missing += convert_refs(refs, image_dir, qmds[0])
 
     # Front matter draws on book/images/, which also holds site art such as the
