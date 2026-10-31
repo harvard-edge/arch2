@@ -90,6 +90,101 @@ Replicating cores does not escape this cost; it moves it into coherence, synchro
 
 When a workload performs regular, predictable calculations, a specialized datapath can strip away most of that per-instruction coordination hardware and devote the silicon to dense arithmetic arrays. The trade works only if the memory system can keep those units fed.
 
+The trade has produced a diverse population of accelerators rather than one canonical template, a shift the Project Brainwave team characterized as rapid architectural diversification [@ChungEtAl2018Brainwave]. Publicly announced AI chips, cards, and systems spread across the power–performance plane from milliwatt edge devices to multi-kilowatt data-center platforms (@fig-accelerator-landscape) [@ReutherEtAl2025LAICS].
+
+```{python}
+#| label: fig-accelerator-landscape
+#| fig-cap: |
+#|   **AI accelerators span seven orders of magnitude in peak power.** Each point represents a
+#|   publicly announced accelerator entry from the MIT Lincoln Laboratory survey, plotted as peak performance against
+#|   peak power on log-log axes; the 180 entries across 170 accelerators span about $1\ \text{mW}$ to $23\ \text{kW}$ and
+#|   $6\ \text{GOps/s}$ to $3.5 \times 10^7\ \text{GOps/s}$ [@ReutherEtAl2025LAICS]. Marker shape and color denote form factor (circle chip, square card, triangle system), filled versus hollow markers
+#|   distinguish training from inference parts, and dashed diagonals trace constant energy-efficiency contours
+#|   from $100\ \text{GOps/W}\text{ to }100\ \text{TOPS/W}$. The resulting design space forms a dense, heterogeneous cloud
+#|   rather than clustering around a single operating point.
+#| out-width: "100%"
+#| fig-alt: "Log-log scatter plot of about 180 AI accelerators, peak performance in giga-operations per second versus peak power in watts. Points span from subwatt embedded chips at the lower left to multi-kilowatt data-center systems at the upper right, roughly seven orders of magnitude in power and six in performance. Dashed diagonal lines mark constant energy efficiency from 100 giga-ops per watt to 100 tera-ops per watt. Chips are circles, cards squares, and systems triangles; training parts are filled and inference parts hollow."
+
+import csv
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import _python.plots as _ap
+from _python.plots import COLORS, apply_style
+from _python.labels import place_labels
+
+apply_style()
+
+# Data: MIT Lincoln Laboratory AI accelerator survey, 2025 edition
+# [@ReutherEtAl2025LAICS], one row per publicly announced accelerator with a
+# stated peak performance and power. Values are dataset-transcribed.
+# Accessed 2026-07-19. Source data: data/datasets/chapter1-accelerator-landscape.csv
+
+_root = Path(_ap.__file__).resolve().parents[2]
+rows = []
+with open(_root / "data" / "datasets" / "chapter1-accelerator-landscape.csv", encoding="utf-8") as fh:
+    # datasets carry '#' provenance headers; skip them
+    for d in csv.DictReader(l for l in fh if not l.startswith("#")):
+        try:
+            perf = float(d["peak_performance_ops_per_s"]) / 1e9
+            power = float(d["power_w"])
+        except ValueError:
+            continue
+        rows.append({"label": d["label"], "perf": perf, "power": power,
+                     "form": d["form_factor"], "iort": d["inference_or_training"]})
+
+forms = {"Chip": COLORS["workload"], "Card": COLORS["methods"], "System": COLORS["evidence"]}
+markers = {"Chip": "o", "Card": "s", "System": "^"}  # shape as well as hue
+fig, ax = plt.subplots(figsize=(6.0, 4.0))
+xline = np.array([1e-3, 1e5])
+for eff, lab in [(1e2, "100 GOPS/W"), (1e3, "1 TOPS/W"), (1e4, "10 TOPS/W"), (1e5, "100 TOPS/W")]:
+    ax.plot(xline, eff * xline, ls=(0, (5, 4)), color=COLORS["grid"], lw=0.8, zorder=1)
+    x_pos = max(2.4e-3, 10.0 / eff)
+    ax.text(x_pos, eff * x_pos * 1.3, lab, fontsize=4.6, color=COLORS["muted"],
+            rotation=34, rotation_mode="anchor", va="bottom", ha="left", zorder=1)
+for form, color in forms.items():
+    for iort, filled in [("training", True), ("inference", False)]:
+        pts = [d for d in rows if d["form"] == form and d["iort"] == iort]
+        if not pts:
+            continue
+        xs = [d["power"] for d in pts]
+        ys = [d["perf"] for d in pts]
+        if filled:
+            ax.scatter(xs, ys, s=14, marker=markers[form], facecolor=color, edgecolor=color, linewidth=0.5, alpha=0.9, zorder=3)
+        else:
+            ax.scatter(xs, ys, s=14, marker=markers[form], facecolors="white", edgecolors=color, linewidth=0.8, alpha=0.95, zorder=3)
+for txt, x, y in [("Very low power", 0.02, 3.0e3), ("Embedded / autonomous", 3.0, 1.2e1),
+                  ("Data-center cards", 5e1, 2.5e6), ("Data-center systems", 1.5e4, 2.5e5)]:
+    ax.text(x, y, txt, fontsize=5.2, fontstyle="italic", color=COLORS["muted"], ha="center", va="center", zorder=2)
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.set_xlim(8e-4, 7e4)
+ax.set_ylim(3, 1e8)
+ax.set_xlabel("Peak power (W)", fontsize=7.2)
+ax.set_ylabel("Peak performance (GOps/sec)", fontsize=7.2)
+ax.tick_params(labelsize=6.2, length=2.5, width=0.6)
+for _sp in ("top", "right"):
+    ax.spines[_sp].set_visible(False)
+ax.grid(True, which="major", color=COLORS["row"], linewidth=0.4, zorder=0)
+handles = [Line2D([0], [0], marker=markers[f], ls="", markerfacecolor=c, markeredgecolor=c, markersize=5, label=f) for f, c in forms.items()]
+handles += [Line2D([0], [0], marker="o", ls="", markerfacecolor=COLORS["ink"], markeredgecolor=COLORS["ink"], markersize=5, label="Training"),
+            Line2D([0], [0], marker="o", ls="", markerfacecolor="white", markeredgecolor=COLORS["ink"], markersize=5, label="Inference")]
+ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=5.8, handletextpad=0.3, labelspacing=0.3, borderaxespad=0.4)
+curated = ["Maxim", "GAP9", "Jetson1", "Perceive", "A100", "TPU4", "H100",
+           "AMD-MI300X", "B200", "Gaudi3", "CS-2", "DGX-H100", "GroqNode", "Tachyum"]
+by_label: dict[str, dict] = {}
+for d in rows:
+    if d["label"] not in by_label or d["perf"] > by_label[d["label"]]["perf"]:
+        by_label[d["label"]] = d
+items = [(by_label[n]["power"], by_label[n]["perf"], n) for n in curated if n in by_label]
+place_labels(ax, fig, items, fontsize=5.0, color=COLORS["ink"])
+fig.subplots_adjust(left=0.095, right=0.98, top=0.98, bottom=0.11)
+```
+
+The spread reflects deployment targets rather than a single ranking of designs, because the plotted points mix numerical precisions, supported operations, and chip, card, and system boundaries. A subwatt sensor processor emphasizes local storage and low-precision arithmetic to avoid costly off-chip transfers, whereas a data-center accelerator devotes orders of magnitude more power to compute arrays and high-bandwidth memory. The data-center end of that plane shows most clearly what happens when arithmetic grows faster than the memory that feeds it.
+
 Across five NVIDIA GPU generations from Pascal P100 (2016) to Blackwell B200 (2024), peak dense half-precision floating-point (FP16) throughput grew by $106\times$ ($21.2\text{ to }2{,}250\ \text{TFLOPS}$). Off-chip High Bandwidth Memory (HBM) supply grew only $10.9\times$ ($732\text{ to }8{,}000\ \text{GB/s}$), roughly an order of magnitude less, while TDP rose $3.3\times$ ($300\text{ to }1{,}000\ \text{W}$) (@fig-ch02-accelerator-scaling-frontier a). With precision held fixed and excluding structured sparsity,[^fn-structured-sparsity-c02] this divergence reflects an architectural pivot from P100's conventional vector units to dedicated matrix Tensor Cores across successive process nodes and dual-reticle packaging [@FoleyDanskin2017Pascal; @ChoquetteEtAl2018Volta; @ChoquetteEtAl2021Ampere; @Choquette2023Hopper; @NVIDIA2024BlackwellTechBrief].
 
 [^fn-structured-sparsity-c02]: **Structured sparsity**: Sparse matrices contain zero values whose arithmetic can sometimes be skipped. Hardware-supported structured sparsity limits the patterns of nonzero values so that dedicated hardware can process the remaining values efficiently. Advertised sparse throughput assumes those patterns; the comparison here uses dense throughput throughout.
@@ -179,6 +274,13 @@ The path in @fig-codegen-narrow-waist locates that shared representation between
 
 ![**Executable target software paths connect developer intent to verification checks.** High-level domain-specific abstract syntax trees (Python, Triton domain-specific languages) lower through mid-level control-data flow graphs in MLIR dialects and LLVM IR at the compiler narrow waist, where workload intent, architectural mechanisms such as CPU instruction-set extensions and NPU dataflows, and silicon constraints converge. Lowered machine code and runtimes then pass through verification checks for correctness, performance, portability, and maintainability.](images/fig-codegen-narrow-waist){#fig-codegen-narrow-waist width="80%" fig-alt="Diagram of an executable target software path showing programming models, compiler representations, libraries, runtimes, and generated code connecting hardware constraints to correctness, performance, portability, and maintainability checks."}
 
+The software that exposes hardware capabilities also keeps growing (@fig-ch09-money-plot-software-porting-wall). CUTLASS's architecture-specific headers accumulate templates and inline assembly for specialized instructions [@NVIDIACUTLASS], Triton's source trees span a shared compiler, target-specific lowering, runtime interfaces, and vendored headers [@TilletEtAl2019Triton], and serving frameworks such as vLLM maintain their own native kernel libraries [@KwonEtAl2023PagedAttention]. These line counts combine shared, vendored, and target-specific files rather than isolating porting effort.
+
+<!-- arch2-allow: figure-placement-override The readable stacked panels and caption were deferred several pages under top-only placement. -->
+![**Software source trees document an expanding implementation footprint.** Newline counts measured at release tags show (a) CUTLASS architecture-specific headers reaching about 208,000 lines and inline `asm volatile` statements passing 3,000; (b) Triton's selected trees reaching about 280,000 lines, including vendored headers, examples, and tests; and (c) vLLM native kernels reaching about 120,000 lines [@NVIDIACUTLASS; @TilletEtAl2019Triton; @KwonEtAl2023PagedAttention]. Directory reorganizations limit comparisons of subcategories; these counts do not measure maintenance cost.](images/fig-ch09-software-porting-wall){#fig-ch09-money-plot-software-porting-wall width="100%" fig-pos="!htbp" fig-alt="Three-panel bar chart of source lines at selected release tags. CUTLASS headers grow to about 690 thousand lines, including about 208 thousand architecture-specific lines, and inline assembly statements exceed 3,000. Triton's selected source trees total about 86 thousand lines at v1, fall at v2, and rise to about 280 thousand at v3.7; totals include vendored headers, examples, and tests. vLLM native kernel sources grow to about 120 thousand lines, with a directory reorganization at v0.27."}
+
+Each new hardware mechanism therefore carries a software development and maintenance cost. Shared compilers reduce duplication across targets, and hand-tuned libraries expose hardware features before general compilers support them, but both routes must still produce a working binary that the evaluation can run.
+
 Once code reaches the target, its mapping can determine whether the offload pays. Fusing operations places more work behind each invocation, while retaining intermediate tensors on chip reduces traffic. These changes address the two distinct costs identified by LogCA. Yet fusion also keeps more values live at once, increasing register pressure. If those values exceed the available registers, the compiler spills them to memory and can undo the locality gain.
 
 The RISC-V Vector extension makes the trade-off concrete. A compiler can group architectural vector registers to process more elements per instruction, but wider groups leave fewer independent groups for other live values [@RISCV2026UnprivilegedISA]. A fused kernel may therefore benefit from wide grouping until register spills add enough traffic to slow it down. Peak vector width cannot determine the winner; compiled execution with the intended data types and workload can.
@@ -192,6 +294,100 @@ An architectural comparison may become outdated while a chip is still being spec
 Numerical formats make this commitment especially clear. Supporting FP8, 4-bit integer, or block-scale representations changes the arithmetic units and datapaths built into silicon. Block-scale formats share exponent or scale metadata across groups of elements [@RouhaniEtAl2023Microscaling], so their efficiency depends on a specific organization of values and metadata. A model that adopts a different format after the datapath is frozen may no longer use the hardware as efficiently. The architect must decide which workload properties are stable enough to specialize and where programmability is worth its area and energy cost.
 
 Memory behavior can change just as sharply. Convolutional inference with fixed frame sizes follows a relatively regular schedule, whereas autoregressive Transformer serving retains a growing key-value (KV) cache of attention keys and values from earlier tokens to avoid recomputing them [@KwonEtAl2023PagedAttention]. Variable sequence lengths change the amount of stored state. Mixture-of-experts models route inputs to selected expert subnetworks [@ShazeerEtAl2017MoE], making traffic depend on the input, while prompt processing and incremental token generation form distinct prefill and decode phases [@AgrawalEtAl2024SarathiServe]. These changes alter how computation and memory traffic arrive. A larger working set can overflow a scratchpad and force transfers to dynamic random-access memory (DRAM); a smaller serving batch can leave too little work to amortize each accelerator invocation. The relevant question is which assumption changed and whether the hardware retains enough flexibility to accommodate it.
+
+Compute demand is moving just as quickly. Epoch AI reported a four- to fivefold annual increase in training compute for notable models through May 2024 [@SevillaRoldan2024ComputeGrowth], and an unweighted least-squares fit to a frozen July 2026 snapshot of the same database yields roughly 4.4-fold annual growth across entries that combine published figures with estimates of varying confidence (@fig-training-compute-growth) [@EpochAI2025AIModels].
+
+```{python}
+#| label: fig-training-compute-growth
+#| fig-cap: |
+#|   **Reported and estimated training compute rises about 4.4-fold per year in this historical sample.**
+#|   The 467 displayed records come from a frozen July 2026 snapshot of the Epoch AI database [@EpochAI2025AIModels].
+#|   Compute is plotted logarithmically against publication date (2010–2026); it combines reported figures with
+#|   source estimates of differing confidence, including speculative estimates. Filled points use the snapshot's
+#|   frontier flag (top ten by training compute at release), and landmark systems are labeled. The line is an
+#|   unweighted least-squares fit to the logarithm of compute. Its $\approx 4.4\times$ annual growth factor
+#|   characterizes this sample and does not measure how changes in model scale intersect hardware development schedules.
+#| out-width: "100%"
+#| fig-alt: "Log-scale scatter plot of 467 reported or source-estimated AI training-compute values versus publication date from 2010 to 2026. Filled points mark the snapshot's frontier models. An unweighted fitted line marks roughly 4.4-fold growth per year. AlexNet, AlphaGo Zero, GPT-3, and GPT-4 are labeled; all records used in the fit are visible."
+
+import csv
+import datetime
+import math
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+import _python.plots as _ap
+from _python.plots import COLORS, apply_style
+
+apply_style()
+
+_root = Path(_ap.__file__).resolve().parents[2]
+
+def _year(text):
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+        try:
+            d = datetime.datetime.strptime(text.strip(), fmt)
+            return d.year + (d.timetuple().tm_yday - 1) / 365.25
+        except ValueError:
+            continue
+    return None
+
+pts = []
+with open(_root / "data" / "datasets" / "chapter2-training-compute.csv", encoding="utf-8") as fh:
+    # datasets carry '#' provenance headers; skip them
+    for row in csv.DictReader(l for l in fh if not l.startswith("#")):
+        yr = _year(row["publication_date"])
+        try:
+            flop = float(row["training_compute_flop"])
+        except ValueError:
+            flop = None
+        if yr and flop and flop > 0 and 2010 <= yr <= 2026.6:
+            pts.append({"yr": yr, "flop": flop, "name": row["model"], "frontier": row["frontier"] == "1"})
+
+years = np.array([p["yr"] for p in pts])
+logf = np.array([math.log10(p["flop"]) for p in pts])
+slope, intercept = np.polyfit(years, logf, 1)
+growth = 10 ** slope
+
+fig, ax = plt.subplots(figsize=(5.2, 3.3))
+other = [p for p in pts if not p["frontier"]]
+front = [p for p in pts if p["frontier"]]
+ax.scatter([p["yr"] for p in other], [p["flop"] for p in other], s=8, marker="o",
+           facecolors="white", edgecolors=COLORS["grid"], linewidth=0.6, zorder=2, label="Notable models")
+ax.scatter([p["yr"] for p in front], [p["flop"] for p in front], s=12, marker="o",
+           facecolor=COLORS["workload"], edgecolor=COLORS["workload_ink"], linewidth=0.4, zorder=3, label="Frontier models")
+xline = np.array([2010, 2026.5])
+ax.plot(xline, 10 ** (intercept + slope * xline), color=COLORS["constraints"], lw=1.5, zorder=4)
+ax.text(2018.0, 10 ** (intercept + slope * 2018.8), f"×{growth:.1f} per year", fontsize=6.6,
+        fontweight="bold", color=COLORS["constraints_ink"], rotation=29, rotation_mode="anchor",
+        bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.9))
+
+by_name = {p["name"]: p for p in pts}
+landmarks = {"AlexNet": ("AlexNet", 6, -12), "AlphaGo Zero": ("AlphaGo Zero", -8, 11),
+             "GPT-3 175B (davinci)": ("GPT-3", -8, 11), "GPT-4 (Jun 2023)": ("GPT-4", 6, 10)}
+for key, (label, dx, dy) in landmarks.items():
+    p = by_name.get(key)
+    if p:
+        ax.annotate(label, (p["yr"], p["flop"]), textcoords="offset points", xytext=(dx, dy),
+                    fontsize=5.0, fontweight="bold", color=COLORS["ink"],
+                    arrowprops=dict(arrowstyle="-", color=COLORS["muted"], lw=0.45))
+
+ax.set_yscale("log")
+ax.set_xlim(2010, 2026.7)
+ax.set_ylim(5e13, 3e27)
+ax.set_xlabel("Publication date", fontsize=7.2)
+ax.set_ylabel("Reported or estimated training compute (FLOP)", fontsize=7.2)
+ax.set_xticks([2010, 2013, 2016, 2019, 2022, 2025])
+ax.tick_params(labelsize=6.4, length=2.5, width=0.6)
+for _spine in ("top", "right"):
+    ax.spines[_spine].set_visible(False)
+ax.grid(True, which="major", axis="y", color=COLORS["row"], linewidth=0.4, zorder=0)
+ax.legend(loc="lower right", frameon=False, fontsize=6.0, handletextpad=0.3, labelspacing=0.3)
+fig.subplots_adjust(left=0.14, right=0.97, top=0.98, bottom=0.12)
+```
+
+Larger training runs do not automatically change the underlying kernel mix, but performance measured at one model scale or serving regime does not transfer to another without re-evaluating memory traffic and software assumptions.
 
 Deployment requirements can also change delivered throughput without changing the arithmetic or hardware. The matched MLPerf submissions below isolate one such pressure by comparing standard and interactive latency requirements on the same systems.
 
