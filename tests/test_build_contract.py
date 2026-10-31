@@ -362,12 +362,12 @@ def test_glossary_findings_empty_on_repository() -> None:
 
 
 def test_glossary_findings_detects_drift(tmp_path, monkeypatch) -> None:
-    fake_qmd = tmp_path / "apdx-d-glossary.qmd"
-    fake_qmd.write_text("Stale content\n", encoding="utf-8")
-    monkeypatch.setattr(arch2_cli, "GLOSSARY_PATH", fake_qmd)
+    fake_lua = tmp_path / "glossary.lua"
+    fake_lua.write_text("-- stale\n", encoding="utf-8")
+    monkeypatch.setattr(arch2_cli, "LUA_GLOSSARY_FILTER_PATH", fake_lua)
     findings = arch2_cli.glossary_findings()
     codes = {f.code for f in findings}
-    assert "glossary-drift" in codes
+    assert "glossary-filter-drift" in codes
 
 
 def test_glossary_cli_commands() -> None:

@@ -6461,40 +6461,6 @@ def prose_style_findings(paths: list[Path] | None = None) -> list[Finding]:
     return findings
 
 
-GLOSSARY_DOMAINS: list[tuple[str, str, str, str]] = [
-    (
-        "hardware",
-        "Hardware Architecture and Microarchitecture",
-        "tbl-glossary-hardware",
-        "sec-glossary-hardware",
-    ),
-    (
-        "physical",
-        "Physical Design, Manufacturing and Signoff",
-        "tbl-glossary-physical",
-        "sec-glossary-physical",
-    ),
-    (
-        "compilers",
-        "EDA, Compilers and Intermediate Representations",
-        "tbl-glossary-compilers",
-        "sec-glossary-compilers",
-    ),
-    (
-        "verification",
-        "Verification, Power and Standards",
-        "tbl-glossary-verification",
-        "sec-glossary-verification",
-    ),
-    (
-        "interconnects",
-        "Bus Protocols and Interconnect Interfaces",
-        "tbl-glossary-interconnects",
-        "sec-glossary-interconnects",
-    ),
-    ("ai", "AI, Modeling and Design Automation", "tbl-glossary-ai", "sec-glossary-ai"),
-]
-
 # Canonical technical abbreviations registry (CMOS Chapter 10 style contract)
 # Format: (canonical_expansion, is_proper_noun, phonetic_article, domain_key, engineering_definition, regex_pattern, exempt_first_mention)
 CMOS_ABBREVIATIONS: dict[str, tuple[str, bool, str, str, str, str, bool]] = {
@@ -7936,64 +7902,7 @@ IGNORED_PROSE_ACRONYMS: set[str] = {
     "TOPS",
 }
 
-GLOSSARY_PATH = (
-    BOOK_DIR / "contents" / "backmatter" / "apdx-d-glossary" / "apdx-d-glossary.qmd"
-)
 LUA_GLOSSARY_FILTER_PATH = BOOK_DIR / "filters" / "glossary.lua"
-
-
-def generate_glossary_markdown() -> str:
-    """Generate the canonical markdown source for Appendix D: Glossary."""
-    lines = [
-        "---",
-        "format:",
-        "  html:",
-        "    output-file: index.html",
-        "---",
-        "",
-        "# Acronyms and Technical Glossary {#sec-appendix-d-glossary}",
-        "",
-        "::: {.abstract}",
-        "This reference appendix consolidates and categorizes the technical acronyms, standards, formal representations, and abbreviations used throughout *Architecture 2.0*. Each entry lists the canonical abbreviation, its spelled-out form, and a concise engineering definition, grouped by technical domain across hardware microarchitecture (@tbl-glossary-hardware), physical design and signoff (@tbl-glossary-physical), EDA and compilers (@tbl-glossary-compilers), verification and standards (@tbl-glossary-verification), bus interconnects (@tbl-glossary-interconnects), and AI automation (@tbl-glossary-ai).",
-        ":::",
-        "",
-    ]
-
-    for domain_key, domain_title, table_anchor, sec_anchor in GLOSSARY_DOMAINS:
-        # Keep each glossary heading with the table header and its first entry.
-        lines.extend(["```{=latex}", r"\Needspace{16\baselineskip}", "```", ""])
-        lines.append(f"## {domain_title} {{#{sec_anchor}}}")
-        lines.append("")
-        lines.append(
-            "| **Acronym** | **Spelled-out form** | **Engineering definition** |"
-        )
-        lines.append("| :--- | :--- | :--- |")
-
-        domain_abbrs = [
-            (abbr, data)
-            for abbr, data in sorted(
-                CMOS_ABBREVIATIONS.items(), key=lambda item: item[0].casefold()
-            )
-            if data[3] == domain_key
-        ]
-
-        for abbr, (
-            canonical,
-            is_proper,
-            article,
-            dom,
-            definition,
-            pattern,
-            exempt,
-        ) in domain_abbrs:
-            lines.append(f"| **{abbr}** | {canonical} | {definition} |")
-
-        lines.append(
-            f': **{domain_title} Glossary.** {{#{table_anchor} tbl-colwidths="[15,30,55]"}}'
-        )
-        lines.append("")
-
-    return "\n".join(lines)
 
 
 def generate_glossary_lua() -> str:
@@ -8067,33 +7976,10 @@ def generate_glossary_lua() -> str:
 
 
 def glossary_findings() -> list[Finding]:
-    """Verify that the Glossary appendix and Lua filter are present, registered, and up to date."""
+    """Verify that the acronym-tooltip Lua filter is present, registered, and up to date."""
     findings: list[Finding] = []
 
-    # 1. Check QMD file
-    if not GLOSSARY_PATH.exists():
-        findings.append(
-            Finding(
-                "error",
-                "missing-glossary-file",
-                _relative(GLOSSARY_PATH),
-                "Glossary appendix file is missing; run './arch2 generate glossary' to create it.",
-            )
-        )
-    else:
-        actual_qmd = GLOSSARY_PATH.read_text(encoding="utf-8").strip()
-        expected_qmd = generate_glossary_markdown().strip()
-        if actual_qmd != expected_qmd:
-            findings.append(
-                Finding(
-                    "error",
-                    "glossary-drift",
-                    _relative(GLOSSARY_PATH),
-                    "Glossary appendix content is out of sync with CMOS_ABBREVIATIONS; run './arch2 generate glossary' to update.",
-                )
-            )
-
-    # 2. Check Lua filter file
+    # 1. Check Lua filter file
     if not LUA_GLOSSARY_FILTER_PATH.exists():
         findings.append(
             Finding(
@@ -8116,22 +8002,10 @@ def glossary_findings() -> list[Finding]:
                 )
             )
 
-    # 3. Check _quarto.yml registration
+    # 2. Check _quarto.yml registration
     manifest_path = BOOK_DIR / "_quarto.yml"
     if manifest_path.exists():
         manifest_text = manifest_path.read_text(encoding="utf-8")
-        if (
-            "contents/backmatter/apdx-d-glossary/apdx-d-glossary.qmd"
-            not in manifest_text
-        ):
-            findings.append(
-                Finding(
-                    "error",
-                    "missing-glossary-manifest",
-                    _relative(manifest_path),
-                    "_quarto.yml is missing 'contents/backmatter/apdx-d-glossary/apdx-d-glossary.qmd' under appendices",
-                )
-            )
         if "filters/glossary.lua" not in manifest_text:
             findings.append(
                 Finding(
@@ -8150,11 +8024,8 @@ def run_glossary_check() -> None:
 
 
 def run_glossary_generation() -> None:
-    GLOSSARY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    GLOSSARY_PATH.write_text(generate_glossary_markdown(), encoding="utf-8")
     LUA_GLOSSARY_FILTER_PATH.parent.mkdir(parents=True, exist_ok=True)
     LUA_GLOSSARY_FILTER_PATH.write_text(generate_glossary_lua(), encoding="utf-8")
-    console.print(f"[green]generated[/green] {_relative(GLOSSARY_PATH)}")
     console.print(f"[green]generated[/green] {_relative(LUA_GLOSSARY_FILTER_PATH)}")
 
 
@@ -8254,10 +8125,6 @@ def abbreviations_findings(paths: list[Path] | None = None) -> list[Finding]:
     findings: list[Finding] = []
 
     for path in targets:
-        # Skip the Glossary appendix itself from first-mention self-referencing check
-        if path.resolve() == GLOSSARY_PATH.resolve():
-            continue
-
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
 
@@ -9998,7 +9865,7 @@ def source_repairable_findings() -> list[Finding]:
 
 @generate_app.command("glossary")
 def generate_glossary() -> None:
-    """Generate the canonical Glossary appendix and Lua filter from CMOS_ABBREVIATIONS."""
+    """Generate the acronym-tooltip Lua filter from CMOS_ABBREVIATIONS."""
     run_glossary_generation()
 
 
@@ -10026,7 +9893,7 @@ def check_acronyms() -> None:
 
 @check_app.command("glossary")
 def check_glossary() -> None:
-    """Check that Glossary appendix and Lua filter match CMOS_ABBREVIATIONS without drift."""
+    """Check that the acronym-tooltip Lua filter matches CMOS_ABBREVIATIONS without drift."""
     run_glossary_check()
 
 
