@@ -202,7 +202,38 @@ Choosing that competitor requires care, because an isolated performance gain or 
 
 A comparison can manufacture an artificial win by giving an AI-native search loop hundreds of compute-hours and tuned hyperparameters while running a conventional EDA baseline once with out-of-the-box defaults. The dispute over learned macro placement shows how much rides on this choice. The original study compared a learned placer against baselines configured by its authors [@MirhoseiniEtAl2021GraphPlacement], those authors defended their setup against skeptics [@GoldieEtAl2024ThatChipHasSailed], and an updated assessment running commercial and academic placers as comparators reached different conclusions [@ChengEtAl2026UpdatedAssessment]. Whichever reading one finds persuasive, the disagreement turns largely on what each arm was allowed to tune and at what cost. When a team claims that a complete workflow deserves adoption, the evaluation has to test whether that workflow improves supported architecture outcomes or lowers total cost relative to the strongest practical alternative across declared tasks, conditions, budgets, and checks. Both workflows must therefore be matched across the architecture questions they answer, the starting artifacts and tools they can access, the evaluator-owned checks they must pass, and the cost rules, budgets, and stopping criteria that govern each run.
 
-Within those matched rules, different comparison arms test different questions. Random search tests whether guided search beats unguided sampling under the same budget, and a conventional workflow paired with point AI assistance tests whether a narrow helper improves on current practice. Comparisons across no-AI, retrieval-only, foundation-model, and full AI-native configurations show how their supported outcomes and total costs differ. These configurations need not form a steady progression of capability. Controlled comparisons in ArchEval, for instance, show that agents that appear effective when iterating with a simulator in the loop can fall below each challenge's reference design, such as LRU replacement or a simulator default, once runnable simulator feedback is removed. Much of an apparent capability can reside in iterative tool feedback rather than in the model's standalone priors [@WangEtAl2026ArchEval]. Random search and simple heuristics therefore serve as essential diagnostic floors, even when the strongest practical alternative for an adoption claim is direct enumeration, a commercial optimizer, an established EDA flow, or a human-directed study (@sec-methods-generation-prediction-optimization).
+Within those matched rules, different comparison arms test different questions. Random search tests whether guided search beats unguided sampling under the same budget, and a conventional workflow paired with point AI assistance tests whether a narrow helper improves on current practice. Comparisons across no-AI, retrieval-only, foundation-model, and full AI-native configurations show how their supported outcomes and total costs differ. These configurations need not form a steady progression of capability. Controlled comparisons in ArchEval, for instance, show that agents that appear effective when iterating with a simulator in the loop can fall below each challenge's reference design, such as LRU replacement or a simulator default, once runnable simulator feedback is removed. Much of an apparent capability can reside in iterative tool feedback rather than in the model's standalone priors (@fig-ch10-archeval-feedback-cost) [@WangEtAl2026ArchEval]. Random search and simple heuristics therefore serve as essential diagnostic floors, even when the strongest practical alternative for an adoption claim is direct enumeration, a commercial optimizer, an established EDA flow, or a human-directed study (@sec-methods-generation-prediction-optimization).
+
+```{python}
+#| echo: false
+# ArchEval settings and per-challenge L3 results, transcribed from Tables 10, 23, and 27:
+#   data/datasets/chapter10-archeval-settings.csv, chapter10-archeval-l3-per-challenge.csv
+import csv as _csv10a
+from pathlib import Path as _Path10a
+import _python.plots as _ap10a
+
+_ds10 = _Path10a(_ap10a.__file__).resolve().parents[2] / "data" / "datasets"
+
+
+def _rows10(name):
+    with open(_ds10 / name, encoding="utf-8") as fh:
+        return list(_csv10a.DictReader(l for l in fh if not l.startswith("#")))
+
+
+_ae = _rows10("chapter10-archeval-settings.csv")
+_ae_l3 = [r for r in _ae if r["setting"] == "L3"]
+_ae_l2 = {r["agent"]: r for r in _ae if r["setting"] == "L2"}
+assert all(float(r["mean_mtok"]) < float(_ae_l2[r["agent"]]["mean_mtok"]) for r in _ae_l3)
+assert sum(float(r["geomean_norm_perf"]) < 1 for r in _ae_l3) == 3 and len(_ae_l3) == 4
+_ae_vals = [float(r["norm_perf"]) for r in _rows10("chapter10-archeval-l3-per-challenge.csv") if r["norm_perf"] != "hf"]
+ae_lo = f"{min(_ae_vals):.2f}"
+ae_hi = f"{max(_ae_vals):.2f}"
+ae_tasks = len({r["challenge_id"] for r in _rows10("chapter10-archeval-l3-per-challenge.csv")})
+```
+
+![**Withdrawing runnable simulator feedback lowers token use and leaves three of four agents below the challenge baselines.** (a) Suite geometric mean of baseline-normalized performance against mean tokens per run, for four agents under the full harness (L1), a simulator-code container (L2), and an agent-only setting without a runnable simulator (L3, hollow). (b) Per-challenge L3 results, with bars at each agent's geometric mean. Means cover valid submissions only, and tokens exclude human effort. Values are transcribed from the tables in ArchEval [@WangEtAl2026ArchEval].](images/fig-ch10-archeval-feedback-cost){#fig-ch10-archeval-feedback-cost width="100%" fig-alt="Two-panel log-scale chart for four agents. Panel (a) plots geometric mean performance against mean tokens per run for three settings joined by lines; moving to the setting without a runnable simulator lowers tokens for every agent and places three of the four below the baseline of one. Panel (b) is a strip plot of per-challenge results in that setting, ranging over about two orders of magnitude around each agent's mean."}
+
+Removing the runnable simulator lowers token use for every agent and leaves three of the four below the challenge baselines, so a lower cost means little until quality clears the declared threshold. Panel (b) adds a warning about aggregation. Individual results across the `{python} ae_tasks` challenges range from `{python} ae_lo` to `{python} ae_hi` times the baseline, a spread that each agent's single mean conceals. ArchEval has no conventional arm, so this comparison is a feedback ablation within each system rather than a matched comparison with a conventional flow.
 
 Once the comparator is chosen, holding the dimensions in @tbl-matched-system-comparison fixed rules out alternative explanations for a measured gain. Any difference that cannot be matched remains an explicit limit on the comparison.
 
@@ -340,7 +371,29 @@ Existing suites expose different parts of the work. VerilogEval tests functional
 
 Comparing scores requires the frozen system and environment identities (@tbl-complete-system-identity), the benchmark release, version splits, evaluator-owned hidden tests, feedback and scoring rules, and contamination records. A production-program claim also requires representative task distributions, design artifacts, feedback loops, compute budgets, and human interactions; a narrower study states which conditions and evidence stages it covers.
 
-Task realism asks whether the suite exposes the work left for engineers. A standalone module score does not establish how a generator handles hierarchical integration, asynchronous clock crossings, backpressure, or power-domain transitions in a production system. The Comprehensive Verilog Design Problems (CVDP) benchmark narrows that gap with reuse, debugging, and verification tasks among 783 engineer-written problems in thirteen categories; the models its authors evaluated reached no more than 34% `pass@1` on code generation [@PinckneyEtAl2025CVDP]. These remain benchmark problems rather than a complete production program, so industrial claims still require representative integration and verification work.
+Task realism asks whether the suite exposes the work left for engineers. A standalone module score does not establish how a generator handles hierarchical integration, asynchronous clock crossings, backpressure, or power-domain transitions in a production system. The Comprehensive Verilog Design Problems (CVDP) benchmark narrows that gap with reuse, debugging, and verification tasks among 783 engineer-written problems in thirteen categories; the models its authors evaluated reached no more than 34% aggregate `pass@1` on code generation [@PinckneyEtAl2025CVDP]. That aggregate hides how unevenly the shortfall falls across the work.
+
+```{python}
+#| echo: false
+# CVDP Table 2, transcribed: data/datasets/chapter10-cvdp-category-pass1.csv
+_cv = _rows10("chapter10-cvdp-category-pass1.csv")
+
+
+def _cv_range(cid):
+    vals = [float(r["pass_at_1_pct"]) for r in _cv if r["category_id"] == cid]
+    return f"{min(vals):.0f}", f"{max(vals):.0f}"
+
+
+cv_rtl_lo, cv_rtl_hi = _cv_range("cid03")
+cv_chk_lo, cv_chk_hi = _cv_range("cid13")
+cv_dbg_lo, cv_dbg_hi = _cv_range("cid16")
+```
+
+Across eight models, turning a specification into RTL reaches `{python} cv_rtl_lo` to `{python} cv_rtl_hi`% `pass@1`, whereas generating testbench checkers reaches only `{python} cv_chk_lo` to `{python} cv_chk_hi`% (@fig-ch10-cvdp-category-gap).
+
+![**Benchmark pass rates differ widely by task, and checker generation sits lowest.** Non-agentic CVDP code-generation `pass@1` by task category, five samples per problem, for eight models. Diamonds mark the model with the best aggregate score, purple for RTL tasks and green for verification tasks; $n$ is the number of problems. Categories differ in difficulty and size, so positions compare tasks within this benchmark only [@PinckneyEtAl2025CVDP].](images/fig-ch10-cvdp-category-gap){#fig-ch10-cvdp-category-gap width="85%" fig-alt="Dot plot of pass at 1 percentages for eight task categories, each with eight models. Debugging ranges from 26 to 53 percent, specification to RTL 20 to 48 percent, RTL modification 30 to 45 percent, lint and quality improvement 20 to 45 percent, RTL completion 18 to 37 percent, testbench stimulus 13 to 25 percent, assertion generation 5 to 23 percent, and testbench checker 3 to 11 percent."}
+
+Generating checks sits below writing RTL, although debugging, at `{python} cv_dbg_lo` to `{python} cv_dbg_hi`%, shows that the gap does not extend to all verification work. A suite weighted toward module drafting would therefore report more capability than a verification team would observe. These remain benchmark problems rather than a complete production program, so industrial claims still require representative integration and verification work.
 
 Training-data overlap poses a different problem. An audit of VerilogEval and RTLLM found contamination indicators among models with high pass rates [@WangEtAl2025VeriContaminated]. Public availability alone does not prove that a particular model trained on a problem, and overlap does not invalidate a separately verified output design. It does weaken the interpretation of a score as performance on unseen tasks. Time-split evaluation selects tasks created after model snapshot dates [@JainEtAl2025LiveCodeBench]; restricted query budgets, limited feedback, and renewed holdouts reduce adaptive overfitting to the evaluation itself [@DworkEtAl2015ReusableHoldout].
 
