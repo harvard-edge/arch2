@@ -195,7 +195,7 @@ def main():
     save_figure_bundle(
         fig,
         ROOT
-        / "book/contents/chapters/09-patterns/images/fig-ch09-mlperf-latency-contract",
+        / "book/contents/chapters/02-pressures/images/fig-ch09-mlperf-latency-contract",
     )
     plt.close(fig)
     record_build(

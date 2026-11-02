@@ -213,7 +213,32 @@ A specialized engine delivers a system speedup only when the surrounding machine
 
 ### From Kernel Efficiency to System Speedup
 
-Specialization can produce large local gains by removing general-purpose machinery. For the H.264 video encoder studied by @HameedEtAl2010Inefficiency, a fixed-function application-specific integrated circuit (ASIC) improved kernel energy efficiency roughly 500-fold relative to a four-core chip multiprocessor. It did so by eliminating instruction fetch and decode overhead and fusing operator pipelines. That result explains the attraction of specialization, but the fraction of the application accelerated and the cost of reaching the block determine how much benefit survives in a full system.
+Specialization can produce large local gains by removing general-purpose machinery. For the H.264 video encoder studied by @HameedEtAl2010Inefficiency, a fixed-function application-specific integrated circuit (ASIC) improved kernel energy efficiency roughly 500-fold relative to a four-core chip multiprocessor. @fig-ch02-specialization-energy traces that gain through each step toward the ASIC and shows where the base processors spent their energy.
+
+```{python}
+#| echo: false
+# Base-processor energy shares from Hameed et al. Table 3, summed across the four encoder stages.
+import csv as _csv2he
+from pathlib import Path as _Path2he
+import _python.plots as _ap2he
+
+_he_path = _Path2he(_ap2he.__file__).resolve().parents[2] / "data" / "datasets" / "chapter2-hameed-component-breakdown.csv"
+with open(_he_path, encoding="utf-8") as _fh:
+    _he_rows = [r for r in _csv2he.DictReader(l for l in _fh if not l.startswith("#"))
+                if r["optimization_stage"] == "base_RISC_CMP" and r["metric"] == "energy_mJ_per_frame"
+                and r["evidence_class"] == "transcribed" and r["component"] != "Total" and r["h264_substage"] != "Total"]
+_he_tot = {}
+for _r in _he_rows:
+    _he_tot[_r["component"]] = _he_tot.get(_r["component"], 0.0) + float(_r["value"])
+_he_all = sum(_he_tot.values())
+he_fu_pct = f"{100 * _he_tot['FU'] / _he_all:.1f}"
+he_if_pct = f"{100 * _he_tot['IF'] / _he_all:.1f}"
+he_table_ratio = f"{_he_all / 4:.0f}"
+```
+
+![**Most of the efficiency gap lies outside the arithmetic.** (a) Energy efficiency of a 720p H.264 encoder as a four-processor 90\ nm chip gains single instruction, multiple data (SIMD) and very-long-instruction-word (VLIW) instructions, fused operations, and custom instructions, compared with an ASIC, using the factors stated in the source's text; its tables give about `{python} he_table_ratio`$\times$ for the ASIC. (b) Base-processor energy by component across the encoder, as tabulated in the source [@HameedEtAl2010Inefficiency].](images/fig-ch02-specialization-energy){#fig-ch02-specialization-energy width="100%" fig-alt="Two-panel horizontal bar chart. Panel (a) shows energy efficiency on a log scale relative to base processors: 7 times with SIMD and VLIW, 10 times with operation fusion, 170 times with custom instructions, and 500 times for the ASIC. Panel (b) shows base-processor energy shares: instruction fetch 33.6 percent, pipeline registers 22.0 percent, data cache 19.2 percent, control 9.7 percent, register file 9.7 percent, and functional units 5.8 percent."}
+
+Functional units account for only `{python} he_fu_pct`% of the base processors' energy, while instruction fetch alone takes `{python} he_if_pct`%. Wider datapaths and fused operations therefore recover only about one order of magnitude. The larger gains arrive once custom instructions and fixed logic remove the cost of fetching, decoding, and sequencing each operation. That result explains the attraction of specialization, but the fraction of the application accelerated and the cost of reaching the block determine how much benefit survives in a full system.
 
 Amdahl's law makes this distinction explicit. If a fraction $f$ of baseline execution receives a local speedup $S_{\mathrm{accel}}$, the total speedup including communication is
 
@@ -228,6 +253,38 @@ The LogCA accelerator model separates the costs hidden inside the communication 
 Consider a neural processing unit (NPU) invoked separately for each small layer of a neural network. Command preparation, queue submission, and synchronization can consume much of the elapsed time even when the matrix arithmetic finishes quickly. Fusing layers or batching requests places more useful work behind each launch and can move the workload beyond its break-even payload size. But batching alone cannot remove a transfer cost that grows in proportion to the arithmetic. If moving each additional operation's data takes at least as much time as offloading saves on that operation, no larger payload makes the nonoverlapped offload profitable. The design needs fewer transferred bytes, more link bandwidth, or effective overlap.
 
 These remedies cross different boundaries. A compiler may retain intermediate tensors on chip and reduce traffic without changing the interface. A lower-cost submission path changes how the runtime invokes the accelerator, while a wider physical link changes the hardware. The actual launch path, achieved bandwidth, data reuse, and host baseline determine which remedy helps; a link specification alone cannot settle the comparison. An empirical sweep across payload sizes tests where, if anywhere, the complete offload becomes faster than host execution.
+
+```{python}
+#| echo: false
+# Crossovers from the retained three-run sweep: data/studies/27-offload-break-even/summary.json
+import json as _json2ob
+from pathlib import Path as _Path2ob
+import _python.plots as _ap2ob
+
+_ob = _json2ob.loads(
+    (_Path2ob(_ap2ob.__file__).resolve().parents[2] / "data" / "studies" / "27-offload-break-even" / "summary.json").read_text(encoding="utf-8")
+)
+_ob_x = _ob["crossovers"]
+
+
+def _ob_range(arm):
+    runs = _ob_x[arm]["per_run_n"]
+    return f"{min(runs):,}" if min(runs) == max(runs) else f"{min(runs):,} and {max(runs):,}"
+
+
+ob_res = _ob_range("mps_resident")
+ob_copy = _ob_range("mps_copy")
+ob_sixteen = _ob_range("mps_16_launch")
+ob_one = _ob_range("mps_bmm")
+ob_runs = len(_ob_x["mps_bmm"]["per_run_n"])
+assert _ob_x["mps_16_launch"]["stable_across_runs"] and _ob_x["mps_bmm"]["stable_across_runs"]
+```
+
+Our sweep on one Apple-silicon laptop times 32-bit floating-point matrix products on the CPU, through its vendor library, and on the integrated GPU, through PyTorch (@fig-ch02-offload-break-even). Across `{python} ob_runs` independent runs, a single $n \times n$ product first beat the host at $n$ between `{python} ob_res`, whether its operands already sat on the GPU or were copied in and out. Batching lowered the break-even. Sixteen products beat the host at $n$ of `{python} ob_sixteen` as separate launches and `{python} ob_one` as one launch.
+
+![**Launch cost sets a floor, and batching moves the break-even toward smaller matrices.** Median time for 32-bit floating-point matrix products on an Apple M5 Max in three independent runs, each drawn as its own line: (a) one product on the host CPU and on the GPU, with operands resident or copied in and out; (b) sixteen products on the host and on the GPU as separate launches or one launch. CPU and GPU share memory here, so the copies do not cross a discrete link. Crossovers describe this one machine.](images/fig-ch02-offload-break-even){#fig-ch02-offload-break-even width="100%" fig-alt="Two-panel log-log line chart of median time against matrix dimension from 16 to 3072, with three lines per series for three runs. In both panels the host CPU rises steadily from about a microsecond or tens of microseconds, while GPU series stay flat near 0.2 to 0.6 milliseconds and then rise, crossing below the host between dimensions of about 256 and 1024."}
+
+The GPU's flat floor at small sizes is the fixed invocation cost that LogCA isolates, and only enough work behind one launch can repay it. The sweep supports the direction of each remedy without supplying a design constant. The batched crossovers repeated exactly, whereas the single-product crossovers moved by a full step of the size grid between runs, a shift that one run cannot reveal. Shared memory also leaves untested the transfer cost that grows with the work, the case in which no payload size reaches break-even.
 
 ::: {.callout-failure-mode title="The unamortized offload wall"}
 **The trap.** A team treats the local matrix-multiply acceleration of an NPU as the expected system speedup.
@@ -406,6 +463,7 @@ _ml12 = _json2ml.loads(
      / "data" / "studies" / "12-mlperf-latency-contract" / "summary.json").read_text(encoding="utf-8")
 )
 ml12_pairs = _ml12["pairs"]
+ml12_logs = _ml12["raw_logs"]
 ml12_std_ttft = f"{round(_ml12['latency_contract_ms']['standard_ttft_ms']):,}"
 ml12_std_tpot = f"{round(_ml12['latency_contract_ms']['standard_tpot_ms']):,}"
 ml12_int_ttft = f"{round(_ml12['latency_contract_ms']['interactive_ttft_ms']):,}"
@@ -415,7 +473,9 @@ ml12_max_pct = f"{100 * _ml12['maximum_interactive_fraction']:.1f}"
 ml12_med_pct = f"{100 * _ml12['median_interactive_fraction']:.1f}"
 ```
 
-The matched set contains `{python} ml12_pairs` single-node, eight-accelerator Llama 2 70B server submissions in MLPerf Inference v5.0 [@MLCommons2025InferenceV50Results]. The Interactive scenario tightens 99th-percentile latency bounds from `{python} ml12_std_ttft`\ ms time to first token and `{python} ml12_std_tpot`\ ms time per output token (Standard) to `{python} ml12_int_ttft`\ ms and `{python} ml12_int_tpot`\ ms. Under those bounds, interactive server throughput falls to `{python} ml12_min_pct`% to `{python} ml12_max_pct`% of standard throughput (median `{python} ml12_med_pct`%). The hardware has not changed, but the acceptable service behavior has. A throughput result established under the looser requirement cannot answer the stricter design question.
+The matched set contains `{python} ml12_pairs` single-node, eight-accelerator Llama 2 70B server submissions in MLPerf Inference v5.0 [@MLCommons2025InferenceV50Results]. The Interactive scenario tightens 99th-percentile latency bounds from `{python} ml12_std_ttft`\ ms time to first token and `{python} ml12_std_tpot`\ ms time per output token (Standard) to `{python} ml12_int_ttft`\ ms and `{python} ml12_int_tpot`\ ms. Under those bounds, interactive server throughput falls to `{python} ml12_min_pct`% to `{python} ml12_max_pct`% of standard throughput (median `{python} ml12_med_pct`%), by a different fraction on each system (@fig-ch09-mlperf-latency-contract). The hardware has not changed, but the acceptable service behavior has. A throughput result established under the looser requirement cannot answer the stricter design question.
+
+![**Submitted server throughput drops under a stricter latency contract on matched eight-accelerator systems.** Paired MLPerf Inference v5.0 closed submissions (`{python} ml12_pairs` system pairs, `{python} ml12_logs` logs) for eight-accelerator Llama 2 70B servers [@MLCommons2025InferenceV50Results]: (a) 99th-percentile latency targets under Standard (`{python} ml12_std_ttft`\ ms first token / `{python} ml12_std_tpot`\ ms per output token) versus Interactive (`{python} ml12_int_ttft`\ ms / `{python} ml12_int_tpot`\ ms) contracts, and (b) submitted Interactive throughput as a share of Standard across H100, H200, and B200 pairs (`{python} ml12_min_pct`% to `{python} ml12_max_pct`%, median `{python} ml12_med_pct`%).](images/fig-ch09-mlperf-latency-contract){#fig-ch09-mlperf-latency-contract width="100%" fig-alt="Two-panel horizontal bar chart of 19 matched eight-accelerator Llama 2 70B server pairs in MLPerf Inference v5.0. Panel (a) compares the 99th-percentile latency targets in milliseconds between the Standard contract (2,000 milliseconds first token and 200 milliseconds per output token) and the Interactive contract (450 milliseconds and 40 milliseconds). Panel (b) plots Interactive throughput as a percentage of Standard throughput across 19 NVIDIA H100 SXM, H200 NVL, H200 SXM, and B200 SXM system pairs, ranging from 42.0 percent to 63.9 percent with a median of 58.8 percent."}
 
 A changed requirement defines a different task, not a better implementation of the old one. A faster kernel for the original workload can strengthen the case for existing hardware; a new model shape, accuracy target, or latency requirement changes what the machine must accomplish. Standardized benchmarks hold tasks and run rules fixed long enough to compare systems. Within a single MLPerf version, division, scenario, and accuracy target, teams can optimize their software while retaining a defined comparison [@ReddiEtAl2020MLPerfInference]. Once those conditions change, earlier measurements may need to be repeated.
 

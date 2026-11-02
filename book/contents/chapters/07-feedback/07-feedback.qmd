@@ -178,6 +178,33 @@ assert (s22_rtl_n, s22_non_rtl_n) == (1, 44)
 
 Public RTL regression logs show why aggregate pass rates and individual failures both need interpretation. In one retained OpenTitan Ibex nightly report, `{python} s16_pass` of `{python} s16_total` runs pass (`{python} s16_pct`%), yet `{python} s16_nonpass_groups` test groups record failures [@LowRISCIbex2026OpenTitanRegression]. A high aggregate rate does not resolve those cases. Nor is each failure an RTL defect. The issue author's `{python} s22_mapped_n` explicit case-to-signature mappings in Ibex issue 2187 attribute `{python} s22_non_rtl_n` cases to generator timeouts, stale testbench checkers, co-simulation configuration, or host timeouts, and only `{python} s22_rtl_n` to a possible RTL bug [@LowRISCIbex2024Issue2187]. Treating every nonpass as a hardware defect would train the search on mislabeled feedback.
 
+```{python}
+#| echo: false
+# Nightly history: data/studies/28-ibex-nightly-history/derived/ (nightly.csv, plateaus.csv)
+import datetime as _dt7n
+
+_s28_dir = _root7ib / "data" / "studies" / "28-ibex-nightly-history" / "derived"
+_s28_n = list(_csv7ib.DictReader((_s28_dir / "nightly.csv").open(encoding="utf-8")))
+_s28_p = list(_csv7ib.DictReader((_s28_dir / "plateaus.csv").open(encoding="utf-8")))
+_s28_steady = min(_s28_p, key=lambda r: float(r["pass_pct_sd"]))
+s28_reports = f"{len(_s28_n):,}"
+s28_first = _s28_n[0]["date"][:4]
+s28_last = _s28_n[-1]["date"][:4]
+s28_plateaus = ["zero", "one", "two", "three", "four", "five"][len(_s28_p)]
+s28_steady_first = _dt7n.date.fromisoformat(_s28_steady["first_date"]).strftime("%B %Y")
+s28_steady_last = _dt7n.date.fromisoformat(_s28_steady["last_date"]).strftime("%B %Y")
+s28_steady_sd = f"{float(_s28_steady['pass_pct_sd']):.1f}"
+s28_steady_med = f"{float(_s28_steady['failing_groups_median']):.0f}"
+s28_steady_distinct = _s28_steady["distinct_failing_groups"]
+s28_steady_change = f"{float(_s28_steady['mean_groups_changed_between_reports']):.1f}"
+```
+
+That report repeated over several years shows why neither the aggregate nor a single night describes the suite. Across `{python} s28_reports` nightly reports from `{python} s28_first` to `{python} s28_last`, the aggregate moves in steps between `{python} s28_plateaus` plateaus, for reasons the reports do not record, while the failing groups keep changing inside each plateau (@fig-ch07-ibex-nightly-churn) [@LowRISCIbex2026NightlyArchive]. In the steadiest plateau, from `{python} s28_steady_first` to `{python} s28_steady_last`, the nightly pass rate has a standard deviation of only `{python} s28_steady_sd` percentage points and a median of `{python} s28_steady_med` groups fail on any night. Over the same months `{python} s28_steady_distinct` distinct groups failed at least once, and consecutive reports differ by about `{python} s28_steady_change` groups.
+
+![**A steady aggregate pass rate can hide a changing set of failing checks.** (a) Nightly aggregate pass rate of the OpenTitan-configuration Ibex regression. (b) Test groups by night, with the groups that fail most often at the top. Nonpassing results include timeouts and simulator diagnostics and are not counts of RTL defects; unfilled areas mark missing reports or groups absent from the suite [@LowRISCIbex2026NightlyArchive].](images/fig-ch07-ibex-nightly-churn){#fig-ch07-ibex-nightly-churn width="100%" fig-alt="Two stacked charts sharing a time axis from 2023 to 2026. The upper line chart shows the nightly pass rate moving in steps, near 93 percent until mid 2024, near 98 percent for a year, then near 96 percent. The lower raster shows test groups as rows and nights as columns, with failing cells dense in the top rows and scattered intermittently through the middle rows."}
+
+A few groups fail on most nights, while many others fail intermittently and recover, so two nights with the same pass rate can rest on different failures. A search that reads only the aggregate would treat those nights as interchangeable, and one that reads a single night could mistake an intermittent failure for a property of the design. Neither panel establishes that the RTL changed, so each nonpass still needs the triage described above.
+
 ::: {.callout-lighthouse title="A returned value must qualify before it becomes feedback"}
 **Context.** Consider a hypothetical return from evaluating a prospective L2 cache configuration for the Lighthouse XR subsystem under a 3\ W thermal design power envelope. Suppose static UPF checks pass, but a bounded model checking (BMC) run fails during tool setup, and a thermal report omits raw trace lineage. These statuses illustrate routing; the Lighthouse study has not executed.
 
