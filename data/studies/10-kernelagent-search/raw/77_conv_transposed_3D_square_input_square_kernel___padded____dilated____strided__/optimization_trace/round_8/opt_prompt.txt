@@ -1,0 +1,366 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Performs a 3D transposed convolution operation with square input and square kernel,
+    and supports padding, dilation, and stride.
+
+    Args:
+        in_channels (int): Number of channels in the input tensor.
+        out_channels (int): Number of channels produced by the convolution.
+        kernel_size (int): Size of the convolution kernel (square kernel, so only one value needed).
+        stride (int, optional): Stride of the convolution. Defaults to 1.
+        padding (int, optional): Padding applied to the input. Defaults to 0.
+        dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+        bias (bool, optional): If `True`, adds a learnable bias to the output. Defaults to `False`.
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, dilation: int = 1, bias: bool = False):
+        super(Model, self).__init__()
+        self.conv_transpose3d = nn.ConvTranspose3d(in_channels, out_channels, kernel_size=(kernel_size, kernel_size, kernel_size), stride=stride, padding=padding, dilation=dilation, bias=bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Performs the 3D transposed convolution.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, depth, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, out_channels, depth_out, height_out, width_out).
+        """
+        return self.conv_transpose3d(x)
+
+# Test code
+batch_size = 16
+in_channels = 32
+out_channels = 64
+kernel_size = 3
+depth = 16
+height = 32
+width = 32
+stride = 2
+padding = 1
+dilation = 2
+
+def get_inputs():
+    x = torch.rand(batch_size, in_channels, depth, height, width)
+    return [x]
+
+def get_init_inputs():
+    return [in_channels, out_channels, kernel_size, stride, padding, dilation]
+PyTorch Eager baseline: 14.2310 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _conv_transpose3d_fwd_kernel_opt(
+    x_ptr,
+    w_ptr,
+    b_ptr,
+    y_ptr,
+    N, Cin, Cout,
+    Di, Hi, Wi,
+    Do, Ho, Wo,
+    stride_d, stride_h, stride_w,
+    pad_d, pad_h, pad_w,
+    dil_d, dil_h, dil_w,
+    sx_n, sx_c, sx_d, sx_h, sx_w,
+    sw_ci, sw_co, sw_kd, sw_kh, sw_kw,
+    sy_n, sy_c, sy_d, sy_h, sy_w,
+    HoWo,
+    K_D: tl.constexpr,
+    K_H: tl.constexpr,
+    K_W: tl.constexpr,
+    BLOCK_S: tl.constexpr,
+    BLOCK_OC: tl.constexpr,
+    BLOCK_CIN: tl.constexpr,
+    BIAS: tl.constexpr,
+):
+    pid_s = tl.program_id(0)
+    pid_oc = tl.program_id(1)
+    pid_n = tl.program_id(2)
+
+    S_total = Do * Ho * Wo
+    s_base = pid_s * BLOCK_S
+    s_offsets = s_base + tl.arange(0, BLOCK_S)
+    s_mask = s_offsets < S_total
+
+    # Compute output positions - recompute to save registers
+    od = s_offsets // HoWo
+    tmp = s_offsets % HoWo
+    oh = tmp // Wo
+    ow = tmp % Wo
+
+    oc_base = pid_oc * BLOCK_OC
+    oc_offsets = oc_base + tl.arange(0, BLOCK_OC)
+    oc_mask = oc_offsets < Cout
+
+    acc = tl.zeros((BLOCK_S, BLOCK_OC), dtype=tl.float32)
+
+    if BIAS:
+        b = tl.load(b_ptr + oc_offsets, mask=oc_mask, other=0.0).to(tl.float32)
+        acc += b[None, :]
+
+    x_base_n = x_ptr + pid_n * sx_n
+    cin_offsets = tl.arange(0, BLOCK_CIN)
+
+    # Precompute weight base
+    w_base = w_ptr + oc_offsets * sw_co
+
+    for kd in range(K_D):
+        tmpd = od + pad_d - kd * dil_d
+        valid_d = (tmpd >= 0) & ((tmpd % stride_d) == 0)
+        id_val = tmpd // stride_d
+        valid_d = valid_d & (id_val >= 0) & (id_val < Di)
+
+        for kh in range(K_H):
+            tmph = oh + pad_h - kh * dil_h
+            valid_h = (tmph >= 0) & ((tmph % stride_h) == 0)
+            ih_val = tmph // stride_h
+            valid_h = valid_h & (ih_val >= 0) & (ih_val < Hi)
+
+            valid_dh = valid_d & valid_h
+
+            for kw in range(K_W):
+                tmpw = ow + pad_w - kw * dil_w
+                valid_w = (tmpw >= 0) & ((tmpw % stride_w) == 0)
+                iw_val = tmpw // stride_w
+                valid_w = valid_w & (iw_val >= 0) & (iw_val < Wi)
+
+                valid_dhw = valid_dh & valid_w & s_mask
+
+                # Compute x addresses
+                x_spatial = id_val * sx_d + ih_val * sx_h + iw_val * sx_w
+                x_ptrs = x_base_n + x_spatial[:, None] + cin_offsets[None, :] * sx_c
+                x_tile = tl.load(x_ptrs, mask=valid_dhw[:, None] & (cin_offsets[None, :] < Cin), other=0.0).to(tl.bfloat16)
+
+                # Load weights
+                w_k_off = kd * sw_kd + kh * sw_kh + kw * sw_kw
+                w_ptrs = w_base[None, :] + cin_offsets[:, None] * sw_ci + w_k_off
+                w_tile = tl.load(w_ptrs, mask=(cin_offsets[:, None] < Cin) & oc_mask[None, :], other=0.0).to(tl.bfloat16)
+
+                acc = tl.dot(x_tile, w_tile, acc)
+
+    # Store output
+    y_base = y_ptr + pid_n * sy_n
+    y_spatial = od * sy_d + oh * sy_h + ow * sy_w
+    y_ptrs = y_base + y_spatial[:, None] + oc_offsets[None, :] * sy_c
+    tl.store(y_ptrs, acc.to(tl.bfloat16), mask=s_mask[:, None] & oc_mask[None, :])
+
+
+def _normalize_triple(v, name):
+    if isinstance(v, int):
+        return (v, v, v)
+    if isinstance(v, (list, tuple)) and len(v) == 3:
+        return tuple(int(x) for x in v)
+    raise TypeError(f"{name} must be int or 3-tuple of ints")
+
+
+def _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW):
+    Do = (Di - 1) * sD - 2 * pD + dD * (kD - 1) + 1
+    Ho = (Hi - 1) * sH - 2 * pH + dH * (kH - 1) + 1
+    Wo = (Wi - 1) * sW - 2 * pW + dW * (kW - 1) + 1
+    return Do, Ho, Wo
+
+
+def kernel_function(x, weight, bias=None, stride=1, padding=0, dilation=1):
+    sD, sH, sW = _normalize_triple(stride, "stride")
+    pD, pH, pW = _normalize_triple(padding, "padding")
+    dD, dH, dW = _normalize_triple(dilation, "dilation")
+
+    if x.dtype != torch.bfloat16:
+        x = x.to(torch.bfloat16)
+    if weight.dtype != torch.bfloat16:
+        weight = weight.to(torch.bfloat16)
+    if bias is not None and bias.dtype != torch.bfloat16:
+        bias = bias.to(torch.bfloat16)
+
+    N, Cin, Di, Hi, Wi = x.shape
+    Cin_w, Cout, kD, kH, kW = weight.shape
+
+    Do, Ho, Wo = _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW)
+    y = torch.empty((N, Cout, Do, Ho, Wo), device=x.device, dtype=x.dtype)
+
+    S_total = Do * Ho * Wo
+    HoWo = Ho * Wo
+
+    BLOCK_CIN = 32
+    BLOCK_OC = 64
+    BLOCK_S = 128
+
+    grid = (triton.cdiv(S_total, BLOCK_S), triton.cdiv(Cout, BLOCK_OC), N)
+
+    _conv_transpose3d_fwd_kernel_opt[grid](
+        x, weight, (bias if bias is not None else y), y,
+        N, Cin, Cout,
+        Di, Hi, Wi,
+        Do, Ho, Wo,
+        sD, sH, sW,
+        pD, pH, pW,
+        dD, dH, dW,
+        x.stride(0), x.stride(1), x.stride(2), x.stride(3), x.stride(4),
+        weight.stride(0), weight.stride(1), weight.stride(2), weight.stride(3), weight.stride(4),
+        y.stride(0), y.stride(1), y.stride(2), y.stride(3), y.stride(4),
+        HoWo,
+        K_D=kD, K_H=kH, K_W=kW,
+        BLOCK_S=BLOCK_S,
+        BLOCK_OC=BLOCK_OC,
+        BLOCK_CIN=BLOCK_CIN,
+        BIAS=(bias is not None),
+        num_warps=4,
+        num_stages=2,
+    )
+    return y
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'Extremely poor global memory load efficiency causing excessive memory transactions', 'evidence': [{'metric': 'smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct', 'value': 7.4, 'interpretation': 'Only 7.4% of loaded bytes are actually used, meaning ~13x more data is fetched than needed due to uncoalesced access patterns'}, {'metric': 'l1tex__throughput.avg.pct_of_peak_sustained_active', 'value': 93.85, 'interpretation': 'L1 cache is nearly saturated processing redundant memory requests from poor coalescing'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 57.7% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (166 registers per thread) severely limits occupancy to 1 block per SM
+**Fix Applied**: Reduce register pressure by decreasing BLOCK_S and BLOCK_OC tile sizes, splitting the accumulator into smaller chunks, and using explicit register spilling via local memory for intermediate values. Target 64-80 registers per thread to achieve 4+ blocks per SM.
+**Performance**: 6.7856ms → 10.6995ms (57.7% slower)
+**NCU SOL (% of Peak)**: Combined: 92.8%, Compute: 17.2%, Memory: 92.8%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 83.2% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Extremely poor global memory coalescing with only 7.4% efficiency per load sector
+**Fix Applied**: Restructure the kernel to load contiguous output channel blocks and use shared memory to stage input data, ensuring coalesced global memory access patterns where consecutive threads access consecutive memory addresses
+**Performance**: 5.4119ms → 9.9153ms (83.2% slower)
+**NCU SOL (% of Peak)**: Combined: 93.3%, Compute: 11.5%, Memory: 93.3%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 83.2% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Extremely poor global memory load efficiency causing wasted memory bandwidth
+**Fix Applied**: Restructure memory access patterns to improve coalescing by loading contiguous chunks of input/weight data into shared memory before processing, and reduce register pressure by splitting the kernel into smaller tiles or using fewer intermediate variables
+**Performance**: 5.4119ms → 9.9141ms (83.2% slower)
+**NCU SOL (% of Peak)**: Combined: 93.1%, Compute: 11.4%, Memory: 93.1%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 109.8% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Extremely low occupancy due to high register usage (252 registers per thread) limiting concurrent warps
+**Fix Applied**: Reduce register pressure by splitting the kernel into smaller tiles, using fewer intermediate variables, and leveraging shared memory to cache frequently accessed data instead of recomputing values. Consider reducing BLOCK_S or BLOCK_OC to allow more concurrent blocks.
+**Performance**: 5.4119ms → 11.3522ms (109.8% slower)
+**NCU SOL (% of Peak)**: Combined: 90.6%, Compute: 22.7%, Memory: 90.6%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 98.6% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (252 registers per thread) severely limits occupancy to only 2 blocks per SM
+**Fix Applied**: Reduce register pressure by splitting the kernel into smaller tiles, using smaller BLOCK_S/BLOCK_OC values, or manually spilling intermediate values to shared memory to increase occupancy
+**Performance**: 5.4119ms → 10.7467ms (98.6% slower)
+**NCU SOL (% of Peak)**: Combined: 92.8%, Compute: 17.1%, Memory: 92.8%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (166 registers per thread) severely limits occupancy to 1 block per SM
+**Fix Applied**: Reduce register pressure by decreasing BLOCK_S and BLOCK_OC tile sizes, splitting the accumulator into smaller chunks, and using explicit register spilling via local memory for intermediate values. Target 64-80 registers per thread to achieve 4+ blocks per SM.
+**Expected**: Reducing register pressure from 166 to 64-80 registers per thread should increase occupancy from 1 block/SM to 4+ blocks/SM, improving latency hiding and overall performance
+**Actual**: Performance degraded by 57.7% (6.79ms → 10.70ms). The kernel shifted from underutilized (likely compute-bound with low occupancy) to memory-bound (92.8% Memory SOL vs 17.2% Compute SOL) (-57.7%)
+**Analysis**: While the diagnosis of excessive register usage limiting occupancy was correct, the fix was counterproductive. By reducing tile sizes and splitting accumulators, the kernel now performs more memory accesses relative to compute work. The dramatic shift to 92.8% Memory SOL indicates the optimization traded register pressure for memory bandwidth pressure. The smaller tiles mean less data reuse per memory load, increasing global memory traffic. The explicit register spilling to local memory adds additional memory operations that hurt performance.
+**Lessons**:
+  - Register pressure reduction must be balanced against data reuse - smaller tiles reduce registers but also reduce arithmetic intensity
+  - Explicit register spilling to local memory can be worse than high register usage since it adds memory traffic
+  - A memory-bound kernel at 92.8% SOL with poor performance suggests inefficient memory access patterns or insufficient compute per byte loaded
+  - Occupancy is not the only factor - a kernel with lower occupancy but better data reuse can outperform higher occupancy with poor reuse
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Extremely poor global memory coalescing with only 7.4% efficiency per load sector
+**Fix Applied**: Restructure the kernel to load contiguous output channel blocks and use shared memory to stage input data, ensuring coalesced global memory access patterns where consecutive threads access consecutive memory addresses
+**Expected**: Improving memory coalescing from 7.4% should have reduced memory transaction overhead and improved overall kernel performance, potentially by 2-10x given the severity of the original inefficiency
+**Actual**: Performance degraded by 83.2% (5.4ms → 9.9ms), indicating the fix introduced significant overhead that outweighed any coalescing benefits. Memory SOL increased to 93.3% suggesting we're now memory-bound but slower overall (-83.2%)
+**Analysis**: The diagnosis of poor coalescing was correct (7.4% is extremely inefficient). However, the fix likely introduced excessive overhead: (1) shared memory staging adds synchronization barriers and extra memory operations, (2) restructuring output channel blocks may have changed the computation pattern unfavorably, (3) the 93.3% memory SOL suggests we're now saturating memory bandwidth but at a much slower rate, possibly due to increased total memory traffic from shared memory operations or poor shared memory bank conflicts. The fix traded one inefficiency for multiple new ones.
+**Lessons**:
+  - Shared memory staging is not free - it adds synchronization overhead and can introduce bank conflicts
+  - Restructuring kernel access patterns can have cascading effects on other aspects of performance
+  - High memory SOL doesn't mean good performance if total work increased significantly
+  - When fixing coalescing, verify the fix doesn't increase total memory transactions
+  - Measure intermediate metrics like total DRAM transactions before and after to validate the approach
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Extremely poor global memory load efficiency causing wasted memory bandwidth
+**Fix Applied**: Restructure memory access patterns to improve coalescing by loading contiguous chunks of input/weight data into shared memory before processing, and reduce register pressure by splitting the kernel into smaller tiles or using fewer intermediate variables
+**Expected**: Expected performance improvement by reducing wasted memory bandwidth through better coalescing and shared memory usage, which should have improved memory efficiency and reduced overall execution time
+**Actual**: Performance degraded significantly by 83.2% (5.4ms → 9.9ms). Memory SOL remained high at 93.1% while compute dropped to 11.4%, indicating the kernel became even more memory-bound (-83.2%)
+**Analysis**: The diagnosis of memory bottleneck was correct (Memory SOL at 93.1% confirms memory-bound). However, the fix backfired - adding shared memory and restructuring likely introduced: 1) Additional synchronization overhead (__syncthreads), 2) Extra memory operations for loading into shared memory, 3) Possible bank conflicts in shared memory, 4) The 'smaller tiles' approach may have reduced parallelism or increased total memory transactions. The kernel now does more work without improving effective bandwidth utilization.
+**Lessons**:
+  - Adding shared memory is not always beneficial - it introduces synchronization overhead that can outweigh coalescing benefits
+  - When memory SOL is already very high, the issue may not be coalescing but rather algorithmic memory access volume
+  - Reducing register pressure by splitting into smaller tiles can hurt performance by reducing occupancy or increasing loop overhead
+  - Need to verify coalescing improvements with specific NCU metrics (global load efficiency) before assuming shared memory helps
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Extremely low occupancy due to high register usage (252 registers per thread) limiting concurrent warps
+**Fix Applied**: Reduce register pressure by splitting the kernel into smaller tiles, using fewer intermediate variables, and leveraging shared memory to cache frequently accessed data instead of recomputing values. Consider reducing BLOCK_S or BLOCK_OC to allow more concurrent blocks.
+**Expected**: Reducing register pressure should have improved occupancy, allowing more concurrent warps and better latency hiding, leading to improved performance
+**Actual**: Performance degraded by 109.8% (5.4ms → 11.4ms). The kernel became memory-bound (90.6% memory SOL) with very low compute utilization (22.7%) (-109.8%)
+**Analysis**: The diagnosis of high register usage was likely correct, but the fix overcorrected. By splitting into smaller tiles and using shared memory caching, the kernel traded register pressure for memory bandwidth pressure. The 90.6% memory SOL indicates the kernel is now severely memory-bound. The original kernel, despite low occupancy, was achieving better performance through register-based computation that avoided memory traffic. The fix introduced excessive shared memory accesses that saturated memory bandwidth.
+**Lessons**:
+  - High register usage with good performance may indicate an intentionally compute-heavy design that benefits from keeping data in registers
+  - Reducing register pressure by moving data to shared memory can shift the bottleneck to memory bandwidth
+  - A kernel with low occupancy but fast execution may be acceptable if it's compute-bound and efficiently uses available resources
+  - Memory SOL of 90.6% indicates the fix created a new, worse bottleneck
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (252 registers per thread) severely limits occupancy to only 2 blocks per SM
+**Fix Applied**: Reduce register pressure by splitting the kernel into smaller tiles, using smaller BLOCK_S/BLOCK_OC values, or manually spilling intermediate values to shared memory to increase occupancy
+**Expected**: Reducing register pressure should increase occupancy, allowing more concurrent blocks per SM, which should improve latency hiding and overall performance
+**Actual**: Performance degraded by nearly 2x (5.41ms → 10.75ms). The kernel became memory-bound (92.8% memory SOL) with very low compute utilization (17.1%), indicating the fix overcorrected and introduced new inefficiencies (-98.6%)
+**Analysis**: The diagnosis of high register usage limiting occupancy was likely correct. However, the fix of reducing tile sizes (BLOCK_S/BLOCK_OC) was counterproductive. Smaller tiles mean: (1) more memory transactions per useful computation, (2) reduced data reuse in registers/shared memory, (3) lower arithmetic intensity. The kernel went from being underutilized (likely compute-limited with low occupancy) to severely memory-bound (92.8% memory SOL). This suggests the original larger tiles were actually beneficial for data reuse, and the register pressure was a worthwhile tradeoff.
+**Lessons**:
+  - High register usage is not always bad - it often enables better data reuse and higher arithmetic intensity
+  - Reducing tile sizes to lower register pressure can dramatically increase memory traffic and hurt performance
+  - A kernel with 2 blocks per SM but high compute efficiency can outperform higher occupancy with poor arithmetic intensity
+  - Memory-bound at 92.8% with only 17.1% compute indicates severe inefficiency in computation per byte loaded
+
+
+Guidance for this round:
+- AVOID: Blindly reducing tile sizes to decrease register pressure without considering impact on data reuse; Using explicit local memory spilling as a register pressure relief mechanism; Prioritizing occupancy over arithmetic intensity in compute-heavy kernels; Adding shared memory staging without carefully analyzing bank conflicts and sync overhead; Major kernel restructuring without incremental validation; Assuming improved coalescing automatically improves performance without considering total memory traffic; Complex fixes when simpler alternatives might exist (e.g., data layout changes); Blindly adding shared memory without measuring actual coalescing improvement; Making multiple changes at once (shared memory + tiling + register reduction) - makes it impossible to identify what hurt performance; Assuming shared memory is the solution for all memory inefficiency problems; Blindly reducing register usage by moving data to shared memory without considering memory bandwidth impact; Assuming low occupancy is always a problem - compute-bound kernels may perform well with few warps; Trading register-based computation for memory accesses when the kernel is already performant; Blindly reducing tile sizes to decrease register pressure without considering impact on arithmetic intensity; Prioritizing occupancy over data reuse when the kernel has good compute utilization; Making large changes to tiling parameters without incremental testing- PRIORITIZE: Maintain larger tile sizes but use pragma unroll directives more carefully to control register allocation; Consider using shared memory more effectively to maintain data reuse while managing registers; Profile the original kernel to understand if the 1 block/SM was actually limiting performance or if it was already compute-efficient; Try compiler flags like --maxrregcount to let compiler manage spilling decisions rather than manual intervention; Consider changing input data layout (NCHW → NHWC) at the algorithm level for natural coalescing; Use vectorized loads (float4) to improve coalescing without shared memory overhead; Profile shared memory bank conflicts if using shared memory; Try simpler coalescing fixes first - thread remapping without shared memory; Analyze if the convolution can be reformulated (im2col, implicit GEMM) for better memory patterns; First analyze exact memory access patterns and global load efficiency metrics before restructuring; Consider if the algorithm inherently requires scattered access that cannot be coalesced; Look at reducing total memory accesses through computation reuse or algorithmic changes rather than just reorganizing existing accesses; Try simpler fixes first - like adjusting thread block dimensions to improve natural coalescing without shared memory; Profile memory access patterns before adding shared memory caching; Consider instruction-level parallelism (ILP) improvements instead of occupancy improvements for register-heavy kernels; Try smaller register reductions through better variable reuse rather than wholesale architectural changes; Evaluate if the original high-register design was intentionally optimized for compute efficiency; Keep larger tile sizes but use __launch_bounds__ to hint register usage without changing algorithm; Try register spilling to shared memory for specific variables rather than reducing tile dimensions; Profile the original kernel more carefully - if it was working at 5.4ms, understand what made it efficient; Consider that 2 blocks per SM with high ILP/data reuse may be optimal for this workload; Revert to original tile sizes and try more surgical optimizations
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

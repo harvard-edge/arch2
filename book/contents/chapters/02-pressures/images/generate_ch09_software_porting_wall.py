@@ -1,7 +1,7 @@
 """Generate fig-ch09-software-porting-wall from the measured CUTLASS, Triton, and vLLM datasets.
 
-Inputs are written by measure_software_porting_wall.py (the retained harness; bucket
-definitions live there). Tick labels show each tag and the year of its tagged commit.
+Inputs are written by measure_software_porting_wall.py (the retained harness, which is part
+of this figure's evidence; bucket definitions live there). Tick labels show each tag and the year of its tagged commit.
 Triton is shown as the sum of the selected source trees: directory reorganizations,
 vendored headers, and tests prevent an equivalent shared-versus-backend comparison.
 """
@@ -21,7 +21,7 @@ from book._python.plots import COLORS, FONT_SIZES, apply_style, save_figure_bund
 
 
 def load(name):
-    path = repo_root / "data" / "datasets" / name
+    path = repo_root / "book/contents/chapters/02-pressures/data/fig-ch09-money-plot-software-porting-wall" / name
     with open(path, encoding="utf-8") as fh:
         return list(csv.DictReader(l for l in fh if not l.startswith("#")))
 

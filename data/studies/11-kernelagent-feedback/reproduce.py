@@ -3,6 +3,7 @@
 import csv
 import json
 from pathlib import Path
+import re
 import sys
 import matplotlib
 
@@ -23,6 +24,41 @@ LABELS = {
     "77": "Transposed conv. 3D",
     "82": "Depthwise conv. 2D",
 }
+
+
+def readme_timing_check():
+    """Compare the upstream README's running-best table with the round records."""
+    readme = (HERE / "raw" / "README.md").read_text()
+    out = []
+    for d in sorted(p for p in (HERE / "raw").iterdir() if p.is_dir()):
+        section = re.search(
+            rf"^### {d.name[:2]}\\_.*?^\| Best \(ms\) \|(.*?)\|$", readme, re.S | re.M
+        )
+        reported = [float(v.strip(" *")) for v in section.group(1).split("|")]
+        assert len(reported) == 8
+        best = float("inf")
+        for n, value in enumerate(reported, start=1):
+            f = d / f"optimization_trace/round_{n}/benchmark_results.json"
+            record = next(iter(json.loads(f.read_text())["kernels"].values()))
+            best = min(best, record["time_ms"])
+            out.append(
+                {
+                    "problem": d.name,
+                    "label": LABELS[d.name[:2]],
+                    "round": n,
+                    "round_time_ms": record["time_ms"],
+                    "record_running_best_ms": best,
+                    "readme_running_best_ms": value,
+                    "readme_over_record": value / best,
+                    "warmup": json.loads(f.read_text())["warmup"],
+                    "repeat": json.loads(f.read_text())["repeat"],
+                }
+            )
+    with (HERE / "readme_timing_check.csv").open("w") as f:
+        w = csv.DictWriter(f, fieldnames=list(out[0]))
+        w.writeheader()
+        w.writerows(out)
+    return out
 
 
 def main():
@@ -72,6 +108,8 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
+    readme_check = readme_timing_check()
+    tasks = len(rows) // 2
     apply_style()
     fig, axes = plt.subplots(1, 3, figsize=(6.8, 2.55), sharey=True)
     specs = [
@@ -90,7 +128,7 @@ def main():
         ),
     ]
     for ax, (key, title, label, upper) in zip(axes, specs):
-        for i in range(5):
+        for i in range(tasks):
             a, b = rows[2 * i : 2 * i + 2]
             x0, x1 = a[key], b[key]
             ax.plot([x0, x1], [i, i], color=COLORS["muted"], lw=1, zorder=1)
@@ -124,7 +162,7 @@ def main():
         ax.grid(axis="y", color=COLORS["row"], lw=0.5)
         ax.spines[["top", "right"]].set_visible(False)
         ax.tick_params(axis="y", length=0)
-    axes[0].set_yticks(range(5), [rows[2 * i]["label"] for i in range(5)])
+    axes[0].set_yticks(range(tasks), [rows[2 * i]["label"] for i in range(tasks)])
     axes[0].set_xticks([0, 0.25, 0.5, 0.75, 1])
     for ax in axes[1:]:
         ax.set_xticks([0, 25, 50, 75, 100])
@@ -143,7 +181,14 @@ def main():
         HERE,
         {
             "source_files_hash_verified": len(manifest["files"]),
-            "paired_candidates": 5,
+            "paired_candidates": tasks,
+            "readme_over_record_range": {
+                r["label"]: [
+                    round(min(x["readme_over_record"] for x in readme_check if x["label"] == r["label"]), 4),
+                    round(max(x["readme_over_record"] for x in readme_check if x["label"] == r["label"]), 4),
+                ]
+                for r in rows
+            },
             "single_kernel_per_profile": True,
             "profiled_kernel_name_found_in_associated_source": True,
             "candidate_selection": "Minimum timing across all eight retained rounds; first retained round as reference",

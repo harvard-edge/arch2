@@ -219,7 +219,10 @@ for prov_file in sorted(
     prov_data = yaml.safe_load(prov_file.read_text(encoding="utf-8")) or {}
     for ds in prov_data.get("datasets", []) or []:
         if isinstance(ds, dict) and "file" in ds:
+            # Per-figure records name their own files relative to the folder and upstream files repo-relative.
             ds_path = (prov_dir / ds["file"]).resolve()
+            if not ds_path.is_file() and (ROOT / ds["file"]).is_file():
+                ds_path = (ROOT / ds["file"]).resolve()
             if not ds_path.is_file():
                 problems.append(
                     f"{prov_file.relative_to(ROOT)} declares missing dataset: {ds['file']}"

@@ -30,7 +30,7 @@ def read_csv(path):
 
 def main():
     manifest = verify_sources(HERE, allow_missing_gitignored=True)
-    verify_sources(SHARED, allow_missing_gitignored=True)
+    shared = verify_sources(SHARED, allow_missing_gitignored=True)
     errata = read_csv(SHARED / "derived/errata.csv")
     sources = read_csv(SHARED / "derived/sources.csv")
     launches = read_csv(HERE / "launch_years.csv")
@@ -170,7 +170,8 @@ def main():
         HERE,
         {
             "source_files_hash_verified": len(manifest["files"]),
-            "shared_vendor_sources_hash_verified": True,
+            "shared_vendor_sources_declared": len(shared["files"]),
+            "shared_vendor_sources_hash_verified": shared["verified_count"],
             "all_19_families_join_exactly_once": True,
             "counts_reconcile_with_source_metadata": True,
         },

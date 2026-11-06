@@ -9,7 +9,7 @@ format:
 ::: {.epigraph}
 > "There is no single development, in either technology or in management technique, that by itself promises even one order-of-magnitude improvement in productivity, in reliability, in simplicity."
 >
-> — Frederick P. Brooks Jr., *No Silver Bullet* [@Brooks1986NoSilverBullet, p. 10]
+> — Frederick P. Brooks Jr., *No Silver Bullet* [@Brooks1986NoSilverBullet]
 :::
 
 ::: {.callout-crux}
@@ -59,13 +59,39 @@ Refining that distinction gives three kinds of target change:
 
 - **Distributional transfer.** The objective, legal actions, artifact boundary, and acceptance criteria remain stable, while workloads, operating conditions, or candidate populations shift. Different batch sizes or a move from dense general matrix multiply (GEMM) kernels to irregular attention can change which array shape uses the available compute and memory bandwidth well.
 - **Component or integration transfer.** The core decision remains stable while a component or interface changes along the executable or measurement path. A compiler backend update can alter the schedule; a process-library update can alter timing estimates. Each change reopens the claims that depend on it.
-- **New design problem.** The objective, legal actions, artifact boundary, or acceptance criteria change, such as moving from datacenter throughput under a 700\ W-class accelerator envelope to a strict 3\ W mobile or headset thermal limit.
+- **New design problem.** The objective, legal actions, artifact boundary, or acceptance criteria change, such as moving from datacenter throughput under a vendor-rated 700\ W accelerator envelope [@NVIDIA2022H100Whitepaper] to a strict 3\ W mobile or headset thermal limit.
 
-These categories apply claim by claim because one target change can affect several dependencies. The size of the change does not dictate the response. A large workload shift may leave the design question intact, whereas a single-line change to an acceptance criterion creates a new design problem. The matched MLPerf Inference v5.0 server submissions in @sec-software-changes-faster-than-silicon show such a change with hardware and model weights held fixed. A stricter latency contract cut throughput by a different fraction on each system (@fig-ch09-mlperf-latency-contract), so a comparison qualified under the looser contract cannot be rescaled by a fixed factor to answer the stricter one.
+```{python}
+#| echo: false
+# Inline values for the latency-contract pairs, read from the retained study:
+#   data/studies/12-mlperf-latency-contract/paired_throughput.csv
+# Fractions are submitted interactive throughput over standard throughput per pair. They
+# follow the ratio of the two target query rates, so they are not a cost of the contract.
+import csv as _csv9l
+from pathlib import Path as _Path9l
+import _python.plots as _ap9l
+
+with open(_Path9l(_ap9l.__file__).resolve().parents[2] / "data" / "studies" / "12-mlperf-latency-contract" / "paired_throughput.csv", encoding="utf-8") as _fh:
+    _rows9l = list(_csv9l.DictReader(_fh))
+_all9l = [float(r["interactive_fraction"]) for r in _rows9l]
+_shared9l = [r for r in _rows9l if (r["standard_target_qps"], r["interactive_target_qps"]) == ("114.24", "67.2")]
+_w9l = {9: "nine", 20: "twenty"}
+assert all(
+    float(r["standard_ttft_p99_ns"]) / 1e6 > float(r["interactive_ttft_ms"])
+    and float(r["standard_tpot_p99_ns"]) / 1e6 > float(r["interactive_tpot_ms"])
+    for r in _rows9l
+)
+lc_all_lo = f"{100 * min(_all9l):.0f}"
+lc_all_hi = f"{100 * max(_all9l):.0f}"
+lc_pairs_n = _w9l[len(_rows9l)]
+lc_shared_n = _w9l[len(_shared9l)].capitalize()
+```
+
+These categories apply claim by claim because one target change can affect several dependencies. The size of the change does not dictate the response. A large workload shift may leave the design question intact, whereas a single-line change to an acceptance criterion creates a new design problem. The matched MLPerf Inference v5.0 server submissions in @sec-software-changes-faster-than-silicon show such a change on the same named platforms, with submitters free to reconfigure between conditions. Their interactive throughput is `{python} lc_all_lo`% to `{python} lc_all_hi`% of standard (@fig-ch09-mlperf-latency-contract), but each share follows the ratio of the two target rates the submitter chose, and `{python} lc_shared_n` of the `{python} lc_pairs_n` pairs share one setting, so that range measures neither a cost of the stricter contract nor a spread across independent systems. The change shows in the latency record instead. Every standard log misses both interactive bounds, so a comparison qualified under the looser contract does not qualify a system under the stricter one (@sec-software-changes-faster-than-silicon).
 
 Whether a change is material therefore depends on the claim and the path that supports it. Recharacterizing a cell library at a new voltage and temperature corner requires new timing and power analysis without necessarily invalidating a compiler-semantics result. Dataset-shift tests can compare reference samples with incoming data to detect departures [@RabanserEtAl2019FailingLoudly], but that signal does not identify the broken physical or software relationship. A detected shift calls for inspecting the affected claims before deciding what to adapt.
 
-The preliminary spatial array experiment introduced in @sec-methods-generation-prediction-optimization and @sec-feedback-verification-trust makes these distinctions concrete, because its record contains a source result, a shift in its conditions, and a new design question. In that Layer 2 parameter search, SCALE-Sim [@RajEtAl2025ScaleSimV3] evaluated five systolic array shapes on a synthetic three-layer GEMM slice. It swept array aspect ratios within a fixed structural template $\Theta$ and scored them with an uncalibrated cycle-and-utilization proxy. Under that local metric, the source study found a tie and retained the 32 by 32 reference array, a no-change finding that remains confined to its synthetic source context.
+The preliminary spatial array experiment introduced in @sec-methods-generation-prediction-optimization and @sec-feedback-verification-trust makes these distinctions concrete, because its record contains a source result, a shift in its conditions, and a new design question. In that Layer 2 parameter search, SCALE-Sim [@RajEtAl2025ScaleSimV3] evaluated five systolic array shapes on a synthetic three-layer GEMM slice. It varied array height and width within a fixed structural template $\Theta$ and scored each shape with an uncalibrated cycle-and-utilization proxy. Under that local metric, the source study found a tie and recommended retaining the 32 by 32 reference array, a no-change recommendation that remains confined to its synthetic source context.
 
 ```{python}
 #| echo: false
@@ -99,12 +125,41 @@ _mc9t = _study9t["mechanism_claim"]
 assert abs(_orig9t - _mc9t["original_margin_pct"]) < 1e-9
 assert abs(_trans9t - _mc9t["transposed_margin_pct"]) < 1e-9
 assert _mc9t["observed_original_winner"] == _mc9t["observed_transposed_winner"] == "16x64"
+assert _mc9t["status"] == "falsified" and _mc9t["predicted_transposed_winner"] == "64x16"
 tp_orig_margin = f"{_orig9t:.1f}"
 tp_trans_margin = f"{_trans9t:.1f}"
 tp_ratio = f"{_orig9t / _trans9t:.1f}"
+
+
+# The factor depends on the metric: raw cycles excluding prefetch, and the score
+# recomputed with each layer's cycles including prefetch. Same margin definition.
+def _cyc9t(cid):
+    return _probe9t[cid]["total_cycles"]
+
+
+def _pre9t(cid):
+    m = _probe9t[cid]
+    return sum(int(x["Total Cycles (incl. prefetch)"]) for x in m["layers"]) / (m["avg_layer_util_pct"] / 100)
+
+
+def _lead9t(fn, winner, loser):
+    return 100 * (fn(loser) - fn(winner)) / fn(loser)
+
+
+_cyc_o9t = _lead9t(_cyc9t, "probe_original_16x64", "probe_original_64x16")
+_cyc_t9t = _lead9t(_cyc9t, "probe_transposed_16x64", "probe_transposed_64x16")
+_pre_o9t = _lead9t(_pre9t, "probe_original_16x64", "probe_original_64x16")
+_pre_t9t = _lead9t(_pre9t, "probe_transposed_16x64", "probe_transposed_64x16")
+assert min(_cyc_o9t, _cyc_t9t, _pre_o9t, _pre_t9t) > 0
+tp_cyc_orig = f"{_cyc_o9t:.1f}"
+tp_cyc_trans = f"{_cyc_t9t:.1f}"
+tp_cyc_ratio = f"{_cyc_o9t / _cyc_t9t:.1f}"
+tp_pre_orig = f"{_pre_o9t:.1f}"
+tp_pre_trans = f"{_pre_t9t:.1f}"
+tp_pre_ratio = f"{_pre_o9t / _pre_t9t:.1f}"
 ```
 
-The same record also tests a conclusion under changed conditions. The mechanism probe of @sec-methods-generation-prediction-optimization ran the $16 \times 64$ and $64 \times 16$ arrays on the original workload and on a transposed version with $M$ and $N$ swapped. On the original workload, the $16 \times 64$ array scored `{python} tp_orig_margin`% better than the $64 \times 16$ array. It still won after transposition, but its lead shrank to `{python} tp_trans_margin`%. The ranking survived the distributional shift; the margin did not. A team that carried the source margin forward, for instance to decide whether the wide array was worth its extra modeled write traffic, would have relied on a margin `{python} tp_ratio` times larger than the transposed workload supports. The probe runs a single synthetic three-layer workload under a deterministic simulator and changes several factors at once. It therefore shows that a performance margin need not transfer; it does not estimate how much margins typically shrink.
+The same record also bears on transfer, although only after the fact. The mechanism probe of @sec-methods-generation-prediction-optimization ran the $16 \times 64$ and $64 \times 16$ arrays on the original workload and on a transposed version with $M$ and $N$ swapped to test a predicted reversal of their ranking. The reversal did not occur, so the proposed explanation for the ranking failed. On the original workload, the $16 \times 64$ array scored `{python} tp_orig_margin`% better than the $64 \times 16$ array. It still won after transposition, but its lead shrank to `{python} tp_trans_margin`%. Read as a transfer test, which the probe was not designed to be, the ranking survived the distributional shift and the margin did not. A team that carried the source margin forward, for instance to decide whether the wide array was worth its extra modeled write traffic, would have relied on a score margin `{python} tp_ratio` times larger than the transposed workload supports. That factor depends on the metric. On cycles excluding prefetch, the lead fell from `{python} tp_cyc_orig`% to `{python} tp_cyc_trans`%, a factor of `{python} tp_cyc_ratio`, whereas under a score that counts prefetch cycles it fell from `{python} tp_pre_orig`% to `{python} tp_pre_trans`%, a factor of `{python} tp_pre_ratio` that a small change in so thin a margin would move considerably. The direction held under all three. The probe runs a single synthetic three-layer workload under a deterministic simulator and changes several factors at once. It therefore shows that a performance margin need not transfer; it does not estimate how much margins typically shrink.
 
 Selecting an array for implementation in the 3\ W Lighthouse subsystem asks a different question from ranking shapes under that simulator score. The target adds workload, memory-interface, and physical constraints that the source study did not evaluate. Some source artifacts can still help, but the team must separate them from the unsupported implementation conclusion and check each against its target use.
 
@@ -156,7 +211,7 @@ Qualifying a unit in isolation is still insufficient when its local choices shif
 ::: {.callout-failure-mode title="Container optimization can hide system cost"}
 **The trap.** In a parameter search inside a fixed template, an automated exploration engine optimizes parameters $\theta \in \Theta$ within the template's structural container against a local proxy metric, and a local win or tie is read as a system-level result.
 
-**The mechanism.** The retained systolic array study already showed this trap (@fig-proxy-mismatch). Its wider $16 \times 64$ geometry tied the $32 \times 32$ baseline on cycles excluding prefetch and on the local score while SCALE-Sim reported twice as many modeled dynamic random-access memory (DRAM) word writes, traffic the score never saw because the container held the memory interface and dataflow fixed. The run modeled no DRAM timing or energy, so the gap exposes a question the local score cannot answer rather than a measured system penalty.
+**The mechanism.** The retained systolic array study already showed this trap (@fig-proxy-mismatch). Its wider $16 \times 64$ geometry tied the $32 \times 32$ baseline on cycles excluding prefetch and on the local score while SCALE-Sim reported twice as many modeled dynamic random-access memory (DRAM) word writes, traffic the score never saw because its formula reads only cycles and utilization, while the container held the memory interface and dataflow fixed. The run modeled no DRAM timing or energy, so the gap exposes a question the local score cannot answer rather than a measured system penalty.
 
 **The lesson.** Bound such searches and transfer checks to the smallest enclosing boundary that captures interconnect, memory traffic, and thermal coupling, and report what the local score omits. When a quantity outside the container decides the question, the container cannot settle it; the study must widen its measurement, and possibly reopen the interface, before any system claim is made.
 :::
@@ -167,23 +222,23 @@ Widening the measurement does not dissolve the block as a transfer unit. Its loc
 
 The target check must exercise the changed relation, not merely confirm that the component still runs. A simulator wrapper can pass its syntax regressions while forwarding out-of-range parameters introduced by a neighboring representation. The target tests need to include those values and verify both the expected rejection and the valid boundary cases.
 
-The qualification rules from @sec-feedback-verification-trust apply to the result. Checks that share a model or specification carry the same blind spot to the target, so component checks have to be combined with integration tests wherever the claim depends on interactions [@SculleyEtAl2015Hidden]; they are not interchangeable votes that the transferred system works.
+The qualification rules from @sec-feedback-verification-trust apply to the result. We reason that checks sharing a model or specification carry the same blind spot to the target, so they are not interchangeable votes that the transferred system works, and component checks have to be combined with integration tests wherever the claim depends on interactions. Machine-learned systems show a related limit, since changing one input can change the rest of the system, and unit and end-to-end tests alone do not show that it still works as intended once the world changes [@SculleyEtAl2015Hidden].
 
 ## Transfer Under Distribution Shift {#sec-transfer-distribution-shift}
 
 A shift becomes actionable when the team can connect a changed condition to a relationship the source method relied on. Different failures call for different adaptations. New workload samples may be enough to retune an existing schedule; changed memory-ordering rules may require new synchronization; a different metal stack may require refitting a predictor against routed target designs. The source artifact's continued execution does not distinguish these cases.
 
-For workload transfer, start with the program and its mapping. A dense matrix workload supplies regular tiles and steady data reuse, whereas mixture-of-experts token routing changes tile sizes and work balance [@ShazeerEtAl2017MoE], and autoregressive decoding increases repeated memory traffic [@KwonEtAl2023PagedAttention]. Representative target traces must therefore measure utilization and bandwidth together. A fall in utilization can call for changing the mapping or data-movement schedule before replacing the array hardware. Workload characterization should separate intrinsic program properties from the effects of a particular machine [@HosteEeckhout2007MICA]. Compiler autotuners such as AutoTVM and Ansor show why the distinction matters, because their cost models are fitted to measurements of workloads and candidate schedules on one hardware target [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor]. A new workload or mapping can therefore change the conditions supporting both the tuned schedule and the fitted model even when the hardware is unchanged. Both require target checks to determine what remains valid.
+For workload transfer, start with the program and its mapping. A dense matrix workload supplies regular tiles and steady data reuse, whereas mixture-of-experts routing can send very different numbers of examples to different experts unless training balances the load [@ShazeerEtAl2017MoE], and autoregressive decoding grows a per-request key-value cache as it generates each token [@KwonEtAl2023PagedAttention]. Representative target traces must therefore measure utilization and bandwidth together. A fall in utilization can call for changing the mapping or data-movement schedule before replacing the array hardware. Workload characterization can separate inherent program behavior from the effects of a particular machine by using microarchitecture-independent metrics [@HosteEeckhout2007MICA]. Compiler autotuners such as AutoTVM and Ansor show why the distinction matters, because each fits its cost model to execution times measured on the hardware it is tuning for [@ChenEtAl2018AutoTVM; @ZhengEtAl2020Ansor]. AutoTVM reports a $2\times$ to $10\times$ search speedup from transfer learning across workloads, using representations that need more invariance as the workloads grow farther apart, and its one test across devices is a preliminary study [@ChenEtAl2018AutoTVM]. A new workload or mapping can therefore change the conditions supporting both the tuned schedule and the fitted model even when the hardware is unchanged. Both require target checks to determine what remains valid.
 
-An instruction set architecture change can break a functional relation rather than a performance prediction. Consider message passing in which a producer writes a payload before setting a flag, and a consumer reads that payload after observing the flag. A strongly ordered source machine such as x86 keeps each core's writes and each core's reads in program order, so code can rely on that order without stating it. Under RISC-V Weak Memory Ordering, the hardware may reorder either pair, so the producer needs a `fence w, w` between its payload and flag writes and the consumer a `fence r, r` between its flag and payload reads [@RISCV2026UnprivilegedISA]. Portable code states the ordering through source-language atomics, and the compiler lowers those atomics to whatever fences each target requires, so the lowering decides whether a result carried from the source still holds. The invariant is visibility of the payload after the flag is observed, not preservation of the source instruction sequence. Target litmus tests, small concurrent programs that expose permitted memory-access interleavings, exercise that relation [@AlglaveEtAl2014HerdingCats]. Passing a single-core test would leave it untested.
+An instruction set architecture change can break a functional relation rather than a performance prediction. Consider message passing in which a producer writes a payload before setting a flag, and a consumer reads that payload after observing the flag. A strongly ordered source machine such as x86 keeps each core's writes and each core's reads in program order, so code can rely on that order without stating it [@AlglaveEtAl2014HerdingCats]. Under RISC-V Weak Memory Ordering, the hardware may reorder either pair, so the producer needs a `fence w, w` between its payload and flag writes and the consumer a `fence r, r` between its flag and payload reads [@RISCV2026UnprivilegedISA]. Portable code states the ordering through source-language atomics, and the compiler lowers those atomics to whatever fences each target requires, so the lowering decides whether a result carried from the source still holds. The invariant is visibility of the payload after the flag is observed, not preservation of the source instruction sequence. Target litmus tests, small concurrent programs that expose permitted memory-access interleavings, exercise that relation [@AlglaveEtAl2014HerdingCats]. Passing a single-core test would leave it untested.
 
 A process migration changes the relation between circuit structure and physical behavior. A congestion predictor fitted to one library and metal stack can retain a useful netlist representation while losing the accuracy of its fitted predictions. Moving power routing to the backside of the wafer, for example, changes the frontside resources available for signal routing.[^fn-bspdn-c09] The team should compare predictions with held-out routed target layouts before deciding whether recalibration suffices or the model needs new features and training. A changed node label alone establishes neither successful transfer nor model failure.
 
 [^fn-bspdn-c09]: **Backside power delivery network (BSPDN)**: An arrangement that routes power through the backside of the silicon wafer, separating the power-delivery network from frontside signal routing. Its resistance and routing benefits depend on the implemented network and device connections, and a migration to backside power can invalidate relationships fitted to a frontside-power stack.
 
-A package change similarly requires a new model for the boundaries that traffic crosses. A die-to-die interface such as Universal Chiplet Interconnect Express (UCIe) adds interface circuitry, protocol adaptation, and bump parasitics [@UCIeConsortium2026Spec].[^fn-die-interconnect-latency-c09] The transfer check traces which traffic crosses each boundary, measures its volume and timing, and compares the resulting demand with the target link's bandwidth and energy under declared conditions. Keeping intermediate results on one die removes some crossings but does not eliminate input and output traffic. A local bandwidth advantage becomes a system advantage only after those remaining costs are included.
+A package change similarly requires a new model for the boundaries that traffic crosses. A die-to-die interface such as Universal Chiplet Interconnect Express (UCIe) adds a physical layer with analog circuits and bumps and, in its 2D and 2.5D forms, an adapter layer that handles link management and multi-protocol support [@DasSharma2024UCIe20Introduction].[^fn-die-interconnect-latency-c09] The transfer check traces which traffic crosses each boundary, measures its volume and timing, and compares the resulting demand with the target link's bandwidth and energy under declared conditions. Keeping intermediate results on one die removes some crossings but does not eliminate input and output traffic. A local bandwidth advantage becomes a system advantage only after those remaining costs are included.
 
-[^fn-die-interconnect-latency-c09]: **Die-to-die interface overheads**: Short-reach interfaces still pay for transmit and receive circuits, protocol adaptation, and bump capacitance. Partitioning a tightly coupled systolic array or shared-cache coherence domain across a die boundary without accounting for those costs can make a monolithic performance model optimistic.
+[^fn-die-interconnect-latency-c09]: **Die-to-die interface overheads**: Short-reach interfaces still pay for transmit and receive circuits, protocol adaptation, and electrical parasitics that shrink as the connection shortens [@UCIeConsortium2024Overview]. Partitioning a tightly coupled systolic array or shared-cache coherence domain across a die boundary without accounting for those costs can make a monolithic performance model optimistic.
 
 Software updates also break source relations over time. The hardware can remain fixed while a new compiler or runtime changes the executed schedule and the result it supports.
 
@@ -193,7 +248,7 @@ A software update can change whether accelerator offload pays without changing t
 
 The hardware-software version pair also determines how a candidate uses the datapath. Changing an array's dimensions without adapting its compiler tiling can produce partial tiles or unaligned transfers; a measured slowdown may reflect that mismatch rather than a limit of the revised array. Pinning both versions makes the result identifiable, but it does not remove the interaction. Comparisons with an earlier baseline need the compatible dependency versions and inputs that produced it, and a hardware claim needs tests that distinguish datapath effects from software effects.
 
-The dependency also runs from hardware into software. Once a post-silicon erratum workaround ships in operating-system code, distribution kernels must keep supporting deployed machines even as newer processor revisions arrive. The same kernel thus runs different workaround code on each revision, so a result measured on one revision need not hold on the next. Kernel configuration files record that accumulation (@fig-ch09-linux-arm64-errata-workarounds).
+The dependency also runs from hardware into software. Once a post-silicon erratum workaround ships in operating-system code, we expect distribution kernels to keep supporting deployed machines even as newer processor revisions arrive. The same kernel thus runs different workaround code on each revision, so a result measured on one revision need not hold on the next. Kernel configuration files record that accumulation (@fig-ch09-linux-arm64-errata-workarounds).
 
 ```{python}
 #| echo: false
@@ -215,13 +270,119 @@ lk14_added_n = _lk14["last"]["other_options"]
 
 ![**Prompted `arm64` erratum workaround options accumulate across Linux kernel releases without retiring the initial set.** Count of prompted Boolean `*ERRATUM*` configuration symbols in `arch/arm64/Kconfig` across `{python} lk14_snaps` pinned Linux kernel releases from `{python} lk14_first_tag` (`{python} lk14_first_yr`) to `{python} lk14_last_tag` (`{python} lk14_last_yr`) [@LinuxKernel2024Arm64Kconfig]. All `{python} lk14_first_n` options present in `{python} lk14_first_tag` remain in every subsequent sampled release while `{python} lk14_added_n` later options accumulate above them, reaching `{python} lk14_last_n` options in `{python} lk14_last_tag`.](images/fig-ch09-linux-arm64-errata-workarounds){#fig-ch09-linux-arm64-errata-workarounds width="80%" fig-alt="Stacked bar chart of prompted Boolean ERRATUM configuration options in Linux arch/arm64/Kconfig across ten kernel releases from v4.4 in 2016 to v6.12 in 2024. The lower band of 10 options present in v4.4 persists unchanged across all ten releases, while later-added options grow the total from 10 to 52."}
 
-Option counts measure configuration surface rather than runtime overhead or defect rates, but they show how a hardware workaround becomes a software contract that later releases must carry.
+Option counts measure configuration surface rather than runtime overhead or defect rates, but they show how a hardware workaround becomes a software contract that later releases have carried.
 
-In the opposite direction, software updates change results on fixed hardware. Public MLPerf submissions show why performance gains on nominally identical accelerators cannot be carried across version pairs by a fixed factor (@fig-ch09-mlperf-software-dividend). Between MLPerf Training v2.1 (November 2022) and v3.0 (June 2023), NVIDIA's submissions with eight H100-SXM5-80GB GPUs improved by different amounts across three workloads. Ratios calculated from the published times reach $1.166\times$ for BERT, $1.084\times$ for ResNet-50, and $1.082\times$ for 3D U-Net [@MLCommons2022TrainingV21Results; @MLCommons2023TrainingV30Results]. NVIDIA attributes the gains to software updates including fused attention, CUDA graph capture, GEMM library improvements, and convolution kernels [@EassaEryilmaz2023H100MLPerfSoftware]. Because the earlier preview record omits clock, host-memory, and software details, the public records neither verify that the complete machine was unchanged nor isolate a compiler effect.
+```{python}
+#| echo: false
+# Speedups for the matched H100 MLPerf Training pairs and their run-to-run spread. Values come from
+#   book/contents/chapters/09-patterns/data/fig-ch09-mlperf-software-dividend.csv and
+#   mlperf-h100-spread.csv, mlperf-h100-pairs.csv, and mlperf-h100-hosts.csv, written by analyze_mlperf_h100_runs.py.
+import csv as _csv9d
+from pathlib import Path as _Path9d
+import _python.plots as _ap9d
 
-![**H100 training results improve by different amounts across workloads.** Speedups divide published MLPerf Training v2.1 times (preview result 2.1-2091) by v3.0 times (available results 3.0-2064 for BERT and 3.0-2062 for ResNet-50 and 3D U-Net) [@MLCommons2022TrainingV21Results; @MLCommons2023TrainingV30Results]. All rows list eight H100-SXM5-80GB GPUs, so per-accelerator normalization gives the same ratios. NVIDIA attributes the gains to software optimization [@EassaEryilmaz2023H100MLPerfSoftware]; incomplete preview metadata limits independent claims about whole-system identity and causal attribution.](images/fig-ch09-mlperf-software-dividend){#fig-ch09-mlperf-software-dividend width="80%" fig-alt="Horizontal bar chart of published time-to-train ratios for eight H100-SXM5-80GB GPUs from MLPerf Training v2.1 to v3.0: BERT 1.166 times, ResNet-50 v1.5 1.084 times, and 3D U-Net 1.082 times. The earlier submission was a preview system."}
+_dir9d = _Path9d(_ap9d.__file__).resolve().parents[2] / "book" / "contents" / "chapters" / "09-patterns" / "data"
+def _rows9d(name):
+    with open(_dir9d / name, encoding="utf-8") as _fh:
+        return list(_csv9d.DictReader(line for line in _fh if not line.startswith("#")))
+_fig9d = {r["workload"]: r for r in _rows9d("fig-ch09-mlperf-software-dividend.csv")}
+_spread9d = {r["workload"]: r for r in _rows9d("mlperf-h100-spread.csv")}
+_pairs9d = {(r["left"], r["right"]): r for r in _rows9d("mlperf-h100-pairs.csv")}
+_sep9d = {k: r["separated"] == "yes" for k, r in _pairs9d.items()}
+_hosts9d = _rows9d("mlperf-h100-hosts.csv")
+def _range9d(work):
+    _vals = [float(r["published_ratio"]) for r in _hosts9d if r["workload"] == work]
+    assert len(_vals) == 7
+    return f"{min(_vals):.2f}", f"{max(_vals):.2f}"
+def _apart9d(a, b):
+    return _sep9d.get((a, b), _sep9d.get((b, a)))
+_speed9d = {k: float(r["ratio"]) for k, r in _fig9d.items()}
+_unet9d = _spread9d["3D U-Net"]
+_resnet9d = "ResNet-50 v1.5"
+assert len(_speed9d) == 6 and max(_speed9d, key=_speed9d.get) == "BERT" and min(_speed9d, key=_speed9d.get) == "RetinaNet"
+# One standard: a pair with any draw lacking a valid comparison depends on how aborted runs are handled, and no lead is claimed for it.
+_aborted9d = ("BERT", _resnet9d, "Mask R-CNN")
+for _key9d, _row9d in _pairs9d.items():
+    assert (_row9d["depends_on_aborted_runs"] == "yes") == any(w in _key9d for w in _aborted9d) == (int(_row9d["no_comparison_draws"]) > 0)
+# What the prose reports as the published times and the valid runs, in the published order of these four workloads.
+_order9d = ("BERT", _resnet9d, "Mask R-CNN", "RetinaNet")
+assert sorted(_order9d, key=_speed9d.get, reverse=True) == list(_order9d)
+for _i9d, _left9d in enumerate(_order9d):
+    for _right9d in _order9d[_i9d + 1:]:
+        assert _pairs9d[(_left9d, _right9d)]["valid_separated"] == "yes" and float(_pairs9d[(_left9d, _right9d)]["valid_diff_low"]) > 0
+# Valid draws that reverse the published order, pair by pair. The prose names the one pair that has any.
+_reversed9d = {k: int(r["valid_reverse_or_tie_draws"]) for k, r in _pairs9d.items() if set(k) <= set(_order9d)}
+assert len(_reversed9d) == 6 and [k for k, n in _reversed9d.items() if n] == [("BERT", _resnet9d)]
+sd_order_reversed = str(_reversed9d[("BERT", _resnet9d)])
+sd_order_valid = f"{int(_spread9d['BERT']['draws']) - int(_pairs9d[('BERT', _resnet9d)]['no_comparison_draws']):,}"
+def _valid9d(a, b):
+    return _pairs9d.get((a, b), _pairs9d.get((b, a)))["valid_separated"] == "yes"
+assert all(_spread9d[w]["sets_overlap"] == "no" for w in _order9d)
+# The prose says every converged v3.0 run beat every converged v2.1 run on these four, and all six published ratios exceed one.
+assert all(float(_spread9d[w]["to_max_min"]) < float(_spread9d[w]["from_min_min"]) for w in _order9d)
+assert min(float(r["published_ratio"]) for r in _spread9d.values()) > 1
+assert all(_spread9d[w]["sets_overlap"] == "yes" for w in ("RNN-T", "3D U-Net"))
+assert not any(_valid9d("RNN-T", w) for w in ("BERT", _resnet9d, "Mask R-CNN"))
+assert not any(_apart9d("3D U-Net", w) for w in _speed9d if w != "3D U-Net")
+assert not any(_valid9d("3D U-Net", w) for w in _speed9d if w != "3D U-Net")
+# The one separated pair free of aborted runs, which the prose names and does not claim.
+assert [k for k, r in _pairs9d.items() if r["depends_on_aborted_runs"] == "no" and r["separated"] == "yes"] == [("RNN-T", "RetinaNet")]
+assert float(_unet9d["ratio_low"]) < 1 < float(_unet9d["ratio_high"])
+assert float(_unet9d["valid_ratio_low"]) < 1 < float(_unet9d["valid_ratio_high"])
+assert _unet9d["from_nonconverged"] == _unet9d["to_nonconverged"] == "0"
+assert _unet9d["to_overlap_blocks"] == "1" and _unet9d["from_overlap_blocks"] == "10"
+assert float(_unet9d["from_block_tpu_ratio_min"]) < 1 < float(_unet9d["from_block_tpu_ratio_max"])
+assert _unet9d["sets_overlap_time_per_unit"] == "yes"
+assert float(_unet9d["units_low"]) < 1 < float(_unet9d["units_high"])
+assert all(28 < float(_unet9d[k]) < 37 for k in ("from_cv_pct", "to_cv_pct"))
+assert all(float(_unet9d[k]) < 3 for k in ("from_time_per_unit_cv_pct", "to_time_per_unit_cv_pct"))
+def _pub9d(work):
+    return float(_fig9d[work]["from_time_min"]) / float(_fig9d[work]["to_time_min"])
+sd_bert = f"{_pub9d('BERT'):.2f}"
+sd_retina = f"{_pub9d('RetinaNet'):.2f}"
+sd_retina_pct = f"{(_speed9d['RetinaNet'] - 1) * 100:.1f}"
+sd_unet = f"{float(_unet9d['ratio']):.2f}"
+sd_unet_lo = f"{float(_unet9d['ratio_low']):.2f}"
+sd_unet_hi = f"{float(_unet9d['ratio_high']):.2f}"
+sd_unet_tpe = f"{float(_unet9d['time_per_unit_ratio']):.2f}"
+sd_unet_in = _unet9d["from_in_to_range"]
+assert _spread9d["BERT"]["from_nonconverged"] == _spread9d[_resnet9d]["to_nonconverged"] == _spread9d["Mask R-CNN"]["to_nonconverged"] == "1"
+# Draws with no valid comparison, as plain counts out of the draws made.
+assert {r["draws"] for r in _spread9d.values()} == {"20000"}
+sd_draws = f"{int(_spread9d['BERT']['draws']):,}"
+_none9d = [int(_spread9d[w]["no_comparison_draws"]) for w in _aborted9d]
+sd_none_lo, sd_none_hi = f"{min(_none9d):,}", f"{max(_none9d):,}"
+_rnnt9d = _spread9d["RNN-T"]
+assert _rnnt9d["from_in_to_range"] == "8" and _rnnt9d["from_runs_above_step"] == "4" and float(_rnnt9d["to_tpu_largest_step_pct"]) < 1
+assert min(float(_rnnt9d[k]) for k in ("ratio_low", "valid_ratio_low")) > 1
+sd_rnnt_tpe = f"{float(_rnnt9d['time_per_unit_ratio']):.2f}"
+sd_rnnt_tpe_low = f"{float(_rnnt9d['time_per_unit_ratio_below_step']):.2f}"
+assert all(float(_rnnt9d["time_per_unit_ratio_below_step"]) < float(_spread9d[w]["time_per_unit_ratio"]) for w in (_resnet9d, "Mask R-CNN"))
+# Sets that form one overlapping block; the prose says several run sets overlap in time.
+assert [w for w, r in _spread9d.items() if r["to_overlap_blocks"] == "1"] == ["3D U-Net", "RNN-T", "Mask R-CNN", "RetinaNet"]
+assert [w for w, r in _spread9d.items() if r["from_overlap_blocks"] == "1"] == ["RNN-T"]
+# The prose calls the two narrowest intervals narrower than 1% and quotes the Mask R-CNN start span.
+_mask9d, _retina9d = _spread9d["Mask R-CNN"], _spread9d["RetinaNet"]
+assert all(float(r["ratio_high"]) - float(r["ratio_low"]) < 0.01 for r in (_mask9d, _retina9d))
+sd_mask_start = f"{float(_mask9d['to_start_span_s']):.0f}"
+sd_mask_lo, sd_mask_hi = _range9d("Mask R-CNN")
+sd_rnnt_lo, sd_rnnt_hi = _range9d("RNN-T")
+sd_resnet_mask_gap = f"{(_speed9d[_resnet9d] - _speed9d['Mask R-CNN']) * 100:.1f}"
+```
 
-The gains differ across workloads even within this version pair, so the BERT ratio does not describe the observed improvement on ResNet-50 or 3D U-Net. Nor does the comparison establish a gain for later releases. An architect must retain software history alongside hardware specifications and remeasure the target configuration before attributing an improvement to microarchitecture.
+In the opposite direction, a vendor can credit software with gains on nominally unchanged hardware, and published MLPerf times show how far such a credit can be checked (@fig-ch09-mlperf-software-dividend). Between MLPerf Training v2.1 (November 2022) and v3.0 (June 2023), NVIDIA's submissions with eight H100-SXM5-80GB GPUs match on six workloads, comparing a v2.1 preview system with v3.0 available systems. Recommendation and MiniGo have no matched pair because v3.0 replaced the first benchmark and dropped the second. All six published times improved, with ratios from `{python} sd_bert`$\times$ for BERT to `{python} sd_retina`$\times$ for RetinaNet [@MLCommons2022TrainingV21Results; @MLCommons2023TrainingV30Results]. NVIDIA reports that single-node performance rose by up to 17% on the same hardware through software alone, and it names fused attention, CUDA graph capture, GEMM library improvements, and convolution kernels among the changes [@EassaEryilmaz2023H100MLPerfSoftware]. Its text gives no percentage for RNN-T, which appears only as a chart bar, and it does not limit its RetinaNet improvements of up to 10% to eight GPUs, where the time-to-train gain is `{python} sd_retina_pct`%. The system records of both rounds leave clocks blank, and the preview record also omits host-memory and software details, so the public records neither verify that the complete machine was unchanged nor isolate a compiler effect.
+
+![**Published H100 time-to-train ratios differ across six matched workloads, but logs leave their order open.** Points divide MLPerf Training v2.1 preview by v3.0 available times on eight H100-SXM5-80GB GPUs. Lines give 95% bootstrap intervals over these runs (aborted counts fixed), which describe spread within them, not uncertainty of the gain; several are far narrower than MLCommons's stated variation [@MLCommons2022TrainingV21Results; @MLCommons2023TrainingV30Results]. Aborted runs void some draws, so no lead is claimed. The 3D U-Net interval includes no gain. ResNet-50 omits its published v2.1 scaling. NVIDIA credits software [@EassaEryilmaz2023H100MLPerfSoftware]; incomplete records limit independent claims on system identity and cause.](images/fig-ch09-mlperf-software-dividend){#fig-ch09-mlperf-software-dividend width="80%" fig-alt="Dot plot with horizontal interval lines of time-to-train ratios for eight H100-SXM5-80GB GPUs from MLPerf Training v2.1 to v3.0, with a vertical reference line at no change. BERT is 1.17 times, from 1.11 to 1.25. RNN-T is 1.09 times, from 1.04 to 1.14. 3D U-Net is 1.08 times, from 0.93 to 1.26, crossing the reference line. ResNet-50 v1.5 at 1.08 times, Mask R-CNN at 1.06 times, and RetinaNet at 1.03 times have intervals narrower than 0.02. The earlier submission was a preview system."}
+
+The published ratios differ across workloads even within this version pair, so the BERT ratio does not describe the other five. The per-run logs in the results repositories show how much of each difference survives variation between runs. For BERT, ResNet-50, Mask R-CNN, and RetinaNet the improvement survives, since every converged v3.0 run finished faster than every converged v2.1 run. RNN-T is weaker. Its interval stays above parity, but eight of its ten v2.1 times fall inside the v3.0 range, and without four v2.1 runs that were slower per epoch for reasons the logs do not give, its ratio per epoch falls from `{python} sd_rnnt_tpe`$\times$ to `{python} sd_rnnt_tpe_low`$\times$.
+
+The order of the workloads is less secure than these gains. Among resampling draws with a valid comparison, BERT, ResNet-50, Mask R-CNN, and RetinaNet keep their published order except for BERT against ResNet-50, which reverses in `{python} sd_order_reversed` of `{python} sd_order_valid` draws. We still claim no lead of one workload over another, under a standard we set after inspecting the logs. The v2.1 BERT set and the v3.0 ResNet-50 and Mask R-CNN sets each hold one aborted run, and a second would invalidate the result [@MLCommons2023TrainingRules]. Resampling all submitted runs therefore leaves `{python} sd_none_lo` to `{python} sd_none_hi` of `{python} sd_draws` draws per workload with no valid comparison, a property of the resampling and not an abort rate, whereas the plotted intervals hold the aborted count fixed. A lead involving those three workloads depends on that choice. 3D U-Net cannot be separated from any other workload, and the one separated pair that no aborted run touches, RNN-T over RetinaNet, rests on overlapping RNN-T run sets.
+
+These intervals describe spread within one pair of submissions, so they are not the uncertainty of the gain. They treat submitted runs as independent draws, yet several run sets overlap in time, and the five v3.0 Mask R-CNN runs started within about `{python} sd_mask_start`\ s of one another. A set may also be a selected window, because the rules let a submitter launch extra runs and score the consecutive set closest to the median [@MLCommons2023TrainingRules], and the run data we retain do not show whether NVIDIA did so. MLCommons states on both results pages that even the averaged result varies very roughly $\pm 2.5$% for imaging benchmarks and $\pm 5$% for the others [@MLCommons2022TrainingV21Results; @MLCommons2023TrainingV30Results]. The plotted Mask R-CNN and RetinaNet intervals are narrower than 1%. If MLCommons counts these detection benchmarks as imaging, which the pages do not spell out, the `{python} sd_retina_pct`% RetinaNet gain is about the size of that stated variation, and the `{python} sd_resnet_mask_gap` percentage-point gap between ResNet-50 and Mask R-CNN falls inside it. Dividing the NVIDIA v2.1 time by each of the seven published v3.0 times with eight H100 SXM GPUs gives `{python} sd_mask_lo`$\times$ to `{python} sd_mask_hi`$\times$ for Mask R-CNN and `{python} sd_rnnt_lo`$\times$ to `{python} sd_rnnt_hi`$\times$ for RNN-T. Those hosts differ, so these ratios are not replicates, but a gain this small is not settled by one vendor's repeated runs.
+
+3D U-Net shows why a published mean can mislead. No run aborted in either round, so nothing here depends on how aborted runs are handled. Its time to converge varies by about a third from run to run in each round, nearly all of it in the number of epochs rather than the time per epoch, and `{python} sd_unet_in` of the 40 v2.1 times fall inside the v3.0 range. The `{python} sd_unet`$\times$ ratio therefore has an interval of `{python} sd_unet_lo`$\times$ to `{python} sd_unet_hi`$\times$, so the logs do not establish a time-to-train gain, although NVIDIA reports one. Time per epoch is steadier and differs by `{python} sd_unet_tpe`$\times$, but all 40 v3.0 runs form one group overlapping in time, so the logs cannot show how much a second group would move that value, and that smaller gain is not established either.
+
+These logs support a narrow statement. On one pair of NVIDIA submissions, four of six workloads separated cleanly between rounds, the size of the change differed by workload, and the public record leaves open how much of it came from software and whether it holds for later releases. The rule that a transferred result carries its compiler version rests on the LogCA reasoning above and on NVIDIA's attribution, and these logs do not test it. An architect must retain software history alongside hardware specifications and remeasure the target configuration before attributing an improvement to microarchitecture.
 
 The inverse risk appears when a generated hardware candidate uses an immature compiler backend while the production baseline benefits from years of operator fusion. The end-to-end comparison describes the two available systems, which may be the relevant deployment question. Isolating their microarchitectures requires further work, such as tuning both candidates under matched budgets or perturbing tile sizes to test whether a result depends on a favorable compiler schedule. These checks carry the versioned source result into a target comparison without assuming either that every software change invalidates it or that fixed hardware preserves it.
 
@@ -229,14 +390,14 @@ The inverse risk appears when a generated hardware candidate uses an immature co
 
 Applying the transfer test to our prospective Lighthouse subsystem begins with a new target question: which array and memory organization can serve the workload within the 3\ W budget? The retained array sweep supplies candidate identities, simulator returns, and a wrapper, but its no-change recommendation applies only to the synthetic GEMM slice. Workload traces, compiler mappings, target energy models, and implementation evidence are still missing. The following application is a study plan, not an executed transfer or permission to freeze the array interface.
 
-Two source units require different actions. A pending rerun under the pinned source configuration would check whether the SCALE-Sim wrapper reproduces the retained cycle and utilization counts; it would not qualify a Lighthouse power prediction. The source decision rule needs replacement because its ratio of cycles to utilization omits memory traffic (@sec-proxy-mismatch-metric-gaming-and-calibration). The simulator did record word traffic, which can inform a new comparison, but those counts alone do not establish power.
+Two source units require different actions. A rerun under this plan, at the pinned source configuration, would check whether the SCALE-Sim wrapper reproduces the retained cycle and utilization counts; it would not qualify a Lighthouse power prediction. The source decision rule needs replacement because its ratio of cycles to utilization omits memory traffic (@sec-proxy-mismatch-metric-gaming-and-calibration). The simulator did record word traffic, which can inform a new comparison, but those counts alone do not establish power.
 
 ```{python}
 #| echo: false
 # Derived, not measured: energy of the extra modeled DRAM writes of the 16 x 64 candidate.
 # Inputs:
 #   extra writes   data/studies/ai_systolic_array_study/recorded/reference/study_results.json
-#   pJ per access  data/datasets/chapter2-horowitz-energy.csv, "DRAM access, 64 bit" (Horowitz, ISSCC 2014, 45 nm)
+#   pJ per access  book/contents/chapters/02-pressures/data/fig-data-movement-energy-scale/chapter2-horowitz-energy.csv, "DRAM access, 64 bit" (Horowitz, ISSCC 2014, 45 nm)
 # Assumption: each modeled word costs one full 64-bit DRAM access.
 # The target execution rate is unknown; no other traffic, refresh, or interface energy is counted.
 import csv as _csv9e
@@ -248,7 +409,7 @@ _root9e = _Path9e(_ap9e.__file__).resolve().parents[2]
 _st9e = _json9e.loads((_root9e / "data" / "studies" / "ai_systolic_array_study" / "recorded" / "reference" / "study_results.json").read_text(encoding="utf-8"))
 _m9e = {e["candidate_id"]: e["metrics"] for e in _st9e["evaluations"]}
 _extra9e = _m9e["ai_wide_16x64"]["dram_writes"] - _m9e["model_baseline_32x32"]["dram_writes"]
-with open(_root9e / "data" / "datasets" / "chapter2-horowitz-energy.csv", encoding="utf-8") as _fh:
+with open(_root9e / "book/contents/chapters/02-pressures/data/fig-data-movement-energy-scale/chapter2-horowitz-energy.csv", encoding="utf-8") as _fh:
     _dram9e = next(r for r in _csv9e.DictReader(_fh) if r["operation_or_access"] == "DRAM access")
 _pj_lo9e, _pj_hi9e = float(_dram9e["energy_low_pj"]), float(_dram9e["energy_high_pj"])
 _mj_lo9e = _extra9e * _pj_lo9e * 1e-9
@@ -268,7 +429,7 @@ $$
 \Delta P_{\mathrm{writes}} = \Delta E_{\mathrm{writes}} f_{\mathrm{slice}},
 $$
 
-where $f_{\mathrm{slice}}$ is the number of slice executions per second. Substituting the historical `{python} en_pj_lo` to `{python} en_pj_hi`\ nJ per 64-bit access reported by @Horowitz2014Energy gives `{python} en_mj_lo` to `{python} en_mj_hi`\ mJ per pass under that assumption. The estimate is only approximate, because the write count is a simulator return and the energy input comes from an older process node and memory interface rather than from measurement on Lighthouse. Charging a full access per modeled word also overstates energy whenever narrower words are packed into bursts. Even this per-pass estimate cannot establish power because the target execution rate $f_{\mathrm{slice}}$ remains unknown. Testing the 3\ W constraint therefore requires a calibrated energy model, measured execution rates, and the rest of the subsystem power budget. Until those exist, the source score cannot admit any array shape for implementation, including the retained 32 by 32 reference.
+where $f_{\mathrm{slice}}$ is the number of slice executions per second. Substituting the historical `{python} en_pj_lo` to `{python} en_pj_hi`\ nJ DRAM access energy reported by @Horowitz2014Energy, read here as the cost of one 64-bit access, gives `{python} en_mj_lo` to `{python} en_mj_hi`\ mJ per pass under that assumption. The estimate is only approximate, because the write count is a simulator return and the energy input comes from an older process node and memory interface rather than from measurement on Lighthouse. The retained simulator configuration declares no word width, so the 64-bit word is our assumption, and the range is a ceiling whenever narrower words are packed into bursts. Even this per-pass estimate cannot establish power because the target execution rate $f_{\mathrm{slice}}$ remains unknown. Testing the 3\ W constraint therefore requires a calibrated energy model, measured execution rates, and the rest of the subsystem power budget. Until those exist, the source score cannot admit any array shape for implementation, including the 32 by 32 reference.
 
 An automated transfer harness that carries the source comparator forward could incorrectly describe the reference array as power-qualified. The error would be an unsupported power conclusion, not a demonstrated 3\ W violation. A memory-aware target comparison might retain that array, choose another, or reject every candidate. Leaving all three outcomes open lets the source artifacts help without letting the source verdict decide a different problem.
 
@@ -298,7 +459,7 @@ When we carry models, tools, and design records across workloads, compilers, pro
 
 - **How can we separate what a learned timing or congestion model captures about circuit structure from the physics of a single process node?** Graph-based surrogates combine netlist topology with cell delays, metal pitches, and pin-access rules from their training data. A process migration can break those fitted relationships even when the RTL is unchanged. A representation that separates logic connectivity from process-specific physical parameters could reduce the routed target layouts needed for adaptation. The unresolved question is how to preserve useful structural knowledge while re-establishing prediction accuracy near timing and congestion limits.
 
-- **When a team modifies one block on a die, how can it tell which unedited neighbors still have valid timing and power evidence without rerunning full-chip signoff?** Selective requalification saves engineering time only when the dependency map catches every property a target change can disturb. Incremental timing analysis[^fn-incremental-sta-c09] updates arrival times along modified logic cones [@Cherry2026OpenSTA]. Repositioning an SRAM macro or resizing a tile buffer, however, can also shift clock-tree insertion delay, capacitive crosstalk, and dynamic voltage drop across neighboring blocks that share no logical wires with the edited module. A dependency check that follows only structural netlist connectivity understates the affected slice, whereas rerunning full-chip extraction and electrothermal signoff after every local edit wipes out the time savings of modular transfer. We still lack fast physical-sensitivity bounds that can be paired with structural dependency graphs to tell an architect when an unedited neighbor's timing and power evidence remains valid.
+- **When a team modifies one block on a die, how can it tell which unedited neighbors still have valid timing and power evidence without rerunning full-chip signoff?** Selective requalification saves engineering time only when the dependency map catches every property a target change can disturb. Incremental timing analysis,[^fn-incremental-sta-c09] as in OpenSTA, updates delays, arrival times, and required times on query [@Cherry2026OpenSTA]. Repositioning an SRAM macro or resizing a tile buffer, however, can also shift clock-tree insertion delay, capacitive crosstalk, and dynamic voltage drop across neighboring blocks that share no logical wires with the edited module. A dependency check that follows only structural netlist connectivity understates the affected slice, whereas rerunning full-chip extraction and electrothermal signoff after every local edit wipes out the time savings of modular transfer. We still lack fast physical-sensitivity bounds that can be paired with structural dependency graphs to tell an architect when an unedited neighbor's timing and power evidence remains valid.
 
 [^fn-incremental-sta-c09]: **Incremental static timing analysis**: An optimization in physical design signoff where timing graphs are updated only for logic cones and net parasitics directly affected by an incremental circuit or placement modification, rather than recomputing the full chip. In a transfer setting, an incremental update understates the change if macro repositioning alters global clock-tree insertion delay or coupling on neighboring paths that the update treats as undisturbed.
 
@@ -309,7 +470,7 @@ When we carry models, tools, and design records across workloads, compilers, pro
 Transfer begins by asking whether the target preserves the design question, then tracing which supporting relationships changed. The array probe showed that even a surviving ranking can carry a different margin; the prospective Lighthouse application showed why retained simulator outputs cannot establish a new power or implementation claim.
 
 ::: {.callout-takeaways}
-- **Components move, conclusions do not.** Data sources, models, tool paths, and checks remain reusable while their invariants and dependencies hold, whereas a source conclusion applies only where its supporting conditions still hold and requires new evidence whenever dependencies change.
+- **Components move; conclusions move only with their conditions.** Data sources, models, tool paths, and checks remain reusable while their invariants and dependencies hold, whereas a source conclusion applies only where its supporting conditions still hold and requires new evidence whenever dependencies change.
 - **Check the decision before the components.** A tighter limit or a new set of legal designs changes the question itself, and recalibrating a predictor cannot make the old conclusion answer it; unit actions and target checks follow only once the target question is clear.
 - **Materiality is claim-specific.** Whether a change matters depends on the claim and the path that supports it, so a new library corner reopens timing and power analysis without touching a compiler-semantics result; magnitude alone decides nothing.
 - **Transfer benefit needs a matched arm.** A carried prior earns its place only against a target-only arm with the same tasks, budgets, and stopping rules, with adaptation and requalification charged to the transfer.

@@ -20,7 +20,8 @@ OUT_DIR = "data/datasets"
 
 def read_csv(path):
     with open(path, "r") as f:
-        reader = csv.DictReader(f)
+        # Some datasets carry '#' header lines.
+        reader = csv.DictReader(line for line in f if not line.startswith("#"))
         return list(reader)
 
 
@@ -101,9 +102,9 @@ def plot_hdl_trends():
         color="#e74c3c",
     )
 
-    plt.title("Global Open-Source RTL Topology (GitHub Repositories)")
+    plt.title("Hand-Typed Stand-In for HDL Repository Counts (Not Mined Data)")
     plt.xlabel("Year")
-    plt.ylabel("Cumulative Repositories Created")
+    plt.ylabel("Stand-In Repository Count")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.7)
     plt.yscale("log")
@@ -142,7 +143,7 @@ def plot_ai_tco_limits():
     ]
     plt.legend(handles=handles, title="Company", loc="upper left")
 
-    plt.title("AI Accelerator Thermal Limits (Bubble Size = Transistors)")
+    plt.title("Hand-Typed Accelerator Table, Unsourced (Bubble Size = Transistors)")
     plt.xlabel("Launch Year")
     plt.ylabel("Thermal Design Power (TDP in Watts)")
     plt.grid(True, linestyle="--", alpha=0.7)

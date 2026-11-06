@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """
-Datacenter Power Delivery & Thermal Limits Dataset (AI-TCO-Limits)
+Hand-typed table of AI accelerator specifications. NOT MINED DATA.
 ==================================================================
-Architecture 2.0 Empirical Provenance Pipeline
 
-This script aggregates the physical constraints of AI architectures over the past decade.
-As chips hit the reticle limit, power density (Amps/mm²) and cooling are becoming the
-primary bottlenecks. This dataset correlates physical packaging data (Process Node,
-Transistor Count, Die Size) with Power (TDP) and Peak Compute (TOPS/TFLOPS).
+Despite this file's name, nothing here is mined or read from a source file. Every
+input value in ACCELERATORS was typed by hand, no row names a source, and no value
+has been checked against one. Only Power_Density_W_mm2 and TFLOPS_per_Watt are
+computed, from the typed values. The Peak_TFLOPS_FP16 column also mixes metrics:
+the TPU v1 row holds an Int8 figure, so the column cannot be compared across rows.
+
+The output feeds no book figure and no book number. Its only reader is
+data/datasets/plot_new_mining_datasets.py. Evidence class: constructed.
 
 Outputs:
 data/datasets/ai_accelerator_power_thermal_trend.csv
 """
 
-import os
 import csv
+import os
 
-# Authoritative empirical data sourced from HotChips, ISSCC, IEEE Micro, and vendor whitepapers.
-# FP16 TFLOPS used as standard baseline where applicable, or dense BF16/FP16 tensor core metrics.
+HEADER = """\
+# CONSTRUCTED STAND-IN. NOT MINED DATA. Input values are hand-typed, with no per-row source.
+# No value has been checked against a source. The last two columns are computed from typed values.
+# Peak_TFLOPS_FP16 mixes metrics: the TPU v1 row holds an Int8 figure.
+# Written by data/scrapers/mine_ai_accelerator_power_trend.py. Feeds no book figure or number.
+"""
+
+# Hand-typed, with no recorded source for any row.
 ACCELERATORS = [
     # Google TPU
     {
@@ -218,7 +227,7 @@ ACCELERATORS = [
 
 
 def mine_ai_accelerator_trends():
-    print("Compiling AI Accelerator Power & Thermal Trends...")
+    print("Writing the hand-typed accelerator table (not mined)...")
 
     os.makedirs("data/datasets", exist_ok=True)
     out_file = "data/datasets/ai_accelerator_power_thermal_trend.csv"
@@ -242,11 +251,12 @@ def mine_ai_accelerator_trends():
     ]
 
     with open(out_file, "w", newline="") as f:
+        f.write(HEADER)
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(ACCELERATORS)
 
-    print(f"Saved {len(ACCELERATORS)} AI accelerators to {out_file}")
+    print(f"Saved {len(ACCELERATORS)} hand-typed rows to {out_file}")
 
 
 if __name__ == "__main__":

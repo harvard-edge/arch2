@@ -140,12 +140,14 @@ def main() -> int:
     )
     ax1.axvline(benchmark_median, color=COLORS["methods_ink"], linewidth=0.8)
     ax1.axvline(production_median, color=COLORS["designspace_ink"], linewidth=0.8)
+    # Open area right of the production curve, so the label covers no data.
     ax1.text(
-        np.sqrt(benchmark_median * production_median),
-        0.43,
+        0.60,
+        0.48,
         f"{ratio:.1f}× module-weighted median gap\n"
-        f"{benchmark_median:,.0f} → {production_median:,.0f} nodes",
-        ha="center",
+        f"{benchmark_median:,.0f} → {production_median:,.0f} per module",
+        transform=ax1.transAxes,
+        ha="left",
         va="center",
         fontsize=7.0,
         color=COLORS["ink"],
@@ -161,7 +163,7 @@ def main() -> int:
     ax1.set_xscale("log")
     ax1.set_xlim(8, max(production_nodes) * 1.15)
     ax1.set_ylim(0, 1.02)
-    ax1.set_xlabel("Concrete syntax nodes per module (log scale)")
+    ax1.set_xlabel("Concrete syntax nodes and tokens per module (log scale)")
     ax1.set_ylabel("Cumulative fraction of modules")
     ax1.set_title(
         "(a) Measured Module Syntax Distributions", loc="left", fontweight="bold"

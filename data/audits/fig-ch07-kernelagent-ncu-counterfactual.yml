@@ -1,0 +1,71 @@
+figure: fig-ch07-kernelagent-ncu-counterfactual
+producer: session fe4868b7
+auditor: red-team-round3-ch07 2026-11-02
+audited_on: '2026-11-02'
+inputs:
+  caption: 343874062142065e76bb28f8b8b352a2653dc5cbc6eca936565a9d390e146f28
+  data/studies/11-kernelagent-feedback/paired_metrics.csv: e7c0e16e5dc02e575f2a21136560340fe9aa864bd73015e6845702431e9b6a3e
+  data/studies/11-kernelagent-feedback/reproduce.py: c6b8e26d74ea28fd4aea767a40442bf92fa0cf478fe3e4850de69b907a353b46
+source_check: 'All 126 retained files match source_manifest.json by sha256 (own script). Fetched 9 files
+  from the pinned commit 56cf9183 on raw.githubusercontent.com, chosen by me including the extremes and
+  quoted rounds; all byte-identical to the retained copies. GitHub confirms the commit dates and that
+  no license is reported. Scanned all 40 timing and 40 profile records: each has one kernel entry and
+  one profiled kernel; timing and profile paths name the same worker and round in all 40; timing files
+  hold only time_ms, so no reported uncertainty is correct; profile metadata holds no hash.'
+rerun:
+  command: python3 data/studies/11-kernelagent-feedback/reproduce.py, run from a scratch copy with /usr/local/bin/python3
+    (matplotlib 3.11.1, requests 2.33.1)
+  result: 'paired_metrics.csv and readme_timing_check.csv hashes identical to the repository; figure PNG
+    sha256 d839e0fa identical; 100 dpi PDF rasters identical; 8.1 s. A separate selection script rebuilt
+    all 10 rows from the raw records and matched. Own recomputation reproduces every quoted value: 6.80
+    to 1.95 ms, 24.2 to 95.2, 25.8 to 91.1; 5.22 to 2.44 ms, 0.47, 73.3 to 57.2, 33.9 to 66.0; 24.9 to
+    12.5; 0.99 for RMSNorm.'
+attempts:
+- attack: 'Selection sensitivity: replace the fastest round with the second fastest. MaxPool 3D round
+    5 (71.58, narrowly below 73.29) and transposed conv. round 2 (12.5) still have lower occupancy. Within-task
+    rank correlation of time and occupancy runs from -0.62 to 0.73, so no uniform direction holds.'
+  outcome: survived
+- attack: 'Profiler noise: compare input_ncu_metrics of a later round with the same-named kernel in Study
+    10. Repeat values agree closely (73.28 and 73.29, 24.93 and 24.93, 94.21 and 94.21; 57.18 against
+    56.91 for what appears to be the MaxPool kernel), far below the occupancy drops the claim uses.'
+  outcome: survived
+- attack: 'Do timing and profile describe the same execution? Derived profile elapsed time as DRAM bytes
+    over bytes per second. Best-to-first ratio: MaxPool 3D 0.505 from profile, 0.467 from timing; Transposed
+    conv. 3D 0.527 from profile, 0.527 from timing; Matrix-vector 0.567 from profile, 0.287 from timing;
+    RMSNorm 1.937 from profile, 0.991 from timing. The two pairs carrying the argument agree in direction
+    and size; matrix-vector agrees in direction only; RMSNorm profile elapsed nearly doubles while timing
+    is flat. Book claims rest on rates and on timing, and the prose already says profiles are not bound
+    to the executed kernel, so the claims stand, but see findings.'
+  outcome: survived
+- attack: 'Flattering baseline: Round 1 is not torch.compile. Upstream README gives matrix-vector 1.06x
+    against torch.compile whereas the figure shows 0.29 of Round 1. Caption and prose state Round 1 throughout
+    and the claim concerns counters, not KernelAgent merit.'
+  outcome: survived
+- attack: 'README disagreement: transposed conv. reads about 1.445 times the records. The book quotes
+    only the ratio there (0.5269 against 0.5271) and no absolute milliseconds for that task.'
+  outcome: survived
+- attack: 'Run log and shortcuts: runs.jsonl has 3 attempts, 1 failed and retained (NameError in record_build,
+    log confirms). All log hashes match; the last run hashes match current outputs. 10.1 s against 8.1
+    s here is plausible. The first next(iter(...)) is safe because every record has one entry. Hits at
+    reproduce.py:166,168 are axis ticks only.'
+  outcome: survived
+negative_control: In a scratch copy, set MaxPool 3D round 5 time to 1.0. reproduce.py refused on the manifest
+  hash check. After also updating the scratch manifest, selection moved to round 5 and paired_metrics.csv
+  changed (best round 5, relative time 0.19, occupancy 71.58).
+limits: No GPU was available, so no timing, profile, or output-correctness rerun; the numbers are author-reported
+  and transcribed. Correctness of the fastest kernels was not checked here; the upstream README describes
+  execution-based checks, and their records are not in this retained set. One of four workers per round
+  is retained. Attempts before the run log existed, or outside the wrapper, cannot be detected.
+verdict: PASS
+findings:
+- 'Not disclosed in book or study: profile elapsed time differs from recorded timing, ratio 0.85 to 2.11
+  across 40 rounds, about 2 for the matrix-vector and RMSNorm fastest rounds. Derived by this audit, cause
+  not established. RMSNorm round 8 has four launch sites, one per input branch; launch counts are not
+  recorded. Suggest one clause in the prose at 07-feedback.qmd:626 and a study README note.'
+- 'Lead for the study: upstream README transposed conv. values 14.839 and 7.821 sit within 0.02 percent
+  of profile elapsed 14.838 and 7.823 (rounds 1 and 5); round 2 is 9.836 against 9.811. Three points only;
+  this may bear on the cause the study calls unknown, but does not settle it.'
+- 'Non-blocking: bib key Cheng2025KernelAgentArtifacts carries 2025 for a 2026 entry (book/references/references.bib:1102).'
+- 'Process: data/claims/ does not exist, so required practice 1 is unmet. data/audits/BASELINE.json still
+  lists this figure. Hits at reproduce.py:166,168 have no reviewed disposition. The statement that upstream
+  benchmark.py uses warmup 500 was not checked.'

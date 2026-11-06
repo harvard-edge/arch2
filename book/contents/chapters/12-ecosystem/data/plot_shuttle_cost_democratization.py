@@ -4,10 +4,13 @@ Chapter 12: open-shuttle submissions per Tiny Tapeout run (2022-2026).
 
 Data: fig-shuttle-cost-democratization-submissions.csv, one row per run,
 transcribed from the Tiny Tapeout shuttle catalog (https://tinytapeout.com/chips/,
-snapshot 2026-08-22; see QueryTimestampUTC). Counts are submitted designs, not
-fabricated or delivered chips. The cumulative series is computed here from the
-per-run counts rather than read from the CSV's CumulativeDesignsCount column;
-the script asserts that the two agree.
+snapshot 2026-08-22; see QueryTimestampUTC). Counts are catalog entries, not
+distinct designs or fabricated or delivered chips. A design ported to a later run
+usually counts again (tinytapeout-receipts/design_repeats.py measures this), but
+the catalog's asterisked TT03 count leaves out the designs carried over from TT02.
+Run this after design_repeats.py, whose summary supplies the asterisk marks. The
+cumulative series is computed here from the per-run counts rather than read from
+the CSV's CumulativeDesignsCount column; the script asserts that the two agree.
 
 An earlier version of this figure carried a second panel of mask-set and
 multi-project-wafer costs by node. Those values were hand-typed and not traceable
@@ -15,6 +18,7 @@ to per-row sources, so the panel was removed (2026-09-28 accuracy pass).
 """
 
 import csv
+import json
 import sys
 from pathlib import Path
 
@@ -54,6 +58,14 @@ def main() -> None:
     out_svg = img_dir / "fig-shuttle-cost-democratization.svg"
     out_pdf = img_dir / "fig-shuttle-cost-democratization.pdf"
     out_png = img_dir / "fig-shuttle-cost-democratization.png"
+
+    summary_json = chapter_dir / "data" / "tinytapeout-receipts" / "design-repeats-summary.json"
+    summary = json.loads(summary_json.read_text(encoding="utf-8"))
+    asterisked = {
+        d["run"]
+        for d in summary["catalog_check"]["differences"]
+        if d["field"] == "SubmittedDesignsCount" and d["source"].endswith("*")
+    }
 
     runs, dates, counts, groups, csv_cumul = [], [], [], [], []
     with open(tt_csv, "r", encoding="utf-8") as f:
@@ -96,13 +108,13 @@ def main() -> None:
             zorder=3,
         )
     ax.set_ylim(0, 700)
-    ax.set_ylabel("Designs submitted per run", fontsize=6.8, color=COLORS["ink"])
+    ax.set_ylabel("Designs listed per run", fontsize=6.8, color=COLORS["ink"])
     ax.grid(True, axis="y", color=COLORS["grid"], linewidth=0.45, zorder=0)
     ax.grid(False, axis="x")
     ax.set_xlim(-0.7, len(runs) - 0.3)
     ax.set_xticks(x)
     ax.set_xticklabels(
-        [f"{r} ({d})" for r, d in zip(runs, dates)],
+        [f"{r}{'*' if r in asterisked else ''} ({d})" for r, d in zip(runs, dates)],
         rotation=60,
         ha="right",
         fontsize=4.6,
@@ -122,7 +134,7 @@ def main() -> None:
     )
     ax2.set_ylim(0, 4700)
     ax2.set_ylabel(
-        "Cumulative designs submitted",
+        "Cumulative catalog entries (not distinct designs)",
         fontsize=6.8,
         color=COLORS["constraints_ink"],
         labelpad=4,
@@ -131,7 +143,7 @@ def main() -> None:
     ax2.spines["right"].set_visible(True)
 
     ax2.annotate(
-        f"{cumul[-1]:,} submitted\nacross {len(runs)} runs",
+        f"{cumul[-1]:,} entries across\n{len(runs)} runs",
         xy=(x[-1], cumul[-1]),
         xytext=(x[-1] - 5.8, 4350),
         arrowprops=dict(arrowstyle="->", color=COLORS["constraints"], linewidth=0.6),

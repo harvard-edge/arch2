@@ -8,7 +8,8 @@ book/contents/chapters/11-ownership/images/fig-errata-subsystem-shares.*
     python3 data/studies/01-silicon-errata-archaeology/plot_errata_subsystems.py
 
 Bars: share of all errata assigned to each reporting class by the committed
-rules. Dot and whisker: audit-adjusted share with its 95% bootstrap interval.
+rules. Dot and whisker: share adjusted by one model's relabeling of the sample, with
+its 95% bootstrap interval. No person reviewed those labels.
 The "not resolved" bar is hatched grey so it reads without color.
 """
 
@@ -143,7 +144,7 @@ def main() -> int:
             marker="o",
             markersize=3.4,
             linewidth=0.9,
-            label="Audit-adjusted share, 95% interval",
+            label="Model-adjusted share, 95% interval",
         ),
     ]
     fig.legend(

@@ -1,7 +1,7 @@
 schema: arch2-provenance/v1
 study: 10-kernelagent-search
-title: Retained candidates and best-so-far kernel time
-claim: The published search traces contain regressions and task-dependent progress; retaining the best observed candidate changes the outcome of a bounded search.
+title: Recorded candidates and lowest recorded kernel time
+claim: The published search traces contain regressions and task-dependent progress, and the lowest time recorded so far does not stand in for the history of candidates or for the kernel the source finally keeps.
 evidence_class: mined
 status: extraction_verified
 sources:
@@ -14,15 +14,21 @@ datasets:
   - file: timings.csv
     rows: 40
     row_provenance: [source_path, reported_worker_path, problem, round]
+  - file: attempts.csv
+    rows: 140
+    row_provenance: [source_path, problem, round]
 source_manifest: source_manifest.json
 produced_by: reproduce.py
-reproduce: python3 data/studies/10-kernelagent-search/reproduce.py
+reproduce: python3 data/studies/10-kernelagent-search/reproduce.py (needs an interpreter with NumPy and Matplotlib, and Requests for collect.py; build_receipt.json records the interpreter and package versions of the last run; rerun through data/run_study.py so the attempt is logged)
 collect: python3 data/studies/10-kernelagent-search/collect.py
-verified: All 177 retained source files match Git blob identities and SHA-256 receipts. All five tasks have eight timing files and constant reported benchmark parameters within each task. Best-so-far values are computed from those files.
+verified: All 217 retained source files match Git blob identities and SHA-256 receipts. All five tasks have eight timing files and constant reported benchmark parameters within each task. Lowest recorded values are computed from those files as a running minimum and do not assert that the source kept that kernel. reproduce.py asserts that in all 35 rounds with a recoverable history (rounds 1 to 7 of five tasks) the retained record equals the fastest timed attempt at the four decimals the history keeps.
 not_verified: GPU execution, correctness checks, measurement variance, complete search cost, and comparison with a conventional search baseline were not independently repeated. The GPU identity comes from the source README; it is absent from the timing records.
 defects:
   - The README and raw timing files disagree for three tasks beyond rounding, including a material transposed-convolution difference. The plot uses only raw timing files. See readme_crosscheck.json.
-  - The repository retains one of four workers per round. These records cannot recover all attempts, failures, or the complete beam-search history.
+  - The repository retains timing and kernel files for one of four workers per round, and that worker is the round's fastest, not a random sample. The source README calls its kernel the round's best. attempts.csv recovers the other attempts from the history text in opt_prompt.txt, attributing each to a round by first appearance. That covers 140 attempts in rounds 1 to 7, of which 139 carry a time and one failed verification without a time. Round 8 attempts other than the retained one are not recoverable, and the history gives timings only, with no kernels for discarded attempts.
+  - The rounds are not a single lineage. The attempt history shows each worker's starting time, and the matrix-vector Round 5 record starts from a 6.1988 ms kernel, not the 4.0312 ms Round 4 kernel, so the dashed line in panel (a) joins separate branches.
   - Raw timing records report warmup=25 and repeat=100; the supplied final benchmark script uses a different interface and is not the exact original per-round runner.
-  - No sample-level timing distribution is published. Small differences, especially RMSNorm, do not establish a statistically reliable improvement.
+  - No sample-level timing distribution is published. The only replicate evidence is the starting times the four Round 1 workers report for what the trace layout indicates is the same input kernel, one small sample per task (baseline_ms in attempts.csv; round_1_starting_times_ms and round_1_start_spread in summary.json). The spreads run from 1.00 to 1.40 times across the five tasks, so one task's sample cannot stand for the noise of the set. The matrix-vector Round 5 step of 1.37 times from its parent lies inside the RMSNorm spread. Small differences, especially RMSNorm, do not establish a statistically reliable improvement.
+  - The lowest recorded time is not always the kernel the source keeps. RMSNorm's optimized_kernel_beam_search.py is closest to its Round 3 kernel by token comparison (final_kernel_round and final_kernel_token_similarity in summary.json) and the source README names Round 3, while the lowest record is Round 8. reproduce.py computes a running minimum, so timings.csv calls that column lowest_recorded_ms; it was best_retained_ms before 2026-11-02.
+  - The run log is incomplete. An audit on 2026-11-02 found attempts.csv absent from changed_outputs of the first logged run, so it already existed unchanged and at least one earlier run is unlogged; the number of such runs is unknown. Extraction is deterministic, so this does not select a result. Logged runs are dirty against their code_sha, and the failed attempts stay in runs.jsonl, including one on 2026-11-02 caused by an interpreter without NumPy.
 outputs: [figure.svg, figure.pdf, figure.png]

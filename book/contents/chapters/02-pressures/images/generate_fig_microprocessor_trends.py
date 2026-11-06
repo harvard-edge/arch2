@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Generate fig-microprocessor-trends: sampled CPU trends and accelerator specifications.
 
-Show Karl Rupp's CPU sample maxima (1971-2021) beside a separate
-2012-2026 accelerator frontier (25 accelerators including GPUs; undisclosed specs are N/A).
+Show Karl Rupp's CPU sample maxima (1971-2021, GPU and Xeon Phi records excluded) beside a separate
+2012-2026 accelerator frontier (25 dataset rows including GPUs, of which 22 carry a plotted
+value; undisclosed specs are N/A).
 The earlier CPU cutoff does not establish a power ceiling after 2021.
 
 Inputs:
-  - data/datasets/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0)
-  - data/datasets/chapter2-ai-accelerator-scaling-frontier.csv (Primary-cited accelerators)
-  - data/datasets/chapter2-ai-design-milestones.csv (dated, primary-cited AI-assisted design events)
+  - book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter1-micro-trend.csv (Rupp microprocessor-trend-data, CC-BY 4.0;
+    derive_chapter1_micro_trend.py recomputes it from the retained source files)
+  - book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter2-ai-accelerator-scaling-frontier.csv (Primary-cited accelerators)
+  - book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter2-ai-design-milestones.csv (dated, primary-cited AI-assisted design events)
 
 The band after 2026 is a hypothesis, not data: it marks the possibility that the design
 process becomes the next lever. Milestones are events drawn on their own rail and carry
@@ -37,11 +39,11 @@ if str(REPO_ROOT) not in sys.path:
 
 from book._python.plots import COLORS, FONT_SIZES, apply_style, inject_svg_font_stack
 
-CPU_CSV = REPO_ROOT / "data" / "datasets" / "chapter1-micro-trend.csv"
+CPU_CSV = REPO_ROOT / "book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter1-micro-trend.csv"
 ACC_CSV = (
-    REPO_ROOT / "data" / "datasets" / "chapter2-ai-accelerator-scaling-frontier.csv"
+    REPO_ROOT / "book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter2-ai-accelerator-scaling-frontier.csv"
 )
-MILESTONE_CSV = REPO_ROOT / "data" / "datasets" / "chapter2-ai-design-milestones.csv"
+MILESTONE_CSV = REPO_ROOT / "book/contents/chapters/02-pressures/data/fig-microprocessor-trends/chapter2-ai-design-milestones.csv"
 DEFAULT_OUT_DIR = Path(__file__).resolve().parent
 
 
@@ -259,7 +261,7 @@ def generate_figure(out_dir: Path | None = None):
     fig.text(
         0.075,
         0.323,
-        "CPU: 4-year sample maxima, 1971–2021 (Rupp).",
+        "CPU: 4-year sample maxima, 1971–2021 (Rupp), without GPU and Xeon Phi records.",
         fontsize=FONT_SIZES["annotation"],
         color=grey,
     )
@@ -273,7 +275,7 @@ def generate_figure(out_dir: Path | None = None):
     fig.text(
         0.075,
         0.281,
-        "2005: Dennard scaling ends; 2016: specialization turn.",
+        "2005: Dennard scaling ends; 2016: era boundary set by the author, not a data break.",
         fontsize=FONT_SIZES["annotation"],
         color=grey,
     )

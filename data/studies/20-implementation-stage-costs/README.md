@@ -1,13 +1,16 @@
-# Measured physical-design stage cost: one LibreLane CI run
+# Recorded physical-design stage cost: one LibreLane CI run
 
-This study retains one complete LibreLane design-test artifact and extracts its
-stage wall times and subprocess resource records. It is a worked cost-accounting
-example for Chapter 6. The selected case is the `spm` design on IHP SG13G2
-standard cells because its successful CI job retained a complete end-to-end
-run directory. It was not selected as a best result, a winning design, or a
-comparison point.
+This study extracts stage wall times and subprocess resource records from one
+LibreLane design-test artifact and retains the records that reproduce them, not
+the complete artifact (see Retention). The values were recorded by LibreLane and
+GitHub Actions, so their evidence class is transcribed. It is a worked
+cost-accounting example for Chapter 6. The selected case is the `spm` design on
+IHP SG13G2 standard cells because its successful CI job uploaded a complete
+end-to-end run directory. It was not selected as a best result, a winning
+design, or a comparison point. The run is a `pull_request` build of the
+development branch `donn/nixeda_7p11`.
 
-![Measured flow-step times and enclosing CI time boundaries.](figure.png)
+![Recorded flow-step times and enclosing CI time boundaries.](figure.png)
 
 ## Figure and placement
 
@@ -15,20 +18,20 @@ Place the figure in Chapter 6 near “Execution Records” or resource accountin
 Chapter 2 can refer to it when explaining the cost of obtaining a result.
 The lesson is that the budget and the reported time need the same boundary.
 The six longest steps and all other steps account for the complete outer-step
-sum. The second panel compares that sum with enclosing action and job intervals;
+sum. The second panel compares that sum with enclosing job-step and job intervals;
 these intervals overlap and must not be added.
 
 **Suggested caption.** A time claim depends on its accounting boundary.
-(a) Measured wall time for the six longest steps and the remaining 72 combined
+(a) Recorded wall time for the six longest steps and the remaining 72 combined
 in one completed LibreLane `spm` / IHP SG13G2 run. (b) The step sum sits inside
-the test action and complete design CI job, which also includes setup and other
+the `Run Test` job step and complete design CI job, which also includes setup and other
 work. Intervals are nested, and one selected run does not establish general
 stage costs. [Source job](https://github.com/librelane/librelane/actions/runs/37749124131/job/113223652131).
 
 **Alt text.** Two horizontal bar charts show recorded elapsed time in one
 physical-design CI job. Detailed routing is the longest individual flow step.
-The 78 outer flow steps total about 106 seconds, while the test action takes
-108 seconds and the complete design job takes 288 seconds.
+The 78 outer flow steps total about 106 seconds, while the `Run Test` job step
+takes 108 seconds and the complete design job takes 288 seconds.
 
 ## Declared population and run identity
 
@@ -39,7 +42,7 @@ The population is exactly one GitHub Actions job: **Test Design spm
 pinned to `librelane-ci-designs` commit
 `2c0686e401e088e2bcad030b431bbf3a7213e3ea`. The original artifact is
 `spm-ihp-sg13g2-sg13g2_stdcell`, artifact ID `11539925672`. The workflow run,
-job, and artifact metadata responses are retained under `raw/`.
+job, and artifact metadata responses and the job log are retained under `raw/`.
 
 The compressed artifact contains 915 ZIP entries, 78 numbered flow-step directories,
 78 direct-step `runtime.txt` records, and no duplicate archive paths. The
@@ -49,8 +52,13 @@ time twice. It emits every numbered step, including stages without child
 process telemetry. The `runtime.txt` total is 106.292 seconds across the 78
 serial step intervals. This is the flow's measured step time, not the full CI
 job duration: the job ran from 09:02:40 to 09:07:28 UTC (288 s), while its
-`Run Test` action ran from 09:05:33 to 09:07:21 UTC (108 s). The intervals
-around cache and runner setup are outside the 106.292-second step sum.
+`Run Test` step ran from 09:05:33 to 09:07:21 UTC (108 s). `Run Test` is a
+`run:` step of the job (`source/librelane/ci.yml`), not a GitHub action. The API
+timestamps have one-second resolution, so the figure and the book print these
+two intervals in whole seconds. The retained job log has sub-second timestamps
+and gives 108.117 s from the start of `Run Test` to the start of the next step.
+The intervals around cache and runner setup are outside the 106.292-second step
+sum.
 
 The longest measured step intervals were detailed routing (25.759 s), Magic
 write-LEF (16.083 s), Magic streamout (15.277 s), KLayout DRC (11.059 s), and
@@ -76,15 +84,16 @@ their subprocess memory is unknown, not zero. The file-level process sample
 is not a whole-job memory trace or a proof that each stage's complete process
 tree was sampled.
 
-The retained step configs identify LibreLane `3.1.0.dev3`, design `spm`, PDK
-`ihp-sg13g2`, standard-cell library `sg13g2_stdcell`, PDK source pin
+The retained `resolved.json` identifies LibreLane `3.1.0.dev3`, design `spm`,
+PDK `ihp-sg13g2`, standard-cell library `sg13g2_stdcell`, PDK source pin
 `22f43352dd8219f9007eb659e422e0d5fe28c5fb`, and a 10 ns clock period. Logs
 identify Yosys `0.69` (git `9f75ca1f9834a39a863915b5dae0c7b1e33533bc`),
-Verilator `5.046` (`v5.046`), and Magic `8.3` revision `677`. OpenROAD,
-KLayout, and Netgen versions are not printed in the retained run outputs; the
-source revision and Nix lock are preserved, but those run-time version strings
-remain unknown. The per-step resolved configs retain the active timing corners,
-clock constraints, layer limits, and PDK library paths.
+Verilator `5.046` (`v5.046`), Magic `8.3` revision `677`, and Netgen `1.5.323`.
+A text search of the artifact's outputs found no OpenROAD or KLayout version
+string (the KLayout log prints only its Ruby version); the source revision and
+Nix lock are preserved, but those run-time versions remain unknown.
+`resolved.json` also holds the active timing corners, clock constraints, layer
+limits, and PDK library paths.
 
 The CI job succeeded. The final flow metrics also report zero final route DRC
 errors, zero Magic DRC errors, zero KLayout DRC errors, zero LVS errors, and a
@@ -101,27 +110,56 @@ job completion as comprehensive physical signoff.
 
 ## Reproduction
 
-The original artifact ZIP and its API digest are retained in `raw/`. The ZIP
-SHA-256 is
+The ZIP SHA-256 is
 `f638d2a9198ee9e1595897a671edbe148fe41ded0eff926dc8cf9bb88a266094` and matches
 GitHub's artifact digest. `source_manifest.json` lists the pinned public source
 URLs and identities. `collect.py` verifies existing inputs and recovers a missing
-file only after its downloaded bytes match the frozen hash. The compatibility
+ZIP only after its downloaded bytes match the frozen hash. The compatibility
 wrapper `collect_artifact.sh` calls that collector. Recovery of the ZIP requires
-an authenticated GitHub CLI and an unexpired upstream artifact; mutable API
-receipts may no longer be recoverable byte for byte. Retain the local snapshot.
-Once the sources are present, extraction and plotting are fully offline:
+an authenticated GitHub CLI and an unexpired upstream artifact; once it fails,
+`collect.py` says so and the retained subset remains the input. Mutable API
+receipts may no longer be recoverable byte for byte. Extraction and plotting are
+fully offline:
 
 ```sh
 python3 data/studies/20-implementation-stage-costs/reproduce.py
 ```
 
+The command needs a Python that has matplotlib.
+
 The extractor writes `stage-costs.csv`, `process-costs.csv`, and `summary.json`
-from the ZIP. The plotter also computes `time_boundaries.json` from the saved
+from the retained subset, checking each member against the index. When the ZIP
+is present, it also checks the ZIP digest, the complete index, and the subset
+bytes; when it is absent, it says so on stderr and `build_receipt.json` records
+`upstream_zip_checked_against_subset: false`. The plotter also computes `time_boundaries.json` from the saved
 API records, emits `plot_rows.csv`, and renders SVG, PDF, and 300-dpi PNG twins
 using the book's shared style. `sha256-manifest.txt` and `build_receipt.json`
 record the retained inputs, scripts, outputs, dependencies, and checks. The
 PNG and a raster of the PDF were visually inspected.
+
+## Retention
+
+The upstream ZIP expires on 2027-01-06. `retain_records.py` cut these tracked
+files from it on 2026-11-02:
+
+- `raw/run-records-subset.tar.gz`: exact bytes of 144 of the 915 ZIP members,
+  namely all 80 `runtime.txt` files, all 55 `*.process_stats.json` files,
+  `final/metrics.json`, `resolved.json`, `warning.log`, `error.log`, and the
+  five tool logs that carry the version strings quoted above.
+- `raw/artifact-index.tsv`: path, size, packed size, and CRC-32 of all 915 members.
+- `raw/job-113223652131.log.gz`: the complete job log, which supports the serial
+  step order and the composition of the job outside `Run Test`.
+
+**The complete 7.7 MB ZIP is not retained in the repository.** The ZIP carries no
+license of its own, `librelane-ci-designs` has no repository license file, and
+the archive holds layout generated from PDK cells, so its redistribution is not
+cleared. It is also 2.4 times the largest tracked study file, and the figure
+does not need it. It stays gitignored. After expiry, the run's DEF, GDS, ODB,
+netlists, reports, per-step configurations, and other logs will have no copy
+here, and the ZIP's SHA-256 cannot be rechecked. The subset bytes then rest on
+the CRC-32 index, which this study generated from the ZIP while the upstream
+digest could be checked. A local untracked copy in `raw/` is lost with its
+checkout.
 
 ## Source ownership and claim boundary
 

@@ -10,7 +10,9 @@ from its title and body text alone.
     python3 data/studies/01-silicon-errata-archaeology/audit_sample.py
 
 Design: 18 errata per class drawn without replacement (every row when a class
-has fewer), seed 20260929. The rules were frozen before this sample was drawn.
+has fewer), seed 20260929. The rules are recorded as frozen before this sample
+was drawn; they and the sample first appear in one commit, so the record cannot
+show the order. The worksheet is not retained.
 """
 
 from __future__ import annotations

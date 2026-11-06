@@ -16,7 +16,7 @@ Executable Quarto figures in the chapter:
 
 - `fig-eval-fidelity-latency`: schematic tool-to-property matrix.
 - `fig-ch05-kernel-funnel`: correct and correct-and-faster KernelBench one-shot
-  results, read from `data/datasets/chapter5-kernelbench-funnel.csv`.
+  results, read from `book/contents/chapters/05-methods/data/fig-ch05-kernel-funnel/chapter5-kernelbench-funnel.csv`.
 - `fig-ai-study-result`: recorded SCALE-Sim systolic-array study, read from
   `data/studies/ai_systolic_array_study/recorded/reference/study_results.json`.
   Its local score uses cycles excluding prefetch and unweighted mean layer

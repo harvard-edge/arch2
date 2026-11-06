@@ -1,6 +1,6 @@
 # Editorial placement: retained search histories
 
-Status: companion only, proposed October 17, 2026. No manuscript edit.
+Status: proposed October 17, 2026 as a companion only. The figure has since entered Chapter 3 as `fig-ch03-kernelagent-search-trajectories`; the note below records the original proposal.
 See the [selection proposal](../../../integration/manage-work-tree/PLOT_INTEGRATION_PROPOSAL.md).
 
 Chapter 3 defines a design loop by evidence changing the represented state and
@@ -17,9 +17,11 @@ insert it now or replace the lifecycle diagram. A companion exercise can ask
 students to distinguish the most recent result from the best retained result
 and identify what evidence is missing for a claim about adaptive search.
 
-The retained records cover five curated tasks and one worker per round from a
-four-worker search. Round 1 is not the original input baseline. Complete search
-cost is unavailable, and three README values differ from the raw records.
+The retained records cover five curated tasks and the fastest worker per round
+from a four-worker search; `attempts.csv` recovers the other attempts' times for
+rounds 1 to 7 from prompt history. Round 1 is not the original input baseline.
+Complete search cost is unavailable, and three README values differ from the raw
+records.
 Use the reconciled timing data; do not claim complete search efficiency,
 causal feedback improvement, or advantage over conventional optimization.
 

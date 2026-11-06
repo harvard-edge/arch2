@@ -1,33 +1,40 @@
 #!/usr/bin/env python3
 """
-Global Open-Source RTL & HDL Topology Corpus Miner (OpenSilicon-20M)
-====================================================================
-Architecture 2.0 Empirical Provenance Pipeline
+Hand-typed stand-in for HDL repository counts. NOT MINED DATA.
+==============================================================
 
-This script tracks the longitudinal evolution of Hardware Description Languages
-(HDL) on GitHub. It measures the transition from traditional languages (Verilog, VHDL)
-to agile hardware generators (Chisel, SystemVerilog) by querying repository creation
-counts over time.
+Despite this file's name, nothing it writes was read from GitHub. The table
+below is hand-typed, its origin is unrecorded, and no value has been checked
+against a source. Even years are the typed values. Each odd year is the
+previous even year scaled up by 15 percent, a formula chosen by hand. The
+retained CSV matches this table and formula in all 75 cells, so no API query
+contributed to it. The earlier API code could not run, because a constant
+forced this table, and it recorded a failed query as zero repositories. It has
+been removed so that the script cannot be mistaken for a miner.
+
+The output feeds no book figure and no book number. Its only reader is
+data/datasets/plot_new_mining_datasets.py. Evidence class: constructed.
 
 Outputs:
 data/datasets/github_hdl_language_trends.csv
 """
 
-import os
 import csv
-import urllib.request
-import urllib.error
-import json
-import time
-from datetime import datetime
+import os
+
+HEADER = """\
+# CONSTRUCTED STAND-IN. NOT MINED DATA. Nothing here was read from GitHub.
+# Even years are hand-typed values of unrecorded origin, unchecked against any source.
+# Odd years are the previous even year scaled up by 15 percent, a formula chosen by hand.
+# Written by data/scrapers/mine_github_hdl_trends.py. Feeds no book figure or number.
+"""
 
 LANGUAGES = ["Verilog", "VHDL", "SystemVerilog", "Chisel", "Tcl"]
 START_YEAR = 2010
 END_YEAR = 2024
 
-# Fallback empirical data (calibrated to actual GitHub search indexing trends as of 2024)
-# Used if unauthenticated GitHub API rate limits (10 req/min) are exhausted during CI/CD.
-FALLBACK_DATA = {
+# Hand-typed anchor values. Their origin is unrecorded and none has been checked.
+STAND_IN_ANCHORS = {
     2010: {"Verilog": 450, "VHDL": 320, "SystemVerilog": 45, "Chisel": 0, "Tcl": 210},
     2012: {
         "Verilog": 1200,
@@ -81,64 +88,30 @@ FALLBACK_DATA = {
 }
 
 
-def get_repo_count(language, year):
-    """Query GitHub Search API for the number of repositories created in a specific year."""
-    url = f"https://api.github.com/search/repositories?q=language:{language}+created:{year}-01-01..{year}-12-31"
-    req = urllib.request.Request(url, headers={"User-Agent": "Arch2-DataMiner"})
-
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            return data.get("total_count", 0)
-    except urllib.error.HTTPError as e:
-        if e.code in (403, 429):
-            raise Exception("Rate limit exceeded")
-        return 0
-    except Exception:
-        return 0
-
-
-def mine_trends():
-    print("Mining GitHub HDL repository trends...")
+def write_stand_in():
+    print("Writing the hand-typed HDL stand-in table (not mined)...")
     results = []
-
-    use_fallback = True
 
     for year in range(START_YEAR, END_YEAR + 1):
         row = {"Year": year}
+        closest_year = min(STAND_IN_ANCHORS, key=lambda k: abs(k - year))
         for lang in LANGUAGES:
-            if not use_fallback:
-                try:
-                    count = get_repo_count(lang, year)
-                    row[lang] = count
-                    time.sleep(2)  # Polite delay to avoid rapid rate limiting
-                except Exception as e:
-                    print(
-                        f"\n[!] GitHub API rate limit hit. Switching to empirical calibrated fallback data..."
-                    )
-                    use_fallback = True
-
-            if use_fallback:
-                # Interpolate from fallback data
-                closest_year = min(FALLBACK_DATA.keys(), key=lambda k: abs(k - year))
-                base_val = FALLBACK_DATA[closest_year].get(lang, 0)
-                # Add slight linear scaling based on year diff for realism in the interpolation
-                scaled_val = int(base_val * (1.0 + 0.15 * (year - closest_year)))
-                row[lang] = max(0, scaled_val)
-
+            base_val = STAND_IN_ANCHORS[closest_year][lang]
+            # Fills odd years with a hand-chosen formula. These are not observations.
+            row[lang] = int(base_val * (1.0 + 0.15 * (year - closest_year)))
         results.append(row)
-        print(f"Processed {year}...")
 
     os.makedirs("data/datasets", exist_ok=True)
     out_file = "data/datasets/github_hdl_language_trends.csv"
 
     with open(out_file, "w", newline="") as f:
+        f.write(HEADER)
         writer = csv.DictWriter(f, fieldnames=["Year"] + LANGUAGES)
         writer.writeheader()
         writer.writerows(results)
 
-    print(f"Saved language trends to {out_file}")
+    print(f"Saved the stand-in table to {out_file}")
 
 
 if __name__ == "__main__":
-    mine_trends()
+    write_stand_in()

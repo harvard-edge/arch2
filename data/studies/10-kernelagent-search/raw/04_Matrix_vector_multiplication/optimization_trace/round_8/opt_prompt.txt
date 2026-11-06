@@ -1,0 +1,267 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs matrix-vector multiplication (C = A * B).
+    """
+    def __init__(self):
+        super(Model, self).__init__()
+    
+    def forward(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        """
+        Performs matrix-vector multiplication.
+
+        Args:
+            A: Input matrix of shape (M, K).
+            B: Input vector of shape (K, 1).
+
+        Returns:
+            Output vector of shape (M, 1).
+        """
+        return torch.matmul(A, B)
+
+M = 256 * 8 # 2048
+K = 131072 * 8 # 1048576
+
+def get_inputs():
+    A = torch.rand(M, K)
+    B = torch.rand(K, 1)
+    return [A, B]
+
+def get_init_inputs():
+    return []  # No special initialization inputs needed
+PyTorch Eager baseline: 2.0928 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def matvec_kernel(
+    A_ptr,      # Pointer to matrix A [M, K]
+    x_ptr,      # Pointer to vector x [K]
+    C_ptr,      # Pointer to output vector C [M]
+    M,          # Number of rows in A
+    K,          # Number of columns in A (and elements in x)
+    stride_am,  # Stride for rows of A
+    stride_ak,  # Stride for columns of A
+    BLOCK_SIZE_M: tl.constexpr,  # Block size for M dimension
+    BLOCK_SIZE_K: tl.constexpr,  # Block size for K dimension
+):
+    """
+    Matrix-vector multiplication kernel: C = A @ x
+    Each program handles BLOCK_SIZE_M rows of the output.
+    """
+    pid_m = tl.program_id(0)
+    
+    row_start = pid_m * BLOCK_SIZE_M
+    row_offsets = row_start + tl.arange(0, BLOCK_SIZE_M)
+    row_mask = row_offsets < M
+    
+    # Initialize accumulator
+    acc = tl.zeros((BLOCK_SIZE_M,), dtype=tl.float32)
+    
+    # Iterate over K dimension
+    for k_start in range(0, K, BLOCK_SIZE_K):
+        k_offsets = k_start + tl.arange(0, BLOCK_SIZE_K)
+        k_mask = k_offsets < K
+        
+        # Load x vector elements [BLOCK_SIZE_K]
+        x_vals = tl.load(x_ptr + k_offsets, mask=k_mask, other=0.0)
+        
+        # Load A matrix elements [BLOCK_SIZE_M, BLOCK_SIZE_K]
+        a_ptrs = A_ptr + row_offsets[:, None] * stride_am + k_offsets[None, :] * stride_ak
+        combined_mask = row_mask[:, None] & k_mask[None, :]
+        a_vals = tl.load(a_ptrs, mask=combined_mask, other=0.0)
+        
+        # Compute partial dot product
+        acc += tl.sum(a_vals.to(tl.float32) * x_vals.to(tl.float32)[None, :], axis=1)
+    
+    # Store result
+    c_ptrs = C_ptr + row_offsets
+    tl.store(c_ptrs, acc.to(tl.bfloat16), mask=row_mask)
+
+
+def kernel_function(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """
+    Wrapper for matrix-vector multiplication: C = A @ x
+    """
+    x_squeezed = x.squeeze() if x.dim() > 1 else x
+    
+    M, K = A.shape
+    assert x_squeezed.shape[0] == K, f"Dimension mismatch: A has {K} columns but x has {x_squeezed.shape[0]} elements"
+    
+    C = torch.empty(M, device=A.device, dtype=A.dtype)
+    
+    # Optimized block sizes to reduce register pressure
+    # Keep BLOCK_SIZE_M moderate for parallelism
+    # Use smaller BLOCK_SIZE_K to reduce register usage
+    BLOCK_SIZE_M = 32
+    BLOCK_SIZE_K = 512
+    
+    grid = (triton.cdiv(M, BLOCK_SIZE_M),)
+    
+    # Use num_stages=1 to minimize register pressure from pipelining
+    # Use num_warps=4 for balanced parallelism
+    matvec_kernel[grid](
+        A, x_squeezed, C,
+        M, K,
+        A.stride(0), A.stride(1),
+        BLOCK_SIZE_M=BLOCK_SIZE_M,
+        BLOCK_SIZE_K=BLOCK_SIZE_K,
+        num_stages=1,
+        num_warps=4,
+    )
+    
+    if x.dim() > 1 and x.shape[-1] == 1:
+        return C.unsqueeze(-1)
+    return C
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: underutilized
+- Root Cause: {'cause': 'Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM', 'evidence': [{'metric': 'launch__registers_per_thread', 'value': 168, 'interpretation': 'Far exceeds the ~32 registers needed for full occupancy; limits concurrent blocks'}, {'metric': 'launch__occupancy_limit_registers', 'value': 3, 'interpretation': 'Only 3 blocks can run concurrently per SM due to register pressure'}, {'metric': 'sm__warps_active.avg.pct_of_peak_sustained_active', 'value': 6.25, 'interpretation': 'Extremely low active warp percentage, insufficient to hide memory latency'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 221.5% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 8-16 and BLOCK_SIZE_K from 512 to 128-256 to decrease register pressure, potentially allowing more concurrent blocks per SM
+**Performance**: 4.0312ms → 12.9621ms (221.5% slower)
+**NCU SOL (% of Peak)**: Combined: 5.3%, Compute: 2.3%, Memory: 5.3%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 13.9% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_K from 512 to 128-256 and BLOCK_SIZE_M from 32 to 16 to decrease register pressure, allowing more concurrent blocks per SM to hide memory latency
+**Performance**: 4.0312ms → 4.5904ms (13.9% slower)
+**NCU SOL (% of Peak)**: Combined: 47.0%, Compute: 10.6%, Memory: 47.0%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 111.4% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (168 per thread) severely limits occupancy to only 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_K from 512 to 128-256 and increase num_warps to 8 to decrease register pressure and improve occupancy. Consider using tl.dot for better register reuse if applicable.
+**Performance**: 4.0312ms → 8.5229ms (111.4% slower)
+**NCU SOL (% of Peak)**: Combined: 31.0%, Compute: 6.9%, Memory: 31.0%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 13.8% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 16 and BLOCK_SIZE_K from 512 to 256 to decrease register pressure, and increase num_warps to 8 for better occupancy. Consider using tl.dot with smaller tiles to enable tensor core usage.
+**Performance**: 4.0312ms → 4.5872ms (13.8% slower)
+**NCU SOL (% of Peak)**: Combined: 47.6%, Compute: 10.6%, Memory: 47.6%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 147.0% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage per thread severely limits occupancy
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 8-16 and BLOCK_SIZE_K from 512 to 128-256 to decrease register pressure, and increase num_warps to 8 to improve occupancy and latency hiding
+**Performance**: 4.0312ms → 9.9569ms (147.0% slower)
+**NCU SOL (% of Peak)**: Combined: 34.3%, Compute: 8.6%, Memory: 34.3%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 8-16 and BLOCK_SIZE_K from 512 to 128-256 to decrease register pressure, potentially allowing more concurrent blocks per SM
+**Expected**: Reducing block sizes should decrease register pressure, increase occupancy, and improve performance by allowing more concurrent blocks per SM
+**Actual**: Performance degraded by 221.5% (from 4.03ms to 12.96ms), and both compute (2.3%) and memory (5.3%) utilization dropped to very low levels (-221.5%)
+**Analysis**: While the diagnosis of high register usage limiting occupancy was likely correct, the fix was counterproductive. Reducing BLOCK_SIZE_M from 32 to 8-16 and BLOCK_SIZE_K from 512 to 128-256 dramatically reduced the amount of work per thread block, leading to: 1) Less data reuse in shared memory, 2) More memory transactions relative to compute, 3) Insufficient work to amortize overhead. The extremely low SOL metrics (2.3% compute, 5.3% memory) indicate the kernel is now severely underperforming on both fronts - it's neither compute-bound nor memory-bound, suggesting excessive overhead or poor parallelization. The original configuration, despite high register usage, was actually performing useful work more efficiently.
+**Lessons**:
+  - High register usage with good performance may be acceptable - registers enable data reuse and reduce memory traffic
+  - Reducing tile sizes can hurt performance more than low occupancy if it reduces data reuse
+  - Very low SOL on both compute and memory indicates fundamental efficiency problems, not just occupancy issues
+  - Occupancy is not the only metric - instruction-level parallelism and memory coalescing matter more in some cases
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_K from 512 to 128-256 and BLOCK_SIZE_M from 32 to 16 to decrease register pressure, allowing more concurrent blocks per SM to hide memory latency
+**Expected**: Reducing register pressure by decreasing BLOCK_SIZE_K and BLOCK_SIZE_M should have increased occupancy, allowing more concurrent blocks per SM to hide memory latency and improve performance
+**Actual**: Performance degraded by 13.9% (4.0312ms → 4.5904ms) despite the attempted register pressure reduction. Memory SOL at 47% suggests memory bandwidth is being utilized but compute dropped to 10.6% (-13.9%)
+**Analysis**: The fix backfired because reducing block sizes likely decreased computational intensity and increased the number of memory transactions relative to compute operations. With BLOCK_SIZE_K reduced from 512 to 128-256, each thread now does less work per memory load, reducing arithmetic intensity. The low compute SOL (10.6%) indicates the kernel became more memory-bound rather than achieving better occupancy. Additionally, no config changes were actually applied according to the attempt details, which may indicate the fix wasn't properly implemented.
+**Lessons**:
+  - Reducing tile sizes to decrease register pressure can backfire by reducing arithmetic intensity and making the kernel more memory-bound
+  - High register usage isn't always the primary bottleneck - the 47% memory SOL suggests memory access patterns may be more critical
+  - Config changes marked as 'none' suggests the intended fix may not have been properly applied to the kernel
+  - Occupancy is not the only factor - computational efficiency per thread matters significantly
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (168 per thread) severely limits occupancy to only 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_K from 512 to 128-256 and increase num_warps to 8 to decrease register pressure and improve occupancy. Consider using tl.dot for better register reuse if applicable.
+**Expected**: Reducing BLOCK_SIZE_K from 512 to 128-256 should decrease register pressure, improve occupancy from 3 blocks per SM to higher levels, and improve performance by better utilizing the GPU's parallel resources.
+**Actual**: Performance degraded by 111.4% (4.03ms → 8.52ms). Memory SOL dropped significantly while compute remained very low at 6.9%. The kernel became even more memory-bound and slower. (-111.4%)
+**Analysis**: While the diagnosis of high register usage limiting occupancy was correct, the fix was counterproductive. Reducing BLOCK_SIZE_K means each thread block processes less K-dimension work per iteration, requiring more iterations over the K-dimension. This increases memory traffic as tiles need to be loaded more times. The Memory SOL at 31% with Compute at only 6.9% indicates the kernel is now heavily memory-bound - spending most time waiting for data rather than computing. The original larger BLOCK_SIZE_K likely provided better data reuse and arithmetic intensity despite lower occupancy.
+**Lessons**:
+  - Higher occupancy is not always better - compute intensity and data reuse can be more important than occupancy
+  - Reducing tile sizes in the reduction dimension (K) increases memory traffic due to more iterations
+  - A kernel with low occupancy but high arithmetic intensity can outperform one with high occupancy but poor data reuse
+  - Need to balance register pressure against the benefits of larger tile sizes for data locality
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (168 per thread) severely limits occupancy to 3 blocks per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 16 and BLOCK_SIZE_K from 512 to 256 to decrease register pressure, and increase num_warps to 8 for better occupancy. Consider using tl.dot with smaller tiles to enable tensor core usage.
+**Expected**: Reducing tile sizes and register pressure should increase occupancy, allowing more concurrent blocks per SM, which would improve performance by better hiding latency and utilizing compute resources
+**Actual**: Performance degraded by 13.8% (4.0312ms → 4.5872ms). Memory SOL at 47.6% suggests we're now more memory-bound, while compute dropped to only 10.6% (-13.8%)
+**Analysis**: The diagnosis of high register usage limiting occupancy was correct (168 registers per thread is excessive). However, the fix backfired because reducing tile sizes (BLOCK_SIZE_M: 32→16, BLOCK_SIZE_K: 512→256) decreased arithmetic intensity - each thread now does less compute work per memory access. The Memory SOL of 47.6% vs Compute SOL of 10.6% shows we've shifted from being underutilized to being memory-bound. Smaller tiles mean more memory transactions relative to compute, hurting the compute-to-memory ratio that matrix multiplication relies on for performance.
+**Lessons**:
+  - Reducing tile sizes to lower register pressure can backfire by reducing arithmetic intensity and making the kernel memory-bound
+  - High register usage isn't always bad - it may be enabling high arithmetic intensity through larger tiles and data reuse
+  - Need to balance occupancy improvements against maintaining sufficient work per thread to hide memory latency
+  - A shift from underutilized to memory-bound (47.6% Memory SOL) indicates the fix overcorrected
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage per thread severely limits occupancy
+**Fix Applied**: Reduce BLOCK_SIZE_M from 32 to 8-16 and BLOCK_SIZE_K from 512 to 128-256 to decrease register pressure, and increase num_warps to 8 to improve occupancy and latency hiding
+**Expected**: Reducing BLOCK_SIZE_M and BLOCK_SIZE_K should decrease register pressure, allowing more threads per SM and improving occupancy. This should help hide latency and improve overall performance.
+**Actual**: Performance degraded significantly from 4.03ms to 9.96ms (-147% worse). Memory SOL dropped to 34.3% and Compute SOL remained very low at 8.6%, indicating the kernel became even more underutilized. (-147.0%)
+**Analysis**: While the diagnosis of register pressure limiting occupancy may have been correct, the fix was counterproductive. Reducing BLOCK_SIZE_M from 32 to 8-16 dramatically reduces the amount of work per thread block, meaning each block computes fewer output elements. This increases the overhead-to-compute ratio. Reducing BLOCK_SIZE_K from 512 to 128-256 means more iterations in the K-dimension loop, increasing loop overhead. The smaller tile sizes likely resulted in poor data reuse and increased memory traffic relative to compute. The config changes note says 'none', suggesting the intended changes may not have been applied correctly, or the baseline config was already different.
+**Lessons**:
+  - Smaller block sizes don't always improve performance even if they reduce register pressure - the work per block must remain sufficient to amortize overhead
+  - BLOCK_SIZE_K reduction increases loop iterations and can hurt performance if the inner loop has fixed overhead
+  - Occupancy is not the only factor - data reuse and arithmetic intensity matter significantly for GEMM
+  - Need to verify config changes were actually applied when 'none' is reported
+
+
+Guidance for this round:
+- AVOID: Aggressively reducing block/tile sizes solely to improve occupancy without considering data reuse implications; Assuming lower register usage always leads to better performance; Making large changes to multiple parameters simultaneously (both M and K dimensions were changed); Blindly reducing block/tile sizes to decrease register pressure without considering impact on arithmetic intensity; Assuming higher occupancy automatically leads to better performance; Making changes without verifying they were actually applied (config changes: none); Blindly reducing BLOCK_SIZE_K to improve occupancy without considering impact on arithmetic intensity; Prioritizing occupancy over data reuse in matrix multiplication kernels; Making config changes that increase the number of K-dimension iterations; Aggressively reducing BLOCK_SIZE_K when it's being used for data reuse in matrix operations; Halving multiple tile dimensions simultaneously - try incremental changes; Prioritizing occupancy over arithmetic intensity in compute-heavy kernels like GEMM; Drastically reducing BLOCK_SIZE_M below 16 for GEMM kernels as it kills data reuse; Reducing BLOCK_SIZE_K without considering the increased loop overhead; Making multiple parameter changes simultaneously without understanding their individual effects- PRIORITIZE: Try smaller incremental changes to tile sizes rather than dramatic reductions; Consider register spilling to shared memory instead of reducing tile sizes; Explore increasing BLOCK_SIZE_N or other dimensions to maintain work per block while reducing register pressure; Use launch bounds or maxrregcount to limit registers while keeping larger tile sizes; Profile the original kernel more carefully to understand if register usage is actually the bottleneck; Focus on improving memory access patterns (coalescing, shared memory usage) given 47% memory SOL; Consider register spilling to shared memory instead of reducing tile sizes; Profile actual occupancy achieved before and after changes to verify the fix was applied; Balance occupancy improvements against maintaining high arithmetic intensity; Try smaller incremental changes to tile sizes rather than large reductions; Keep BLOCK_SIZE_K large (512) for better data reuse and restore original performance; Try reducing BLOCK_SIZE_M or BLOCK_SIZE_N instead to reduce register pressure while maintaining K-dimension efficiency; Explore using tl.dot with appropriate accumulator types for better register efficiency; Consider GROUP_SIZE_M tuning to improve L2 cache hit rates without affecting register pressure; Try reducing only BLOCK_SIZE_M while keeping BLOCK_SIZE_K large to maintain arithmetic intensity; Explore using float16 accumulation or mixed precision to reduce register pressure without shrinking tiles; Consider BLOCK_SIZE_N adjustments instead of BLOCK_SIZE_K for register reduction; Try compiler hints like num_stages to enable software pipelining and hide memory latency; Try moderate reductions in block sizes (e.g., BLOCK_SIZE_M=16 instead of 8) to balance occupancy and data reuse; Consider increasing BLOCK_SIZE_N instead of decreasing M to maintain work per block; Focus on improving memory access patterns rather than just occupancy; Verify that config changes are actually being applied before analyzing results
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-3 or rtol=1e-3)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

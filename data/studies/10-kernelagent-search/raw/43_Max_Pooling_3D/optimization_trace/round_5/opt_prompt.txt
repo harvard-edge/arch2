@@ -1,0 +1,338 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs Max Pooling 3D.
+    """
+    def __init__(self, kernel_size: int, stride: int = None, padding: int = 0, dilation: int = 1, return_indices: bool = False, ceil_mode: bool = False):
+        """
+        Initializes the Max Pooling 3D layer.
+
+        Args:
+            kernel_size (int): Size of the kernel for the max pooling operation.
+            stride (int, optional): Stride of the pooling operation. Defaults to None, which means stride is equal to kernel_size.
+            padding (int, optional): Padding applied to the input tensor. Defaults to 0.
+            dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+            return_indices (bool, optional): Whether to return indices of the maximum values. Defaults to False.
+            ceil_mode (bool, optional): When True, the output size is ceil(input_size / stride) instead of floor. Defaults to False.
+        """
+        super(Model, self).__init__()
+        self.maxpool = nn.MaxPool3d(kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, return_indices=return_indices, ceil_mode=ceil_mode)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Max Pooling 3D to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, channels, dim1, dim2, dim3).
+
+        Returns:
+            torch.Tensor: Output tensor with Max Pooling 3D applied.
+        """
+        return self.maxpool(x)
+
+batch_size = 16
+channels = 32
+dim1 = 128
+dim2 = 128
+dim3 = 128
+kernel_size = 3
+stride = 2
+padding = 1
+dilation = 3
+
+def get_inputs():
+    x = torch.rand(batch_size, channels, dim1, dim2, dim3)
+    return [x]
+
+def get_init_inputs():
+    return [kernel_size, stride, padding, dilation]
+PyTorch Eager baseline: 6.2473 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def max_pool3d_kernel(
+    input_ptr,
+    output_ptr,
+    N, C, D, H, W,  # Input dimensions
+    OD, OH, OW,  # Output dimensions
+    kernel_size: tl.constexpr,
+    stride: tl.constexpr,
+    padding: tl.constexpr,
+    dilation: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """
+    Fused 3D Max Pooling kernel.
+    Each program handles one output element.
+    """
+    # Get program ID - we flatten all output elements
+    pid = tl.program_id(0)
+    
+    # Total number of output elements
+    total_outputs = N * C * OD * OH * OW
+    
+    # Process BLOCK_SIZE elements per program
+    offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offs < total_outputs
+    
+    # Decompose linear index to (n, c, od, oh, ow)
+    ow = offs % OW
+    tmp = offs // OW
+    oh = tmp % OH
+    tmp = tmp // OH
+    od = tmp % OD
+    tmp = tmp // OD
+    c = tmp % C
+    n = tmp // C
+    
+    # Compute input starting positions (with padding offset)
+    d_start = od * stride - padding
+    h_start = oh * stride - padding
+    w_start = ow * stride - padding
+    
+    # Initialize max value to negative infinity
+    max_val = tl.full([BLOCK_SIZE], float('-inf'), dtype=tl.float32)
+    
+    # Iterate over the pooling window
+    for kd in range(kernel_size):
+        d_in = d_start + kd * dilation
+        d_valid = (d_in >= 0) & (d_in < D)
+        
+        for kh in range(kernel_size):
+            h_in = h_start + kh * dilation
+            h_valid = (h_in >= 0) & (h_in < H)
+            
+            for kw in range(kernel_size):
+                w_in = w_start + kw * dilation
+                w_valid = (w_in >= 0) & (w_in < W)
+                
+                # Combined validity check
+                valid = mask & d_valid & h_valid & w_valid
+                
+                # Compute input index: n * (C*D*H*W) + c * (D*H*W) + d_in * (H*W) + h_in * W + w_in
+                input_idx = n * (C * D * H * W) + c * (D * H * W) + d_in * (H * W) + h_in * W + w_in
+                
+                # Load input value
+                val = tl.load(input_ptr + input_idx, mask=valid, other=float('-inf'))
+                val = val.to(tl.float32)
+                
+                # Update max
+                max_val = tl.maximum(max_val, val)
+    
+    # Store result
+    tl.store(output_ptr + offs, max_val, mask=mask)
+
+
+def kernel_function(x, kernel_size=2, stride=2, padding=0, dilation=1):
+    """
+    3D Max Pooling wrapper function.
+    
+    Args:
+        x: Input tensor of shape (N, C, D, H, W)
+        kernel_size: Size of the pooling window
+        stride: Stride of the pooling window
+        padding: Padding added to input
+        dilation: Spacing between kernel elements
+    
+    Returns:
+        Output tensor after max pooling
+    """
+    # Handle tuple/list parameters
+    if isinstance(kernel_size, (tuple, list)):
+        kernel_size = kernel_size[0]
+    if isinstance(stride, (tuple, list)):
+        stride = stride[0]
+    if isinstance(padding, (tuple, list)):
+        padding = padding[0]
+    if isinstance(dilation, (tuple, list)):
+        dilation = dilation[0]
+    
+    # Get input dimensions
+    N, C, D, H, W = x.shape
+    
+    # Calculate output dimensions
+    OD = (D + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    OH = (H + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    OW = (W + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    
+    # Allocate output tensor
+    output = torch.empty((N, C, OD, OH, OW), device=x.device, dtype=x.dtype)
+    
+    # Total number of output elements
+    total_outputs = N * C * OD * OH * OW
+    
+    # Launch configuration
+    BLOCK_SIZE = 256
+    grid = (triton.cdiv(total_outputs, BLOCK_SIZE),)
+    
+    # Ensure input is contiguous
+    x = x.contiguous()
+    
+    # Launch kernel
+    max_pool3d_kernel[grid](
+        x,
+        output,
+        N, C, D, H, W,
+        OD, OH, OW,
+        kernel_size=kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    
+    return output
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'Non-coalesced global memory access pattern due to 3D pooling window traversal causing scattered reads across input tensor', 'evidence': [{'metric': 'smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct', 'value': 23.64, 'interpretation': 'Only 23.64% of loaded bytes are actually used, meaning ~76% of memory bandwidth is wasted on unused data in each 32-byte sector'}, {'metric': 'smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct', 'value': 58.52, 'interpretation': '58.52% of warp stalls are due to waiting for memory operations, confirming memory latency is the primary stall reason'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✓ IMPROVED 3.3% faster]
+**Prescription Applied**: `compute` tier
+**Root Cause**: High register usage (72 registers per thread) severely limits occupancy to only 7 warps per SM, causing compute resources to be underutilized while waiting for data
+**Fix Applied**: Reduce register pressure by processing fewer output elements per thread (smaller BLOCK_SIZE), using shared memory to cache input tiles, and restructuring the kernel to reuse loaded values across the pooling window
+**Performance**: 2.8827ms → 2.7874ms (3.3% faster)
+**NCU SOL (% of Peak)**: Combined: 86.5%, Compute: 86.5%, Memory: 70.4%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 89.5% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor global memory coalescing due to strided 3D access pattern in the pooling window iteration
+**Fix Applied**: Restructure the kernel to process output elements in a tiled manner where adjacent threads access spatially adjacent input elements, and use shared memory to stage pooling window data for reuse across threads
+**Performance**: 2.6718ms → 5.0629ms (89.5% slower)
+**NCU SOL (% of Peak)**: Combined: 85.6%, Compute: 85.6%, Memory: 51.1%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 99.9% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor memory coalescing with only 23.64% of loaded bytes being useful
+**Fix Applied**: Restructure the kernel to process contiguous output tiles in shared memory, loading input tiles cooperatively across threads to improve coalescing. Use a 2D or 3D thread block layout where adjacent threads process spatially adjacent output elements, ensuring their input window loads overlap and can be coalesced.
+**Performance**: 2.6718ms → 5.3411ms (99.9% slower)
+**NCU SOL (% of Peak)**: Combined: 84.9%, Compute: 84.9%, Memory: 50.4%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 78.1% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor global memory coalescing - only 23.64% of loaded bytes are useful data
+**Fix Applied**: Restructure the kernel to process output elements with spatial locality - group threads to access contiguous memory regions by tiling the output space in (OD, OH, OW) dimensions and using shared memory to cache input tiles that overlap between pooling windows
+**Performance**: 2.6718ms → 4.7595ms (78.1% slower)
+**NCU SOL (% of Peak)**: Combined: 81.2%, Compute: 81.2%, Memory: 55.5%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 8.8% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor memory coalescing with only 23.64% of loaded bytes being useful data
+**Fix Applied**: Restructure the kernel to process data in tiles that maximize spatial locality - load a 3D tile of input into shared memory, then have multiple threads cooperatively compute pooling results from the shared tile, reducing redundant global memory loads and improving coalescing
+**Performance**: 2.6718ms → 2.4365ms (8.8% faster)
+**NCU SOL (% of Peak)**: Combined: 99.5%, Compute: 73.6%, Memory: 99.5%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: High register usage (72 registers per thread) severely limits occupancy to only 7 warps per SM, causing compute resources to be underutilized while waiting for data
+**Fix Applied**: Reduce register pressure by processing fewer output elements per thread (smaller BLOCK_SIZE), using shared memory to cache input tiles, and restructuring the kernel to reuse loaded values across the pooling window
+**Expected**: Reducing register pressure should significantly improve occupancy, allowing more warps to run concurrently and better hiding latency. Expected a larger performance improvement (10-20%+) if register usage was truly the bottleneck limiting compute utilization.
+**Actual**: Only achieved 3.3% improvement, and compute SOL remains very high at 86.5% while memory SOL is at 70.4%. The kernel is still compute-bound with minimal change in the bottleneck profile. (+3.3%)
+**Analysis**: The 3.3% improvement is marginal and suggests the register pressure fix either didn't significantly improve occupancy or the kernel was already near optimal for its compute workload. With compute at 86.5% SOL, the kernel is efficiently using compute resources. The diagnosis identified high register usage correctly, but the root cause of limited performance may not be occupancy - it could be that the kernel is genuinely compute-intensive and 86.5% compute utilization is close to optimal. The fix may have slightly improved instruction throughput but didn't fundamentally change the execution profile.
+**Lessons**:
+  - High register usage doesn't always mean poor performance - sometimes it enables efficient computation that outweighs occupancy benefits
+  - A compute SOL of 86.5% is actually quite good and may indicate the kernel is near optimal for its workload
+  - Small improvements (3.3%) suggest we're in the optimization tail where gains are incremental
+  - Need to examine whether increased occupancy actually translated to better latency hiding
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor global memory coalescing due to strided 3D access pattern in the pooling window iteration
+**Fix Applied**: Restructure the kernel to process output elements in a tiled manner where adjacent threads access spatially adjacent input elements, and use shared memory to stage pooling window data for reuse across threads
+**Expected**: If memory coalescing was the bottleneck, fixing it should have improved performance and increased memory SOL while potentially revealing compute as the new bottleneck
+**Actual**: Performance degraded by 89.5% (from 2.67ms to 5.06ms), and the kernel became compute-bound (85.6% compute SOL) with memory SOL dropping to 51.1% (-89.5%)
+**Analysis**: The original kernel was likely already reasonably efficient. The 'fix' introduced significant overhead by adding shared memory staging and tiled processing that wasn't necessary. The dramatic shift to compute-bound (85.6%) suggests the new kernel has excessive thread synchronization, shared memory management overhead, or redundant computations. The memory SOL at 51.1% indicates the shared memory approach didn't improve memory efficiency - it actually made it worse while adding compute overhead. For 3D pooling, the access pattern may have already been acceptable, or the tiling scheme introduced more complexity than benefit.
+**Lessons**:
+  - Not all strided access patterns benefit from shared memory tiling - the overhead can exceed the coalescing benefits
+  - 3D pooling operations may have inherently complex access patterns that are difficult to optimize with simple tiling
+  - A 2.67ms baseline with correct results suggests the original implementation was already reasonably optimized
+  - Shared memory staging adds synchronization and indexing overhead that can dominate small pooling windows
+  - Always verify the actual memory access pattern before assuming coalescing is the issue
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor memory coalescing with only 23.64% of loaded bytes being useful
+**Fix Applied**: Restructure the kernel to process contiguous output tiles in shared memory, loading input tiles cooperatively across threads to improve coalescing. Use a 2D or 3D thread block layout where adjacent threads process spatially adjacent output elements, ensuring their input window loads overlap and can be coalesced.
+**Expected**: Improving memory coalescing should reduce memory bottleneck, decrease execution time, and shift the SOL balance toward compute-bound behavior
+**Actual**: Performance degraded by ~2x (2.67ms → 5.34ms), and the kernel became compute-bound (84.9% compute SOL) while memory utilization dropped to 50.4% (-99.9%)
+**Analysis**: The diagnosis of poor memory coalescing (23.64% useful bytes) was correct as a memory bottleneck. However, the fix introduced excessive computational overhead. The shift from memory-bound to compute-bound (84.9% compute SOL) indicates the restructuring added too much complexity - likely excessive shared memory synchronization, redundant calculations for tile management, or inefficient thread block layouts. The 2D/3D thread block reorganization and cooperative loading pattern created more work than it saved in memory efficiency. The memory SOL at 50.4% suggests memory is no longer the bottleneck, but the compute overhead doubled execution time.
+**Lessons**:
+  - Restructuring for coalescing can introduce compute overhead that outweighs memory benefits
+  - Shared memory tile-based approaches require careful balance between tile size, synchronization costs, and actual memory savings
+  - A successful memory optimization should not cause compute SOL to spike dramatically above memory SOL
+  - When memory utilization drops but performance worsens, the fix likely added too much computational complexity
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor global memory coalescing - only 23.64% of loaded bytes are useful data
+**Fix Applied**: Restructure the kernel to process output elements with spatial locality - group threads to access contiguous memory regions by tiling the output space in (OD, OH, OW) dimensions and using shared memory to cache input tiles that overlap between pooling windows
+**Expected**: Expected improved memory coalescing to reduce memory traffic and improve performance, with Memory SOL increasing closer to compute SOL or overall execution time decreasing
+**Actual**: Performance degraded by 78.1% (2.67ms → 4.76ms). Memory SOL dropped to 55.5% while Compute SOL increased to 81.2%, indicating the kernel became compute-bound instead of memory-bound (-78.1%)
+**Analysis**: The diagnosis of poor memory coalescing (23.64% useful bytes) was likely correct, but the fix introduced significant overhead. The shared memory tiling approach for 3D pooling added complexity: (1) synchronization overhead from __syncthreads(), (2) shared memory bank conflicts, (3) complex index calculations for overlapping pooling windows in 3D space, (4) potential thread divergence in boundary handling. The shift from memory-bound (original) to compute-bound (81.2% compute SOL) suggests the tiling logic itself became the bottleneck, not the memory access pattern.
+**Lessons**:
+  - Shared memory tiling for 3D pooling has significant overhead that can outweigh coalescing benefits
+  - Overlapping pooling windows create complex data reuse patterns that don't map well to simple tiling strategies
+  - A kernel becoming compute-bound after a memory optimization indicates the fix added too much computational overhead
+  - 23.64% useful bytes may be acceptable if the alternative introduces more overhead than it saves
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Poor memory coalescing with only 23.64% of loaded bytes being useful data
+**Fix Applied**: Restructure the kernel to process data in tiles that maximize spatial locality - load a 3D tile of input into shared memory, then have multiple threads cooperatively compute pooling results from the shared tile, reducing redundant global memory loads and improving coalescing
+**Expected**: Improving memory coalescing and reducing redundant global memory loads should significantly reduce memory traffic and improve performance, with memory SOL potentially decreasing as efficiency improves
+**Actual**: Performance improved by 8.8% (2.67ms → 2.44ms), but memory SOL increased to 99.5% indicating the kernel is now even more memory-bound, while compute SOL is at 73.6% (+8.8%)
+**Analysis**: The diagnosis was correct - poor memory coalescing (23.64% useful bytes) was indeed a bottleneck. The tiled shared memory approach successfully improved performance by 8.8%, confirming the fix was effective. However, the memory SOL increasing to 99.5% suggests that while we improved coalescing efficiency, we're now fully utilizing memory bandwidth. The kernel has shifted from being inefficient with memory to being efficiently memory-bound. The 8.8% improvement came from reducing wasted memory transactions, but further gains will require reducing the fundamental memory requirements or increasing compute intensity.
+**Lessons**:
+  - Improving memory coalescing can improve performance even when it makes the kernel appear more memory-bound in SOL metrics
+  - High memory SOL (99.5%) after optimization indicates we've maximized memory efficiency but are now bandwidth-limited
+  - Shared memory tiling is effective for pooling operations with overlapping input regions
+  - A kernel can go from 'inefficiently memory-bound' to 'efficiently memory-bound' - both show as memory bottleneck but have different optimization paths
+
+
+Guidance for this round:
+- AVOID: Assuming register pressure is always bad - sometimes register-heavy kernels with lower occupancy outperform high-occupancy alternatives; Expecting large gains when already at 86%+ compute utilization; Focusing solely on occupancy without measuring actual instruction throughput; Adding shared memory tiling without profiling evidence of severe coalescing issues; Over-engineering solutions for pooling operations with small window sizes; Assuming strided 3D access automatically means poor coalescing; Introducing thread synchronization overhead for operations with limited data reuse; Overly complex 2D/3D thread block reorganizations without measuring synchronization overhead; Adding shared memory tiling without considering whether the compute overhead is justified; Prioritizing coalescing improvements at the cost of significant compute complexity; Complex shared memory tiling schemes for operations with irregular or overlapping access patterns like pooling; Adding synchronization barriers without measuring their cost against memory savings; Over-engineering memory optimizations when the baseline kernel is already reasonably performant; Continuing to optimize memory coalescing when already at 99.5% memory SOL - diminishing returns; Expecting memory SOL to decrease when improving memory efficiency - it often increases as bandwidth becomes fully utilized- PRIORITIZE: Look at memory access patterns since memory SOL is 70.4% - there may be room for coalescing or caching improvements; Consider algorithmic changes rather than micro-optimizations at this utilization level; Explore vectorized loads/stores to improve memory bandwidth utilization; Investigate instruction-level parallelism (ILP) improvements within the kernel; Profile the original kernel's actual memory transaction efficiency before applying fixes; Consider simpler optimizations like loop unrolling or register blocking first; For 3D pooling, try optimizing the innermost loop dimension only; Revert to baseline and try incremental, targeted optimizations; Focus on reducing thread divergence or instruction count rather than memory access restructuring; Simpler coalescing improvements that maintain thread-to-data mapping simplicity; Vectorized loads (float4) to improve memory efficiency without restructuring; Profile shared memory bank conflicts and synchronization costs before committing to tile-based approaches; Incremental coalescing improvements rather than full kernel restructuring; Simpler coalescing improvements like reordering thread-to-output mapping without shared memory; Vectorized loads (float4) to improve memory throughput without shared memory overhead; Focus on reducing thread divergence and improving occupancy instead of complex tiling; Consider that max pooling's simple computation may not benefit from trading memory for compute; Focus on compute optimizations since compute SOL is only 73.6% while memory is at 99.5%; Consider algorithmic changes that reduce total memory footprint or increase arithmetic intensity; Explore kernel fusion to amortize memory access costs over more computation; Look into data compression or reduced precision to decrease memory bandwidth requirements
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

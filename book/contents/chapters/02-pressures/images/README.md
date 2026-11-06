@@ -22,12 +22,16 @@ Generated figures with scripts (moved from chapters 7 and 9; datasets in
 
 - `fig-microprocessor-trends`: the 1971–2021 CPU sample joined with the
   2012–2026 accelerator specification frontier; `generate_fig_microprocessor_trends.py`
-  reads `chapter1-micro-trend.csv` and `chapter2-ai-accelerator-scaling-frontier.csv`.
+  reads `chapter1-micro-trend.csv`, `chapter2-ai-accelerator-scaling-frontier.csv`, and
+  `chapter2-ai-design-milestones.csv`.
   The CPU cutoff and mixed published power-rating boundaries are explicit.
 - `fig-ch09-software-porting-wall`: CUTLASS, Triton, and vLLM code growth;
-  `measure_software_porting_wall.py` (retained harness, rerun 2026-09-29) writes the
-  `chapter9-{cutlass,triton,vllm}-*.csv` datasets and `generate_ch09_software_porting_wall.py`
-  plots them. Triton is plotted as the union of selected source trees, including
+  `measure_software_porting_wall.py` (retained harness, rerun 2026-11-02 through
+  `data/run_study.py`; attempts are logged in `runs.jsonl` here) writes the
+  `chapter9-{cutlass,triton,vllm}-*.csv` datasets and the prose-only
+  `chapter9-cutlass-v3.6-step-files.csv`, and `generate_ch09_software_porting_wall.py`
+  plots the first three. Tags are a selection; each row records its commit. Clones are
+  not retained. Triton is plotted as the union of selected source trees, including
   vendored headers, examples, and tests; repository moves do not support a stable
   shared-versus-backend split.
 - `fig-ch07-wilson-verification-scissors`: Wilson Research / Siemens EDA
@@ -60,7 +64,7 @@ Executable Quarto figures in the chapter:
   reported and estimated training-compute records; every fitted point is visible.
 - `fig-data-movement-energy-scale`: Matplotlib data-movement energy scale plot.
 - `fig-verification-demand-scissors`: verification and design staffing demand.
-- `fig-design-cost-by-node`: leading-node design-cost estimates, separated by
-  the vintage of the published estimate.
+- `fig-design-cost-by-node`: leading-node design-cost estimates, labeled by the
+  report that cites them; five of the fifteen published points are plotted.
 
 The earlier accelerator photo collage and promotional WSE photograph are not used.

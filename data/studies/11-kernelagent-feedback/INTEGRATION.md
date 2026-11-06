@@ -1,7 +1,8 @@
 # Editorial placement: interpreting hardware counters
 
-Status: optional prose only, proposed October 17, 2026. Keep the figure in the
-companion. See the [selection proposal](../../../integration/manage-work-tree/PLOT_INTEGRATION_PROPOSAL.md).
+Status: superseded proposal of October 17, 2026, kept as a record. The figure and
+its prose are now in Chapter 7. The selection proposal this note linked to is no
+longer at `integration/manage-work-tree/PLOT_INTEGRATION_PROPOSAL.md`.
 
 Chapter 7 already contains a measured systolic-array case and a defect/mutation
 figure. Another three-panel performance exhibit would crowd its progression

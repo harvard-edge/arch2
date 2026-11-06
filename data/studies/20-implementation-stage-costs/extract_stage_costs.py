@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Extract stage wall times and subprocess telemetry from the pinned CI ZIP."""
+"""Extract stage wall times and subprocess telemetry from the retained run records.
+
+The tracked subset and ZIP index are the durable input. When the upstream ZIP is
+also present, its digest, member index, and subset bytes are checked against it.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +11,18 @@ import csv
 import hashlib
 import json
 import re
+import sys
+import tarfile
 import zipfile
+import zlib
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-ARCHIVE = ROOT / "raw/librelane-spm-ihp-sg13g2-run-37749124131-artifact-11539925672.zip"
+ARCHIVE_NAME = "raw/librelane-spm-ihp-sg13g2-run-37749124131-artifact-11539925672.zip"
+ARCHIVE = ROOT / ARCHIVE_NAME
+INDEX = ROOT / "raw/artifact-index.tsv"
+SUBSET = ROOT / "raw/run-records-subset.tar.gz"
 DURATION_RE = re.compile(r"^(\d+):(\d+):(\d+(?:\.\d+)?)$")
 MEMORY_RE = re.compile(r"^([0-9.]+)(B|KiB|MiB|GiB|TiB)$")
 STEP_RE = re.compile(r"^([0-9]{2})-(.+)$")
@@ -43,97 +53,140 @@ def mib(value: str | None) -> float | None:
     return float(amount) * factor
 
 
-def main() -> None:
-    manifest = json.loads((ROOT / "source_manifest.json").read_text())
-    for receipt in manifest["files"]:
-        if (
-            hashlib.sha256((ROOT / receipt["path"]).read_bytes()).hexdigest()
-            != receipt["sha256"]
-        ):
-            raise ValueError(f"Source hash mismatch: {receipt['path']}")
+def load_index() -> dict[str, tuple[int, int, str]]:
+    lines = INDEX.read_text(encoding="utf-8").splitlines()[1:]
+    rows = [line.split("\t") for line in lines]
+    index = {row[0]: (int(row[1]), int(row[2]), row[3]) for row in rows}
+    assert len(index) == len(rows), "Duplicate ZIP paths"
+    return index
+
+
+def load_subset(index: dict[str, tuple[int, int, str]]) -> dict[str, bytes]:
+    members: dict[str, bytes] = {}
+    with tarfile.open(SUBSET, "r:gz") as tar:
+        for info in tar.getmembers():
+            payload = tar.extractfile(info).read()
+            size, _, crc = index[info.name]
+            if len(payload) != size or f"{zlib.crc32(payload):08x}" != crc:
+                raise ValueError(f"Retained record differs from index: {info.name}")
+            members[info.name] = payload
+    return members
+
+
+def check_against_archive(
+    index: dict[str, tuple[int, int, str]], members: dict[str, bytes]
+) -> None:
     metadata = json.loads((ROOT / "raw/artifact-metadata.json").read_text())
     assert (
         metadata["digest"]
         == "sha256:" + hashlib.sha256(ARCHIVE.read_bytes()).hexdigest()
     )
+    with zipfile.ZipFile(ARCHIVE) as archive:
+        listed = {
+            m.filename: (m.file_size, m.compress_size, f"{m.CRC:08x}")
+            for m in archive.infolist()
+        }
+        assert listed == index, "ZIP listing differs from retained index"
+        for name, payload in members.items():
+            assert archive.read(name) == payload, name
+
+
+def main() -> None:
+    manifest = json.loads((ROOT / "source_manifest.json").read_text())
+    for receipt in manifest["files"]:
+        if receipt["path"] == ARCHIVE_NAME and not ARCHIVE.exists():
+            continue
+        if (
+            hashlib.sha256((ROOT / receipt["path"]).read_bytes()).hexdigest()
+            != receipt["sha256"]
+        ):
+            raise ValueError(f"Source hash mismatch: {receipt['path']}")
+    index = load_index()
+    members = load_subset(index)
+    if ARCHIVE.exists():
+        check_against_archive(index, members)
+    else:
+        print(
+            "Upstream ZIP absent: using the retained subset; ZIP digest and "
+            "byte comparison skipped.",
+            file=sys.stderr,
+        )
     step_rows: dict[str, dict[str, object]] = {}
     process_rows: list[dict[str, object]] = []
-    with zipfile.ZipFile(ARCHIVE) as archive:
-        names = set(archive.namelist())
-        assert len(names) == len(archive.namelist()), "Duplicate ZIP paths"
-        numbered_dirs = {
-            n.split("/")[0] for n in names if STEP_RE.fullmatch(n.split("/")[0])
+    names = set(index)
+    numbered_dirs = {
+        n.split("/")[0] for n in names if STEP_RE.fullmatch(n.split("/")[0])
+    }
+    runtime_paths = sorted(
+        name for name in names if re.fullmatch(r"[0-9]{2}-[^/]+/runtime\.txt", name)
+    )
+    runtimes = sorted(
+        name for name in names if re.fullmatch(r"[0-9]{2}-.+/runtime\.txt", name)
+    )
+    assert len(numbered_dirs) == len(runtime_paths) == 78
+    assert len(runtimes) == 80
+    for name in runtime_paths:
+        step_dir = name.split("/", 1)[0]
+        match = STEP_RE.fullmatch(step_dir)
+        if not match:
+            continue
+        step_id, step_name = match.groups()
+        row: dict[str, object] = {
+            "step_id": int(step_id),
+            "step_name": step_name,
+            "runtime_seconds": seconds(members[name].decode("utf-8")),
+            "state_out_present": f"{step_dir}/state_out.json" in names,
+            "process_stats_count": 0,
+            "peak_rss_mib_max": None,
+            "peak_vms_mib_max": None,
+            "peak_cpu_percent_max": None,
+            "process_stats_files": "",
         }
-        runtime_paths = sorted(
-            name for name in names if re.fullmatch(r"[0-9]{2}-[^/]+/runtime\.txt", name)
-        )
-        runtimes = sorted(
-            name for name in names if re.fullmatch(r"[0-9]{2}-.+/runtime\.txt", name)
-        )
-        assert len(numbered_dirs) == len(runtime_paths) == 78
-        assert len(runtimes) == 80
-        for name in runtime_paths:
-            step_dir = name.split("/", 1)[0]
-            match = STEP_RE.fullmatch(step_dir)
-            if not match:
-                continue
-            step_id, step_name = match.groups()
-            row: dict[str, object] = {
-                "step_id": int(step_id),
-                "step_name": step_name,
-                "runtime_seconds": seconds(archive.read(name).decode("utf-8")),
-                "state_out_present": f"{step_dir}/state_out.json" in names,
-                "process_stats_count": 0,
-                "peak_rss_mib_max": None,
-                "peak_vms_mib_max": None,
-                "peak_cpu_percent_max": None,
-                "process_stats_files": "",
-            }
-            step_rows[step_dir] = row
+        step_rows[step_dir] = row
 
-        for name in sorted(names):
-            if not re.fullmatch(r"[0-9]{2}-.+/[^/]+\.process_stats\.json", name):
-                continue
-            step_dir, filename = name.split("/", 1)
-            data = json.loads(archive.read(name))
-            timing = data.get("time", {})
-            peak = data.get("peak_resources", {})
-            average = data.get("avg_resources", {})
-            proc = {
-                "step_id": int(STEP_RE.fullmatch(step_dir).group(1)),
-                "step_name": STEP_RE.fullmatch(step_dir).group(2),
-                "process_stats_file": filename,
-                "process_wall_seconds": seconds(timing["runtime"]),
-                "cpu_user_seconds": seconds(timing["cpu_time_user"]),
-                "cpu_system_seconds": seconds(timing["cpu_time_system"]),
-                "cpu_iowait_seconds": seconds(timing["cpu_time_iowait"]),
-                "peak_rss_mib": mib(peak.get("memory_rss")),
-                "peak_vms_mib": mib(peak.get("memory_vms")),
-                "peak_cpu_percent": peak.get("cpu_percent"),
-                "peak_threads": peak.get("threads"),
-                "avg_rss_mib": mib(average.get("memory_rss")),
-                "avg_vms_mib": mib(average.get("memory_vms")),
-                "avg_cpu_percent": average.get("cpu_percent"),
-                "avg_threads": average.get("threads"),
-            }
-            process_rows.append(proc)
-            row = step_rows.get(step_dir)
-            if row is not None:
-                row["process_stats_count"] = int(row["process_stats_count"]) + 1
-                row["process_stats_files"] = ",".join(
-                    filter(None, [str(row["process_stats_files"]), filename])
-                )
-                for col, val in (
-                    ("peak_rss_mib_max", proc["peak_rss_mib"]),
-                    ("peak_vms_mib_max", proc["peak_vms_mib"]),
-                    ("peak_cpu_percent_max", proc["peak_cpu_percent"]),
-                ):
-                    if val is not None:
-                        row[col] = (
-                            val
-                            if row[col] is None
-                            else max(float(row[col]), float(val))
-                        )
+    for name in sorted(names):
+        if not re.fullmatch(r"[0-9]{2}-.+/[^/]+\.process_stats\.json", name):
+            continue
+        step_dir, filename = name.split("/", 1)
+        data = json.loads(members[name])
+        timing = data.get("time", {})
+        peak = data.get("peak_resources", {})
+        average = data.get("avg_resources", {})
+        proc = {
+            "step_id": int(STEP_RE.fullmatch(step_dir).group(1)),
+            "step_name": STEP_RE.fullmatch(step_dir).group(2),
+            "process_stats_file": filename,
+            "process_wall_seconds": seconds(timing["runtime"]),
+            "cpu_user_seconds": seconds(timing["cpu_time_user"]),
+            "cpu_system_seconds": seconds(timing["cpu_time_system"]),
+            "cpu_iowait_seconds": seconds(timing["cpu_time_iowait"]),
+            "peak_rss_mib": mib(peak.get("memory_rss")),
+            "peak_vms_mib": mib(peak.get("memory_vms")),
+            "peak_cpu_percent": peak.get("cpu_percent"),
+            "peak_threads": peak.get("threads"),
+            "avg_rss_mib": mib(average.get("memory_rss")),
+            "avg_vms_mib": mib(average.get("memory_vms")),
+            "avg_cpu_percent": average.get("cpu_percent"),
+            "avg_threads": average.get("threads"),
+        }
+        process_rows.append(proc)
+        row = step_rows.get(step_dir)
+        if row is not None:
+            row["process_stats_count"] = int(row["process_stats_count"]) + 1
+            row["process_stats_files"] = ",".join(
+                filter(None, [str(row["process_stats_files"]), filename])
+            )
+            for col, val in (
+                ("peak_rss_mib_max", proc["peak_rss_mib"]),
+                ("peak_vms_mib_max", proc["peak_vms_mib"]),
+                ("peak_cpu_percent_max", proc["peak_cpu_percent"]),
+            ):
+                if val is not None:
+                    row[col] = (
+                        val
+                        if row[col] is None
+                        else max(float(row[col]), float(val))
+                    )
 
     assert set(step_rows) == numbered_dirs
     assert all(row["state_out_present"] for row in step_rows.values())

@@ -1,0 +1,433 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Performs a 3D transposed convolution operation with square input and square kernel,
+    and supports padding, dilation, and stride.
+
+    Args:
+        in_channels (int): Number of channels in the input tensor.
+        out_channels (int): Number of channels produced by the convolution.
+        kernel_size (int): Size of the convolution kernel (square kernel, so only one value needed).
+        stride (int, optional): Stride of the convolution. Defaults to 1.
+        padding (int, optional): Padding applied to the input. Defaults to 0.
+        dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+        bias (bool, optional): If `True`, adds a learnable bias to the output. Defaults to `False`.
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, dilation: int = 1, bias: bool = False):
+        super(Model, self).__init__()
+        self.conv_transpose3d = nn.ConvTranspose3d(in_channels, out_channels, kernel_size=(kernel_size, kernel_size, kernel_size), stride=stride, padding=padding, dilation=dilation, bias=bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Performs the 3D transposed convolution.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, depth, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, out_channels, depth_out, height_out, width_out).
+        """
+        return self.conv_transpose3d(x)
+
+# Test code
+batch_size = 16
+in_channels = 32
+out_channels = 64
+kernel_size = 3
+depth = 16
+height = 32
+width = 32
+stride = 2
+padding = 1
+dilation = 2
+
+def get_inputs():
+    x = torch.rand(batch_size, in_channels, depth, height, width)
+    return [x]
+
+def get_init_inputs():
+    return [in_channels, out_channels, kernel_size, stride, padding, dilation]
+PyTorch Eager baseline: 14.2310 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _conv_transpose3d_fwd_kernel_opt(
+    x_ptr,
+    w_ptr,
+    b_ptr,
+    y_ptr,
+    N, Cin, Cout,
+    Di, Hi, Wi,
+    Do, Ho, Wo,
+    stride_d, stride_h, stride_w,
+    pad_d, pad_h, pad_w,
+    dil_d, dil_h, dil_w,
+    sx_n, sx_c, sx_d, sx_h, sx_w,
+    sw_ci, sw_co, sw_kd, sw_kh, sw_kw,
+    sy_n, sy_c, sy_d, sy_h, sy_w,
+    K_D: tl.constexpr,
+    K_H: tl.constexpr,
+    K_W: tl.constexpr,
+    BLOCK_S: tl.constexpr,
+    BLOCK_OC: tl.constexpr,
+    BLOCK_CIN: tl.constexpr,
+    BIAS: tl.constexpr,
+):
+    pid_s = tl.program_id(0)
+    pid_oc = tl.program_id(1)
+    pid_n = tl.program_id(2)
+
+    S_total = Do * Ho * Wo
+    s_base = pid_s * BLOCK_S
+    s_offsets = s_base + tl.arange(0, BLOCK_S)
+    s_mask = s_offsets < S_total
+
+    HoWo = Ho * Wo
+    od = s_offsets // HoWo
+    tmp = s_offsets % HoWo
+    oh = tmp // Wo
+    ow = tmp % Wo
+
+    oc_base = pid_oc * BLOCK_OC
+    oc_offsets = oc_base + tl.arange(0, BLOCK_OC)
+    oc_mask = oc_offsets < Cout
+
+    acc = tl.zeros((BLOCK_S, BLOCK_OC), dtype=tl.float32)
+
+    if BIAS:
+        b = tl.load(b_ptr + oc_offsets, mask=oc_mask, other=0.0).to(tl.float32)
+        acc += b[None, :]
+
+    n = pid_n
+    x_base_n = x_ptr + n * sx_n
+
+    cin_offsets = tl.arange(0, BLOCK_CIN)
+    cin_mask = cin_offsets < Cin
+
+    # Precompute weight base pointer
+    w_base_oc = w_ptr + oc_offsets * sw_co
+
+    for kd in range(K_D):
+        tmpd = od + pad_d - kd * dil_d
+        valid_d = (tmpd >= 0) & ((tmpd % stride_d) == 0)
+        id_val = tmpd // stride_d
+        valid_d = valid_d & (id_val >= 0) & (id_val < Di)
+
+        for kh in range(K_H):
+            tmph = oh + pad_h - kh * dil_h
+            valid_h = (tmph >= 0) & ((tmph % stride_h) == 0)
+            ih_val = tmph // stride_h
+            valid_h = valid_h & (ih_val >= 0) & (ih_val < Hi)
+
+            valid_dh = valid_d & valid_h
+
+            for kw in range(K_W):
+                tmpw = ow + pad_w - kw * dil_w
+                valid_w = (tmpw >= 0) & ((tmpw % stride_w) == 0)
+                iw_val = tmpw // stride_w
+                valid_w = valid_w & (iw_val >= 0) & (iw_val < Wi)
+
+                valid_dhw = valid_dh & valid_w & s_mask
+
+                # Compute x addresses - use contiguous cin for better coalescing
+                x_spatial_offset = id_val * sx_d + ih_val * sx_h + iw_val * sx_w
+                x_row_base = x_base_n + x_spatial_offset
+
+                # Load x tile [BLOCK_S, BLOCK_CIN]
+                x_ptrs = x_row_base[:, None] + cin_offsets[None, :] * sx_c
+                x_load_mask = valid_dhw[:, None] & cin_mask[None, :]
+                x_tile = tl.load(x_ptrs, mask=x_load_mask, other=0.0).to(tl.bfloat16)
+
+                # Load w tile [BLOCK_CIN, BLOCK_OC]
+                w_k_offset = kd * sw_kd + kh * sw_kh + kw * sw_kw
+                w_ptrs = w_base_oc[None, :] + cin_offsets[:, None] * sw_ci + w_k_offset
+                w_load_mask = cin_mask[:, None] & oc_mask[None, :]
+                w_tile = tl.load(w_ptrs, mask=w_load_mask, other=0.0).to(tl.bfloat16)
+
+                # Matrix multiply
+                acc = tl.dot(x_tile, w_tile, acc)
+
+    # Store output with coalesced access pattern
+    y_base = y_ptr + n * sy_n
+    y_spatial = od * sy_d + oh * sy_h + ow * sy_w
+    y_ptrs = y_base + y_spatial[:, None] + oc_offsets[None, :] * sy_c
+    out_mask = s_mask[:, None] & oc_mask[None, :]
+    tl.store(y_ptrs, acc.to(tl.bfloat16), mask=out_mask)
+
+
+def _normalize_triple(v, name):
+    if isinstance(v, int):
+        return (v, v, v)
+    if isinstance(v, (list, tuple)) and len(v) == 3:
+        return tuple(int(x) for x in v)
+    raise TypeError(f"{name} must be int or 3-tuple of ints")
+
+
+def _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW, out_pad=(0, 0, 0)):
+    Do = (Di - 1) * sD - 2 * pD + dD * (kD - 1) + out_pad[0] + 1
+    Ho = (Hi - 1) * sH - 2 * pH + dH * (kH - 1) + out_pad[1] + 1
+    Wo = (Wi - 1) * sW - 2 * pW + dW * (kW - 1) + out_pad[2] + 1
+    return Do, Ho, Wo
+
+
+def kernel_function(x, *args, **kwargs):
+    weight = None
+    bias = None
+    stride = None
+    padding = None
+    dilation = None
+
+    if len(args) == 1 and isinstance(args[0], dict):
+        params = args[0]
+        weight = params.get('weight', None)
+        bias = params.get('bias', None)
+        stride = params.get('stride', 1)
+        padding = params.get('padding', 0)
+        dilation = params.get('dilation', 1)
+    else:
+        if len(args) >= 1:
+            weight = args[0]
+        if len(args) == 4:
+            stride, padding, dilation = args[1], args[2], args[3]
+        elif len(args) == 5:
+            bias, stride, padding, dilation = args[1], args[2], args[3], args[4]
+        elif len(args) == 3:
+            stride, padding, dilation = args[1], args[2], kwargs.get('dilation', kwargs.get('d', 1))
+
+        if 'weight' in kwargs:
+            weight = kwargs['weight']
+        if 'bias' in kwargs:
+            bias = kwargs['bias']
+        if 'stride' in kwargs:
+            stride = kwargs['stride']
+        if 'padding' in kwargs:
+            padding = kwargs['padding']
+        if 'dilation' in kwargs:
+            dilation = kwargs['dilation']
+
+    if weight is None:
+        raise TypeError("weight must be provided")
+    stride = stride if stride is not None else 1
+    padding = padding if padding is not None else 0
+    dilation = dilation if dilation is not None else 1
+
+    sD, sH, sW = _normalize_triple(stride, "stride")
+    pD, pH, pW = _normalize_triple(padding, "padding")
+    dD, dH, dW = _normalize_triple(dilation, "dilation")
+
+    assert x.is_cuda and weight.is_cuda
+    if bias is not None:
+        assert bias.is_cuda
+
+    if x.dtype != torch.bfloat16:
+        raise TypeError(f"Expected x to be BF16, got {x.dtype}")
+    if weight.dtype != torch.bfloat16:
+        raise TypeError(f"Expected weight to be BF16, got {weight.dtype}")
+    if bias is not None and bias.dtype != torch.bfloat16:
+        raise TypeError(f"Expected bias to be BF16, got {bias.dtype}")
+
+    N, Cin, Di, Hi, Wi = x.shape
+    Cin_w, Cout, kD, kH, kW = weight.shape
+    if Cin_w != Cin:
+        raise ValueError(f"Incompatible Cin: x has {Cin}, weight has {Cin_w}")
+    if bias is not None and bias.numel() != Cout:
+        raise ValueError("bias must have shape [Cout]")
+
+    Do, Ho, Wo = _compute_conv_transpose3d_output_size(Di, Hi, Wi, kD, kH, kW, sD, sH, sW, pD, pH, pW, dD, dH, dW)
+
+    y = torch.empty((N, Cout, Do, Ho, Wo), device=x.device, dtype=x.dtype)
+
+    sx_n, sx_c, sx_d, sx_h, sx_w = x.stride()
+    sy_n, sy_c, sy_d, sy_h, sy_w = y.stride()
+    sw_ci, sw_co, sw_kd, sw_kh, sw_kw = weight.stride()
+
+    S_total = Do * Ho * Wo
+
+    BLOCK_CIN = 32
+    BLOCK_OC = 64
+    BLOCK_S = 128
+
+    if Cin > BLOCK_CIN:
+        raise NotImplementedError(f"This kernel expects Cin <= {BLOCK_CIN}; got Cin={Cin}")
+
+    grid = (
+        triton.cdiv(S_total, BLOCK_S),
+        triton.cdiv(Cout, BLOCK_OC),
+        N,
+    )
+
+    _conv_transpose3d_fwd_kernel_opt[grid](
+        x, weight, (bias if bias is not None else y), y,
+        N, Cin, Cout,
+        Di, Hi, Wi,
+        Do, Ho, Wo,
+        sD, sH, sW,
+        pD, pH, pW,
+        dD, dH, dW,
+        sx_n, sx_c, sx_d, sx_h, sx_w,
+        sw_ci, sw_co, sw_kd, sw_kh, sw_kw,
+        sy_n, sy_c, sy_d, sy_h, sy_w,
+        K_D=kD, K_H=kH, K_W=kW,
+        BLOCK_S=BLOCK_S,
+        BLOCK_OC=BLOCK_OC,
+        BLOCK_CIN=BLOCK_CIN,
+        BIAS=(bias is not None),
+        num_warps=8,
+        num_stages=4,
+    )
+    return y
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: underutilized
+- Root Cause: {'cause': 'Excessive register usage (166 per thread) severely limits occupancy to 1 block per SM', 'evidence': [{'metric': 'launch__registers_per_thread', 'value': 166, 'interpretation': '166 registers far exceeds the ~32 registers needed for full occupancy, limiting to only 1 block per SM'}, {'metric': 'sm__warps_active.avg.pct_of_peak_sustained_active', 'value': 12.5, 'interpretation': 'Only 12.5% warp occupancy means most SM resources are idle'}, {'metric': 'launch__occupancy_limit_registers', 'value': 1, 'interpretation': 'Registers are the primary occupancy limiter'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 2743.1% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Extremely poor global memory load efficiency causing excessive L1 cache traffic
+**Fix Applied**: Restructure memory access patterns to achieve coalesced loads by having consecutive threads access consecutive memory addresses. Consider tiling the input tensor into shared memory with a coalesced load pattern, then performing strided accesses from shared memory instead of global memory.
+**Performance**: 19.8691ms → 564.8961ms (2743.1% slower)
+**NCU SOL (% of Peak)**: Combined: 97.2%, Compute: 15.8%, Memory: 97.2%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 33.9% faster]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Extremely poor global memory load efficiency causing excessive L1 cache traffic
+**Fix Applied**: Restructure data access patterns to improve coalescing - load contiguous Cin channels together and reorganize the spatial loop to access consecutive memory locations. Consider using shared memory to stage input tiles with proper layout transformation.
+**Performance**: 10.2706ms → 6.7856ms (33.9% faster)
+**NCU SOL (% of Peak)**: Combined: 75.9%, Compute: 14.5%, Memory: 75.9%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 33.5% faster]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Extremely poor global memory load efficiency causing excessive memory transactions
+**Fix Applied**: Restructure memory access patterns to improve coalescing - ensure threads in a warp access contiguous memory locations by reorganizing the spatial indexing (od, oh, ow) computation and loading x_tile with proper striding
+**Performance**: 10.2706ms → 6.8332ms (33.5% faster)
+**NCU SOL (% of Peak)**: Combined: 75.9%, Compute: 14.5%, Memory: 75.9%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 38.2% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Extremely poor global memory load efficiency due to uncoalesced or strided access patterns
+**Fix Applied**: Restructure memory access patterns to load contiguous data by reordering the spatial index computation and using shared memory to stage input tiles, allowing coalesced global loads followed by local reindexing for the convolution computation
+**Performance**: 19.8687ms → 12.2822ms (38.2% faster)
+**NCU SOL (% of Peak)**: Combined: 86.8%, Compute: 10.3%, Memory: 86.8%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 49.1% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Extremely poor global memory load efficiency causing excessive L1 cache pressure
+**Fix Applied**: Restructure the kernel to use shared memory tiling for input and weight tensors, loading contiguous memory blocks cooperatively across threads before computing, rather than performing scattered global loads per thread in the inner loops
+**Performance**: 19.8687ms → 10.1082ms (49.1% faster)
+**NCU SOL (% of Peak)**: Combined: 91.9%, Compute: 10.4%, Memory: 91.9%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Extremely poor global memory load efficiency causing excessive L1 cache traffic
+**Fix Applied**: Restructure memory access patterns to achieve coalesced loads by having consecutive threads access consecutive memory addresses. Consider tiling the input tensor into shared memory with a coalesced load pattern, then performing strided accesses from shared memory instead of global memory.
+**Expected**: Expected memory efficiency to improve with coalesced access patterns, reducing L1 cache traffic and improving overall kernel performance by reducing memory bottleneck
+**Actual**: Performance degraded catastrophically by 2743%, going from 19.87ms to 564.90ms. Memory SOL increased to 97.2% while compute dropped to 15.8%, indicating the kernel became even more memory-bound (-2743.1%)
+**Analysis**: The diagnosis of memory inefficiency was likely correct given the original bottleneck analysis. However, the fix implementation appears to have introduced severe overhead. Using shared memory with tiling for this operation may have added excessive synchronization barriers, increased register pressure, or the shared memory access pattern itself became inefficient. The 97.2% memory SOL suggests the kernel is now spending almost all its time on memory operations, possibly due to bank conflicts in shared memory or inefficient shared memory loading patterns. The dramatic slowdown indicates the cure was far worse than the disease.
+**Lessons**:
+  - Shared memory tiling is not always beneficial - the overhead of loading to shared memory and synchronization can exceed the benefits
+  - A 97.2% memory SOL with such poor performance suggests shared memory bank conflicts or inefficient shared memory usage
+  - Coalescing global memory loads is important, but the implementation approach matters significantly
+  - Need to verify shared memory access patterns don't introduce new bottlenecks like bank conflicts
+  - Dramatic performance regressions indicate fundamental implementation issues, not just suboptimal tuning
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Extremely poor global memory load efficiency causing excessive L1 cache traffic
+**Fix Applied**: Restructure data access patterns to improve coalescing - load contiguous Cin channels together and reorganize the spatial loop to access consecutive memory locations. Consider using shared memory to stage input tiles with proper layout transformation.
+**Expected**: Improving memory coalescing and data access patterns should reduce L1 cache traffic and improve global memory load efficiency, leading to better memory bandwidth utilization and faster execution
+**Actual**: Performance improved by 33.9% (10.27ms → 6.79ms), and the kernel transitioned from being underutilized to being clearly memory-bound (75.9% Memory SOL vs 14.5% Compute SOL) (+33.9%)
+**Analysis**: The diagnosis of poor global memory load efficiency was correct. By restructuring data access to load contiguous Cin channels and reorganizing spatial loops for consecutive memory access, we achieved much better coalescing. The Memory SOL jumping to 75.9% indicates the memory subsystem is now being utilized effectively rather than being bottlenecked by inefficient access patterns. The low Compute SOL (14.5%) confirms the kernel is now properly memory-bound rather than artificially limited by cache thrashing.
+**Lessons**:
+  - Poor memory coalescing can severely underutilize both compute and memory resources, masking the true bottleneck
+  - Restructuring loops to access contiguous memory locations can yield significant speedups (33%+)
+  - When a kernel transitions from 'underutilized' to showing clear memory-bound behavior (high Memory SOL), the access pattern fix was successful
+  - Loading contiguous channel data together is an effective pattern for convolution kernels
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Extremely poor global memory load efficiency causing excessive memory transactions
+**Fix Applied**: Restructure memory access patterns to improve coalescing - ensure threads in a warp access contiguous memory locations by reorganizing the spatial indexing (od, oh, ow) computation and loading x_tile with proper striding
+**Expected**: Improving memory coalescing should reduce excessive memory transactions and improve memory bandwidth utilization, leading to significant performance gains
+**Actual**: Performance improved by 33.5% (10.27ms → 6.83ms), and memory SOL increased dramatically to 75.9%, confirming the memory access pattern was the bottleneck (+33.5%)
+**Analysis**: The diagnosis correctly identified poor global memory load efficiency as the root cause. By restructuring memory access patterns to ensure threads in a warp access contiguous memory locations, we achieved much better coalescing. The Memory SOL jumping to 75.9% confirms we're now efficiently utilizing memory bandwidth. The Compute SOL at 14.5% indicates the kernel is now memory-bound rather than underutilized, which is the expected behavior after fixing coalescing issues.
+**Lessons**:
+  - Memory coalescing is critical for convolution kernels - uncoalesced accesses can cause 3-4x performance degradation
+  - Spatial indexing order (od, oh, ow) directly impacts memory access patterns and must be carefully designed
+  - Moving from underutilized to memory-bound (75.9% Memory SOL) is a valid optimization trajectory
+  - Proper striding when loading tiles ensures threads access contiguous memory addresses
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Extremely poor global memory load efficiency due to uncoalesced or strided access patterns
+**Fix Applied**: Restructure memory access patterns to load contiguous data by reordering the spatial index computation and using shared memory to stage input tiles, allowing coalesced global loads followed by local reindexing for the convolution computation
+**Expected**: Fixing uncoalesced memory access patterns should significantly improve memory throughput and reduce overall execution time, with memory remaining the bottleneck but operating more efficiently
+**Actual**: Performance improved by 38.2% (19.87ms → 12.28ms), and memory remains the dominant bottleneck at 86.8% SOL while compute is only 10.3% SOL, indicating successful memory access optimization (+38.2%)
+**Analysis**: The diagnosis was correct - the kernel was memory-bound with poor global memory load efficiency. The fix of restructuring memory access patterns with shared memory tiling successfully improved coalescing. The 38.2% improvement is substantial and consistent with fixing a major memory inefficiency. The NCU metrics confirm memory is still the bottleneck (86.8% vs 10.3% compute), which is expected - we made memory access more efficient but didn't change the fundamental memory-bound nature of the kernel. The high memory SOL actually indicates we're now utilizing memory bandwidth much better.
+**Lessons**:
+  - Coalesced memory access patterns are critical for GPU performance - fixing this alone yielded 38% improvement
+  - Shared memory tiling is an effective technique for converting strided global accesses into coalesced loads
+  - A kernel can remain memory-bound after optimization but still show significant speedup from improved access efficiency
+  - High memory SOL (86.8%) after optimization indicates we're now effectively utilizing available bandwidth
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Extremely poor global memory load efficiency causing excessive L1 cache pressure
+**Fix Applied**: Restructure the kernel to use shared memory tiling for input and weight tensors, loading contiguous memory blocks cooperatively across threads before computing, rather than performing scattered global loads per thread in the inner loops
+**Expected**: Shared memory tiling should significantly reduce global memory traffic by enabling cooperative loading and data reuse, improving memory efficiency and reducing L1 cache pressure
+**Actual**: Performance improved by 49.1% (19.87ms → 10.11ms), confirming the memory bottleneck was correctly identified. The kernel now shows 91.9% memory SOL utilization, indicating efficient memory access patterns (+49.1%)
+**Analysis**: The diagnosis was correct - scattered global loads were causing poor memory efficiency. The shared memory tiling fix directly addressed this by: (1) enabling coalesced memory access through cooperative thread loading, (2) reducing redundant global memory fetches through data reuse in shared memory, (3) alleviating L1 cache pressure by staging data in shared memory. The 49.1% improvement and high memory SOL (91.9%) confirm the fix was effective. The low compute SOL (10.4%) indicates the kernel is now memory-bound with efficient memory access, but compute resources are underutilized.
+**Lessons**:
+  - Shared memory tiling is highly effective for addressing scattered global memory access patterns
+  - A 49% improvement from a single memory optimization confirms memory access patterns can dominate performance
+  - High memory SOL (91.9%) with low compute SOL (10.4%) indicates successful memory optimization but reveals new optimization opportunity in compute
+  - Cooperative loading across threads is essential for achieving coalesced memory access
+
+
+Guidance for this round:
+- AVOID: Blindly adding shared memory tiling without analyzing whether it's appropriate for the access pattern; Adding synchronization barriers without considering their cost relative to the benefit; Restructuring memory access in ways that increase total memory traffic or add bank conflicts; Strided memory access patterns that cause poor coalescing; Loop orderings that scatter memory accesses across non-contiguous locations; Assuming compute is the bottleneck when memory access patterns are inefficient; Random or strided memory access patterns where threads in a warp access non-contiguous addresses; Spatial indexing computations that don't consider warp-level memory access patterns; Strided or uncoalesced global memory access patterns in convolution-like operations; Direct indexing into global memory for spatial operations without staging through shared memory; Per-thread scattered global memory loads in inner loops; Accessing global memory without considering coalescing; Ignoring shared memory for data that will be reused across threads- PRIORITIZE: Revert to original implementation and apply more targeted coalescing fixes; Analyze if the operation can benefit from vectorized loads (float4) instead of shared memory tiling; Consider if the strided access pattern is fundamental to the algorithm and optimize differently; Profile shared memory bank conflicts if using shared memory; Try simpler memory optimizations like read-only cache (__ldg) before complex tiling schemes; Now that kernel is memory-bound at 75.9%, consider shared memory tiling to reduce global memory traffic; Explore register blocking to increase arithmetic intensity; Consider vectorized loads (float4) to further improve memory throughput; Look into data layout transformations (NHWC vs NCHW) for better access patterns; Now that memory is well-utilized (75.9%), focus on compute optimizations or reducing memory traffic; Consider shared memory tiling to reduce global memory accesses since we're memory-bound; Explore data reuse opportunities in convolution to improve arithmetic intensity; Look into register blocking or loop unrolling to hide remaining memory latency; Since memory is still the bottleneck at 86.8%, consider reducing memory traffic through data reuse or algorithmic changes; Explore increasing arithmetic intensity to better balance compute vs memory; Consider using texture memory or L1 cache hints for read-only convolution inputs; Look into register-level optimizations to reduce shared memory bank conflicts if present; Increase compute intensity per memory load to improve compute SOL; Consider larger tile sizes to amortize memory latency over more computation; Explore instruction-level parallelism (ILP) to overlap memory and compute operations; Look into register blocking to further reduce shared memory bandwidth pressure; Consider double buffering to overlap data loading with computation
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

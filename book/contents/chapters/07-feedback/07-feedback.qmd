@@ -110,9 +110,11 @@ wv_fs_year = max(_fs7)
 wv_fs_last = _fs7[wv_fs_year]
 # Check the retained survey range and endpoints.
 assert (wv_min, wv_max, wv_first, wv_last, wv_fs_year, wv_fs_last) == (53, 57, 2010, 2020, 2024, 14)
+# The prose says the mean exceeded half of project time in each survey from 2014 to 2020.
+assert all(_wv7[y] > 50 for y in _wv7 if 2014 <= y <= 2020)
 ```
 
-Functional coverage adds a separate pressure to the scheduling problem. A sequential circuit with $|S|$ Boolean state bits has at most $2^{|S|}$ possible states. Reset and input assumptions restrict the reachable subset, but random stimulus can still leave corner-case deadlocks and races unexercised, so adding test vectors alone cannot prove their absence. Verification has taken more than half of project time in industry surveys (@sec-moonshot), and first-silicon success fell to `{python} wv_fs_last`% of projects in `{python} wv_fs_year` [@Foster2025WilsonVerification2024]. Faster candidate generation therefore increases demand for both functional verification and physical signoff unless checks matched to each stage filter the candidate pool. Evaluation budgets are bounded by available compute and, in commercial flows, by tool license seats. A generator that sends every raw proposal straight into synthesis and signoff timing wastes scarce licenses on candidates that a parser or linter could have rejected in seconds.
+Functional coverage adds a separate pressure to the scheduling problem. A sequential circuit with $|S|$ Boolean state bits has at most $2^{|S|}$ possible states. Reset and input assumptions restrict the reachable subset, but random stimulus can still leave corner-case deadlocks and races unexercised, so adding test vectors alone cannot prove their absence. Mean verification time exceeded half of project time in each Wilson Research Group survey from 2014 to 2020 [@Foster2021WilsonPart8], and first-silicon success fell to `{python} wv_fs_last`% of surveyed projects in the `{python} wv_fs_year` Siemens-sponsored Wilson Research Group study [@Foster2025WilsonVerification2024], a figure that reaches beyond functional escapes, since the same survey's 2022 edition lists logic or functional flaws as the leading cause of respins alongside analog tuning, safety, yield, and reliability flaws [@Foster2023WilsonPart12]. Faster candidate generation therefore increases demand for both functional verification and physical signoff unless checks matched to each stage filter the candidate pool. Evaluation budgets are bounded by available compute and, in commercial flows, by tool license seats. A generator that sends every raw proposal straight into synthesis and signoff timing wastes scarce licenses on candidates that a parser or linter could have rejected in seconds.
 
 Multi-fidelity screening [@PeherstorferWillcoxGunzburger2018Multifidelity] organizes these checks into the progressive funnel of @fig-synthesis-verification-funnel. Fast parsing, linting, interface compliance, and assertion checks reject broken candidates before expensive STA and physical verification. Early syntax errors may call for a generator to revise the source or abstract syntax tree (AST); a late timing near-miss may permit a localized physical engineering change order (ECO), such as buffer insertion or gate sizing. The failure determines which diagnosis is needed, while the permitted repair depends on the search's allowed actions.
 
@@ -174,14 +176,22 @@ s22_mapped_n = len(_s22_maps)
 s22_rtl_n = sum("Possible RTL bug" in r["reported_explanation"] for r in _s22_maps)
 s22_non_rtl_n = s22_mapped_n - s22_rtl_n
 assert (s22_rtl_n, s22_non_rtl_n) == (1, 44)
+# Account for every failure in the two runs, not only the mapped ones.
+_s22_ret = list(_csv7ib.DictReader((_s22_dir / "retriaged-groups.csv").open(encoding="utf-8")))
+s22_fail_tot = s22_r1_fail + s22_r2_fail
+s22_unmapped = s22_fail_tot - s22_mapped_n
+s22_excluded = sum(int(r["first_failed"]) for r in _s22_ret)
+s22_compared = s22_r2_fail - sum(r["run"] == "second" for r in _s22_maps)
+assert s22_excluded + s22_compared == s22_unmapped
 ```
 
-Public RTL regression logs show why aggregate pass rates and individual failures both need interpretation. In one retained OpenTitan Ibex nightly report, `{python} s16_pass` of `{python} s16_total` runs pass (`{python} s16_pct`%), yet `{python} s16_nonpass_groups` test groups record failures [@LowRISCIbex2026OpenTitanRegression]. A high aggregate rate does not resolve those cases. Nor is each failure an RTL defect. The issue author's `{python} s22_mapped_n` explicit case-to-signature mappings in Ibex issue 2187 attribute `{python} s22_non_rtl_n` cases to generator timeouts, stale testbench checkers, co-simulation configuration, or host timeouts, and only `{python} s22_rtl_n` to a possible RTL bug [@LowRISCIbex2024Issue2187]. Treating every nonpass as a hardware defect would train the search on mislabeled feedback.
+Public RTL regression logs show why aggregate pass rates and individual failures both need interpretation. In one retained OpenTitan Ibex nightly report, `{python} s16_pass` of `{python} s16_total` runs pass (`{python} s16_pct`%), yet `{python} s16_nonpass_groups` test groups record failures [@LowRISCIbex2026OpenTitanRegression]. A high aggregate rate does not resolve those cases. Nor is each failure an RTL defect. A local regression reported in Ibex issue 2187 in 2024 shows why. Its two runs failed `{python} s22_r1_fail` of `{python} s22_r1_tot` cases and `{python} s22_r2_fail` of `{python} s22_r2_tot`, and the issue author mapped `{python} s22_mapped_n` of those `{python} s22_fail_tot` failures to numbered signatures [@LowRISCIbex2024Issue2187]. That triage attributes `{python} s22_non_rtl_n` mapped cases to causes such as generator timeouts, flawed assertions, stale testbench checkers, co-simulation configuration, and host timeouts, and only `{python} s22_rtl_n` to a possible RTL bug. The other `{python} s22_unmapped` failures have no case-by-case mapping. The author excluded `{python} s22_excluded` first-run failures in four test families because fixes had been made, and, under stated assumptions, matched `{python} s22_compared` second-run failures outside the families it examined in detail to first-run signatures. These remain the author's diagnoses, which we did not reproduce. Treating every nonpass as a hardware defect would train the search on mislabeled feedback.
 
 ```{python}
 #| echo: false
 # Nightly history: data/studies/28-ibex-nightly-history/derived/ (nightly.csv, plateaus.csv)
 import datetime as _dt7n
+import json as _json7n
 
 _s28_dir = _root7ib / "data" / "studies" / "28-ibex-nightly-history" / "derived"
 _s28_n = list(_csv7ib.DictReader((_s28_dir / "nightly.csv").open(encoding="utf-8")))
@@ -190,20 +200,124 @@ _s28_steady = min(_s28_p, key=lambda r: float(r["pass_pct_sd"]))
 s28_reports = f"{len(_s28_n):,}"
 s28_first = _s28_n[0]["date"][:4]
 s28_last = _s28_n[-1]["date"][:4]
-s28_plateaus = ["zero", "one", "two", "three", "four", "five"][len(_s28_p)]
+_s28_a = list(_csv7ib.DictReader((_s28_dir / "step_attribution.csv").open(encoding="utf-8")))
+# Sign-aware: the group must move with the net change and supply most of it.
+assert len(_s28_a) == 2 and all(
+    float(r["top_group_change"]) / float(r["net_change_nonpassing_runs"]) > 0.5 for r in _s28_a
+)
+assert len({r["top_group"] for r in _s28_a}) == 1
+# The first step against the suite: the same 14-report windows as plateaus.py.
+_s28_i = next(i for i, r in enumerate(_s28_n) if r["date"] == _s28_a[0]["shift_report_date"])
+_s28_before, _s28_after = _s28_n[_s28_i - 14 : _s28_i], _s28_n[_s28_i : _s28_i + 14]
+_s28_mean = lambda rows, key: sum(int(r[key]) for r in rows) / len(rows)
+_s28_rate = lambda fails, runs: 100 * (1 - fails / runs)
+_s28_fb, _s28_ra = _s28_mean(_s28_before, "nonpassing_runs"), _s28_mean(_s28_after, "total_runs")
+_s28_rise = _s28_rate(_s28_mean(_s28_after, "nonpassing_runs"), _s28_ra) - _s28_rate(_s28_fb, _s28_mean(_s28_before, "total_runs"))
+s28_step_rise = f"{_s28_rise:.1f}"
+s28_step_denominator = f"{_s28_rate(_s28_fb, _s28_ra) - _s28_rate(_s28_fb, _s28_mean(_s28_before, 'total_runs')):.1f}"
+_s28_last_before, _s28_full = _s28_before[-1], next(r for r in _s28_after if r["total_runs"] == _s28_after[-1]["total_runs"])
+s28_step_new_groups = int(_s28_full["n_groups"]) - int(_s28_last_before["n_groups"])
+s28_step_runs_before = f"{int(_s28_last_before['total_runs']):,}"
+s28_step_runs_after = f"{int(_s28_full['total_runs']):,}"
+assert (_dt7n.date.fromisoformat(_s28_full["date"]) - _dt7n.date.fromisoformat(_s28_last_before["date"])).days <= 14
 s28_steady_first = _dt7n.date.fromisoformat(_s28_steady["first_date"]).strftime("%B %Y")
 s28_steady_last = _dt7n.date.fromisoformat(_s28_steady["last_date"]).strftime("%B %Y")
 s28_steady_sd = f"{float(_s28_steady['pass_pct_sd']):.1f}"
 s28_steady_med = f"{float(_s28_steady['failing_groups_median']):.0f}"
 s28_steady_distinct = _s28_steady["distinct_failing_groups"]
 s28_steady_change = f"{float(_s28_steady['mean_groups_changed_between_reports']):.1f}"
+# The rule behind "most" and the segmentation behind the steadiest stretch, each with a reading
+# that changes the printed result. Other readings: data/reimplementations/02-ibex-nightly-triage/result.json.
+_s28_share = [float(r["top_group_change"]) / float(r["net_change_nonpassing_runs"]) for r in _s28_a]
+assert _s28_share[0] > 1 and 0.5 < _s28_share[1] < 1
+s28_second_share = f"{100 * _s28_share[1]:.0f}"
+_s28_alt = _json7n.loads((_root7ib / "data" / "reimplementations" / "02-ibex-nightly-triage" / "result.json").read_text(encoding="utf-8"))
+_s28_big = _s28_alt["largest_steps_night_to_night"][0]
+assert _s28_big["top_group_share"] < 0.5
+s28_night_share = f"{100 * _s28_big['top_group_share']:.0f}"
+_s28_j = next(i for i, r in enumerate(_s28_n) if r["date"] == _s28_big["date"])
+s28_night_year = _s28_big["date"][:4]
+s28_night_before = f"{float(_s28_n[_s28_j - 1]['pass_pct']):.1f}"
+s28_night_low = f"{float(_s28_n[_s28_j]['pass_pct']):.1f}"
+s28_night_after = f"{float(_s28_n[_s28_j + 1]['pass_pct']):.1f}"
+# The steadiest stretch under every reading in the reimplementation.
+_s28_st = [r["steadiest_stats"] for r in _s28_alt["readings"]]
+_s28_span = lambda key: (min(r[key] for r in _s28_st), max(r[key] for r in _s28_st))
+s28_alt_n = len(_s28_st)
+_s28_starts = _s28_span("start")
+s28_alt_first = _dt7n.date.fromisoformat(_s28_starts[0]).strftime("%B")
+s28_alt_last = _dt7n.date.fromisoformat(_s28_starts[1]).strftime("%B %Y")
+assert _s28_starts[0][:4] == _s28_starts[1][:4]
+s28_alt_sd_lo, s28_alt_sd_hi = (f"{v:.2f}" for v in _s28_span("sd_pct_sample"))
+s28_alt_med_lo, s28_alt_med_hi = (f"{v:.0f}" for v in _s28_span("median_failing"))
+s28_alt_distinct_lo, s28_alt_distinct_hi = _s28_span("distinct_failing")
+s28_alt_change_lo, s28_alt_change_hi = (f"{v:.1f}" for v in _s28_span("churn_mean"))
+assert s28_alt_distinct_hi == int(s28_steady_distinct)  # The prose says the primary value is the top of the range.
+assert all(r["distinct_failing"] > r["median_failing"] for r in _s28_st)  # "Under every reading".
+
+# The shifts plateaus.py finds, continued past its cut of three.
+_s28_dates = [r["date"] for r in _s28_n]
+_s28_iso = [_dt7n.date.fromisoformat(d) for d in _s28_dates]
+_s28_y = [float(r["pass_pct"]) for r in _s28_n]
+_s28_shift = lambda i: sum(_s28_y[i : i + 14]) / 14 - sum(_s28_y[i - 14 : i]) / 14
+_s28_picked = []
+for _i in sorted(range(14, len(_s28_y) - 14), key=lambda i: (abs(_s28_shift(i)), i), reverse=True):
+    if all(abs((_s28_iso[_i] - _s28_iso[j]).days) > 60 for j in _s28_picked):
+        _s28_picked.append(_i)
+    if len(_s28_picked) == 5:
+        break
+assert [_s28_dates[i] for i in _s28_picked[:2]] == [r["shift_report_date"] for r in _s28_a]
+assert {_s28_dates[i] for i in _s28_picked[:3]} == {r["first_date"] for r in _s28_p[1:]}
+_s28_small = sorted(_s28_picked[3:])
+s28_small_early, s28_small_late = (f"{abs(_s28_shift(i)):.1f}" for i in _s28_small)
+s28_small_early_when, s28_small_late_when = (_s28_iso[i].strftime("%B %Y") for i in _s28_small)
+# Attribution at the third shift, by the same 14-report windows.
+_s28_groups = {}
+for _c in _csv7ib.DictReader((_s28_dir / "group_night.csv").open(encoding="utf-8")):
+    _s28_groups.setdefault(_c["test_name"], {})[_c["date"]] = int(_c["total_runs"]) - int(_c["passing_runs"])
+_s28_k = _s28_picked[2]
+_s28_b3, _s28_a3 = _s28_dates[_s28_k - 14 : _s28_k], _s28_dates[_s28_k : _s28_k + 14]
+_s28_ch3 = {
+    g: sum(n.get(d, 0) for d in _s28_a3) / 14 - sum(n.get(d, 0) for d in _s28_b3) / 14 for g, n in _s28_groups.items()
+}
+assert all(len({d in n for d in _s28_b3 + _s28_a3}) == 1 for n in _s28_groups.values())  # A group absent on one window night is absent on all 28, so .get(d, 0) adds nothing to its change.
+_s28_net3 = sum(_s28_ch3.values())
+_s28_top = _s28_a[0]["top_group"]
+assert _s28_net3 < 0 < _s28_ch3[_s28_top]  # The group that drove the two largest steps moves against this one.
+_s28_share3 = min(_s28_ch3.values()) / _s28_net3
+assert _s28_share3 < 0.5  # No group supplies most of the net change.
+s28_third_when = _s28_iso[_s28_k].strftime("%B %Y")
+s28_third_rise = f"{_s28_shift(_s28_k):.1f}"
+s28_third_net = f"{-_s28_net3:.1f}"
+s28_third_group = f"{_s28_ch3[_s28_top]:.1f}"
+s28_third_share = f"{100 * _s28_share3:.0f}"
+# What changed across the two largest steps: reports on either side and the commits between them.
+_s28_w = _json7n.loads((_s28_dir / "step_commits.json").read_text(encoding="utf-8"))["windows"]
+assert [w["after"]["date"] for w in _s28_w] == [r["shift_report_date"] for r in _s28_a]
+_s28_fail = lambda rep: rep["group_total"] - rep["group_passing"]
+assert all(_s28_fail(w[k]) == _s28_groups[_s28_top][w[k]["date"]] for w in _s28_w for k in ("before", "after"))
+assert _s28_w[0]["after"]["commit"] in (_s22_dir / "source" / "issue-2187-body.md").read_text(encoding="utf-8")
+assert _s28_w[1]["rtl_files"] == ["rtl/ibex_top.sv"]
+assert _s28_w[1]["after"]["group_failure_logs"] == {"cosim_mismatch": _s28_fail(_s28_w[1]["after"])}
+s28_w1_commits, s28_w2_commits = (len(w["commits"]) for w in _s28_w)
+s28_w1_before, s28_w1_after = _s28_fail(_s28_w[0]["before"]), _s28_fail(_s28_w[0]["after"])
+s28_w1_runs = _s28_w[0]["after"]["group_total"]
+s28_w2_before, s28_w2_after = _s28_fail(_s28_w[1]["before"]), _s28_fail(_s28_w[1]["after"])
 ```
 
-That report repeated over several years shows why neither the aggregate nor a single night describes the suite. Across `{python} s28_reports` nightly reports from `{python} s28_first` to `{python} s28_last`, the aggregate moves in steps between `{python} s28_plateaus` plateaus, for reasons the reports do not record, while the failing groups keep changing inside each plateau (@fig-ch07-ibex-nightly-churn) [@LowRISCIbex2026NightlyArchive]. In the steadiest plateau, from `{python} s28_steady_first` to `{python} s28_steady_last`, the nightly pass rate has a standard deviation of only `{python} s28_steady_sd` percentage points and a median of `{python} s28_steady_med` groups fail on any night. Over the same months `{python} s28_steady_distinct` distinct groups failed at least once, and consecutive reports differ by about `{python} s28_steady_change` groups.
+That report repeated over several years shows why neither the aggregate nor a single night describes the suite. Across `{python} s28_reports` nightly reports from `{python} s28_first` to `{python} s28_last`, the aggregate moves in steps, while the failing groups keep changing between them (@fig-ch07-ibex-nightly-churn) [@LowRISCIbex2026NightlyArchive]. We locate those steps by comparing the means of the 14 reports on either side of each report and splitting the series at the three largest shifts at least 60 days apart. Three is our choice, not a finding, and it leaves smaller shifts of `{python} s28_small_early` points in `{python} s28_small_early_when` and `{python} s28_small_late` points in `{python} s28_small_late_when` inside their segments.
 
-![**A steady aggregate pass rate can hide a changing set of failing checks.** (a) Nightly aggregate pass rate of the OpenTitan-configuration Ibex regression. (b) Test groups by night, with the groups that fail most often at the top. Nonpassing results include timeouts and simulator diagnostics and are not counts of RTL defects; unfilled areas mark missing reports or groups absent from the suite [@LowRISCIbex2026NightlyArchive].](images/fig-ch07-ibex-nightly-churn){#fig-ch07-ibex-nightly-churn width="100%" fig-alt="Two stacked charts sharing a time axis from 2023 to 2026. The upper line chart shows the nightly pass rate moving in steps, near 93 percent until mid 2024, near 98 percent for a year, then near 96 percent. The lower raster shows test groups as rows and nights as columns, with failing cells dense in the top rows and scattered intermittently through the middle rows."}
+Read this way, one large test group accounts for most of the two largest steps. Between the 14-report windows, its change in nonpassing runs exceeds the net change at the first step, because the other groups moved the opposite way, and equals `{python} s28_second_share`% of the net change at the second. Neither step lines up with a functional RTL change. The first report after the first step tested the same commit as the second regression in issue 2187, and the `{python} s28_w1_commits` commits since the preceding report add a test and merge a pull request of verification fixes that the issue's author made for this group and three others [@LowRISCIbex2024Issue2187]. Their only RTL edits rename and add the trace ports that the checkers read. Between those two reports the group falls from `{python} s28_w1_before` nonpassing runs of `{python} s28_w1_runs` to `{python} s28_w1_after`. The first step also coincides with a change to the suite, as `{python} s28_step_new_groups` groups enter and nightly runs rise from `{python} s28_step_runs_before` to `{python} s28_step_runs_after` within two weeks. With failures held fixed, that larger denominator explains only about `{python} s28_step_denominator` of the `{python} s28_step_rise` percentage points between the neighboring 14-report means.
 
-A few groups fail on most nights, while many others fail intermittently and recover, so two nights with the same pass rate can rest on different failures. A search that reads only the aggregate would treat those nights as interchangeable, and one that reads a single night could mistake an intermittent failure for a property of the design. Neither panel establishes that the RTL changed, so each nonpass still needs the triage described above.
+The second step falls in a window of `{python} s28_w2_commits` commits that change the testbench's debug-module setup and update the co-simulator. Their only RTL edit removes two parameter assertions, yet the group goes from `{python} s28_w2_before` nonpassing run to `{python} s28_w2_after` that night, every one a co-simulation mismatch. Both windows update the co-simulator and we bisected neither, so each bounds the cause without isolating it, and we have not established why the second moved the group. Even so, the two largest movements in the aggregate fall across commits that changed the verification environment rather than the design.
+
+That attribution does not extend past those two steps. At the third shift, in `{python} s28_third_when`, the pass rate rises `{python} s28_third_rise` points and net nonpassing runs fall by `{python} s28_third_net`, yet the same group rises by `{python} s28_third_group`, and the group that fell furthest supplies only `{python} s28_third_share`% of the net change. Nor does it hold between neighboring reports. The largest change between consecutive reports, a drop from `{python} s28_night_before`% to `{python} s28_night_low`% in `{python} s28_night_year` that recovered to `{python} s28_night_after`% at the next report, has no such group, since the one that moved most accounts for only `{python} s28_night_share`% of it.
+
+The steadiest stretch, the segment with the smallest standard deviation, runs from `{python} s28_steady_first` to `{python} s28_steady_last`. In it the nightly pass rate has a standard deviation of only `{python} s28_steady_sd` percentage points, and a median of `{python} s28_steady_med` groups fail on any night. Over the same months `{python} s28_steady_distinct` distinct groups failed at least once, and the failing sets of consecutive reports differ by a mean of `{python} s28_steady_change` groups. We fixed the three-shift split and this selection rule after viewing the series, so a separate reimplementation repeated the selection under `{python} s28_alt_n` readings with other segment counts, smoothing, and selection rules. The stretch then starts between `{python} s28_alt_first` and `{python} s28_alt_last`, its standard deviation runs from `{python} s28_alt_sd_lo` to `{python} s28_alt_sd_hi` points, the median from `{python} s28_alt_med_lo` to `{python} s28_alt_med_hi` groups, the distinct groups from `{python} s28_alt_distinct_lo` to `{python} s28_alt_distinct_hi`, and the mean difference from `{python} s28_alt_change_lo` to `{python} s28_alt_change_hi`. Our distinct count sits at the top of that range. Under every reading, a quiet aggregate sits above a changing set of failing groups.
+
+![**A steady aggregate pass rate can hide a changing set of failing checks.** (a) Nightly aggregate pass rate of the OpenTitan-configuration Ibex regression. (b) Test groups by night, with the groups that fail most often at the top. Nonpassing results include timeouts and simulator diagnostics and are not counts of RTL defects; unfilled areas mark missing reports or groups absent from the suite [@LowRISCIbex2026NightlyArchive].](images/fig-ch07-ibex-nightly-churn){#fig-ch07-ibex-nightly-churn width="100%" fig-alt="Two stacked charts sharing a time axis from 2023 to 2026. The upper line chart shows the nightly pass rate moving in steps, near 93 percent until mid 2024, near 98 percent for a year, near 97 percent until late 2025, then near 95 percent. The lower raster shows test groups as rows and nights as columns, with failing cells dense in the top rows and scattered intermittently through the middle rows."}
+
+A minority of groups fail on most nights, while many others fail intermittently and recover, so two nights with the same pass rate can rest on different failures. A search that reads only the aggregate would treat those nights as interchangeable, and one that reads a single night could mistake an intermittent failure for a property of the design. Neither panel establishes that the RTL changed, so each nonpass still needs the triage described above.
 
 ::: {.callout-lighthouse title="A returned value must qualify before it becomes feedback"}
 **Context.** Consider a hypothetical return from evaluating a prospective L2 cache configuration for the Lighthouse XR subsystem under a 3\ W thermal design power envelope. Suppose static UPF checks pass, but a bounded model checking (BMC) run fails during tool setup, and a thermal report omits raw trace lineage. These statuses illustrate routing; the Lighthouse study has not executed.
@@ -257,7 +371,19 @@ Even when a solver reports that a property holds, the check is meaningless if th
 
 [^fn-vacuity-antecedent-c07]: **Vacuous assertion passes**: In formal logic, a conditional implication $A \implies B$ evaluates to true whenever the antecedent $A$ is false. In hardware assertion checking, if environment assumptions or upstream wiring permanently suppress an antecedent signal (such as a request handshake never asserting), the assertion passes with a nominal 100% formal score while leaving the required consequence $B$ completely unexercised. Formal signoff flows therefore commonly pair assertions with cover properties that show each antecedent can fire under the environment assumptions.
 
-The risk of vacuous or malformed properties increases when assertions are drafted automatically. Evaluations of language-model assertion generators such as AssertLLM find a nontrivial share of syntactically invalid or semantically wrong assertions [@YanEtAl2025AssertLLM; @PulavarthiEtAl2025AssertionGeneration]. Generated assertions therefore require syntactic and semantic qualification alongside seeded-mutant checks that test whether the assertion suite actually catches injected RTL bugs. Mutation testing measures a fault sensitivity that antecedent reachability alone cannot establish (@sec-semantic-rtl-defects).
+```{python}
+#| echo: false
+# AssertLLM generated, syntax-correct, and formally verified assertion counts,
+# read from data/datasets/chapter7-assertllm-table3.csv (Table 3 of Yan et al.).
+_all_path7 = _Pathw7(_apw7.__file__).resolve().parents[2] / "data" / "datasets" / "chapter7-assertllm-table3.csv"
+with _all_path7.open(encoding="utf-8") as _all_f7:
+    _all7 = list(_csvw7.DictReader(line for line in _all_f7 if not line.startswith("#")))
+all_gen = sum(int(r["generated"]) for r in _all7)
+all_fpv_fail = all_gen - sum(int(r["fpv_passed"]) for r in _all7)
+assert sum(int(r["syntax_correct"]) for r in _all7) == all_gen  # The prose says all passed syntax checks.
+```
+
+Assertions drafted automatically can also fail in a more basic way, by being malformed or wrong. Commercial language models generate a considerable fraction of syntactically and semantically incorrect assertions [@PulavarthiEtAl2025AssertionGeneration]. A purpose-built generator can remove the syntax errors without closing the semantic gap. Across three designs, all `{python} all_gen` assertions from AssertLLM passed syntax checks, yet `{python} all_fpv_fail` failed formal property verification against designs the authors assumed to be bug-free [@YanEtAl2025AssertLLM]. Generated assertions therefore require syntactic and semantic qualification alongside seeded-mutant checks that test whether the assertion suite actually catches injected RTL bugs. Mutation testing measures a fault sensitivity that antecedent reachability alone cannot establish (@sec-semantic-rtl-defects).
 
 Whether a solver uses bounded unrolling, $k$-induction, or PDR/IC3, @tbl-formal-result-status maps each returned status to the engineering action it can support.
 
@@ -282,11 +408,11 @@ Dynamic verification combines constrained-random simulation, functional coverage
 Sampled simulation can miss a defect even after extensive testing. The Pentium floating-point division (FDIV) flaw illustrates why rare inputs require more than additional random stimulus.
 
 ::: {.callout-war-story title="The Pentium FDIV flaw and the limit of sampled testing"}
-**The claim.** The Pentium floating-point divider had passed its pre-silicon verification and shipped [@SharangpaniBarton1994FDIV; @Edelman1997PentiumDivision; @Colwell2006PentiumChronicles].
+**The claim.** Early Pentium steppings shipped with a flawed floating-point divider, and Intel reports that it discovered the flaw through ongoing product testing [@SharangpaniBarton1994FDIV], while @Edelman1997PentiumDivision credits Nicely with finding the bug.
 
-**The gap.** Five entries in its Sweeney-Robertson-Tocher (SRT) division lookup table were incorrect. Intel estimated that the defect corrupted about one random division in 9 billion, making it difficult to expose through sampled simulation [@SharangpaniBarton1994FDIV; @Edelman1997PentiumDivision].
+**The gap.** Five entries in its Sweeney-Robertson-Tocher (SRT) division lookup table were incorrect [@SharangpaniBarton1994FDIV; @Edelman1997PentiumDivision]. Intel estimated that about one in 9 billion randomly fed divide or remainder instructions produced an inaccurate result [@SharangpaniBarton1994FDIV]. At that rate random stimulus rarely exposes the flaw, and @Edelman1997PentiumDivision calls it a difficult mistake to catch.
 
-**The lesson.** Sampled testing can expose a fault without establishing its absence across the input space. Intel later used formal verification to validate the Core i7 execution engine [@KaivolaEtAl2009Corei7Formal].
+**The lesson.** Sampled testing can expose a fault without establishing its absence across the input space. Intel later made formal verification the primary validation method for the Core i7 execution cluster [@KaivolaEtAl2009Corei7Formal].
 :::
 
 The stimulus is only one limit; the checker is another. A testbench can execute faulty logic without observing its error, especially when the testbench and RTL inherit the same omitted requirement. Three examples show why coverage must identify both the behavior exercised and the property checked:
@@ -302,9 +428,9 @@ Structural coverage records which code or state transitions ran, whereas mutatio
 # Inline values for the CV32E40P and mutation-analysis paragraphs and
 # @fig-ch07-defect-discovery-modalities, read from the same transcribed
 # datasets the figure plots:
-#   data/datasets/chapter7-defect-discovery-modalities.csv
+#   book/contents/chapters/07-feedback/data/fig-ch07-defect-discovery-modalities/chapter7-defect-discovery-modalities.csv
 #     (OpenHW CV32E40P User Manual, Verification, Tables 9 and 10)
-#   data/datasets/chapter7-herdt-mutation-compliance.csv
+#   book/contents/chapters/07-feedback/data/fig-ch07-defect-discovery-modalities/chapter7-herdt-mutation-compliance.csv
 #     (Herdt et al., ASP-DAC 2021, Table 1)
 import csv as _csv7
 import re as _re7
@@ -325,7 +451,7 @@ class _Raw7:
 
 
 def _rows7(name):
-    with open(_root7 / "data" / "datasets" / name, encoding="utf-8") as fh:
+    with open(_root7 / "book/contents/chapters/07-feedback/data/fig-ch07-defect-discovery-modalities" / name, encoding="utf-8") as fh:
         return list(_csv7.DictReader(l for l in fh if not l.startswith("#")))
 
 
@@ -355,17 +481,17 @@ mut_survivors = int(_mut7[1]["mutants_surviving"])
 _spec_n7 = int(_re7.search(r"\d+", _mut7[2]["tests_description"]).group())
 mut_spec_tests = _Raw7(f"{_spec_n7:,}")
 mut_spec_killed = int(_mut7[2]["mutants_killed"])
-mut_symbolic_tests = int(_mut7[3]["mutants_killed"])
+mut_symbolic_tests = int(_re7.search(r"\d+", _mut7[3]["tests_description"]).group())
 # The prose says symbolic execution "killed the remainder".
 assert int(_mut7[3]["mutants_surviving"]) == 0
 assert int(_mut7[2]["mutants_entering"]) == mut_survivors
 ```
 
-Published verification records show why a verification suite needs both diverse checkers and direct fault-detection tests (@fig-ch07-defect-discovery-modalities). When the OpenHW Group identified and resolved `{python} cv_total` RTL issues in its CV32E40P RISC-V core between the start of verification in February 2020 and RTL freeze, it recorded the method that found each one [@OpenHW2026CV32E40PManual]. Simulation found `{python} cv_sim` of those issues (`{python} cv_directed` through directed self-checking tests, `{python} cv_step` through step-and-compare against an instruction-set simulator, and `{python} cv_random` through constrained-random stimulus), whereas formal verification and human inspection found `{python} cv_formal` each, lint found `{python} cv_lint`, and one has no recorded source. Methods other than simulation therefore account for `{python} cv_nonsim` of the `{python} cv_total` issues (`{python} cv_nonsim_pct`%). These counts come from one core's campaign and omit the effort, compute, execution ordering, and overlapping coverage needed to rank the methods by efficiency or to say which other checks could have caught each defect. They still show that no single method was credited with finding all the issues in the campaign.
+Published verification records can name the method that found an issue, and those methods differ (@fig-ch07-defect-discovery-modalities). In the v1.0.0 campaign for its CV32E40P RISC-V core, the OpenHW Group identified and resolved `{python} cv_total` issues it calls RTL issues between an unofficial start date in February 2020 and RTL freeze, and it counted them by source [@OpenHW2026CV32E40PManual]. Simulation found `{python} cv_sim` of those issues (`{python} cv_directed` through directed self-checking tests, `{python} cv_step` through step-and-compare against an instruction-set simulator, and `{python} cv_random` through constrained-random stimulus), whereas formal verification, counting both designer and verifier use, and human inspection found `{python} cv_formal` each, lint found `{python} cv_lint`, and one has no recorded source. Methods other than simulation therefore account for `{python} cv_nonsim` of the `{python} cv_total` issues (`{python} cv_nonsim_pct`%). These counts come from one core's campaign, include items the project classes as coding style, non-RTL, unreproducible, or invalid, and omit the effort, compute, execution ordering, and overlapping coverage needed to rank the methods by efficiency or to say which other checks could have caught each issue. They still show that no single method was credited with finding all the issues in the campaign.
 
-The second panel of @fig-ch07-defect-discovery-modalities turns from the design to the test suite itself. When @HerdtEtAl2021MutationCompliance seeded `{python} mut_seeded` single mutations across nine mutation classes into a reference RISC-V instruction-set simulator, the official compliance suite killed `{python} mut_official_killed` of them (`{python} mut_official_pct`%). A specification-based suite of about `{python} mut_spec_tests` further tests then killed `{python} mut_spec_killed` of the `{python} mut_survivors` survivors, and symbolic execution generated `{python} mut_symbolic_tests` targeted tests that killed the remainder. The surviving mutants included shift instructions that used unmasked upper bits of the shift-amount register, and jumps that wrote the destination register even when a misaligned target should have trapped without side effects. A suite that every conforming simulator passes can therefore still fail to distinguish faulty ones.
+The second panel of @fig-ch07-defect-discovery-modalities turns from the design to the test suite itself. When @HerdtEtAl2021MutationCompliance seeded `{python} mut_seeded` single mutations across nine mutation classes into a reference RISC-V instruction-set simulator, the official compliance suite killed `{python} mut_official_killed` of them (`{python} mut_official_pct`%). A specification-based suite of `{python} mut_spec_tests` further tests then killed `{python} mut_spec_killed` of the `{python} mut_survivors` survivors, and symbolic execution generated `{python} mut_symbolic_tests` targeted tests that killed the remainder. The surviving mutants included shift instructions that used unmasked upper bits of the shift-amount register, and jumps that wrote the destination register even when a misaligned target should have trapped without side effects. A suite that every conforming simulator passes can therefore still fail to distinguish faulty ones.
 
-![**Different checks find different defects, and a passing suite can leave detectable faults alive.** (a) Method that found each of the `{python} cv_total` RTL issues resolved before CV32E40P RTL freeze; non-simulation methods account for `{python} cv_nonsim` [@OpenHW2026CV32E40PManual]. (b) Mutants seeded into a reference RISC-V instruction-set simulator, with each suite run on the previous suite's survivors; the official compliance tests leave `{python} mut_survivors` of `{python} mut_seeded` alive [@HerdtEtAl2021MutationCompliance].](images/fig-ch07-defect-discovery-modalities){#fig-ch07-defect-discovery-modalities width="100%" fig-alt="Two-panel bar chart. The left panel counts the 47 CV32E40P RTL issues by the method that found them, with formal verification and inspection at 13 each, directed simulation 10, step-and-compare 6, constrained-random simulation 2, lint 2, and one unknown. The right panel shows three test suites applied in turn to seeded simulator mutants, killing 2,263 of 2,455, then 91 of 192, then all remaining 101."}
+![**Recorded finding methods differ across issues, and a passing suite can leave detectable faults alive.** (a) Recorded finding method for the `{python} cv_total` issues the project calls RTL issues, resolved before CV32E40P v1.0.0 RTL freeze; non-simulation methods account for `{python} cv_nonsim`, and one issue has no recorded method [@OpenHW2026CV32E40PManual]. (b) Mutants seeded into a reference RISC-V instruction-set simulator, with each suite run on the previous suite's survivors; the official compliance tests leave `{python} mut_survivors` of `{python} mut_seeded` alive [@HerdtEtAl2021MutationCompliance].](images/fig-ch07-defect-discovery-modalities){#fig-ch07-defect-discovery-modalities width="100%" fig-alt="Two-panel bar chart. The left panel counts the 47 CV32E40P RTL issues by recorded finding method, with formal verification and inspection at 13 each, directed simulation 10, step-and-compare 6, constrained-random simulation 2, lint 2, and one unknown. The right panel shows three test suites applied in turn to seeded simulator mutants, killing 2,263 of 2,455, then 91 of 192, then all remaining 101."}
 
 The same mutation loop could also guide automated property and test generation, a use this book proposes but does not evaluate. In that proposed loop, the environment injects mutations directly at the source RTL AST level by modifying conditional branches, operator polarities, or state transitions. It avoids flattened post-synthesis gate netlists, where logic minimization and technology mapping destroy high-level signal semantics and create synthetic nets. After resource-bounded formal equivalence checking removes mutants proved equivalent, the simulation suite runs against the remaining mutants, with unresolved equivalence reported separately from confirmed non-equivalent faults. Whenever a mutant survives, the environment returns the mutation details and source context to a model that proposes an SVA property or a directed testbench sequence. Rerunning the suite then establishes whether the new check detects the fault while still accepting the correct design. Killing the retained mutants supports a claim about that tested fault set. It does not establish that all corner cases have been found, that the original specification is complete, or that the generator and checker share no omissions.
 
@@ -450,17 +576,67 @@ sa_score = _Raw7(f"{_study7['architecture_outcome_claim']['baseline_score']:,.2f
 assert abs(_study7["architecture_outcome_claim"]["baseline_score"] - _base7["total_cycles"] / (_base7["avg_layer_util_pct"] / 100)) < 1e-6
 sa_writes_base = _Raw7(f"{_base7['dram_writes']:,}")
 sa_writes_wide = _Raw7(f"{_wide7['dram_writes']:,}")
+# The prose says the other counters disagree and that writes scale inversely with rows.
+assert _base7["dram_reads"] == _wide7["dram_reads"]
+assert _wide7["sram_reads"] < _base7["sram_reads"]
+assert len({e["metrics"]["sram_writes"] * e["array_rows"] for e in _study7["evaluations"]}) == 1
+assert all(abs(e["metrics"]["dram_writes"] / e["metrics"]["sram_writes"] - 1) < 0.001 for e in _study7["evaluations"])
+# The prose gives the simulator's fold formula, the distinct output words, and the stall field.
+import csv as _csv7w
+import math as _math7w
+
+_sa_dir = _root7 / "data" / "studies" / "ai_systolic_array_study"
+with (_sa_dir / "workloads" / "xr_slice_gemm.csv").open(encoding="utf-8") as _fh:
+    _sa_layers = [(int(r["M"]), int(r["N"]), int(r["K"])) for r in _csv7w.DictReader(_fh)]
+_sa_fold = lambda rows: sum(_math7w.ceil(k / rows) * m * n for m, n, k in _sa_layers)
+assert all(
+    e["metrics"]["sram_writes"] == _sa_fold(e["array_rows"]) for e in _study7["evaluations"] if e["workload_id"] == "original"
+)
+_sa_outputs = sum(m * n for m, n, _ in _sa_layers)
+sa_folds_base = _Raw7(f"{_sa_fold(32):,}")
+sa_folds_wide = _Raw7(f"{_sa_fold(16):,}")
+sa_outputs = _Raw7(f"{_sa_outputs:,}")
+sa_dram_x_base = f"{_base7['dram_writes'] / _sa_outputs:.1f}"
+sa_dram_x_wide = f"{_wide7['dram_writes'] / _sa_outputs:.1f}"
+assert _base7["stall_cycles"] == _wide7["stall_cycles"] == 0
+_sa_cfg = (_sa_dir / "recorded" / "reference" / "runs" / "ai_wide_16x64" / "inputs" / "scale.cfg").read_text(encoding="utf-8")
+sa_bandwidth = _re7.search(r"^Bandwidth = (\d+),", _sa_cfg, flags=_re7.M).group(1)
+sa_sram_reads_base = _Raw7(f"{_base7['sram_reads']:,}")
+sa_sram_reads_wide = _Raw7(f"{_wide7['sram_reads']:,}")
+sa_mem_base = _Raw7(f"{_base7['sram_accesses'] + _base7['dram_accesses']:,}")
+sa_mem_wide = _Raw7(f"{_wide7['sram_accesses'] + _wide7['dram_accesses']:,}")
+
+# The prose gives the protocol file's self-timestamp and its first git commit.
+import datetime as _dt7r
+import re as _re7r
+
+
+def _utc7(stamp):
+    return _dt7r.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+def _when7(moment):
+    return _Raw7(f"{moment:%B} {moment.day}, {moment.year}, at {moment:%H:%M} UTC")
+
+
+_dir7 = _root7 / "data" / "studies" / "ai_systolic_array_study"
+_stamp7 = _utc7(_re7r.search(r"frozen_at_utc: '([^']+)'", (_dir7 / "context" / "pre_registration.yaml").read_text(encoding="utf-8")).group(1))
+_git7 = _utc7(_re7r.search(r"first_git_commit_utc: '([^']+)'", (_dir7 / "provenance.yml").read_text(encoding="utf-8")).group(1))
+_sims7 = _utc7(_json7.loads((_dir7 / "recorded" / "reference" / "execution_provenance.json").read_text(encoding="utf-8"))["completed_at_utc"])
+assert _stamp7 < _sims7 < _git7
+sa_stamp = _when7(_stamp7)
+sa_entered_git = _when7(_git7)
 ```
 
-Our executed systolic-array study under SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3] shows what that scalar compression hides inside the retained execution records. Recall that the $32 \times 32$ baseline and the shared $16 \times 64$ candidate tied on the preregistered scalar score ($S = C_{\text{excl. prefetch}}/\bar{U}_{\text{frac}} =$ `{python} sa_score`). Both returned an identical sum of reported cycles excluding prefetch (`{python} sa_cycles` cycles) and an identical unweighted mean of the three layers' reported overall utilization (`{python} sa_util_pct`%). The cycle figure comes from the report's `Total Cycles` column rather than `Total Cycles (incl. prefetch)`, so it is distinct from full workload elapsed time.
+Our executed systolic-array study ran SCALE-Sim 3.0.0 [@RajEtAl2025ScaleSimV3] on a synthetic three-layer workload rather than a trace from an XR implementation, and its retained execution records show what that scalar compression hides. Recall that the $32 \times 32$ baseline and the shared $16 \times 64$ candidate tied on the scalar score named in the study's protocol file ($S = C_{\text{excl. prefetch}}/\bar{U}_{\text{frac}} =$ `{python} sa_score`). Both returned an identical sum of reported cycles excluding prefetch (`{python} sa_cycles` cycles) and an identical unweighted mean of the three layers' reported overall utilization (`{python} sa_util_pct`%). The cycle figure comes from the report's `Total Cycles` column rather than `Total Cycles (incl. prefetch)`, so it is distinct from full workload elapsed time.
 
-Inspecting a second metric retained in those execution records breaks the tie (@fig-proxy-mismatch). The $16 \times 64$ candidate reported `{python} sa_writes_wide` modeled DRAM-word writes against `{python} sa_writes_base` for the baseline, twice as many. Across these two retained SCALE-Sim quantities, the baseline dominates the candidate, delivering equal reported cycles excluding prefetch with half the modeled writes. A scalar evaluator that omits write traffic, however, treats the two designs as interchangeable. SCALE-Sim write counts are modeled quantities rather than measured physical bus traffic, so this run alone cannot answer whether the extra writes would degrade wall-clock timing, energy, or thermals through bus contention. We bound that question with a labeled derived energy estimate in @sec-cross-stack-pattern-transfer.
+A second metric retained in those execution records separates the two designs, although we chose it after the run and the study's protocol file does not declare it (@fig-proxy-mismatch). The $16 \times 64$ candidate reported `{python} sa_writes_wide` modeled DRAM-word writes against `{python} sa_writes_base` for the baseline, twice as many. Across every evaluated shape, modeled static random-access memory (SRAM) writes double each time the row count halves and DRAM writes track them. The simulator's weight-stationary mapping produces that scaling. Each layer of the workload has dimensions $M$, $N$, and $K$, and $K$ folds across an array of $R$ rows, so a layer takes $\lceil K/R \rceil$ folds, each of which writes all $M \cdot N$ of the layer's output words as partial sums. Summed over the three layers, $\lceil K/R \rceil \cdot M \cdot N$ gives `{python} sa_folds_base` SRAM writes at 32 rows and `{python} sa_folds_wide` at 16 rows, against `{python} sa_outputs` distinct output words. The doubled count therefore records repeated partial sums rather than twice the result data, and modeled DRAM writes run about `{python} sa_dram_x_base` and `{python} sa_dram_x_wide` times the distinct output words. Whether a built design would send those partial sums off chip lies outside this record. The other retained counters do not all agree with writes. The candidate reports fewer modeled SRAM reads, `{python} sa_sram_reads_wide` against `{python} sa_sram_reads_base`, and the same DRAM reads, although total modeled memory accesses still favor the baseline, `{python} sa_mem_base` against `{python} sa_mem_wide`. Across cycles and modeled DRAM writes alone, the baseline dominates the candidate, delivering equal reported cycles excluding prefetch with half the modeled writes. A scalar evaluator that omits write traffic, however, treats the two designs as interchangeable. SCALE-Sim write counts are modeled quantities rather than measured physical bus traffic. At the study's declared interface bandwidth of `{python} sa_bandwidth` words per cycle, both shapes report zero stall cycles, the one retained field that bears on contention, so this run shows no contention at that setting and cannot answer whether the extra writes would degrade wall-clock timing, energy, or thermals under a tighter memory interface. We bound that question with a labeled derived energy estimate in @sec-cross-stack-pattern-transfer.
 
 ```{python}
 #| echo: false
 #| label: fig-proxy-mismatch
 #| fig-cap: |
-#|   **Modeled traffic exposes model-local dominance masked by the scalar score.** Across retained SCALE-Sim cycles excluding prefetch (horizontal axis, lower is better) and modeled DRAM-word writes (vertical axis, lower is better), the 32 by 32 baseline and shared 16 by 64 candidate tie at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively. The baseline therefore dominates the candidate only across these two retained SCALE-Sim quantities. This post-run observation does not alter the frozen study outcome or establish physical traffic, contention, timing, or energy [@RajEtAl2025ScaleSimV3]. The retained prompt copy does not match the hash recorded before the model call, so the model's exact input cannot be verified; the plotted simulator returns are unaffected.
+#|   **Modeled traffic exposes model-local dominance masked by the scalar score.** Across retained SCALE-Sim cycles excluding prefetch (horizontal) and modeled DRAM-word writes (vertical), lower being better on both, the 32 by 32 baseline and shared 16 by 64 candidate tie at 13,917 cycles with 204,863 and 409,726 modeled writes, respectively. The baseline therefore dominates the candidate only across these two retained SCALE-Sim quantities. This post-run observation does not alter the study's recorded outcome or establish physical traffic, contention, timing, or energy [@RajEtAl2025ScaleSimV3]. The retained prompt copy fails the hash in the study's self-timestamped protocol file, so the model's exact input cannot be verified.
 #| out-width: "100%"
 #| fig-alt: "Scatter plot of evaluated systolic array shapes across retained SCALE-Sim cycles excluding prefetch and modeled DRAM-word writes, showing the 32 by 32 baseline and 16 by 64 candidate tied at 13,917 cycles while reporting 204,863 and 409,726 modeled writes, respectively."
 
@@ -474,8 +650,6 @@ apply_style()
 
 _root = Path(_ap.__file__).resolve().parents[2]
 result_path = _root / "data/studies/ai_systolic_array_study/recorded/reference/study_results.json"
-if not result_path.exists():
-    result_path = _root / "labs/examples/ai_systolic_array_study/recorded/reference/study_results.json"
 result = json.loads(result_path.read_text(encoding="utf-8"))
 arm_runs = [r for r in result["evaluations"] if r["arm"] in {"model", "conventional"}]
 
@@ -529,7 +703,7 @@ ax.spines["bottom"].set_color(COLORS["ink"])
 plt.show()
 ```
 
-The study itself avoided this trap. It recommended retaining the $32 \times 32$ baseline when no candidate beat it by the preregistered 1% margin, and the write difference was noticed only after the run. For automated exploration, however, the hazard is prospective. A search that sweeps aspect ratios $\theta \in \Theta$ inside a fixed template and ranks candidates solely by $S$ has no basis for preferring the baseline over the $16 \times 64$ candidate, and a tie-breaking rule could just as easily select the design with twice the modeled writes. To prevent that blind spot, the team must declare every decision-relevant quantity, here write traffic alongside cycles, as an explicit objective or constraint before the search runs. The quantity then shapes exploration rather than surfacing afterward. This broader pattern, in which optimizing a single scalar hides a regression in an omitted dimension, is the Whac-a-Mole regression effect (@sec-law-whac-a-mole in @sec-appendix-b-laws-paradoxes). Even when a multi-objective comparison confirms that a candidate genuinely improves the target metrics, however, a qualified score shows only *what* improved, not *why* the hardware achieved it.
+The study recommended retaining the $32 \times 32$ baseline under its margin rule, because no candidate beat it by the 1% margin its protocol file names, and its record still lists the accountable decision as awaiting confirmation. That file carries its own timestamp, `{python} sa_stamp`, and first entered git on `{python} sa_entered_git`, after the study's logged simulations had ended, and the prompt hash it records does not match the retained prompt copy (@sec-methods-generation-prediction-optimization), a mismatch that leaves the plotted simulator returns unaffected. The margin is therefore the study's stated rule, and the record does not show that it preceded the run. The recommendation did not use the write difference, which was noticed only after the run. For automated exploration, the hazard is prospective. A search that sweeps aspect ratios $\theta \in \Theta$ inside a fixed template and ranks candidates solely by $S$ has no basis for preferring the baseline over the $16 \times 64$ candidate, and a tie-breaking rule could just as easily select the design with twice the modeled writes. To prevent that blind spot, the team must decide before the search runs whether memory traffic bears on the choice and, if it does, declare a measure of that traffic alongside cycles as an explicit objective or constraint. The quantity then shapes exploration rather than surfacing afterward. This broader pattern, in which optimizing a single scalar hides a regression in an omitted dimension, is the Whac-a-Mole regression effect (@sec-law-whac-a-mole in @sec-appendix-b-laws-paradoxes). Even when a multi-objective comparison confirms that a candidate genuinely improves the target metrics, however, a qualified score shows only *what* improved, not *why* the hardware achieved it.
 
 ::: {.callout-law title="The Whac-a-Mole Regression Effect"}
 **The Classical Principle:** Optimizing a single scalar metric can hide trade-offs in quantities the score omits. Those quantities need their own checks; improvement in one metric neither establishes that they are acceptable nor implies that they must regress.
@@ -541,7 +715,7 @@ The study itself avoided this trap. It recommended retaining the $32 \times 32$ 
 
 ## Outcome, Mechanism, and Counterfactual Reasoning {#sec-outcome-mechanism-counterfactual}
 
-Showing why a candidate performs better requires separating an observed top-line *outcome* from its proposed explanatory *mechanism* (@tbl-outcome-mechanism; @sec-proxy-mismatch-metric-gaming-and-calibration). When an automated optimizer modifies a microarchitectural feature, recording an improvement in top-line latency or throughput does not prove that the intended mechanism produced the gain. For instance, a cache-resizing candidate might post faster frame rendering times because incidental compiler instruction alignment masked a memory-bus serialization stall [@Mytkowicz2009WrongData]. The larger static random-access memory (SRAM) capacity might never have reduced conflict misses at all. To show that the mechanism caused the gain, the architect needs counterfactual tests that hold confounding compiler, memory, and operating variables fixed while varying only the mechanism under test.
+Showing why a candidate performs better requires separating an observed top-line *outcome* from its proposed explanatory *mechanism* (@tbl-outcome-mechanism; @sec-proxy-mismatch-metric-gaming-and-calibration). When an automated optimizer modifies a microarchitectural feature, recording an improvement in top-line latency or throughput does not prove that the intended mechanism produced the gain. For instance, a cache-resizing candidate might post faster frame rendering times because incidental compiler instruction alignment masked a memory-bus serialization stall [@Mytkowicz2009WrongData]. The larger SRAM capacity might never have reduced conflict misses at all. To show that the mechanism caused the gain, the architect needs counterfactual tests that hold confounding compiler, memory, and operating variables fixed while varying only the mechanism under test.
 
 | **Evaluation question** | **Possible qualified status** | **Why the distinction matters** |
 | - | - | - |
@@ -560,6 +734,7 @@ The prospective Lighthouse L2 cache configuration shows what such a test has to 
 ```{python}
 #| echo: false
 import csv as _csv7ka
+import json as _json7ka
 from pathlib import Path as _Path7ka
 import _python.plots as _ap7ka
 
@@ -584,15 +759,31 @@ ka11_mv_occ1 = f"{float(_ka11[('Matrix–vector', 'first')]['occupancy_pct']):.1
 ka11_mv_occb = f"{float(_ka11[('Matrix–vector', 'best')]['occupancy_pct']):.1f}"
 ka11_mv_dram1 = f"{float(_ka11[('Matrix–vector', 'first')]['dram_throughput_pct']):.1f}"
 ka11_mv_dramb = f"{float(_ka11[('Matrix–vector', 'best')]['dram_throughput_pct']):.1f}"
+ka11_rms_rel = f"{float(_ka11[('RMSNorm', 'best')]['relative_time']):.2f}"
 ka11_tc_occ1 = f"{float(_ka11[('Transposed conv. 3D', 'first')]['occupancy_pct']):.1f}"
 ka11_tc_occb = f"{float(_ka11[('Transposed conv. 3D', 'best')]['occupancy_pct']):.1f}"
+# Elapsed time implied by each profile's DRAM bytes and byte rate, as a ratio to
+# the recorded kernel time, for every retained round of every task.
+_ka11_dir = _Path7ka(_ap7ka.__file__).resolve().parents[2] / "data" / "studies" / "11-kernelagent-feedback"
+_ka11_gap = {}
+for _ka11_t in sorted(_ka11_dir.glob("raw/*/optimization_trace/round_*/benchmark_results.json")):
+    _ka11_time = next(iter(_json7ka.loads(_ka11_t.read_text(encoding="utf-8"))["kernels"].values()))["time_ms"]
+    _ka11_prof = _json7ka.loads((_ka11_t.parent / "optimized_ncu_metrics.json").read_text(encoding="utf-8"))
+    _ka11_m = next(iter(_ka11_prof["metrics"].values()))
+    _ka11_ms = 1000 * (_ka11_m["dram__bytes_read.sum"] + _ka11_m["dram__bytes_write.sum"]) / _ka11_m["dram__bytes.sum.per_second"]
+    _ka11_gap[_ka11_t.relative_to(_ka11_dir).as_posix()] = _ka11_ms / _ka11_time
+ka11_gap_n = len(_ka11_gap)
+ka11_gap_lo = f"{min(_ka11_gap.values()):.2f}"
+ka11_gap_hi = f"{max(_ka11_gap.values()):.2f}"
+ka11_gap_mv = f"{_ka11_gap[_ka11[('Matrix–vector', 'best')]['timing_source']]:.2f}"
+ka11_gap_rms = f"{_ka11_gap[_ka11[('RMSNorm', 'best')]['timing_source']]:.2f}"
 ```
 
-Because these Lighthouse trade-offs are hypotheses rather than measured results, the telemetry also needs checks for simulator artifacts. A fixed-latency queuing model, omitted DRAM refresh cycles, or an unconstrained register-file assumption in the compiler backend can each manufacture an apparent mechanism that exists only inside the model. Even on real hardware, paired profiler counters show why a single intermediate metric such as warp occupancy cannot serve as a universal causal story for kernel speedups (@fig-ch07-kernelagent-ncu-counterfactual).
+Because these Lighthouse trade-offs are hypotheses rather than measured results, the telemetry also needs checks for simulator artifacts. A fixed-latency queuing model, omitted DRAM refresh cycles, or an unconstrained register-file assumption in the compiler backend can each manufacture an apparent mechanism that exists only inside the model. Even on GPU hardware, paired profiler counters show why a single intermediate metric such as warp occupancy cannot serve as a universal causal story for kernel speedups (@fig-ch07-kernelagent-ncu-counterfactual).
 
-![**Faster retained GPU kernels do not move intermediate profiler counters in one uniform direction.** Paired Round 1 (open circles) and fastest retained round (filled squares) across `{python} ka11_n` KernelBench tasks profiled with NVIDIA Nsight Compute in the KernelAgent artifacts [@Cheng2025KernelAgentArtifacts]: (a) kernel execution time relative to Round 1, (b) achieved warp occupancy, and (c) sustained DRAM throughput. In MaxPool 3D and 3D transposed convolution, the fastest retained kernel achieves lower execution time alongside lower achieved occupancy, whereas in matrix–vector multiplication both occupancy and DRAM throughput rise steeply.](images/fig-ch07-kernelagent-ncu-counterfactual){#fig-ch07-kernelagent-ncu-counterfactual width="100%" fig-alt="Three-panel dumbbell chart comparing Round 1 and the fastest retained optimization round across five KernelBench tasks on relative kernel time, achieved occupancy, and DRAM throughput. Latency drops or holds nearly steady across all five tasks, while occupancy rises sharply for matrix-vector multiplication but falls for MaxPool 3D and transposed 3D convolution."}
+![**Recorded kernel speedups do not move intermediate profiler counters in one uniform direction.** Round 1 (open circles) and fastest of eight retained rounds (filled squares) across `{python} ka11_n` curated KernelBench tasks profiled with NVIDIA Nsight Compute [@Cheng2025KernelAgentArtifacts]: (a) kernel execution time relative to Round 1, (b) achieved warp occupancy, and (c) sustained DRAM throughput. In MaxPool 3D and 3D transposed convolution, the fastest kernel has lower occupancy, whereas in matrix–vector multiplication occupancy and DRAM throughput rise steeply. Timings carry no reported uncertainty, so RMSNorm, at `{python} ka11_rms_rel` of Round 1 time, is not an established gain.](images/fig-ch07-kernelagent-ncu-counterfactual){#fig-ch07-kernelagent-ncu-counterfactual width="100%" fig-alt="Three-panel dumbbell chart comparing Round 1 and the fastest retained optimization round across five KernelBench tasks on relative kernel time, achieved occupancy, and DRAM throughput. Latency drops or holds nearly steady across all five tasks, while occupancy rises sharply for matrix-vector multiplication but falls for MaxPool 3D and transposed 3D convolution."}
 
-Across those `{python} ka11_n` paired Nsight Compute profiles [@Cheng2025KernelAgentArtifacts], matrix–vector multiplication lowers execution time from `{python} ka11_mv_t1`\ ms to `{python} ka11_mv_tb`\ ms while raising achieved warp occupancy from `{python} ka11_mv_occ1`% to `{python} ka11_mv_occb`% and DRAM throughput from `{python} ka11_mv_dram1`% to `{python} ka11_mv_dramb`%. In MaxPool 3D, by contrast, the fastest retained round cuts execution time from `{python} ka11_mp_t1`\ ms to `{python} ka11_mp_tb`\ ms (`{python} ka11_mp_rel` of Round 1 time) while achieved occupancy falls from `{python} ka11_mp_occ1`% to `{python} ka11_mp_occb`% and DRAM throughput rises from `{python} ka11_mp_dram1`% to `{python} ka11_mp_dramb`%; in 3D transposed convolution, occupancy similarly drops from `{python} ka11_tc_occ1`% to `{python} ka11_tc_occb`% as latency nearly halves. Because occupancy falls in MaxPool 3D and 3D transposed convolution, higher occupancy cannot explain every speedup. These paired endpoint profiles show only co-movement across distinct kernel implementations; they do not isolate a mechanism.
+Across those `{python} ka11_n` curated tasks, each pairing Round 1 with the fastest of eight retained rounds in author-reported artifacts [@Cheng2025KernelAgentArtifacts], matrix–vector multiplication lowers execution time from `{python} ka11_mv_t1`\ ms to `{python} ka11_mv_tb`\ ms while raising achieved warp occupancy from `{python} ka11_mv_occ1`% to `{python} ka11_mv_occb`% and DRAM throughput from `{python} ka11_mv_dram1`% to `{python} ka11_mv_dramb`%. In MaxPool 3D, by contrast, the fastest retained round cuts execution time from `{python} ka11_mp_t1`\ ms to `{python} ka11_mp_tb`\ ms (`{python} ka11_mp_rel` of Round 1 time) while achieved occupancy falls from `{python} ka11_mp_occ1`% to `{python} ka11_mp_occb`% and DRAM throughput rises from `{python} ka11_mp_dram1`% to `{python} ka11_mp_dramb`%; in 3D transposed convolution, occupancy similarly drops from `{python} ka11_tc_occ1`% to `{python} ka11_tc_occb`% as latency nearly halves. Because occupancy falls in MaxPool 3D and 3D transposed convolution, higher occupancy cannot explain every speedup. The timings carry no reported uncertainty, however, so the fastest of eight rounds inherits the selection bias described above, we ran no confirmation measurement, and the profiler records do not bind each profile to the executed kernel by hash. Nor do the profiler and the timing records agree on how long a kernel ran. A profile's DRAM bytes divided by its DRAM byte rate imply an elapsed time between `{python} ka11_gap_lo` and `{python} ka11_gap_hi` times the recorded kernel time across all `{python} ka11_gap_n` retained rounds, with `{python} ka11_gap_mv` for the fastest matrix–vector round and `{python} ka11_gap_rms` for the fastest RMSNorm round, and we have not established the cause. The quoted occupancy and DRAM percentages are rates within each profile, so this gap does not directly alter them, but it is a further reason not to read a profile as an account of the recorded time. These paired endpoint profiles show only co-movement across distinct kernel implementations; they do not isolate a mechanism.
 
 A mechanism counts as supported only when controlled contrasts and model checks support it, and even then the conclusion remains scoped to the model and its identification assumptions. Without such contrasts, the mechanism stays contradicted, unresolved, or untested according to @tbl-outcome-mechanism, while a supported top-line outcome can still be retained separately.
 
@@ -602,7 +793,7 @@ A complete requirement map identifies which obligations each tool examines, but 
 
 Different tools do not guarantee independent failure behavior, as the Knight–Leveson experiment previewed in @sec-design-loop-no-longer-scales showed for separately developed programs [@KnightLeveson1986Multiversion]. Language-model evaluators can also favor their own generations [@PanicksseryEtAl2024SelfPreference]. The practical question is which specification assumptions, model simplifications, or learned components the producer and checker share (@fig-independent-checks).
 
-![**A second check adds protection when it can expose a failure the first check could miss.** Sharing a model or specification between producer and critic produces correlated agreement rather than independent validation (left). A claim-specific check using an orthogonal measurement path mounts a bounded challenge, though unexamined shared assumptions must still be recorded (right) [@KnightLeveson1986Multiversion; @PanicksseryEtAl2024SelfPreference].](images/fig-independent-checks){#fig-independent-checks width="80%" fig-alt="Two-column flow diagram contrasting correlated agreement from shared assumptions against a bounded challenge from an orthogonal checking path."}
+![**A second check adds protection when it can expose a failure the first check could miss.** Sharing a model or specification between producer and critic can produce correlated agreement rather than independent validation (left). A claim-specific check using an orthogonal measurement path mounts a bounded challenge, though unexamined shared assumptions must still be recorded (right) [@KnightLeveson1986Multiversion; @PanicksseryEtAl2024SelfPreference].](images/fig-independent-checks){#fig-independent-checks width="80%" fig-alt="Two-column flow diagram contrasting correlated agreement from shared assumptions against a bounded challenge from an orthogonal checking path."}
 
 For example, a generated testbench and an assertion suite can agree because both omit backpressure. Their different execution engines do not repair the missing requirement. Applying mutation testing across both checkers can expose a joint escape: a non-equivalent RTL defect survives the assertion suite and the dynamic tests [@DeMilloLiptonSayward1978Hints]. The team then traces the escape through the asserted property, formal assumptions, stimulus, and checked outputs. The two checks may share an omission or miss the fault for different reasons; rerunning the mutant after revision tests whether the specific gap has closed.
 
@@ -659,7 +850,7 @@ Qualification can also expire while the method remains unchanged. A *distributio
 
 The calibration limits from @sec-support-limits apply here. Standard conformal guarantees, which assume that calibration designs and new candidates are exchangeable, do not automatically extend to shifted inputs [@TibshiraniEtAl2019CovariateShift] or adaptively selected finalists, and widening an interval by hand does not restore a lost guarantee. Empirical error and coverage checks can reveal deterioration, but they observe only candidates sent to reference tools. Requalification must therefore consider the changed conditions and unsampled regions as well as the monitored returns (@tbl-proxy-diagnostics).
 
-The resulting evidence can improve the project even when no new design is accepted. A disproved mechanism narrows the next experiment; a surviving mutant identifies a weakness in the tests; a comparison inside the decision margin supports retaining the current architecture; and the systolic tie leaves any later sweep a rule to declare write traffic as an objective before it runs. Whether these findings, with their conditions and reopening triggers, transfer to a different design problem is the next chapter's question (@sec-loop-patterns-across-stack).
+The resulting evidence can improve the project even when no new design is accepted. A disproved mechanism narrows the next experiment; a surviving mutant identifies a weakness in the tests; a comparison inside the decision margin supports retaining the current architecture; and the systolic tie leaves any later sweep a rule to decide before it runs whether memory traffic matters and, if it does, to declare it as an objective. Whether these findings, with their conditions and reopening triggers, transfer to a different design problem is the next chapter's question (@sec-loop-patterns-across-stack).
 
 ## Open Questions {#sec-feedback-open-questions}
 
@@ -673,7 +864,7 @@ The qualification discipline developed in this chapter exposes five open researc
 
 - **When a check fails at the boundary between two hardware blocks, how can an automated repair loop tell whether the bug lies inside one block or in the interface contract between them?** In compositional assume-guarantee verification, a counterexample trace at a module boundary can stem from an internal state-machine bug, an upstream driver violating its assumed traffic envelope, or an interface contract that is too weak to prevent deadlock under realistic backpressure. Patching a block's local RTL when the contract itself is flawed wastes synthesis cycles and risks breaking neighboring blocks, whereas escalating every assertion failure to a full interface redesign destroys modularity. We still lack diagnostic synthesis and counterfactual trace-slicing methods that can tell when a violation can be fixed strictly inside a block's existing contract and when the system must instead renegotiate the assume-guarantee boundary across adjacent subsystems.
 
-- **When several verification tools overlap in what they test, how do we decide whether running one more checker is worth the compute and license cost?** Adding a formal property engine, a mutation-testing pass, or an extra timing corner can catch defects that earlier stages missed. Each added check, however, consumes compute servers and commercial license seats, partially duplicates existing coverage, and introduces its own false rejections. Because checkers often share specification assumptions, simple majority voting among evaluators can reinforce a shared blind spot rather than reduce risk, and historical fault-kill ratios measured on baseline designs often break down once a generator shifts the candidate distribution. We still lack practical verification scheduling rules that estimate how much new evidence an extra check will provide on the current candidate, allocating tool budgets to balance missed-defect risk against false-rejection cost.
+- **When several verification tools overlap in what they test, how do we decide whether running one more checker is worth the compute and license cost?** Adding a formal property engine, a mutation-testing pass, or an extra timing corner can catch defects that earlier stages missed. Each added check, however, consumes compute servers and commercial license seats, partially duplicates existing coverage, and introduces its own false rejections. Because checkers often share specification assumptions, simple majority voting among evaluators can reinforce a shared blind spot rather than reduce risk, and historical fault-kill ratios measured on baseline designs can break down once a generator shifts the candidate distribution. We still lack practical verification scheduling rules that estimate how much new evidence an extra check will provide on the current candidate, allocating tool budgets to balance missed-defect risk against false-rejection cost.
 
 ## Summary {#sec-trust-boundary-conclusion}
 

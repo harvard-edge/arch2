@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Split the nightly series at its three largest level shifts and summarize each plateau.
+"""Split the nightly series at its largest level shifts and summarize each segment.
 
 A shift is the largest absolute difference between the 14-report means on either side of
-a report, with chosen shifts at least 60 days apart. Writes derived/plateaus.csv.
+a report, with chosen shifts at least 60 days apart. The number of shifts is a parameter of
+this script, not a finding: stopping at three leaves smaller shifts at 2023-04-16 (1.22
+points) and 2025-12-24 (1.14 points) inside their segments. Writes derived/plateaus.csv, and derived/step_attribution.csv, which names the
+test group that moved most across each of the two largest shifts.
 """
 import csv
 import datetime as dt
@@ -33,6 +36,20 @@ for _, i in jumps:
     if len(picked) == 3:
         break
 bounds = [0] + sorted(picked) + [len(dates)]
+by_group = {}
+for c in cells:
+    by_group.setdefault(c["test_name"], {})[c["date"]] = int(c["total_runs"]) - int(c["passing_runs"])
+with (HERE / "derived/step_attribution.csv").open("w", newline="", encoding="utf-8") as fh:
+    w = csv.writer(fh)
+    w.writerow(["shift_report_date", "net_change_nonpassing_runs", "top_group", "top_group_change"])
+    for i in picked[:2]:
+        before, after = dates[i - 14 : i], dates[i : i + 14]
+        change = {
+            name: st.mean(nights.get(d, 0) for d in after) - st.mean(nights.get(d, 0) for d in before)
+            for name, nights in by_group.items()
+        }
+        top = max(change, key=lambda name: abs(change[name]))
+        w.writerow([dates[i], f"{sum(change.values()):.1f}", top, f"{change[top]:.1f}"])
 with (HERE / "derived/plateaus.csv").open("w", newline="", encoding="utf-8") as fh:
     w = csv.writer(fh)
     w.writerow(

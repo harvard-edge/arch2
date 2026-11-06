@@ -1,0 +1,74 @@
+figure: fig-ch07-ibex-nightly-churn
+producer: session fe4868b7
+auditor: red-team-round2-ch07 2026-11-02
+audited_on: '2026-11-02'
+inputs:
+  caption: 64939a304fb3fa14fe55400ce8785f90fa22301d75d02d9525d3cd3ca6fff955
+  data/studies/28-ibex-nightly-history/derived/group_night.csv: 430b99e3ceae6ae2f3a7a994563c3502d01514ea57f1b9c02c273e3823b2678b
+  data/studies/28-ibex-nightly-history/derived/nightly.csv: 3970b69a81c56c94c612c4621ad4850adf868da3fd19b611b44487e33c30ea6e
+  data/studies/28-ibex-nightly-history/derived/plateaus.csv: 0d8376352c0189ec7bd47b0a031b1c544a335ee5f41a01bd3d88525e75d88e15
+  data/studies/28-ibex-nightly-history/derived/step_attribution.csv: 6492c5b45e53b7e5afb93f48236f56d20bf46f438dfea558a141ff6e5e9730e5
+  data/studies/28-ibex-nightly-history/plot.py: 4a6f0ba1c48a9fb648d871de63e60f18969343659064b26f960d0676b7c808e3
+source_check: 'Listed the public bucket on 2026-11-02 (2,443 keys) and refetched every dated JSON into a scratch
+  directory. All 1,214 manifest objects match manifest sha256: 1,213 canonical keys, plus the leading-slash key
+  for 2024-07-03 fetched by its %2F URL. One newer report (2026-11-02) postdates the snapshot and is excluded; one
+  opentitan-test report (15-01-2024) sits under another prefix and is not part of this series. A separately written
+  parser read raw JSON for every night, including the first, last, minimum (2023-05-24, 89.7101), maximum (2024-09-10,
+  99.1503) and both sides of each step; pass_pct matches nightly.csv with zero difference. Seven sibling HTML reports
+  were fetched; five were parsed and show failing logs with wall-clock timeouts, UVM_FATAL lines, and xmsim *E messages
+  on 2024-07-03 and 2024-07-04, and record an RTL commit each.'
+rerun:
+  command: Copy the study to scratch, place refetched JSON in raw/, then /Library/Frameworks/Python.framework/Versions/3.14/bin/python3
+    -I scripts/extract.py --outdir derived; /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 plateaus.py;
+    /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 plot.py
+  result: 'nightly.csv, group_night.csv, plateaus.csv, step_attribution.csv byte-identical to the repository; summary.json
+    identical apart from its timestamp; figure PNG sha256 ca93868e5a388655... identical to the chapter image and
+    study figure.png. Caption and prose values recomputed in separate code: 1,213 reports; steadiest stretch 2024-07-04
+    to 2025-07-01, SD 0.402, median 10 failing groups, 37 distinct, 6.59 groups changed between reports (6.55 over
+    calendar-adjacent reports only). Alt-text levels 93.26, 98.37, 96.80, 95.42 percent.'
+attempts:
+- attack: 'Selection of the steadiest stretch through the chosen number of shifts: varied shifts 2 to 6, window
+    7, 14, 28 reports, separation 30, 60, 120 days.'
+  outcome: survived
+  note: The same stretch is steadiest in every setting with at least two shifts; a 7-report window moves its start
+    one report and gives SD 0.43.
+- attack: 'Step attribution as an artifact of the 14-report window or of counting runs rather than percent: repeated
+    with windows 5 to 56 and with the group removed from numerator and denominator.'
+  outcome: survived
+  note: riscv_pmp_full_random_test (600 of about 1,530 nightly runs) carries 86 to 114 percent of the first net
+    change and 68 to 81 percent of the second. Without it the first step shrinks from 3.08 to 0.06 points and the
+    second from 1.94 to 0.68 at 14 reports.
+- attack: Denominator change as a trivial explanation of the first step, since total runs rise and groups enter
+    at 2024-07-04 and 2024-07-05.
+  outcome: survived
+  note: Total runs rise by 53.2 per night on average, but the step follows the fall in nonpassing runs, not the
+    larger denominator. The prose does not claim a cause.
+- attack: Excluded or failed reports hiding bad nights.
+  outcome: survived
+  note: No fetch or parse failure; no zero-run group; gaps 34 totaling 123 days as provenance states, drawn as unfilled
+    columns, and the line breaks only for gaps over seven days.
+- attack: Prose claim that two nights with the same pass rate can rest on different failures; caption claim that
+    groups are ordered by failure frequency; few versus many groups.
+  outcome: survived
+  note: 3,410 of 3,414 equal-count night pairs in the steady stretch differ in failing set (median 6 groups). Order
+    is failure fraction of nights present. In that stretch 8 groups fail on most nights and 29 less often.
+- attack: Caption stronger than data on nonpassing results and on RTL causation.
+  outcome: survived
+  note: Failing logs show timeouts and simulator diagnostics. The sentence that no step was traced stays true, although
+    the git commit differs across both steps (e2b721d to 3384bf4; f0a57f0 to 0a5e2fc) and the group set changes
+    at the first.
+negative_control: In scratch, set riscv_pmp_full_random_test to 600 of 600 in 90 raw reports from 2025-07-02 to
+  2025-09-30, then reran extract and plateaus. nightly.csv hash changed, the second shift moved to 2024-01-16 in
+  step_attribution.csv, and the plateau boundary moved to 2025-10-02.
+limits:
+- Only five sibling HTML reports were parsed, so the timeout and diagnostic statement rests on a sample of nights.
+- No step is traced to an RTL or test change, so the figure cannot say why the aggregate moved.
+- Measured by lowRISC's nightly flow and retrieved here; this audit reran no simulation.
+- Raw JSON is not retained in the repository; a deletion from the public bucket would end refetching.
+- extract.py and plateaus.py are not declared inputs, so a change to them alone does not stale this record, though
+  a change to their outputs does.
+verdict: PASS
+findings:
+- provenance.yml for the study has no reproduce command, unlike study 11; the command above was reconstructed from
+  the scripts.
+- extract.py does not check raw bytes against manifest sha256.

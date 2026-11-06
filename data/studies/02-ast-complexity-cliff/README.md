@@ -46,6 +46,9 @@ labels retain approximately 7-point type at that final width.
 | Median concrete syntax nodes per module | 168 | 1,125 | 6.70x |
 | Median clean lines of code per module | 16 | 99 | 6.19x |
 | Median syntax nodes, diagnostic-free files only | 141.5 | 675 | 4.77x |
+| Median syntax nodes, no substantive diagnostic | 168 | 675 | 4.02x |
+| Median syntax nodes, repository include path | 168 | 1,440 | 8.57x |
+| Median written tokens, plain or include-path parse | 90 | 602 | 6.69x |
 | Median of repository syntax-node medians | 232 | 991 | 4.27x |
 
 - **Source-complexity gap:** a module-weighted median of 168 concrete syntax
@@ -53,10 +56,19 @@ labels retain approximately 7-point type at that final width.
   across 217 and 1,296 parsed modules.
 - **The ratio depends on the sample and summary statistic.** The pooled
   6.7x is not offered as a universal ratio.
+- **Two diagnostic filters appear, and they differ.** The miner's diagnostic-free
+  row (4.77x, also in `hardware_ast_complexity_measured_summary.json`) drops any
+  file with a diagnostic and requires a valid tree. Chapter 4 prints 4.02x, which
+  drops only files with a diagnostic other than `DiagCode(NewlineEOF)`, because a
+  missing final newline says nothing about parse quality. Both recompute from the
+  CSV. Neither repairs a parse: both remove larger files.
+- **Parse repair moves the ratio the other way.**
+  `sensitivity_include_dirs.py` adds repository HDL directories to the include
+  path; see `hardware_ast_complexity_include_sensitivity.json` and `REPRODUCE.md`.
 - **Source-level module references provide a second distinction.** No VerilogEval
   module instantiates another module in the corpus. RTLLM reaches a uniquely
   defined local child in 16% of its modules, to a maximum source-reference depth of 5.
-  Production repositories reach one in 45% to 63% of modules, to a maximum
+  The four production-oriented repositories reach one in 45% to 63% of modules, to a maximum
   source-reference depth of 13.
 - **Clocking is a weaker signal than the earlier version claimed.** Multiple
   clock-like event signals appear in 5.1% of production modules against 0.5% of
@@ -76,6 +88,7 @@ The result is not a bound on elaborated instance depth.
 - [`hardware_ast_complexity_measured.csv`](./hardware_ast_complexity_measured.csv) (1,513 module rows)
 - [`hardware_ast_complexity_measured_sources.csv`](./hardware_ast_complexity_measured_sources.csv) (per-repository provenance)
 - [`hardware_ast_complexity_measured_summary.json`](./hardware_ast_complexity_measured_summary.json) (aggregates and execution environment)
+- [`hardware_ast_complexity_include_sensitivity.json`](./hardware_ast_complexity_include_sensitivity.json) (reparse with repository include paths)
 
 ### Data dictionary, `hardware_ast_complexity_measured.csv`
 | Column Name | Data Type | Description |
@@ -88,7 +101,7 @@ The result is not a bound on elaborated instance depth.
 | `source_sha256` | `string` | SHA-256 of the exact file contents parsed |
 | `module_name` | `string` | Module declaration identifier |
 | `clean_loc` | `integer` | Comment-stripped, blank-stripped line count |
-| `concrete_syntax_nodes` | `integer` | `pyslang` concrete syntax tree node count for the module |
+| `concrete_syntax_nodes` | `integer` | Elements `pyslang` visits in the module's concrete syntax tree. The visit yields tokens as well as interior nodes, so this counts tokens as leaves |
 | `concrete_syntax_depth` | `integer` | Maximum syntax tree depth for the module |
 | `syntax_diagnostic_count` | `integer` | Parser diagnostics on the containing file (retained, not excluded) |
 | `syntax_diagnostic_codes` | `string` | Diagnostic codes emitted for that file |
@@ -108,7 +121,7 @@ The result is not a bound on elaborated instance depth.
 ## 5. Primary Sources
 
 1. Liu, M., et al., *VerilogEval: Evaluating Large Language Models for Verilog Code Generation*, IEEE/ACM ICCAD, 2023.
-2. Lu, Y., et al., *RTLLM: An Open-Source Benchmark for RTL Generation Using LLMs*, IEEE TCAD, 2024.
+2. Lu, Y., et al., *RTLLM: An Open-Source Benchmark for Design RTL Generation with Large Language Model*, ASP-DAC, 2024.
 3. lowRISC, *OpenTitan*, `e3f3234aa3772760cdf40e79a8ae4471b6b02213`.
 4. OpenHW Group, *CV32E40P*, `6033d2b1be3295ec774d17ac4cf226faacfdeb08`.
 5. CHIPS Alliance, *VeeR EH1 (Cores-SweRV)*, `d04b1c7ae675a63dc4307cacfd10547ec937b928`.

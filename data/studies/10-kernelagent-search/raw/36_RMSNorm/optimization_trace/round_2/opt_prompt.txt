@@ -1,0 +1,442 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs RMS Normalization.
+    """
+    def __init__(self, num_features: int, eps: float = 1e-5):
+        """
+        Initializes the RMSNorm layer.
+
+        Args:
+            num_features (int): Number of features in the input tensor.
+            eps (float, optional): A small value added to the denominator to avoid division by zero. Defaults to 1e-5.
+        """
+        super(Model, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies RMS Normalization to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, num_features, *).
+
+        Returns:
+            torch.Tensor: Output tensor with RMS Normalization applied, same shape as input.
+        """
+        # Calculate the RMS along the feature dimension
+        rms = torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + self.eps)
+
+        # Normalize the input by dividing by the RMS
+        return x / rms
+
+batch_size = 112
+features = 64
+dim1 = 512
+dim2 = 512
+
+def get_inputs():
+    x = torch.rand(batch_size, features, dim1, dim2)
+    return [x]
+
+def get_init_inputs():
+    return [features]
+PyTorch Eager baseline: 10.9546 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel_fused(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """
+    Single-pass RMSNorm kernel that reads input only once.
+    Each thread block processes a tile of [BLOCK_C, BLOCK_W] elements.
+    We accumulate partial sums across all C channels in registers,
+    then normalize and write output in the same pass.
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh - n * H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    # Cast to int64 for address arithmetic
+    stride_nx = tl.full([], stride_nx, tl.int64)
+    stride_cx = tl.full([], stride_cx, tl.int64)
+    stride_hx = tl.full([], stride_hx, tl.int64)
+    stride_wx = tl.full([], stride_wx, tl.int64)
+    stride_ny = tl.full([], stride_ny, tl.int64)
+    stride_cy = tl.full([], stride_cy, tl.int64)
+    stride_hy = tl.full([], stride_hy, tl.int64)
+    stride_wy = tl.full([], stride_wy, tl.int64)
+
+    n = n.to(tl.int64)
+    h = h.to(tl.int64)
+    offs_w_i64 = offs_w.to(tl.int64)
+
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # Accumulator for sum of squares
+    acc = tl.zeros([BLOCK_W], dtype=tl.float32)
+    
+    # First pass: load all channels, compute sum of squares, store in shared memory
+    # We'll use a blocked approach to reduce register pressure
+    num_c_blocks = tl.cdiv(C, BLOCK_C)
+    
+    # Allocate storage for channel values - we'll process in blocks
+    for c_block in range(num_c_blocks):
+        c_start = c_block * BLOCK_C
+        offs_c = c_start + tl.arange(0, BLOCK_C)
+        mask_c = offs_c < C
+        
+        # Load block of channels
+        for c_idx in range(BLOCK_C):
+            c = c_start + c_idx
+            if c < C:
+                c_i64 = tl.full([], c, tl.int64)
+                x_offsets = base_nh_x + c_i64 * stride_cx + offs_w_i64 * stride_wx
+                x_vals = tl.load(x_ptr + x_offsets, mask=mask_w, other=0.0)
+                x_f32 = x_vals.to(tl.float32)
+                acc += x_f32 * x_f32
+
+    # Compute inverse RMS
+    c_f32 = tl.full([1], C, dtype=tl.float32)
+    mean = acc / c_f32
+    inv_rms = tl.math.rsqrt(mean + eps)
+
+    # Second pass: normalize and store
+    for c in range(C):
+        c_i64 = tl.full([], c, tl.int64)
+        x_offsets = base_nh_x + c_i64 * stride_cx + offs_w_i64 * stride_wx
+        y_offsets = base_nh_y + c_i64 * stride_cy + offs_w_i64 * stride_wy
+        x_vals = tl.load(x_ptr + x_offsets, mask=mask_w, other=0.0)
+        x_f32 = x_vals.to(tl.float32)
+        y_f32 = x_f32 * inv_rms
+        y_vals = y_f32.to(x_vals.dtype)
+        tl.store(y_ptr + y_offsets, y_vals, mask=mask_w)
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel_single_pass(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    C_CONST: tl.constexpr,
+):
+    """
+    Single-pass RMSNorm kernel optimized for small C (fits in registers).
+    Loads all C channels once, computes sum of squares, normalizes, and stores.
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh - n * H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    # Cast to int64 for address arithmetic
+    stride_nx = tl.full([], stride_nx, tl.int64)
+    stride_cx = tl.full([], stride_cx, tl.int64)
+    stride_hx = tl.full([], stride_hx, tl.int64)
+    stride_wx = tl.full([], stride_wx, tl.int64)
+    stride_ny = tl.full([], stride_ny, tl.int64)
+    stride_cy = tl.full([], stride_cy, tl.int64)
+    stride_hy = tl.full([], stride_hy, tl.int64)
+    stride_wy = tl.full([], stride_wy, tl.int64)
+
+    n = n.to(tl.int64)
+    h = h.to(tl.int64)
+    offs_w_i64 = offs_w.to(tl.int64)
+
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # Load all channels into registers and compute sum of squares
+    offs_c = tl.arange(0, C_CONST)
+    mask_c = offs_c < C
+    
+    # Create 2D offset grid [C_CONST, BLOCK_W]
+    offs_c_i64 = offs_c.to(tl.int64)
+    
+    # Compute all offsets at once: [C_CONST, BLOCK_W]
+    x_offsets_2d = base_nh_x + offs_c_i64[:, None] * stride_cx + offs_w_i64[None, :] * stride_wx
+    mask_2d = mask_c[:, None] & mask_w[None, :]
+    
+    # Load all values at once
+    x_vals_2d = tl.load(x_ptr + x_offsets_2d, mask=mask_2d, other=0.0)
+    x_f32_2d = x_vals_2d.to(tl.float32)
+    
+    # Sum of squares across channels (axis=0)
+    sq_2d = x_f32_2d * x_f32_2d
+    acc = tl.sum(sq_2d, axis=0)
+    
+    # Compute inverse RMS
+    c_f32 = tl.full([1], C, dtype=tl.float32)
+    mean = acc / c_f32
+    inv_rms = tl.math.rsqrt(mean + eps)
+    
+    # Normalize and store
+    y_f32_2d = x_f32_2d * inv_rms[None, :]
+    y_vals_2d = y_f32_2d.to(x_vals_2d.dtype)
+    
+    y_offsets_2d = base_nh_y + offs_c_i64[:, None] * stride_cy + offs_w_i64[None, :] * stride_wy
+    tl.store(y_ptr + y_offsets_2d, y_vals_2d, mask=mask_2d)
+
+
+def _parse_kernel_args(x, args, kwargs):
+    eps = kwargs.pop("eps", None)
+    num_features = kwargs.pop("num_features", None)
+    if "features" in kwargs and num_features is None:
+        num_features = kwargs.pop("features")
+    out = kwargs.pop("out", None)
+    if out is None:
+        out = kwargs.pop("output", None)
+    if out is None:
+        out = kwargs.pop("y", None)
+    if out is None:
+        out = kwargs.pop("dst", None)
+
+    if len(args) == 1:
+        a0 = args[0]
+        if isinstance(a0, (int,)) and num_features is None:
+            num_features = int(a0)
+        else:
+            if eps is None:
+                eps = float(a0)
+    elif len(args) == 2:
+        a0, a1 = args
+        if isinstance(a0, (float,)) or not isinstance(a0, (int,)):
+            if eps is None:
+                eps = float(a0)
+            if num_features is None and isinstance(a1, (int,)):
+                num_features = int(a1)
+        else:
+            if num_features is None:
+                num_features = int(a0)
+            if eps is None:
+                eps = float(a1)
+
+    if eps is None:
+        eps = 1e-5
+    return eps, num_features, out
+
+
+def kernel_function(x, *args, **kwargs):
+    if not isinstance(x, torch.Tensor):
+        raise TypeError("x must be a torch.Tensor")
+    if x.device.type != "cuda":
+        raise ValueError("x must be on CUDA device")
+    if x.ndim != 4:
+        raise ValueError(f"Expected 4D NCHW tensor, got shape {tuple(x.shape)}")
+    if x.dtype not in (torch.float16, torch.bfloat16, torch.float32):
+        raise ValueError(f"Unsupported dtype: {x.dtype}. Use float16, bfloat16, or float32.")
+
+    eps, num_features, out = _parse_kernel_args(x, args, kwargs)
+
+    N, C, H, W = x.shape
+    if num_features is not None and int(num_features) != C:
+        raise ValueError(f"num_features ({num_features}) does not match input channels ({C}).")
+
+    if out is None:
+        y = x
+    else:
+        if not isinstance(out, torch.Tensor):
+            raise TypeError("Provided output must be a torch.Tensor")
+        if out.shape != x.shape or out.device != x.device or out.dtype != x.dtype:
+            raise ValueError("Output tensor must match input in shape, device, and dtype.")
+        y = out
+
+    sx0, sx1, sx2, sx3 = x.stride()
+    sy0, sy1, sy2, sy3 = y.stride()
+
+    # For C=64, we can use the single-pass kernel that loads all channels at once
+    # This reduces memory traffic by 2x
+    if C <= 128:
+        # Use power of 2 for C_CONST
+        C_CONST = 64 if C <= 64 else 128
+        BLOCK_W = 128
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel_single_pass[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            C_CONST=C_CONST,
+            num_warps=4,
+            num_stages=2,
+        )
+    else:
+        # Fall back to two-pass for large C
+        BLOCK_W = 256
+        BLOCK_C = 64
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+
+        _rmsnorm_nchw_kernel_fused[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            BLOCK_C=BLOCK_C,
+            num_warps=4,
+            num_stages=2,
+        )
+
+    return y
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'Poor L1 cache utilization with low hit rate causing excessive DRAM traffic', 'evidence': [{'metric': 'l1tex__t_sector_hit_rate.pct', 'value': 14.14, 'interpretation': 'Only 14% of L1 accesses hit cache, forcing 86% of requests to go to slower memory levels'}, {'metric': 'dram__throughput.avg.pct_of_peak_sustained_elapsed', 'value': 86.33, 'interpretation': 'DRAM is heavily utilized due to cache misses'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 28.5% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm requires reading the entire input tensor twice (once for sum-of-squares reduction, once for normalization), doubling memory traffic
+**Fix Applied**: Fuse the two passes into a single pass by loading channel data into shared memory or registers, computing sum-of-squares and normalization without re-reading from global memory. Increase BLOCK_W or add BLOCK_C tiling to process more channels per load
+**Performance**: 5.3295ms → 6.8496ms (28.5% slower)
+**NCU SOL (% of Peak)**: Combined: 83.1%, Compute: 20.5%, Memory: 83.1%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 13.4% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm doubles memory traffic by reading input data twice - once for reduction and once for normalization
+**Fix Applied**: Fuse the two passes into a single pass by caching loaded values in shared memory or registers. Load each channel value once, accumulate sum-of-squares, then use the cached values with the computed inv_rms to write output without re-reading from global memory.
+**Performance**: 5.3286ms → 6.0445ms (13.4% slower)
+**NCU SOL (% of Peak)**: Combined: 73.4%, Compute: 33.1%, Memory: 73.4%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 52.6% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm requires reading input data twice (once for sum-of-squares reduction, once for normalization), doubling memory traffic
+**Fix Applied**: Fuse the two passes into a single pass by using shared memory or registers to cache the input data: load each channel's data once, accumulate sum-of-squares in registers, compute inv_rms, then immediately normalize and store without re-reading from global memory
+**Performance**: 7.4809ms → 3.5475ms (52.6% faster)
+**NCU SOL (% of Peak)**: Combined: 86.5%, Compute: 21.1%, Memory: 86.5%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 15.2% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm requires reading input data twice, doubling memory bandwidth consumption
+**Fix Applied**: Fuse the two passes into a single pass by loading data into shared memory or registers, computing sum-of-squares, then immediately normalizing before storing, eliminating the second read from global memory
+**Performance**: 5.3296ms → 4.5174ms (15.2% faster)
+**NCU SOL (% of Peak)**: Combined: 96.4%, Compute: 20.4%, Memory: 96.4%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Two-pass algorithm requires reading the entire input tensor twice (once for sum-of-squares reduction, once for normalization), doubling memory traffic
+**Fix Applied**: Fuse the two passes into a single pass by loading channel data into shared memory or registers, computing sum-of-squares and normalization without re-reading from global memory. Increase BLOCK_W or add BLOCK_C tiling to process more channels per load
+**Expected**: Fusing two passes into one should reduce global memory traffic by ~50%, improving performance by reducing memory bottleneck from 83.1% SOL
+**Actual**: Performance degraded by 28.5% (5.33ms → 6.85ms), memory SOL remained high at 83.1%, indicating the fusion approach added overhead without reducing memory pressure (-28.5%)
+**Analysis**: The diagnosis that memory was the bottleneck was correct (83.1% Memory SOL). However, the fusion fix likely introduced inefficiencies: 1) Loading data into shared memory or registers for reuse requires additional synchronization and register pressure, 2) The shared memory approach may have caused bank conflicts or exceeded shared memory capacity, 3) Without config changes (BLOCK_W, BLOCK_C tiling), the implementation may have reduced parallelism or increased instruction overhead. The memory SOL staying at 83.1% suggests the fix didn't actually reduce memory traffic as intended.
+**Lessons**:
+  - Single-pass fusion is not always beneficial if it requires expensive intermediate storage or synchronization
+  - Shared memory usage needs careful sizing and bank conflict analysis before implementation
+  - Config changes should accompany algorithmic changes to maintain parallelism
+  - Register pressure from holding more data can hurt occupancy and overall performance
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Two-pass algorithm doubles memory traffic by reading input data twice - once for reduction and once for normalization
+**Fix Applied**: Fuse the two passes into a single pass by caching loaded values in shared memory or registers. Load each channel value once, accumulate sum-of-squares, then use the cached values with the computed inv_rms to write output without re-reading from global memory.
+**Expected**: Fusing two passes into one should reduce memory traffic by ~50%, leading to significant speedup since memory was the bottleneck at 73.4% SOL
+**Actual**: Performance degraded by 13.4% (5.33ms → 6.04ms) despite the optimization attempt aimed at reducing memory traffic (-13.4%)
+**Analysis**: The diagnosis that memory was the bottleneck was correct (73.4% Memory SOL vs 33.1% Compute SOL). However, the fix likely backfired because: 1) Caching values in shared memory or registers for RMSNorm requires storing all channel values (potentially thousands) which exceeds register limits and causes register spilling, 2) Using shared memory for caching adds synchronization overhead and shared memory bandwidth limitations, 3) The original two-pass approach may have benefited from L2 cache hits on the second pass, making the actual memory traffic less than 2x. The 'fix' likely introduced register pressure or shared memory bottlenecks that hurt performance more than the memory traffic it saved.
+**Lessons**:
+  - Caching large arrays (all channels) in registers/shared memory can cause register spilling which is worse than re-reading from global memory
+  - L2 cache can make two-pass algorithms more efficient than expected - the second pass often hits cache
+  - For RMSNorm with large hidden dimensions, the working set may be too large to cache efficiently
+  - Memory bottleneck doesn't always mean reducing reads is the solution - need to consider where data goes
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Two-pass algorithm requires reading input data twice (once for sum-of-squares reduction, once for normalization), doubling memory traffic
+**Fix Applied**: Fuse the two passes into a single pass by using shared memory or registers to cache the input data: load each channel's data once, accumulate sum-of-squares in registers, compute inv_rms, then immediately normalize and store without re-reading from global memory
+**Expected**: Fusing two passes into one should reduce global memory traffic by approximately 50%, leading to significant speedup since the kernel was memory-bound
+**Actual**: Performance improved by 52.6% (7.48ms → 3.55ms), which aligns well with the expected ~50% reduction in memory traffic. Memory SOL remains high at 86.5%, confirming the kernel is still memory-bound but now doing useful work with fewer redundant reads (+52.6%)
+**Analysis**: The diagnosis was correct - the two-pass algorithm was causing redundant global memory reads. By caching input data in registers/shared memory and computing sum-of-squares and normalization in a single pass, we eliminated one complete read of the input tensor. The ~2x speedup directly corresponds to halving the memory traffic. The Memory SOL at 86.5% indicates we're now efficiently utilizing memory bandwidth without the wasteful second pass. Compute SOL at 21.1% confirms compute is not the bottleneck.
+**Lessons**:
+  - Multi-pass algorithms that re-read the same data are prime targets for fusion optimization
+  - Caching data in registers or shared memory can eliminate redundant global memory traffic
+  - When memory-bound, reducing memory traffic directly translates to proportional speedup
+  - A 2x reduction in memory accesses can yield close to 2x performance improvement for memory-bound kernels
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Two-pass algorithm requires reading input data twice, doubling memory bandwidth consumption
+**Fix Applied**: Fuse the two passes into a single pass by loading data into shared memory or registers, computing sum-of-squares, then immediately normalizing before storing, eliminating the second read from global memory
+**Expected**: Fusing two passes into one should reduce global memory reads by approximately 50%, leading to significant speedup since memory was the bottleneck
+**Actual**: Achieved 15.2% improvement (5.33ms → 4.52ms) with memory remaining the dominant bottleneck at 96.4% SOL (+15.2%)
+**Analysis**: The diagnosis was correct - the two-pass algorithm was indeed causing excessive memory bandwidth consumption. The fix successfully reduced memory traffic by eliminating redundant global memory reads. The 15.2% improvement confirms memory was the bottleneck. However, memory SOL remains at 96.4%, indicating we're now more efficiently using memory bandwidth but still memory-bound. The improvement was less than the theoretical 50% because: (1) writes still occur, (2) shared memory/register overhead, (3) we're now closer to peak memory bandwidth utilization rather than wasting it on redundant reads.
+**Lessons**:
+  - Fusing passes is an effective strategy for memory-bound kernels with multiple data traversals
+  - Even after optimization, a kernel can remain memory-bound but with better bandwidth utilization
+  - 96.4% memory SOL indicates we're near peak memory efficiency - further gains require algorithmic changes or compute optimizations
+  - 15% improvement from pass fusion validates that redundant memory accesses were a real problem
+
+
+Guidance for this round:
+- AVOID: Implementing fusion without corresponding config tuning for tile sizes; Adding shared memory without analyzing capacity and bank conflict implications; Assuming algorithmic improvements automatically translate to performance gains; Attempting to cache entire channel dimension in registers for normalization kernels with large hidden sizes; Assuming two-pass algorithms always have 2x memory traffic - L2 cache effects matter; Single-pass fusion when the intermediate storage requirements exceed fast memory capacity; Implementing reduction operations as separate passes that re-read global memory; Assuming that algorithmic simplicity (separate passes) is worth the memory bandwidth cost; Multi-pass algorithms that re-read the same data from global memory; Expecting linear improvement proportional to reduced memory operations (other factors limit gains)- PRIORITIZE: Profile shared memory usage and occupancy before and after changes; Try vectorized loads (float4) to improve memory bandwidth utilization instead of fusion; Consider warp-level primitives for reduction to avoid shared memory overhead; Tune BLOCK_W/BLOCK_C parameters independently before attempting fusion; Improve memory access patterns (coalescing, alignment) rather than reducing pass count; Vectorized loads (float4) to improve memory bandwidth utilization; Optimize the reduction phase with warp-level primitives for faster sum computation; Consider whether the hidden dimension size allows for register-based caching before attempting fusion; Continue optimizing memory access patterns since kernel is still 86.5% memory-bound; Consider vectorized loads (float4) to improve memory throughput efficiency; Explore coalescing optimizations if access patterns are not fully coalesced; Look for opportunities to reduce memory traffic further through data reuse or compression; Look for opportunities to increase arithmetic intensity since memory is saturated; Consider vectorized loads (float4) to maximize memory transaction efficiency; Explore whether computation can be restructured to hide remaining memory latency; Since compute SOL is only 20.4%, find ways to overlap more computation with memory operations
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

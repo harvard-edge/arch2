@@ -5,11 +5,45 @@ and reproduction scripts used by the book and its [public data page](../www/data
 The [study inventory](studies/README.md) identifies the retained studies and their
 limits; chapter datasets have a separate [provenance guide](datasets/README.md).
 
+## Where a figure's data lives
+
+Every data-backed figure has one record to start from:
+`book/contents/chapters/<chapter>/data/<figure-id>/provenance.yml` (schema
+`arch2-provenance/v1`). When the figure's data belongs to that figure alone, the
+CSV, its generator, and any redistributable upstream snapshot sit in the same
+folder, and the record's `sources` list names each upstream document with its
+URL or citation key, the table or figure used, the read date, a sha256, and where
+a copy is kept. Papers that cannot be redistributed are kept outside the
+repository in the author's private source store and are pinned here by hash.
+When the data comes from a multi-figure study or a chapter measurement harness,
+the record points `upstream` to that study's own `provenance.yml` and source
+manifest. Rendered images stay in the chapter's `images/` folder.
+
+Each entry in a record's `sources` list uses these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `name`, `type`, `id` | What the document is, its kind (paper, report, dataset, filing, web page, repository file, API), and its bibliography key |
+| `url` | Where it was obtained |
+| `locator` | The table, figure, page, or rows the values came from |
+| `access` | How it was obtained: `open`, `login`, `paywalled`, or `requested` with `access_requested` and `access_granted` dates |
+| `retrieved` | The date the bytes the book used were fetched or read |
+| `sha256`, `sha256_of` | Hash of the bytes the book used, and what those bytes are |
+| `receipt` or `private_copy` | Where a copy is kept: in the repository, or in the private source store when it cannot be redistributed |
+| `pulled` | A later fetch into the store: date, URL, hash, and whether it matches `sha256` |
+| `basis`, `gap` | Which records these fields were copied from, and what is still missing |
+
+`python3 data/validate_figure_provenance.py` fails a commit when a data figure has
+no record, and `--verbose` lists the source gaps (a source with no locator, full
+hash, or retained copy). `data/audits/MOVES.yml` maps the paths used before the
+figure data moved into chapter folders on 2026-11-06, for audit prose written
+earlier.
+
 ## Layout
 
 | Location | Contents |
 | --- | --- |
-| `datasets/` | Chapter datasets, upstream source snapshots, plotting scripts, and `provenance.yml` |
+| `datasets/` | Shared upstream snapshots, table and prose datasets, and the figure inventory `provenance.yml` |
 | `studies/01-silicon-errata-archaeology/` | Rebuilt extraction and classification of published CPU errata |
 | `studies/02-ast-complexity-cliff/` | Source-syntax measurements from pinned RTL repositories |
 | `studies/06-eda-seed-dispersion/` | Twenty executed OpenROAD placement runs and raw stage metrics |

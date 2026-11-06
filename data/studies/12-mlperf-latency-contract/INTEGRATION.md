@@ -1,6 +1,10 @@
 # Editorial placement: latency contracts
 
-Status: proposed on October 17, 2026; no manuscript change applied. This note
+Superseded on November 2, 2026: the throughput share follows the submitters' target rates, so the lead-in, caption, and landing suggested below overstate the data. See the study README.
+
+Status: proposed on October 17, 2026; no manuscript change applied. The counts
+quoted below predate the removal of the has_power filter on November 2, 2026
+(19 pairs, 63.9 percent maximum); the study README has the current values. This note
 supersedes the broader placement suggestion in the packet README. See the
 [selection proposal](../../../integration/manage-work-tree/PLOT_INTEGRATION_PROPOSAL.md).
 

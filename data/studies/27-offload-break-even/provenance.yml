@@ -5,25 +5,26 @@
 schema: arch2-provenance/v1
 study: offload-break-even
 title: "The unamortized offload wall: where accelerator offload breaks even against an optimized host"
-claim: "On an M5 Max with Accelerate BLAS, a resident FP32 MPS matmul first beats the host at n=768 (pooled; 768, 1024, 768 across three runs), the same product including copies in and out at n=1024 (1024, 1024, 768), sixteen separate MPS launches beat host bmm from n=384 and one batched launch from n=256 (both stable across runs); the resident launch floor is 1.82e-4 s and sixteen launches cost 3.21x one batched launch for n<=256."
+claim: "See summary.json; crossovers are recomputed by reproduce.py from raw/run-1.csv through raw/run-5.csv, the declared runs."
 evidence_class: measured   # mined | measured | transcribed
 status: measured_pilot_one_host
 observation_unit: One timed repetition of one arm at one matrix size in one run (process)
-selection: "All 16 sizes in the declared grid, all 6 arms, all 31 repetitions, all 3 runs are retained. Nothing was dropped."
+selection: "All 16 sizes in the declared grid, all 6 arms, all 31 repetitions, all 5 runs are retained. Nothing was dropped."
 
 host:
-  machine: "Apple M5 Max laptop (12 performance + 6 efficiency CPU cores, 64 GiB unified memory)"
+  machine: "Apple M5 Max laptop (64 GiB unified memory; core counts by perflevel in raw/run-<k>.host.json)"
   os: "macOS 26.4 (Darwin 25.4.0)"
-  python: "3.14.4 (Homebrew)"
-  torch: "2.11.0, BLAS_INFO=accelerate (Apple Accelerate / veclib), USE_MPS, OpenMP, 6 intra-op threads by default"
+  python: "3.12.13"
+  interpreter: "Not recorded. raw/run-<k>.host.json gives the Python and torch versions and a command of 'collect.py --run-id <k>', with no interpreter path."
+  torch: "2.14.1, BLAS_INFO=accelerate, 6 intra-op threads"
   accelerator: "Apple GPU through the PyTorch MPS backend; same physical DRAM as the CPU (unified memory)"
-  power: "AC power, battery charging; recorded per run in raw/run-<k>.host.json"
+  power: "battery power; recorded per run in raw/run-<k>.host.json"
   thermal: "pmset -g therm output recorded per run; no active cooling control"
 
 sources:
   - name: "This study's own measurement"
     type: measured_run
-    note: "collect.py executed three times as three fresh processes on 2026-11-02; see raw/run-<k>.host.json for timestamps and host state."
+    note: "collect.py executed five times as fresh processes on 2026-11-02, about 45 s apart; see raw/run-<k>.host.json for timestamps and host state."
   - name: "Pilot that motivated the grid and arms"
     type: pilot_script
     path: (pilot retained in private review notes)
@@ -39,19 +40,61 @@ datasets:
   - file: raw/run-3.csv
     rows: 2976
     row_provenance: [run_id, n, panel, arm, arm_order, rep, seconds]
+  - file: raw/run-4.csv
+    rows: 2976
+    row_provenance: [run_id, n, panel, arm, arm_order, rep, seconds]
+  - file: raw/run-5.csv
+    rows: 2976
+    row_provenance: [run_id, n, panel, arm, arm_order, rep, seconds]
   - file: raw/run-1.host.json
   - file: raw/run-2.host.json
   - file: raw/run-3.host.json
+  - file: raw/run-4.host.json
+  - file: raw/run-5.host.json
     note: "Host state per run: CPU model, cores, OS, Python, torch version and build config, thread count, BLAS backend, power source, thermal state, seed, command, start and end timestamps, elapsed seconds."
+  - file: raw/run-1.log
+  - file: raw/run-2.log
+  - file: raw/run-3.log
+  - file: raw/run-4.log
+  - file: raw/run-5.log
+    note: "Console output of each run: one median line per arm and size, then the row count and elapsed time."
+  - file: raw/superseded-shared-wait/run-1.csv
+  - file: raw/superseded-shared-wait/run-2.csv
+  - file: raw/superseded-shared-wait/run-3.csv
+  - file: raw/superseded-shared-wait/run-1.host.json
+  - file: raw/superseded-shared-wait/run-2.host.json
+  - file: raw/superseded-shared-wait/run-3.host.json
+    note: "Retained failed attempt, excluded from reproduce.py. Three runs under Python 3.14.4 and torch 2.11.0, with a sixteen-launch arm that waited once after all sixteen launches."
   - file: medians.csv
     note: "Derived. One row per (run | pooled) x arm x n with n_samples, median, q1, q3, iqr, min, max."
   - file: summary.json
     note: "Derived. Crossovers, launch floor, launch ratio, non-monotone flags, dispersion at crossovers."
 
 produced_by: reproduce.py
+attempts_note: "Every attempt known to this record. Only the entry named current feeds summary.json, medians.csv, and the figure."
+attempts:
+  - name: pilot
+    outcome: "15 repetitions, 8 sizes, panel (a) only; motivated the grid and arms, superseded."
+    retained: "private review notes"
+  - name: shared-wait
+    runs: 3
+    outcome: "Failed an independent audit: the sixteen-launch arm waited once after all launches, and the prose called consecutive processes independent."
+    environment: "Python 3.14.4, torch 2.11.0"
+    retained: raw/superseded-shared-wait/
+  - name: current
+    runs: 5
+    outcome: "Reported."
+    environment: "Python 3.12.13, torch 2.14.1"
+    retained: raw/run-<k>.*
+  - name: audit-rerun
+    runs: 3
+    outcome: "Auditor's own reruns (run ids 91 to 93) on a scratch copy. Results are stated in data/audits/fig-ch02-offload-break-even.yml; they feed nothing here."
+    retained: "No raw files in this folder."
+environment: "Python 3.12.13 with torch 2.14.1, as every raw/run-<k>.host.json records. The receipts name no interpreter path. On this host, .venv/bin/python in the Arch2 checkout reports those versions and bare python3 reports Python 3.14.4 and torch 2.11.0, the superseded environment, so bare python3 does not reproduce the collection."
 collect: |
-  for k in 1 2 3; do python3 collect.py --run-id $k; sleep 5; done
-reproduce: python3 reproduce.py
+  # PY is an interpreter with the environment above.
+  for k in 1 2 3 4 5; do "$PY" collect.py --run-id $k; sleep 45; done
+reproduce: python3 reproduce.py  # stdlib only; rewrites summary.json and medians.csv from raw/
 
 measurement:
   dtype: float32
@@ -59,40 +102,43 @@ measurement:
   batch_for_panel_b: 16
   warmup_per_arm_per_n: 5
   timed_repetitions_per_arm_per_n: 31
-  runs: 3
+  runs: 5
   timer: time.perf_counter around the call; torch.mps.synchronize() inside the timed region for every MPS arm
   arm_order: "The six arms are shuffled per n with random.Random(1000 + run_id); the position is recorded in the arm_order column."
-  operands: "torch.randn, seeded with torch.manual_seed(1000 + run_id); the same A, B (and A16, B16) feed all six arms at a given n."
+  operands: "torch.randn, seeded with torch.manual_seed(1000 + run_id); at a given n, one A, B pair feeds the three panel (a) arms and one A16, B16 pair feeds the three panel (b) arms."
   output_allocation: "Inside the timed region for every arm (fresh output each repetition), as for an ordinary caller."
   arms:
     cpu_single: "torch.matmul(A, B) on the host; synchronous"
     mps_resident: "torch.matmul(Ad, Bd) with operands already on MPS; then synchronize"
     mps_copy: "torch.matmul(A.to('mps'), B.to('mps')).cpu(); then synchronize"
     cpu_bmm: "torch.bmm(A16, B16) on the host over a (16, n, n) batch"
-    mps_16_launch: "sixteen torch.matmul(A16d[i], B16d[i]) launches on resident operands; one synchronize after the sixteenth"
+    mps_16_launch: "sixteen torch.matmul launches on resident operands, with torch.mps.synchronize after each"
     mps_bmm: "one torch.bmm(A16d, B16d) launch on resident operands; then synchronize"
 
 transformations:
-  - Per (run, arm, n): median and inclusive-method quartiles over the 31 samples; pooled statistics over all 93 samples.
-  - Crossover: first n in the grid at which the MPS arm's median is below the CPU arm's median for the same panel; stays_ahead is true when every larger n in the grid is also ahead. Reported per run and on pooled medians; stable means the same n in all three runs and stays_ahead in each.
+  - Per (run, arm, n): median and inclusive-method quartiles over the 31 samples; pooled statistics over all 155 samples.
+  - Crossover: first n in the grid at which the MPS arm's median is below the CPU arm's median for the same panel; stays_ahead is true when every larger n in the grid is also ahead. Reported per run and on pooled medians; stable means the same n in all five runs and stays_ahead in each.
   - Launch floor: median over all samples with n <= 256 for a resident MPS arm.
   - Sixteen-launch over one-launch ratio: ratio of medians per n for n <= 256, summarized by its median across those sizes.
   - Non-monotone: a point where the median is lower than at the previous grid size; a point is recurring when it appears in every run.
-  - Dispersion at crossover: spread of the three per-run medians as a fraction of the pooled median, and pooled IQR as a fraction of the median.
+  - Dispersion at crossover: spread of the five per-run medians as a fraction of the pooled median, and pooled IQR as a fraction of the median.
 
 verified: "reproduce.py recomputes summary.json from raw/ alone; every number in README.md is taken from its output."
 not_verified: "No second machine, no discrete GPU, no other BLAS, no other dtype, no independent timer (for example Metal GPU timestamps), no power or energy measurement."
 
 caveats:
-  - One machine, one session, three runs; the dispersion measured is within-session run-to-run dispersion, not across-machine or across-day dispersion.
+  - One machine, one session, five runs; the dispersion measured is within-session run-to-run dispersion, not across-machine or across-day dispersion.
   - Unified memory. The copy arm measures an in-DRAM copy between CPU-visible and MPS-visible buffers plus synchronization, not a discrete-link (PCIe, NVLink) transfer. On a discrete accelerator the copy penalty would be larger and the copy crossover later.
   - The CPU arm uses Apple Accelerate (vendor BLAS) through torch.matmul with the default 6 intra-op threads; it is an optimized host, not a naive loop. A naive host would move every crossover to a smaller n.
+  - The 6 is the configured thread count that torch reports, not achieved parallelism. The 2026-11-02 audit saw about 1 core busy in the CPU arm, so a host using more cores could move the crossovers. See the limits in data/audits/fig-ch02-offload-break-even.yml.
+  - Background load on the host was not recorded in the receipts.
   - FP32 only. Reduced-precision kernels change both the accelerator's kernel time and the host's, and so the crossover.
   - No overlap of transfer and compute was attempted; the copy arm is serial copy-in, compute, copy-out.
   - Timings include Python dispatch and PyTorch operator overhead on both sides; the MPS floor includes command-buffer encode, commit, and the synchronize wait.
-  - The sixteen-launch arm synchronizes once after the sixteenth launch; it measures sixteen submissions and one round trip, not sixteen round trips.
+  - The sixteen-launch arm synchronizes after every launch, so it measures sixteen round trips. The superseded runs waited once after all sixteen launches.
   - Output allocation is inside the timed region (allocator-cached after warmup on both devices).
   - Panel (b) host arm is torch.bmm; its scaling relative to sixteen single matmul calls was not studied separately.
+  - The 768 lower bound of the copy crossover depends on the statistic. Only run 1 reaches it, by median and by minimum. Mean time and the last 16 repetitions give 1,024 in all five runs.
   - The grid is coarse between powers of two; a crossover reported at n means the first grid point, and the true crossover lies between the previous grid point and n.
 
 outputs: [summary.json, medians.csv]

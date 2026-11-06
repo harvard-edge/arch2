@@ -35,7 +35,7 @@ def group(rows, normalize):
 def main():
     manifest = verify_sources(HERE, allow_missing_gitignored=True)
     shared = HERE.parent / "13-errata-dispositions"
-    verify_sources(shared, allow_missing_gitignored=True)
+    shared_check = verify_sources(shared, allow_missing_gitignored=True)
     assert (HERE / "raw/source_manifest.json").read_bytes() == (
         shared / "source_manifest.json"
     ).read_bytes()
@@ -168,7 +168,8 @@ def main():
         HERE,
         {
             "source_files_hash_verified": len(manifest["files"]),
-            "shared_vendor_package_hash_verified": True,
+            "shared_vendor_package_files_declared": len(shared_check["files"]),
+            "shared_vendor_package_files_hash_verified": shared_check["verified_count"],
             "normalization_sensitivity_computed": True,
             "title_groups_partition_all_entries": True,
         },

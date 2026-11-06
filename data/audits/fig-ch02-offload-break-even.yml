@@ -1,0 +1,77 @@
+figure: fig-ch02-offload-break-even
+producer: session fe4868b7
+auditor: red-team-round3-ch02 2026-11-02
+audited_on: '2026-11-02'
+inputs:
+  caption: 6281869144a662dd78a71a35d6d6ffe0e0ce038c460a46e71a9ee6202d45daa9
+  data/studies/27-offload-break-even/medians.csv: 647b8061f3a4d1291a4e8d5d9051a5f8f5dbb7f7f7b5d673ee0fcfad09f13432
+  data/studies/27-offload-break-even/plot.py: 84467c7a26607800b46d34fc18d3848f844416e975fcbe2cc1fd61999a1f92ee
+  data/studies/27-offload-break-even/summary.json: 0a494a4a40ceb26eb076f63e8f279a7f3278424480c5e09e249a0e7681911c7e
+source_check: Measured study, so the primary source is the raw receipts. raw/run-1..5.csv hold 2,976 rows
+  each; all 14,880 samples sit on the 24 MHz perf_counter tick grid (largest deviation 0.017 tick); all
+  480 log median and arm-order lines in raw/run-k.log match the CSVs; host.json records Apple M5 Max,
+  Python 3.12.13, torch 2.14.1, battery power, seeds 1001 to 1005. sha256-manifest.txt checks clean. sysctl
+  on this host also reports Apple M5 Max.
+rerun:
+  command: python3 reproduce.py and /Users/VJ/GitHub/Arch2/.venv/bin/python plot.py in a scratch copy;
+    then collect.py --run-id 91, 92, 93 with --out in scratch
+  result: 'summary.json and medians.csv reproduce byte for byte. Regenerated PNG is byte-identical to
+    the book PNG; SVG and PDF differ in hash, as they do across any rerun of the other generators here
+    (embedded dates). My own metric code on raw CSVs gives the same per-run crossovers: resident 512,768,768,768,768;
+    copy 768,1024,1024,1024,1024; sixteen-launch 512,768,512,512,768; one-launch 256 in all five. Pooled
+    ratio 15.41 prints as 15; per-run extremes 5.83 and 17.59 print as 6 and 18. Fresh runs on AC power
+    under load average near 8: resident 1024,1024,768; copy 1024,1024,1536; sixteen-launch 768,768,768;
+    one-launch 256,256,256; elapsed 51 to 57 s against 93 to 109 s on battery. Those raw files stay in
+    scratch (csv sha256 prefixes 6841a19ae799, 0b604c7fd31d, f604311e4266) and feed nothing.'
+attempts:
+- attack: 'Statistic choice: recompute crossovers with mean, minimum, third quartile, and first and second
+    halves of the repetitions.'
+  outcome: survived
+  detail: One-launch stays 256 everywhere. Copy run 1 moves 768 to 1024 under mean and q3, inside the
+    printed range.
+- attack: Resample repetitions within a run, 400 bootstrap draws per arm.
+  outcome: survived
+  detail: One-launch 256 in 400 of 400; the others split between the two printed grid values.
+- attack: 'Fabrication and timing: tick grid, log agreement, and elapsed time against summed samples times
+    36/31.'
+  outcome: survived
+  detail: Summed samples give 85 to 102 s against logged 93 to 109 s, the rest being setup. Plausible.
+- attack: 'Environment selection: the environment changed along with the arm fix. Compare superseded runs
+    and fresh runs.'
+  outcome: survived
+  detail: 'Superseded crossovers: resident 768,1024,768; copy 1024,1024,768 (third run not staying ahead);
+    one-launch 256. Resident and copy are a step later than reported in the old environment and under
+    AC power, but the book limits crossovers to one session and machine and gives no design constant.
+    One-launch 256 holds in all three conditions, 11 runs.'
+- attack: 'Fair host baseline: sixteen host products as bmm against sixteen single products; host throughput
+    sanity.'
+  outcome: survived
+  detail: bmm over 16 x single is 0.85 to 1.09 across sizes. Host about 0.9 TFLOPS and GPU about 4.7 TFLOPS
+    at n=3072 are plausible.
+- attack: 'Caption and prose stronger than data: launch floor, copy direction, ''held across these runs'',
+    full grid step, alt text.'
+  outcome: survived
+  detail: All supported; resident beats copy by a grid step in every run. See findings for two wording
+    points.
+negative_control: In scratch, multiplying run-3 mps_bmm n=256 samples by 5 moves that run's crossover
+  to 384, and stable_across_runs becomes false.
+limits: One machine, one session, battery power, FP32. Battery state roughly doubles elapsed time, so
+  crossovers are session-bound as the caption says. My reruns ran under concurrent load on AC power and
+  are a robustness check, not a replication of the battery session. Metal GPU timestamps not used. rusage
+  here shows cpu/wall 0.95 to 0.99 for matmul and bmm at n=1024 and 3072, so the host arm occupies about
+  one core despite 6 configured threads; a host using more cores could move crossovers. runs.jsonl logs
+  only one reproduce.py call; collect.py attempts are listed only in provenance.yml, so unlogged collection
+  attempts cannot be excluded. The pilot sits in private notes that I was barred from reading. Auditor
+  is a fresh-context subagent launched from the producing session, same model family.
+verdict: PASS
+findings:
+- 'Minor, prose: 02-pressures.qmd:307 ties the untested growing transfer cost to shared memory. Dense
+  matmul moves n^2 bytes for n^3 work, so even a discrete link would not reach the no-break-even case
+  on this kernel. The claim that it is untested stands.'
+- 'Minor, alt text 02-pressures.qmd:305: ''rises steadily'' glosses a recurring dip at n=32 (cpu_bmm in
+  all runs, cpu_single in four of five).'
+- 'Provenance: provenance.yml audit-rerun entry and thread caveat point at this audit file for runs 91
+  and 92 from an earlier record. This record replaces that one; its reruns are 91 to 93 as above, and
+  the about-one-core observation is restated under limits.'
+- 'Copy cost is not fixed: copy minus resident is 0.40 ms at small n and 3.17 ms at n=3072, consistent
+  with the stated in-DRAM copy.'

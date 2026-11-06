@@ -2,7 +2,9 @@
 """Compute audit agreement and audit-adjusted subsystem shares.
 
 Inputs:
-    errata_classified.csv    rule label for every erratum (the population)
+    errata_classified.csv    rule label for every erratum the sample was drawn from
+    excluded_rows.csv        rows left out of the population (no retained or
+                             retrievable primary text); see load_population()
     audit_sample.csv         seeded stratified sample with the auditor's label
     reporting_classes.yml    post-audit merge of rule classes into reporting classes
 
@@ -10,6 +12,11 @@ Output:
     audit_metrics.json       every number the chapter and the figure use
 
 Definitions
+    Population   errata_classified.csv less the rows in excluded_rows.csv.
+                 The sample was drawn before the exclusion and holds none of
+                 the excluded rows, so within each stratum it remains a simple
+                 random draw from the rows that stay; the class_size column
+                 records the stratum size at the draw.
     Stratum      a rule class (including Unclassified); N_c errata in the
                  population, n_c audited.
     Precision    for a class c, the fraction of audited errata in stratum c whose
@@ -69,12 +76,48 @@ def pct(xs: list[float], q: float) -> float:
     return xs[lo] + (xs[hi] - xs[lo]) * (i - lo)
 
 
-def main() -> int:
-    pop = list(csv.DictReader((HERE / "errata_classified.csv").open()))
-    aud = list(csv.DictReader((HERE / "audit_sample.csv").open()))
-    rep = yaml.safe_load((HERE / "reporting_classes.yml").read_text())
+def drawn_population() -> list[dict]:
+    """Every classified row, as it stood when the sample was drawn."""
+    return list(csv.DictReader((HERE / "errata_classified.csv").open()))
+
+
+def excluded_keys() -> set[tuple[str, str]]:
+    rows = csv.DictReader(
+        line for line in (HERE / "excluded_rows.csv").open() if not line.startswith("#")
+    )
+    return {(r["family"], r["erratum_id"]) for r in rows}
+
+
+def load_population() -> list[dict]:
+    """The rows every count, share, and metric uses: drawn rows less excluded ones."""
+    drop = excluded_keys()
+    pop = drawn_population()
+    kept = [r for r in pop if (r["family"], r["erratum_id"]) not in drop]
+    if len(pop) - len(kept) != len(drop):
+        raise SystemExit("excluded_rows.csv names a row that is not in errata_classified.csv")
+    return kept
+
+
+def compute(
+    rep: dict,
+    aud: list[dict] | None = None,
+    pop: list[dict] | None = None,
+    replicates: int = B,
+) -> tuple[dict, dict]:
+    """Score one grouping of rule classes. Every grouping goes through this path.
+
+    `rep` has the shape of reporting_classes.yml: `reporting` and `not_resolved`.
+    `aud` and `pop` default to the committed files. merge_rule_sensitivity.py passes
+    a changed label set with replicates=0, which leaves every interval as None.
+    """
+    pop = pop if pop is not None else load_population()
+    aud = aud if aud is not None else list(csv.DictReader((HERE / "audit_sample.csv").open()))
     if any(not r["audit_label"] for r in aud):
         raise SystemExit("audit_sample.csv has unlabeled rows")
+    drop = excluded_keys()
+    if any((r["family"], r["erratum_id"]) in drop for r in aud):
+        raise SystemExit("an excluded row is in the audit sample; drop it before scoring")
+    drawn = Counter(r["subsystem"] for r in drawn_population())
 
     N = len(pop)
     Nc = Counter(r["subsystem"] for r in pop)
@@ -82,7 +125,7 @@ def main() -> int:
     for r in aud:
         strata[r["rule_label"]].append(r)
     for c, rows in strata.items():
-        if rows[0]["class_size"] and int(rows[0]["class_size"]) != Nc[c]:
+        if rows[0]["class_size"] and int(rows[0]["class_size"]) != drawn[c]:
             raise SystemExit(
                 f"class size for {c} changed since the sample was drawn; redraw"
             )
@@ -171,7 +214,7 @@ def main() -> int:
     point = estimate(strata)
     rng = random.Random(SEED)
     boots = []
-    for _ in range(B):
+    for _ in range(replicates):
         s = {}
         for c, rows in strata.items():
             s[c] = (
@@ -181,7 +224,9 @@ def main() -> int:
             )
         boots.append(estimate(s))
 
-    def ci(f) -> list[float]:
+    def ci(f) -> list[float] | None:
+        if not boots:
+            return None
         xs = [f(b) for b in boots]
         return [pct(xs, 0.025), pct(xs, 0.975)]
 
@@ -207,6 +252,8 @@ def main() -> int:
     fam = Counter(r["family"] for r in pop)
     out = {
         "population": N,
+        "excluded_rows": len(drop),
+        "drawn_population": sum(drawn.values()),
         "families": len(fam),
         "documents": len(fam),
         "intel_errata": sum(r["vendor"] == "Intel" for r in pop),
@@ -248,10 +295,18 @@ def main() -> int:
         "unique_title_shares": {n: uniq_share[n] / len(uniq) for n in rep_names},
         "bootstrap": {"replicates": B, "seed": SEED},
     }
+    return out, point
+
+
+def main() -> int:
+    rep = yaml.safe_load((HERE / "reporting_classes.yml").read_text())
+    out, point = compute(rep)
     (HERE / "audit_metrics.json").write_text(json.dumps(out, indent=2) + "\n")
 
+    N, audited = out["population"], out["audited"]
+    per_class, per_rep, shares = out["per_class"], out["per_reporting_class"], out["shares"]
     print(
-        f"population {N}; audited {len(aud)}; raw agreement {out['audited_agree_raw']}/{len(aud)}"
+        f"population {N}; audited {audited}; raw agreement {out['audited_agree_raw']}/{audited}"
     )
     a, (l, h) = point["agree"], out["agreement_weighted_ci95"]
     print(f"weighted agreement, 12 classes: {a:.3f} [{l:.3f}, {h:.3f}]")

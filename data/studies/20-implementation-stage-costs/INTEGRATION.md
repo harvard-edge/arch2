@@ -25,14 +25,14 @@ Suggested lead-in:
 
 > A resource record is useful only when its time boundary is explicit. One
 > retained LibreLane run for the `spm` design on IHP SG13G2 records 78 direct
-> step intervals totaling 106.3 seconds. The enclosing `Run Test` action spans
+> step intervals totaling 106.3 seconds. The enclosing `Run Test` job step spans
 > 108 seconds, while the complete CI job spans 288 seconds.
 
 Suggested caption:
 
 > **Physical-flow cost depends on the boundary being measured.** The upper
 > panel shows the longest steps in one retained `spm`/IHP SG13G2 run; the lower
-> panel compares summed direct-step time with the enclosing action and CI job.
+> panel compares summed direct-step time with the enclosing job step and CI job.
 > Detailed routing takes 25.8 seconds, the longest individual step. The intervals
 > are nested and must not be added. Source: LibreLane workflow 37749124131,
 > job 113223652131, completed October 8, 2026.
@@ -60,10 +60,11 @@ artifact has 915 entries. Process statistics cover 45 of 78 steps; missing
 memory records for the other 33 are unknown, not zero.
 
 Add a source-specific citation for the
-[retained CI job](https://github.com/librelane/librelane/actions/runs/37749124131/job/113223652131)
+[CI job](https://github.com/librelane/librelane/actions/runs/37749124131/job/113223652131)
 and its artifact, with commit `36aa197408e1b6508fc4862b7758d21ec8853048`,
-artifact identity, and archive hash from the manifest. The artifact may expire
-upstream, so retain the local ZIP and extraction records. Do not label the
+artifact identity, and archive hash from the manifest. The artifact expires
+upstream on 2027-01-06, so the study retains the run records listed under
+Retention in [README.md](README.md), not the complete ZIP. Do not label the
 run a representative runtime distribution, an AI speedup, or a fully qualified
 signoff. DRC/LVS results coexist with recorded constraint and coverage warnings.
 Several individual tool version strings are unavailable.
@@ -73,7 +74,7 @@ Several individual tool version strings are unavailable.
 The source bundle is [figure.svg](figure.svg), [figure.pdf](figure.pdf), and
 [figure.png](figure.png). The PNG was visually inspected during this review.
 Run `python3 data/studies/20-implementation-stage-costs/reproduce.py` from
-the repository root to derive the figure from the retained artifact; see
+the repository root to derive the figure from the retained run records; see
 [build_receipt.json](build_receipt.json) for packages and hashes.
 
 Proposed chapter asset and label: `images/fig-ch06-flow-accounting` and

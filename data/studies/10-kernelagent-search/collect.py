@@ -57,6 +57,7 @@ def main():
         "input_ncu_metrics.json",
         "optimized_ncu_metrics.json",
         "kernel.py",
+        "opt_prompt.txt",
     }
     entries = [
         e
@@ -77,7 +78,7 @@ def main():
                 "first_collected_utc": previous.get("first_collected_utc", now),
                 "last_verified_utc": now,
                 "inventory_complete": True,
-                "selection": "Every benchmark and NCU JSON, every per-round kernel, root benchmark and README, and all problem/input/final kernels in the complete Git tree.",
+                "selection": "Every benchmark and NCU JSON, every per-round kernel and optimization prompt, root benchmark and README, and all problem/input/final kernels in the complete Git tree. The prompts carry the attempt history that attempts.csv parses.",
                 "files": receipts,
             },
             indent=2,

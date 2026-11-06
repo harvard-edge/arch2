@@ -111,6 +111,7 @@ def main() -> int:
     exe = marimo()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     total_removed = 0
+    sync_failures: list[Path] = []
 
     for nb in books:
         stem = nb.stem
@@ -134,32 +135,34 @@ def main() -> int:
         # 3. Colab notebook sync via jupytext (only for labs/notebooks)
         if "labs" in nb.parts:
             ipynb = nb.parent / f"{stem}.ipynb"
-            try:
-                env = os.environ.copy()
-                env[
-                    "PATH"
-                ] = "/Library/Frameworks/Python.framework/Versions/3.14/bin:" + env.get(
-                    "PATH", ""
-                )
-                subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "jupytext",
-                        "--to",
-                        "notebook",
-                        str(nb),
-                        "-o",
-                        str(ipynb),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    env=env,
-                )
-                if ipynb.exists():
-                    print(f"  synced colab notebook: {ipynb.relative_to(REPO)}")
-            except Exception:
-                pass
+            env = os.environ.copy()
+            env["PATH"] = (
+                "/Library/Frameworks/Python.framework/Versions/3.14/bin:"
+                + env.get("PATH", "")
+            )
+            synced = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "jupytext",
+                    "--to",
+                    "notebook",
+                    str(nb),
+                    "-o",
+                    str(ipynb),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            if synced.returncode == 0:
+                print(f"  synced colab notebook: {ipynb.relative_to(REPO)}")
+            else:
+                # An older .ipynb can remain, so the published copy may be stale.
+                sync_failures.append(ipynb)
+                print(f"  COLAB SYNC FAILED: {ipynb.relative_to(REPO)}")
+                print(f"    {synced.stderr.strip()}")
 
         removed = scrub(live) + scrub(OUTPUT)
         total_removed += len(removed)
@@ -173,6 +176,12 @@ def main() -> int:
     if leaks:
         print(f"\n{len(leaks)} FORBIDDEN FILE(S) SURVIVED THE SCRUB. Not publishable:")
         for p in leaks:
+            print(f"  - {p.relative_to(REPO)}")
+        return 1
+
+    if sync_failures:
+        print(f"\n{len(sync_failures)} COLAB NOTEBOOK(S) NOT SYNCED. May be stale:")
+        for p in sync_failures:
             print(f"  - {p.relative_to(REPO)}")
         return 1
 

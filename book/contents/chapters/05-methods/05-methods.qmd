@@ -42,7 +42,7 @@ Naming these roles describes a design system far more clearly than naming its mo
 [^fn-roofline-c05]: **Analytical roofline model**: A visual and quantitative formulation that bounds theoretical peak compute performance and memory bandwidth to identify whether an operational kernel or pipeline is compute-bound or memory-bound [@Williams2009Roofline].
 
 ::: {.callout-war-story title="A method family carries its assumptions"}
-**The claim.** Itanium's explicitly parallel instruction computing (EPIC) design moved instruction scheduling out of hardware into the compiler, assuming explicit parallelism, predication, and speculation would allow wide execution with static scheduling [@SchlanskerRau2000EPIC].
+**The claim.** Explicitly parallel instruction computing (EPIC), the design style behind Intel's IA-64 instruction set, moved instruction scheduling out of hardware into the compiler, assuming explicit parallelism, predication, and speculation would allow wide execution with static scheduling [@SchlanskerRau2000EPIC].
 
 **The gap.** A static schedule cannot know every memory latency or control-flow outcome that will arise at runtime. EPIC used speculation, predication, and mechanisms for handling variable latency to manage what the static schedule could not resolve in advance [@SchlanskerRau2000EPIC]. Moving scheduling into the compiler changed how those uncertainties were managed; it did not remove them.
 
@@ -75,7 +75,7 @@ Adding a learned method before checking what the study can support often wastes 
 
 Start with what the study is allowed to change. In our arithmetic datapath example, choosing among three textbook adder topologies (ripple-carry, carry-select, and Kogge-Stone) is small enough that we can synthesize all three directly. Choosing where to place pipeline registers across an arbitrary network of arithmetic logic unit stages, by contrast, opens a vast combinatorial space. When explicit algebraic constraints govern that space, an integer solver or domain heuristic often works best. When early choices restrict which downstream stages are legal, the method must track those sequential dependencies and filter out illegal configurations before launching multi-hour tool runs.
 
-Next, ask what data is available to guide those choices, since the representations and datasets from @sec-data-representations-world-models limit which techniques can work in practice. A generator needs formal interface constraints and a representation it can edit cleanly, an optimizer needs consistent scores under a fixed objective, and a learned area or timing predictor needs prior runs from matching circuit structures and process corners. When matching synthesis runs are scarce, training and qualifying a neural surrogate will burn more cluster hours and calendar time than using an analytical model or synthesizing the candidates directly.
+Next, ask what data is available to guide those choices, since the representations and datasets from @sec-data-representations-world-models limit which techniques can work in practice. A generator needs formal interface constraints and a representation it can edit cleanly, an optimizer needs consistent scores under a fixed objective, and a learned area or timing predictor needs prior runs from matching circuit structures and process corners. When matching synthesis runs are scarce and the candidate set is small enough to evaluate directly, training and qualifying a neural surrogate can burn more cluster hours and calendar time than an analytical model or direct synthesis of every candidate.
 
 With the space and the data known, the bottleneck determines which family is worth testing against a simpler baseline: generation when valid candidates are hard to construct, prediction when reference evaluations are too slow, or optimization when the space is too large to sweep (@fig-method-selection-guide).
 
@@ -83,7 +83,7 @@ With the space and the data known, the bottleneck determines which family is wor
 
 The remaining branches in @fig-method-selection-guide cover two further bottlenecks. Multi-step edits whose effects depend on order may call for a transition model, and a full verification queue requires limiting how many candidates enter it. Each response still has to pay for itself. Slow synthesis makes a fast surrogate appealing only if its training cost and ranking accuracy leave a net savings in tool hours. A fast generator helps only if its drafts pass early checks cleanly enough to spare downstream tools wasted runs.
 
-Practical operating constraints narrow the choice further. An interactive assistant that suggests RTL fixes while an engineer edits code needs sub-second latency, whereas strict rules around proprietary RTL, foundry process design kits (PDKs), or licensed timing reports may require every model to run on local machines. Error cost likewise depends on how the output is used. A code suggestion that a human designer inspects before saving carries a very different risk from an automated netlist edit that feeds straight into place-and-route. Neither path becomes safe merely by swapping in a larger model.
+Practical operating constraints narrow the choice further. An interactive assistant that suggests RTL fixes while an engineer edits code has to answer before the engineer moves on, whereas strict rules around proprietary RTL, foundry process design kits (PDKs), or licensed timing reports may require every model to run on local machines. Error cost likewise depends on how the output is used. A code suggestion that a human designer inspects before saving carries a very different risk from an automated netlist edit that feeds straight into place-and-route. Neither path becomes safe merely by swapping in a larger model.
 
 Finally, every method must be paired with a check that can actually verify its claim. A clean compile cannot prove timing closure, a surrogate that ranks candidates well cannot prove that the winner meets a $3\ \text{W}$ power budget, and a testbench generated by the same model that wrote the RTL can easily share the same blind spot regarding corner-case protocol rules. Before spending the evaluation budget, the team should state where each method is trusted to work, what check qualifies its output, and what fallback takes over when those conditions fail (@tbl-method-role-limits).
 
@@ -223,7 +223,7 @@ Because average error hides both failure modes near the frontier, a surrogate sh
 
 [^fn-ml-top-k-recall-c05]: **Top-k recall**: The fraction of the measured best $k$ candidates that also appear in the predictor's top $k$. Ansor uses top-k recall, alongside pairwise comparison accuracy, to evaluate how well cost models rank tensor programs [@ZhengEtAl2020Ansor].
 
-To test that screening rule directly, the workflow can run dedicated test batches from the intended candidate stream through both the surrogate and the reference tool. If the filter is discarding good designs, the team has to widen the survivor set, revise the rule, or pause screening while the cause is investigated. Those audit batches do spend part of the tool budget the surrogate was meant to save. Auditing matters because an optimizer gradually shifts the candidate distribution away from the initial training set, degrading both point accuracy and the reliability of its uncertainty estimates over time [@OvadiaEtAl2019UncertaintyShift].
+To test that screening rule directly, the workflow can run dedicated test batches from the intended candidate stream through both the surrogate and the reference tool. If the filter is discarding good designs, the team has to widen the survivor set, revise the rule, or pause screening while the cause is investigated. Those audit batches do spend part of the tool budget the surrogate was meant to save. Auditing matters because an optimizer gradually shifts the candidate distribution away from the initial training set. Under dataset shift such as image corruption, classifiers lose both accuracy and calibration [@OvadiaEtAl2019UncertaintyShift]. We expect a surrogate under search to degrade in a similar way, although that study did not test one.
 
 An uncertainty interval makes the screening decision clearer near a hard constraint. A predicted macro area of $1.42\ \text{mm}^2$ appears to fit a $1.50\ \text{mm}^2$ floorplan limit, but an interval that straddles the limit leaves that decision unresolved and calls for reference synthesis or placement. Split-conformal prediction[^fn-split-conformal-c05] constructs such an interval from a frozen predictor's errors on a separate calibration set [@LeiEtAl2018Conformal; @AngelopoulosBates2021Conformal]. The margin $q_{1-\alpha}$ is set just wide enough that a target share $1-\alpha$ of the calibration errors, such as 90%, falls within it, with a slight upward correction for a finite calibration set:
 
@@ -273,15 +273,15 @@ The checks must follow the properties the generator can change. A pipeline edit 
 [^fn-bmc-c05]: **Bounded model checking (BMC)**: A formal verification technique that unrolls a sequential circuit for a fixed number of cycles ($k$) and uses Boolean satisfiability (SAT) or satisfiability modulo theories (SMT) solvers to check whether an invariant property holds within that bounded execution horizon [@BiereEtAl1999BMC]. A successful bounded check proves absence of bugs up to depth $k$, but does not by itself guarantee correctness across infinite execution lengths.
 
 
-A generation pipeline that pairs learned proposals with fast symbolic checks can catch structural errors such as port-width and type mismatches before launching slow EDA tools. AST passes and static compiler analyses inspect program structure in milliseconds, while SAT and SMT solvers verify encoded algebraic constraints. These checks inspect a proposed artifact; grammar and template constraints instead limit what the generator can construct. An architect should therefore judge candidate diversity by hardware structure and cycle behavior, not by surface differences in source code. A grammar that locks in a three-stage pipeline cannot invent a five-stage organization, no matter how many textually distinct files it writes.
+A generation pipeline that pairs learned proposals with fast symbolic checks can catch structural errors such as port-width and type mismatches before launching slow EDA tools. AST passes and static compiler analyses inspect program structure without running the design, while SAT and SMT solvers verify encoded algebraic constraints. These checks inspect a proposed artifact; grammar and template constraints instead limit what the generator can construct. An architect should therefore judge candidate diversity by hardware structure and cycle behavior, not by surface differences in source code. A grammar that locks in a three-stage pipeline cannot invent a five-stage organization, no matter how many textually distinct files it writes.
 
 Generated checks also need an independent basis. A model that drafts both RTL and its testbench can encode the same misreading of the specification in both, so agreement between those artifacts cannot replace an independently derived reference or property.
 
 Even when an independent check confirms functional correctness, a generator that ignores physical budgets can still emit unusable hardware. In a high-level synthesis (HLS) pragma search, for instance, aggressive loop unrolling and array partitioning can exhaust FPGA block RAM or cause severe routing congestion even though the generated C++ code is completely legal. The generator therefore needs explicit resource ceilings during construction, and its output still has to pass downstream synthesis and place-and-route checks.
 
-KernelBench[^fn-kernelbench-c05] shows how steeply candidate survival drops across these stages when language models write CUDA kernels against PyTorch baselines [@OuyangEtAl2025KernelBench]. The raw number of drafted kernels tells us very little about useful engineering output, because most candidates fall out between compiling cleanly, passing numerical correctness tests, and actually beating the baseline runtime (@fig-ch05-kernel-funnel).
+KernelBench[^fn-kernelbench-c05] shows how steeply candidate survival drops across these stages when language models write CUDA kernels against PyTorch baselines [@OuyangEtAl2025KernelBench]. The raw number of drafted kernels tells us very little about useful engineering output, because most one-shot candidates fall out between compiling cleanly, passing numerical correctness tests, and actually beating the baseline runtime (@fig-ch05-kernel-funnel).
 
-[^fn-kernelbench-c05]: **KernelBench evaluation framework**: An empirical benchmark evaluating machine-generated GPU kernels against specified PyTorch baselines across functional correctness, compilation validity, and wall-clock execution speedup on target accelerators (such as NVIDIA L40S or H100) [@OuyangEtAl2025KernelBench].
+[^fn-kernelbench-c05]: **KernelBench evaluation framework**: An empirical benchmark evaluating machine-generated GPU kernels against specified PyTorch baselines across functional correctness, compilation validity, and wall-clock execution speedup on target accelerators (such as NVIDIA L40S or H100) [@OuyangEtAl2025KernelBench]. The paper disagrees with itself on a few cells. Its correctness table prints DeepSeek V3 at 43% at Level 1 and 6% at Level 2 while its bar chart prints 44% and 5%, and its summary of findings gives DeepSeek R1's one-shot Level 3 fast share as 12% where its fast-kernel table prints 2%. We use the table values, and the ranges in this chapter do not depend on the difference.
 
 ```{python}
 #| echo: false
@@ -300,11 +300,11 @@ from _python.plots import COLORS, apply_style
 
 apply_style()
 
-# Source dataset: data/datasets/chapter5-kernelbench-funnel.csv
+# Source dataset: book/contents/chapters/05-methods/data/fig-ch05-kernel-funnel/chapter5-kernelbench-funnel.csv
 _root = Path(_ap.__file__).resolve().parents[2]
 
 with open(
-    _root / "data" / "datasets" / "chapter5-kernelbench-funnel.csv",
+    _root / "book/contents/chapters/05-methods/data/fig-ch05-kernel-funnel/chapter5-kernelbench-funnel.csv",
     encoding="utf-8",
 ) as fh:
     dataset_rows = list(csv.DictReader(l for l in fh if not l.startswith("#")))
@@ -377,13 +377,49 @@ fast_lo = min(min(v) for v in fast1.values())
 fast_hi = max(max(v) for v in fast1.values())
 ```
 
-Across the three difficulty levels, `{python} f"{correct_lo:.0f}"` to `{python} f"{correct_hi:.0f}"`% of one-shot kernels pass the correctness tests, whereas only `{python} f"{fast_lo:.0f}"` to `{python} f"{fast_hi:.0f}"`% are both numerically correct and faster than the PyTorch baseline. These figures describe the models and conditions of February 2025. Their lasting lesson is that construction, correctness, and performance are different outcomes. A loop can also improve its reported score by exploiting a flawed check, as Sakana AI acknowledged after some of its generated kernels exploited a flaw in its own evaluation harness to skip the correctness check on KernelBench tasks [@SakanaAI2025AICUDAEngineer]. Such failures require testing the evaluator itself (@sec-evaluating-agentic-architect).
+```{python}
+#| echo: false
+# Source dataset: data/datasets/chapter5-kernelbench-refinement.csv (the paper's Tables 2 and 9)
+with open(
+    _root / "data" / "datasets" / "chapter5-kernelbench-refinement.csv",
+    encoding="utf-8",
+) as fh:
+    _refine = list(csv.DictReader(fh))
+
+
+def _kb_cells(metric, configuration, model):
+    picked = [
+        r for r in _refine
+        if (r["metric"], r["configuration"], r["model"]) == (metric, configuration, model)
+    ]
+    return [int(r["value_pct"]) for r in sorted(picked, key=lambda r: r["kernelbench_level"])]
+
+
+def _kb_series(values):
+    assert len(values) == 3
+    return f"{values[0]}, {values[1]}, and {values[2]}"
+
+
+_correct, _fast, _r1 = "correct_by_turn", "correct_and_faster_than_eager", "DeepSeek R1"
+_r1_correct = _kb_cells(_correct, "G+E+P", _r1)
+_r1_fast = _kb_cells(_fast, "G+E+P", _r1)
+r1_correct_shot = _kb_series(_kb_cells(_correct, "single_attempt", _r1))
+r1_correct_loop = _kb_series(_r1_correct)
+r1_fast_shot = _kb_series(_kb_cells(_fast, "single_attempt", _r1))
+r1_fast_loop = _kb_series(_r1_fast)
+r1_correct_l1, r1_fast_l1 = _r1_correct[0], _r1_fast[0]
+other_fast_loop_max = max(
+    max(_kb_cells(_fast, "G+E+P", m)) for m in ("Llama-3.1-70B Instruct", "DeepSeek V3")
+)
+```
+
+Across the four plotted models and three difficulty levels, `{python} f"{correct_lo:.0f}"` to `{python} f"{correct_hi:.0f}"`% of one-shot kernels pass the correctness tests, whereas only `{python} f"{fast_lo:.0f}"` to `{python} f"{fast_hi:.0f}"`% are both numerically correct and faster than the PyTorch baseline. Feedback moves both numbers for some models. Given up to ten turns with execution and profiler feedback, DeepSeek R1 rose from `{python} r1_correct_shot`% correct to `{python} r1_correct_loop`% at Levels 1 to 3, and from `{python} r1_fast_shot`% fast to `{python} r1_fast_loop`%, while Llama-3.1-70B and DeepSeek V3 reached at most `{python} other_fast_loop_max`% fast with the same feedback [@OuyangEtAl2025KernelBench]. These figures describe the models and conditions of February 2025. Their lasting lesson is that construction, correctness, and performance are different outcomes, since even R1's `{python} r1_correct_l1`% correct at Level 1 yields `{python} r1_fast_l1`% fast. A loop can also improve its reported score by exploiting a flawed check, as Sakana AI acknowledged after some of its generated kernels exploited a flaw in its own evaluation harness to skip the correctness check on KernelBench tasks [@SakanaAI2025AICUDAEngineer]. Such failures require testing the evaluator itself (@sec-evaluating-agentic-architect).
 
 Useful candidate throughput depends on how quickly a generator's proposals pass the required checks. When interactive edits dominate turnaround, faster inference can permit more revision cycles. When synthesis takes hours per run, a slower model that emits fewer broken drafts may save more time than faster token generation. The comparison must count construction, failed drafts, tool calls, and repair, since the best final artifact alone hides the work needed to find it.
 
-When a generator runs inside a multi-turn loop, compiler errors and synthesis reports become feedback that steers the next edit, as Chip-Chat demonstrated when human engineers and language models iteratively revised Verilog for an 8-bit processor through to tapeout [@BlockloveEtAl2023ChipChat]. Verification can also move inside the construction step itself. A Monte Carlo tree search over AST edits, for example, can run linters and unit assertions on partial syntax trees, pruning port-width or type mismatches before the model expands dependent modules. Deciding which partial tree to expand next turns candidate generation directly into a search problem.
+When a generator runs inside a multi-turn loop, failed simulations and tests become feedback that steers the next edit, as Chip-Chat demonstrated when a hardware engineer and ChatGPT-4 iteratively revised Verilog for an 8-bit processor through to tapeout [@BlockloveEtAl2023ChipChat]. Verification can also move inside the construction step itself. A Monte Carlo tree search over AST edits, for example, can run linters and unit assertions on partial syntax trees, pruning port-width or type mismatches before the model expands dependent modules. Deciding which partial tree to expand next turns candidate generation directly into a search problem.
 
-Our executed systolic-array study, kept separate from the prospective Lighthouse studies, shows how to test whether generated candidates add value at all. The same record returns in later chapters, which examine what its score omitted (@sec-feedback-verification-trust), whether its ranking survives a workload shift (@sec-loop-patterns-across-stack), and what it supports as a workflow claim (@sec-evaluating-agentic-architect). An LLM proposed three legal array geometries in a single recorded call for a synthetic three-layer general matrix multiply (GEMM) workload within a ceiling of 1,024 processing elements. Its proposals and a fixed aspect-ratio heuristic each received four SCALE-Sim evaluations, including the same baseline [@RajEtAl2025ScaleSimV3]. The local score $S = \text{total cycles}/\bar{U}_{\text{frac}}$ divides summed cycles excluding prefetch by the unweighted mean layer utilization, $\bar{U}_{\text{frac}}$, so a lower score needs fewer cycles, busier processing elements, or both. It measures a compute window rather than complete workload latency. The smaller $32 \times 16$ candidate improved utilization but worsened this score, illustrating why a generator must follow the declared objective rather than an attractive intermediate metric (@fig-ai-study-result a).
+Our executed systolic-array study, kept separate from the prospective Lighthouse studies, shows how to test whether generated candidates add value at all. The same record returns in later chapters, which examine what its score omitted (@sec-feedback-verification-trust), whether its ranking survives a workload shift (@sec-loop-patterns-across-stack), and what it supports as a workflow claim (@sec-evaluating-agentic-architect). In a single recorded call, an LLM chose three array geometries from a supplied list of legal shapes for a synthetic three-layer general matrix multiply (GEMM) workload within a ceiling of 1,024 processing elements. Its proposals and a fixed aspect-ratio heuristic each received four SCALE-Sim evaluations, including the same baseline [@RajEtAl2025ScaleSimV3]. The local score $S = \text{total cycles}/\bar{U}_{\text{frac}}$ divides summed cycles excluding prefetch by the unweighted mean layer utilization, $\bar{U}_{\text{frac}}$, so a lower score needs fewer cycles, busier processing elements, or both. It measures a compute window rather than complete workload latency. The smaller $32 \times 16$ candidate improved utilization but worsened this score, illustrating why a generator must follow the declared objective rather than an attractive intermediate metric (@fig-ai-study-result a).
 
 The recorded comparison also separates candidate quality from the model's explanation. An additional probe, outside both arms' evaluation budgets, tested the claim that swapping the workload's row and column dimensions, $M$ and $N$, would reverse the ranking of wide and tall arrays. The ranking did not reverse (@fig-ai-study-result b). That result contradicts the stated explanation without establishing a replacement mechanism, the distinction developed in @sec-outcome-mechanism-counterfactual.
 
@@ -406,8 +442,6 @@ apply_style()
 
 _root = Path(_ap.__file__).resolve().parents[2]
 result_path = _root / "data/studies/ai_systolic_array_study/recorded/reference/study_results.json"
-if not result_path.exists():
-    result_path = _root / "labs/examples/ai_systolic_array_study/recorded/reference/study_results.json"
 result = json.loads(result_path.read_text(encoding="utf-8"))
 
 arm_runs = [r for r in result["evaluations"] if r["arm"] in {"model", "conventional"}]
@@ -480,13 +514,97 @@ for ax in (ax1, ax2):
 plt.show()
 ```
 
-The model's $16 \times 64$ proposal tied the $32 \times 32$ baseline, and the fixed heuristic reached the same best score within its allotted runs (@fig-ai-study-result a). Neither arm achieved the preregistered 1% improvement, so the study retained the baseline and showed no advantage for the language model under this comparison. This was a fixed set of proposals followed by evaluation, not an adaptive design loop. It nevertheless supplies a concrete method-selection result: legal generated candidates did not improve on the conventional construction path at the matched simulator budget.
+```{python}
+#| echo: false
+# Derived from the retained study record, so the prose below cannot drift from it:
+#   data/studies/ai_systolic_array_study/context/pre_registration.yaml
+#   data/studies/ai_systolic_array_study/recorded/reference/execution_provenance.json
+#   data/studies/ai_systolic_array_study/recorded/reference/study_results.json
+#   data/studies/ai_systolic_array_study/provenance.yml (first git commit of the protocol file)
+import datetime as _dt5
+import re
+
+_reference = result_path.parent
+_prereg = (_reference.parent.parent / "context" / "pre_registration.yaml").read_text(encoding="utf-8")
+_dims = [int(d) for d in re.search(r"dimensions: \[([^\]]+)\]", _prereg).group(1).split(",")]
+_pe_ceiling = int(re.search(r"area_budget_pes: (\d+)", _prereg).group(1))
+_legal_shapes = sum(r * c <= _pe_ceiling for r in _dims for c in _dims)
+
+_execution = json.loads((_reference / "execution_provenance.json").read_text(encoding="utf-8"))
+_evaluations = _execution["evaluation_count"]
+sa_wall_s = f'{_execution["wall_time_seconds"]:.0f}'
+sa_sweep_s = f'{_execution["wall_time_seconds"] / _evaluations * _legal_shapes:.0f}'
+
+_runs = {r["candidate_id"]: r for r in result["evaluations"]}
+_base = _runs["model_baseline_32x32"]
+_wide = _runs["ai_wide_16x64"]
+assert _base["decision_score"] == _wide["decision_score"]
+assert _base["pe_count"] == _wide["pe_count"]
+_fold_terms = {2 * r["array_rows"] + r["array_cols"] for r in (_base, _wide)}
+assert len(_fold_terms) == 1
+sa_fold_term = str(_fold_terms.pop())
+
+_words = {2: "two", 3: "three", 12: "twelve", 15: "fifteen"}
+_proposals = sum(r["arm"] == "model" and r is not _base for r in result["evaluations"])
+sa_proposals = _words[_proposals]
+sa_shared = _words[len(result["ai_contribution_claim"]["nonbaseline_shape_overlap"])]
+sa_legal_shapes = _words[_legal_shapes]
+sa_evaluations = _words[_evaluations]
+
+
+def _utc5(stamp):
+    return _dt5.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+def _when5(moment):
+    return f"{moment:%B} {moment.day}, {moment.year}, at {moment:%H:%M} UTC"
+
+
+_study_dir = _reference.parent.parent
+_stamp = _utc5(re.search(r"frozen_at_utc: '([^']+)'", _prereg).group(1))
+_entered_git = _utc5(
+    re.search(r"first_git_commit_utc: '([^']+)'", (_study_dir / "provenance.yml").read_text(encoding="utf-8")).group(1)
+)
+_sims_end = _utc5(_execution["completed_at_utc"])
+assert _stamp < _utc5(_execution["started_at_utc"]) < _sims_end < _entered_git
+sa_stamp = _when5(_stamp)
+sa_entered_git = _when5(_entered_git)
+_amended = _utc5(re.search(r"amended_at_utc: '([^']+)'", _prereg).group(1))
+assert _stamp < _amended < _utc5(_execution["started_at_utc"])
+sa_amended = f"{_amended:%H:%M} UTC"
+sa_git_lag_h = f"{(_entered_git - _sims_end).total_seconds() / 3600:.1f}"
+
+
+# Rescore the arms with the report fields the score does not read.
+def _alt_score(run, cycles_field, util_field):
+    layers = run["metrics"]["layers"]
+    cycles = sum(float(layer[cycles_field]) for layer in layers)
+    return cycles / (sum(float(layer[util_field]) for layer in layers) / len(layers))
+
+
+_cycle_fields = ("Total Cycles", "Total Cycles (incl. prefetch)")
+_util_fields = ("Overall Util %", "Compute Util %")
+_arm_runs = [r for r in result["evaluations"] if r["arm"] in ("model", "conventional")]
+assert all(
+    _alt_score(r, c, u) >= _alt_score(_base, c, u)
+    for r in _arm_runs for c in _cycle_fields for u in _util_fields
+)
+_behind = lambda c, u: (_alt_score(_wide, c, u) / _alt_score(_base, c, u) - 1) * 100
+sa_prefetch_behind = f"{_behind(_cycle_fields[1], _util_fields[0]):.1f}"
+sa_compute_behind = f"{_behind(_cycle_fields[0], _util_fields[1]):.1f}"
+```
+
+The model's $16 \times 64$ proposal tied the $32 \times 32$ baseline, and the fixed heuristic, which also proposed $16 \times 64$, reached the same best score (@fig-ai-study-result a). The tie comes from fold arithmetic rather than from two designs finishing close together. On these layers, the reported cycles depend on the array through its folds, the passes needed to map a layer onto it, and through the sum $2R + C$ for $R$ rows and $C$ columns. Halving the rows and doubling the columns of the baseline keeps that sum at `{python} sa_fold_term` and, because the workload's dimensions divide evenly by these array sizes, leaves every layer's fold count unchanged. Both shapes also hold the same number of processing elements, so the two fields the score reads, cycles excluding prefetch and overall utilization, match exactly on every layer. Cycles including prefetch and the separate compute-utilization field do differ between the shapes. The protocol names the score's terms but not these report fields, and the replay script reads neither. Both favor the baseline, leaving $16 \times 64$ `{python} sa_prefetch_behind`% behind on the first, inside the 1% margin, and `{python} sa_compute_behind`% behind on the second, outside it. Under every pairing of these fields, no nonbaseline shape beats the baseline. Neither arm achieved the 1% improvement that the study's self-timestamped protocol file requires, so the study recommended retaining the baseline.
+
+The record cannot show when that protocol was fixed. The file names itself a preregistration and carries its own timestamp, `{python} sa_stamp`, which sits ahead of the model call and simulations in the study's self-reported records. The same file also holds a schema amendment stamped `{python} sa_amended` that day, so the retained copy cannot be the file that timestamp describes. It first entered git on `{python} sa_entered_git`, `{python} sa_git_lag_h` hours after those simulations ended and in the same commit as their results. The prompt hash it records also does not match the retained prompt copy. The records report one model call without repair, but the run left no per-attempt log, so they cannot show how many calls were made. The protocol's place ahead of the run therefore rests on the study's own timestamps. A protocol establishes its order only when a record outside the study, such as a commit of its hash, predates the first run.
+
+This was a fixed set of proposals followed by evaluation, not an adaptive design loop, and the comparison was narrow. One recorded call faced a weak heuristic that shared `{python} sa_shared` of its `{python} sa_proposals` proposals, so the study is a local non-demonstration of AI advantage and says nothing about the relative capability of the two proposers. That overlap may also come from the prompt rather than from the proposers. The protocol hides the heuristic's candidates from the model, but the retained prompt names $16 \times 64$ and $64 \times 16$ as probe shapes, states that the aggregate $N$ dimension exceeds $M$, and says that layer effects can defeat an aggregate aspect-ratio rule, which gives the model the same reasoning that drives the heuristic. The legal space of `{python} sa_legal_shapes` shapes was also small enough to enumerate. The `{python} sa_evaluations` recorded evaluations took `{python} sa_wall_s`\ s, so a sweep of every legal shape would have taken about `{python} sa_sweep_s`\ s at that rate, which makes the four-run budget a protocol setting rather than a limit the problem imposes. The study therefore teaches how to set up a matched comparison, and the next one should keep evaluation shapes and rival rules out of the prompt. It does not show which method to choose for this problem.
 
 Templates, compilers, and learned generators provide different ways to construct candidates. Once the space of candidates they can produce exceeds what the tools can evaluate directly, a search procedure must choose which candidate earns the next simulator or synthesis run.
 
 ## Optimization Algorithms and Heuristics
 
-An optimization algorithm that mismatches the hardware representation or the evaluation budget can stall a study before it finds a single workable design. An evolutionary crossover operator that splices two netlists at random will emit illegal circuits, and a continuous relaxation can lose its predicted gain as soon as fractional parameters are rounded back to discrete registers and gates. A reinforcement-learning policy, for its part, can burn thousands of simulator runs on a one-off block that Bayesian optimization could tune in thirty evaluations. Different algorithms propose moves, incorporate feedback, and record past evaluations in distinct ways, and their relative performance shifts with the parameterization and experimental budget [@HendersonEtAl2018DeepRL; @KrishnanEtAl2023ArchGym]. In spatial accelerator design, stepping across discrete systolic-array dimensions poses a very different search problem from tuning continuous buffer partition ratios or placing macros on a non-convex floorplan. Those structural differences determine which algorithms are worth comparing.
+An optimization algorithm that mismatches the hardware representation or the evaluation budget can stall a study before it finds a single workable design. An evolutionary crossover operator that splices two netlists at random will emit illegal circuits, and a continuous relaxation can lose its predicted gain as soon as fractional parameters are rounded back to discrete registers and gates. A reinforcement-learning policy, for its part, earns back its training runs only through reuse, so we would not expect it to repay them on a one-off block that a simpler search could tune. Different algorithms propose moves, incorporate feedback, and record past evaluations in distinct ways, and their relative performance shifts with the parameterization and experimental budget [@HendersonEtAl2018DeepRL; @KrishnanEtAl2023ArchGym]. In spatial accelerator design, stepping across discrete systolic-array dimensions poses a very different search problem from tuning continuous buffer partition ratios or placing macros on a non-convex floorplan. Those structural differences determine which algorithms are worth comparing.
 
 At the simplest end of the spectrum, exhaustive enumeration evaluates every legal point in a small finite space, while uniform random search samples candidates independently to provide a transparent baseline. Domain heuristics build on human experience by encoding fixed engineering rules, such as resizing cells along a critical timing path first. Local search, simulated annealing, and evolutionary algorithms instead iteratively perturb existing candidates, provided their mutation and crossover operators either preserve structural legality by construction or pass every draft through a repair step. When each tool evaluation is too expensive for large populations, Bayesian optimization uses a surrogate's uncertainty to pick individual runs carefully. When a usable continuous relaxation of the hardware is available, differentiable optimization follows its gradients and projects the result back onto the discrete design space. A post-rounding check must then verify that the discretized circuit retains the improvement.
 
@@ -494,15 +612,15 @@ When the objective and constraints can be written in closed algebraic form, math
 
 [^fn-egraph-c05]: **E-graphs and equality saturation**: An e-graph (equivalence graph) compactly represents exponential numbers of equivalent algebraic or program expressions. Equality saturation applies rewrite rules monotonically while retaining earlier forms, reducing dependence on a greedy rewrite order. An extraction pass then selects a low-cost form among those represented, subject to the cost model, extraction algorithm, and search budget.
 
-Before launching any of these optimizers across dozens of hardware knobs, an architect can also shrink the search space with a classical factor-screening experiment that estimates which parameters actually move the objective [@PlackettBurman1946Design]. Unlike surrogate candidate screening, which filters individual designs during a search, factor screening prunes unimportant knobs ahead of time. Its fractional-factorial estimates assume, however, that pairwise interactions do not mask the main effects. In a datapath where pipeline depth and operator sharing interact strongly, for example, varying each knob in isolation can miss a combination that only works when both change together.
+Before launching any of these optimizers across dozens of hardware knobs, an architect can also shrink the search space with a classical factor-screening experiment that estimates which parameters actually move the objective [@PlackettBurman1946Design]. Unlike surrogate candidate screening, which filters individual designs during a search, factor screening prunes unimportant knobs ahead of time. Its fractional-factorial estimates assume, however, that pairwise interactions do not mask the main effects. In a datapath where pipeline depth and operator sharing interact strongly, for example, an aliased interaction can hide a combination that works only when both change together.
 
-When design choices unfold sequentially and each step reshapes the legal options that remain, reinforcement learning (RL) can train a policy to pick actions from an observed state using cumulative rewards [@SuttonBarto2018ReinforcementLearning]. Sequential structure alone, however, does not make RL superior to classical tree search or analytical optimization. Macro placement is the most prominent hardware test case. Dropping a large SRAM or IP block onto a canvas alters the remaining whitespace and shifts wirelength and routing congestion for every subsequent block, so an RL policy can place macros one by one while a terminal reward scores the completed floorplan (@fig-alphachip-placement) [@MirhoseiniEtAl2021GraphPlacement]. Whether that learned policy beats mature classical placers remains contested. Independent evaluations reported that analytical placement and simulated annealing matched or beat the RL results on tested benchmarks without pretraining a policy [@ChengEtAl2023MacroPlacement; @ChengEtAl2026UpdatedAssessment]. The original authors disputed the 2023 comparison [@GoldieEtAl2024ThatChipHasSailed], and the 2026 study evaluated updated code and pretrained checkpoints. Rather than settling a universal winner, the debate underscores that any learned policy must prove its net value against tuned conventional engines under matched compute and engineering budgets.
+When design choices unfold sequentially and each step reshapes the legal options that remain, reinforcement learning (RL) can train a policy to pick actions from an observed state using cumulative rewards [@SuttonBarto2018ReinforcementLearning]. Sequential structure alone, however, does not make RL superior to classical tree search or analytical optimization. Macro placement is the most prominent hardware test case. Dropping a large SRAM or IP block onto a canvas alters the remaining whitespace and shifts wirelength and routing congestion for every subsequent block, so an RL policy can place macros one by one while a terminal reward scores the completed floorplan (@fig-alphachip-placement) [@MirhoseiniEtAl2021GraphPlacement]. Whether that learned policy beats mature classical placers remains contested. An independent assessment reported simulated annealing, which needs no pretrained policy, ahead of the RL results on proxy cost on tested benchmarks [@ChengEtAl2023MacroPlacement]. Its 2026 update found simulated annealing ahead of the fine-tuned policy on proxy cost in six of nine cases and on routed wirelength in seven of nine, while the policy led on total negative slack in six of nine [@ChengEtAl2026UpdatedAssessment]. The original authors disputed the 2023 comparison [@GoldieEtAl2024ThatChipHasSailed], and the 2026 study evaluated updated code and pretrained checkpoints. Rather than settling a universal winner, the debate underscores that any learned policy must prove its net value against tuned conventional engines under matched compute and engineering budgets.
 
 ![**A placement policy learns to choose actions from a partial floorplan.** In reinforcement-learning macro placement [@MirhoseiniEtAl2021GraphPlacement], the policy places macros one by one and receives an updated partial floorplan after each step; once all macros are placed, a fast standard-cell placement estimates wirelength, congestion, and density to supply a terminal reward. Optimizing that proxy reward still requires downstream checks of placement legality, routing, and timing, as well as comparison against classical analytical baselines [@ChengEtAl2023MacroPlacement].](images/fig-alphachip-placement){#fig-alphachip-placement width="100%" fig-alt="Loop diagram with separate lanes for a placement policy's outbound macro-location action and the partial floorplan's inbound next state. After placing all macros, an approximate standard-cell placement precedes a density, congestion, and wirelength proxy cost, whose negative becomes the terminal reward."}
 
 That compute budget has to account for the heavy upfront cost of policy training. Running a full commercial place-and-route flow inside thousands of training episodes would exhaust both compute clusters and EDA licenses. The RL loop therefore relies on a fast standard-cell proxy to estimate wirelength and congestion, and it defers real routing and timing closure until the end. Placing dozens of macros before receiving a single terminal reward also complicates credit assignment, as the scalar score rarely reveals which early macro placement triggered a late routing bottleneck. For a learned placement policy to pay off, its final post-route signoff metrics must justify the upfront training runs. Fast proxy rewards and pretraining across chip blocks can help amortize that cost, but transfer still has to be demonstrated on the actual target blocks.
 
-Which algorithm leads at the end of a run depends strongly on how large that evaluation budget is. On ArchGym's DRAM memory-controller task, Bayesian optimization held the highest mean reward at the two smallest budgets, a random walker at the next two, and reinforcement learning at the largest [@KrishnanEtAl2023ArchGym]. The reported spreads overlap at most budgets, so these results show a ranking that moves with budget rather than a single winner. Across architecture simulators in the same benchmark, diverse search algorithms all reached the target specification once given ample samples and tuned hyperparameters [@KrishnanEtAl2023ArchGym]. The differences that matter to architects appear under finite evaluation budgets. A fair comparison must therefore fix the tool budget and stopping rules in advance and charge every method for its full computational cost, including surrogate updates, policy training, and failed tool runs, rather than comparing only the final winning designs.
+A policy's appetite for training runs shows up directly when algorithms are compared at fixed evaluation budgets. On ArchGym's DRAM memory-controller task, mean rewards read from the published figure put Bayesian optimization level with a genetic algorithm at the smallest budget, within reading resolution, and ahead at the next. A random walker led at the next two budgets and reinforcement learning at the largest, with no RL result plotted at the two smallest [@KrishnanEtAl2023ArchGym]. The leader's plotted spread overlaps another algorithm's at every budget, so no change of leader is separated from the spread. The clear budget effect is RL, which trails every other algorithm at 10,000 samples with no overlap and has the highest mean at 250,000. Across architecture simulators in the same benchmark, diverse search algorithms all reached the target specification once given ample samples and tuned hyperparameters [@KrishnanEtAl2023ArchGym]. The differences that matter to architects appear under finite evaluation budgets. A fair comparison must therefore fix the tool budget and stopping rules in advance and charge every method for its full computational cost, including surrogate updates, policy training, and failed tool runs, rather than comparing only the final winning designs.
 
 How the study formulates its objective shapes the search just as strongly as the evaluation budget. Minimizing datapath energy under hard area and timing ceilings is a constrained single-objective problem. A team exploring trade-offs across power, performance, and area (PPA) can instead use multi-objective optimization to retain the set of nondominated designs, those for which no other evaluated candidate is at least as good on every metric and strictly better on at least one [@Deb2001MultiObjective]. A single weighted sum forces the architect to pick exchange rates before seeing what the hardware can do. Retaining the empirical Pareto front instead lets the team inspect the actual trade-off curve, though the retained points only approximate the true frontier over the candidates tested so far.
 
@@ -521,7 +639,7 @@ The comparison in @tbl-optimization-methods maps each search procedure to the pr
 | Mathematical programming / solvers | Algebraic objectives, discrete choices, explicit constraints. | Formalizable objectives and constraints. | Optimizing unrepresented architectural desiderata. |
 : **Search mechanisms differ in the structure and feedback they require.** Suitability depends on the candidate representation, available evaluations, and cost of fitting or tuning the procedure. {#tbl-optimization-methods tbl-colwidths="[22,26,26,26]"}
 
-For a learned optimizer selected from @tbl-optimization-methods, the first check is whether it beats simple baselines such as random search or basic domain heuristics on the exact same parameter space and tool budget [@BergstraBengio2012RandomSearch]. PrefixRL illustrates this discipline in prefix-adder synthesis by running commercial-grade logic synthesis directly inside its training loop and comparing the learned policy against classical adder topologies and synthesis scripts [@RoyEtAl2021PrefixRL].
+For a learned optimizer selected from @tbl-optimization-methods, the first check is whether it beats simple baselines such as random search or basic domain heuristics on the exact same parameter space and tool budget [@BergstraBengio2012RandomSearch]. PrefixRL illustrates the baseline half of this discipline in prefix-adder design. It ran open-source physical synthesis (OpenPhySyn on the Nangate45 library) inside its training loop, compared its adders against classical topologies and published search baselines, and then resynthesized seven of them with a commercial tool at an 8\ nm library [@RoyEtAl2021PrefixRL]. The authors report that its adders Pareto-dominate those baselines, with up to 16.0% and 30.2% lower area for the same delay in the 32-bit and 64-bit open-source runs, and that the commercial resynthesis held that lead at all but the lowest delay target. The paper states no tool budget matched across those baselines, so the result answers the baseline half of the check and leaves the matched-budget half open.
 
 Beating uniform random search is only a sanity check, however, because production synthesis passes, HLS autotuners, and physical-design engines already combine decades of domain heuristics with mathematical solvers. To show a genuine engineering gain, a study must benchmark its proposed optimizer against a well-tuned conventional tool flow under matched compute budgets, or document why no conventional baseline applies. It must also count setup, representation, and hyperparameter-tuning overhead alongside the final PPA improvement.
 
@@ -563,7 +681,7 @@ An evaluation path usually places fast structural and functional checks ahead of
 
 [^fn-eda-signoff-c05]: **Physical signoff**: Timing and power checks must be accompanied by physical design rule checking (DRC) and layout versus schematic verification using applicable foundry rule decks and qualified tools.
 
-Even with early filtering, the candidate space can easily outstrip what the tool path can run. A single GPU operator's schedule space in AutoTVM can reach billions of implementations [@ChenEtAl2018AutoTVM], and the accelerator mapping spaces modeled with MAESTRO and Timeloop, among the scale examples in @tbl-design-loop-scale-anchors, are likewise far too large to evaluate exhaustively [@KwonEtAl2019MAESTRO; @ParasharEtAl2019Timeloop]. Vast spaces like these require selective evaluation, yet even a small candidate set can exhaust the budget if each run takes hours or days of simulator and synthesis time.
+Even with early filtering, the candidate space can easily outstrip what the tool path can run. A single GPU operator's schedule space in AutoTVM can reach billions of implementations [@ChenEtAl2018AutoTVM], and the legal mappings of a deep neural network onto an accelerator multiply so quickly that Timeloop, one of the scale examples in @tbl-design-loop-scale-anchors, enumerates small mapping spaces but uses a random-sampling heuristic for large ones [@ParasharEtAl2019Timeloop]. Vast spaces like these require selective evaluation, yet even a small candidate set can exhaust the budget if each run takes hours or days of simulator and synthesis time.
 
 To see how early pass rates and tool runtimes constrain the sustainable proposal rate $g$, we can model the evaluation path as a sequence of $M$ tool stages. For this baseline calculation, assume fixed mean runtimes and conditional pass rates, dedicated capacity at each stage, and no retries or returning candidates.[^fn-feedback-c05] Stage $i$ has $c_i$ parallel slots and mean runtime $t_i$, giving a service capacity $\mu_i = c_i/t_i$, while its conditional pass rate $p_i$ is the fraction of candidates tested at stage $i$ that advance to stage $i+1$.
 
@@ -645,15 +763,15 @@ The compositions in @tbl-method-organization let us omit components whose work i
 | Generation + prediction + optimization | Construction, screening, and search each improve the study. | Their combined benefit exceeds fitting, integration, and checking costs. |
 : **Pipeline components must earn their cost in the declared study.** Each composition addresses particular work and introduces corresponding qualification, integration, and checking costs. {#tbl-method-organization tbl-colwidths="[24,38,38]"}
 
-These compositions describe how work is divided, not how much architectural change the workflow may make. Combining all three families does not by itself establish an AI-native design system. The useful test is whether their interaction helps the study reach a better supported design or a comparable result at lower total cost. Our tensor-mapping and cache studies make that choice concrete.
+These compositions describe how work is divided, not how much architectural change the workflow may make. Combining all three families does not by itself establish an AI-native design system. The useful test is whether their interaction helps the study reach a better supported design or a comparable result at lower total cost. Our tensor-mapping plan and cache study make that choice concrete.
 
 ## Method Selection in Two Contrasting Studies
 
-The tensor-mapping and Lighthouse L2-cache studies prepared in @sec-data-representations-world-models both aim to select a better implementation, but under very different conditions. Tuning a tensor operator spans far more schedules than can be measured on the target hardware, whereas the prospective mobile system-on-chip cache study compares only three capacities. For each, we ask how many alternatives need evaluation, where useful observations will come from, and what the declared evaluation budget can cover.
+The tensor-mapping plan and the Lighthouse L2-cache study prepared in @sec-data-representations-world-models both aim to select a better implementation, but under very different conditions. Tuning a tensor operator spans far more schedules than can be measured on the target hardware, whereas the prospective mobile system-on-chip cache study compares only three capacities. For each, we ask how many alternatives need evaluation, where useful observations will come from, and what the declared evaluation budget can cover.
 
 When a fixed tensor operator is mapped onto a target accelerator, the combinations of loop order, tiling, and parallel execution quickly outgrow exhaustive measurement. Because the space of legal schedules is vast, AutoTVM combines search over these choices with a learned cost model by running selected programs on the target hardware and using their measured runtimes to update the model [@ChenEtAl2018AutoTVM]. Compatible observations from earlier workloads can warm-start the model, but a preexisting dataset is not required because measurements accumulate during tuning.
 
-Learning a cost model is attractive here because a relatively small sample of hardware timings can help prioritize millions of unmeasured schedules. Even so, that screening benefit must repay the measurements spent training the model as well as the overhead of fitting and inference. A large schedule space creates an opportunity for selective search, but it does not by itself prove that a learned model beats a conventional compiler heuristic or autotuner.
+Learning a cost model is attractive here because a relatively small sample of hardware timings can help prioritize a space of billions of unmeasured schedules. Even so, that screening benefit must repay the measurements spent training the model as well as the overhead of fitting and inference. A large schedule space creates an opportunity for selective search, but it does not by itself prove that a learned model beats a conventional compiler heuristic or autotuner.
 
 The Lighthouse cache handoff instead starts with an empty execution history and fixes the surrounding system state while varying only capacity (2\ MiB, 3\ MiB, and 4\ MiB). With no matching prior data, training a surrogate would spend the small evaluation budget on the same runs needed for direct comparison. Analytical SRAM screening followed by at most four cycle-level simulations is therefore the proposed starting method (@tbl-worked-method-decisions), pending configuration of the models and simulator.
 
@@ -668,13 +786,13 @@ The Lighthouse cache handoff instead starts with an empty execution history and 
 | **Fallback and stop** | Compare with an applicable default schedule or tuned operator implementation; set the measurement budget and stopping criteria. | If SRAM screening is unavailable, simulate performance while keeping physical feasibility unresolved. Stop at the declared decision or budget limit. |
 : **Candidate space, available data, and feedback cost distinguish the method choices.** A large compiler schedule space can justify surrogate-guided search, whereas the proposed three-capacity cache comparison favors direct evaluation. The tensor-mapping plan draws on a published method; this comparison reports no new execution results. {#tbl-worked-method-decisions tbl-colwidths="[22,39,39]"}
 
-The inputs and feedback-cost rows in @tbl-worked-method-decisions show why the choices differ. The tensor-mapping study uses observations to guide many remaining decisions; the cache study would spend its small budget collecting the very observations a new surrogate needs to learn from. Method choice can change as the study learns more. If the cache question grows to many interacting parameters, or earlier runs leave a qualified surrogate behind, the same calculation could favor surrogate-guided search over direct evaluation.
+The inputs and feedback-cost rows in @tbl-worked-method-decisions show why the choices differ. The tensor-mapping plan would use observations to guide many remaining decisions; the cache study would spend its small budget collecting the very observations a new surrogate needs to learn from. Method choice can change as the study learns more. If the cache question grows to many interacting parameters, or earlier runs leave a qualified surrogate behind, the same calculation could favor surrogate-guided search over direct evaluation.
 
 Direct evaluation still depends on a coherent model of each candidate. A larger cache changes storage area, leakage, and access latency as well as capacity, so each setting needs a corresponding SRAM organization and consistently derived properties. The study has not yet established a validated SRAM model for its stated TSMC N3E target. Without a suitable model, cycle-level simulation can compare performance under explicit assumptions but cannot settle physical feasibility.
 
 The proposed four-run ceiling includes failed and repeated attempts, leaving little room for additional observations after the three capacities are tested. It is a budget limit, not evidence that a frame-time difference can be resolved. If the observations cannot distinguish a gain from comparison uncertainty, the result is inconclusive unless the study receives a revised budget. Evaluating the supplied capacities is also a fixed design path (@sec-design-loop-no-longer-scales); it becomes an adaptive loop only if returned evidence changes a subsequent design action.
 
-Both studies therefore link method choice to the work it saves and the evidence still required. Larger studies may justify more elaborate combinations, but their calibration, coordination, and evaluation costs raise several open research problems.
+Both plans therefore link method choice to the work it saves and the evidence still required. Larger studies may justify more elaborate combinations, but their calibration, coordination, and evaluation costs raise several open research problems.
 
 ## Open Questions
 

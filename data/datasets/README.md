@@ -1,6 +1,8 @@
 # Chapter Datasets
 
-This directory contains source snapshots, chapter datasets, and plotting scripts.
+This directory contains shared upstream source snapshots (`sources/`), datasets that
+feed tables and prose rather than a single figure, and the figure inventory.
+Data owned by one figure lives with its chapter; see [Where a figure's data lives](../README.md#where-a-figures-data-lives).
 The current book-figure inventory is [provenance.yml](provenance.yml). It records
 which figures use each input, their evidence class, and current CSV row counts.
 A file's presence in this directory does not establish that the book uses it or
@@ -31,6 +33,23 @@ commits, source-document versions, raw outputs, dependencies, and reproduction
 commands. Counts derived from public source trees describe the counted files;
 they do not measure engineering effort. Simulator returns describe a configured
 model and workload; they are not silicon measurements.
+
+## Constructed stand-ins
+
+Two files here are not data, whatever their names and their scripts' names suggest.
+Neither feeds a book figure or a book number.
+
+- `github_hdl_language_trends.csv`, from `data/scrapers/mine_github_hdl_trends.py`,
+  was never mined from GitHub. It is a hand-typed table of even years, of unrecorded
+  origin, with odd years filled by a hand-chosen 15 percent scaling.
+- `ai_accelerator_power_thermal_trend.csv`, from
+  `data/scrapers/mine_ai_accelerator_power_trend.py`, is a hand-typed specification
+  table with no per-row source. No value has been checked against a source, and the
+  TPU v1 row holds an Int8 figure in a column named for FP16.
+
+`plot_hdl_trends.png` and `plot_ai_tco_limits.png` plot these two files and say so in
+their titles. Their `provenance.yml` entries still read `transcribed`, which is wrong
+until that file is corrected to `constructed`.
 
 ## Validation
 

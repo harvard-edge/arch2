@@ -77,8 +77,9 @@ inventories or launch-year defect-quality comparisons.
 Use the existing bibliography keys `Intel2022XeonE5v4SpecUpdate`,
 `Intel2026XeonScalableGen3SpecUpdate`, `AMD2023Family17h00hRevisionGuide`, and
 `AMD2025Family1Ah00hRevisionGuide`. Verify their exact document revisions
-against the manifest. The source PDFs are retained in Study 13; introduction
-dates are sourced in Study 18. The derivation and its exclusions require a
+against the manifest. The source PDFs belong at Study 13's gitignored
+`raw/pdf/` path and are not in the repository; introduction dates are sourced
+in Study 18. The derivation and its exclusions require a
 link to this packet in the reproducibility material.
 
 ## Asset and integration checks

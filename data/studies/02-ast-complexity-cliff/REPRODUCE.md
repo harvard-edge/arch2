@@ -45,6 +45,7 @@ Step 1 prints the per-corpus module counts as it goes. They are fixed by the
 pinned commits, so they are the first thing to check:
 
 ```
+VerilogEval: 156 files, 156 module declarations
 RTLLM: 50 files, 61 module declarations
 OpenTitan: 1137 files, 936 module declarations
 CV32E40P: 126 files, 123 module declarations
@@ -99,20 +100,67 @@ rows except `extraction_timestamp`, which records when the run happened. Verifie
 | Median concrete syntax nodes per module | 168 | 1,125 | 6.70x |
 | Median clean lines of code per module | 16 | 99 | 6.19x |
 | Median syntax nodes, diagnostic-free files only | 141.5 | 675 | 4.77x |
+| Median syntax nodes, no substantive diagnostic | 168 | 675 | 4.02x |
+| Median syntax nodes, repository include path | 168 | 1,440 | 8.57x |
+| Median written tokens, plain or include-path parse | 90 | 602 | 6.69x |
 | Median of repository syntax-node medians | 232 | 991 | 4.27x |
 
 Modules parsed: 217 benchmark (VerilogEval 156, RTLLM 61) and 1,296 production
 (OpenTitan 936, CV32E40P 123, VeeR EH1 112, BlackParrot 125).
 
 The pooled 6.7x is a module-weighted figure over these six repositories. It is
-not a universal ratio, and the two sensitivity checks are reported alongside it
-rather than behind it.
+not a universal ratio, and the sensitivity checks are reported alongside it
+rather than behind it. The diagnostic-free row drops any file with a diagnostic
+and requires a valid tree. The no-substantive-diagnostic row, which Chapter 4
+prints, ignores only `DiagCode(NewlineEOF)`.
+
+## Include-path sensitivity
+
+The filters above remove files; they do not repair a parse. To see which way the
+parse bias runs, `sensitivity_include_dirs.py` reparses every selected file with
+all of that repository's HDL directories on the include path and writes
+`hardware_ast_complexity_include_sensitivity.json`:
+
+```bash
+.venv-ast/bin/python data/studies/02-ast-complexity-cliff/sensitivity_include_dirs.py
+```
+
+Production-oriented modules in files with a substantive diagnostic fall from 703
+to 378, and the pooled ratio rises from 6.70x to 8.57x (5.46x on modules still
+free of substantive diagnostics). All 125 BlackParrot modules stay flagged
+because the BaseJump files they include sit in a submodule outside the pinned
+repository. Files still parse alone, with no predefined macros and no build-time
+generated headers, so this is a direction and a size, not a clean parse.
+
+The 8.57x is a preprocessed count: a repaired parse expands macro text into the
+module, and those nodes count. Written tokens, located in the file and outside
+any macro expansion, give 6.69x under both parses, so the rise is expansion
+rather than more source. The primary measure is source syntax, so 8.57x is a
+different quantity and not a corrected 6.70x.
+
+Run log for the recorded result, 2026-11-02, Python 3.12, pyslang 11.0.0:
+
+1. Failed. OpenTitan `hw/ip/tlul/rtl/tlul_adapter_shim.sv` failed the check
+   against the primary CSV's SHA-256, because the first fetch stored the 32 HDL
+   git symlinks under `hw/` as text files. No result was written.
+2. Recorded. Symlinks restored; every primary file matched its SHA-256.
+
+The written-token fields were added on the same date in a third run, logged in
+`runs.jsonl` with its console output in `runs/`. Its node counts and diagnostics
+equal run 2. The miner has no run log, so its attempts cannot be checked.
+
+The run used `--archive-root` because `git` fetches over the network stalled:
+commit archives for five repositories, and for OpenTitan the 3,973 HDL files
+under `hw/` listed by the pinned commit's git tree, each checked against its git
+blob hash. Rerun without that flag to use the miner's git checkouts.
 
 ## What this measurement does not establish
 
 These boundaries are the reason the study is credible, so do not drop them when
 citing it.
 
+- `concrete_syntax_nodes` counts every element `pyslang` visits, so tokens count
+  as leaves alongside interior nodes.
 - It measures **source syntax**, not elaborated design. Files are parsed
   standalone with error recovery, not preprocessed or elaborated with a full
   include path.
@@ -127,5 +175,9 @@ citing it.
 - Clock-event signal counts and CDC primitive mentions are **lexical
   indicators**. They are not verified clock domains and not verified crossings.
   No claim about asynchronous crossing counts follows from this data.
-- The corpora are six repositories chosen for being public and pinnable. Nothing
-  here generalizes to closed commercial IP.
+- The corpora are six repositories chosen for being public and pinnable, with no
+  recorded sampling rule. Nothing here generalizes to closed commercial IP, and
+  the 45% to 63% reference share describes these four repositories only.
+- The reference share counts uniquely defined children, so it understates
+  reference. BlackParrot's `bsg_` children sit outside the pinned repository, which
+  makes its depth a lower estimate.

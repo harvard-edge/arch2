@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render nested time boundaries and measured step costs from one retained job."""
+"""Render nested time boundaries and recorded step costs from one CI job."""
 import csv
 from datetime import datetime
 import hashlib
@@ -30,18 +30,19 @@ def duration(row):
 
 def main():
     manifest = verify_sources(HERE, allow_missing_gitignored=True)
-    archive = (
-        HERE / "raw/librelane-spm-ihp-sg13g2-run-37749124131-artifact-11539925672.zip"
+    archive_name = (
+        "raw/librelane-spm-ihp-sg13g2-run-37749124131-artifact-11539925672.zip"
     )
-    if archive.exists():
-        subprocess.run(
-            [sys.executable, str(HERE / "extract_stage_costs.py")], check=True
-        )
+    archive = HERE / archive_name
+    absent = [r["path"] for r in manifest["files"] if not (HERE / r["path"]).exists()]
+    assert set(absent) <= {archive_name}, f"missing tracked inputs: {absent}"
+    subprocess.run([sys.executable, str(HERE / "extract_stage_costs.py")], check=True)
     rows = list(csv.DictReader((HERE / "stage-costs.csv").open()))
     for row in rows:
         row["runtime_seconds"] = float(row["runtime_seconds"])
         row["step_id"] = int(row["step_id"])
-    assert sorted(r["step_id"] for r in rows) == list(range(1, 79))
+    step_ids = sorted(r["step_id"] for r in rows)
+    assert step_ids == list(range(1, len(rows) + 1))
     total = sum(r["runtime_seconds"] for r in rows)
     job = json.loads((HERE / "raw/design-job.json").read_text())
     run = json.loads((HERE / "raw/workflow-run.json").read_text())
@@ -50,9 +51,9 @@ def main():
         job["head_sha"] == run["head_sha"] == "36aa197408e1b6508fc4862b7758d21ec8853048"
     )
     assert job["conclusion"] == "success"
-    actions = [s for s in job["steps"] if s["name"] == "Run Test"]
-    assert len(actions) == 1 and actions[0]["conclusion"] == "success"
-    test_seconds, job_seconds = duration(actions[0]), duration(job)
+    test_steps = [s for s in job["steps"] if s["name"] == "Run Test"]
+    assert len(test_steps) == 1 and test_steps[0]["conclusion"] == "success"
+    test_seconds, job_seconds = duration(test_steps[0]), duration(job)
     assert total <= test_seconds <= job_seconds
     ranked = sorted(rows, key=lambda r: (-r["runtime_seconds"], r["step_id"]))
     top, other = ranked[:6], ranked[6:]
@@ -79,15 +80,18 @@ def main():
             "seconds": sum(r["runtime_seconds"] for r in other),
         }
     )
+    plotted_ids = sorted(
+        int(step) for r in display for step in r["step_ids"].split(";")
+    )
     with (HERE / "plot_rows.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(display[0]))
         w.writeheader()
         w.writerows(display)
     boundaries = {
         "sum_step_intervals_seconds": round(total, 3),
-        "run_test_action_seconds": test_seconds,
+        "run_test_job_step_seconds": test_seconds,
         "complete_design_job_seconds": job_seconds,
-        "semantics": "Nested intervals, not additive cost components. API timestamps have one-second resolution.",
+        "semantics": "Nested intervals, not additive cost components. API timestamps have one-second resolution, so print these two boundaries in whole seconds.",
     }
     (HERE / "time_boundaries.json").write_text(json.dumps(boundaries, indent=2) + "\n")
 
@@ -119,10 +123,12 @@ def main():
             va="center",
             fontsize=FONT_SIZES["annotation"],
         )
-    ax.set_title(f"(a) All 78 step intervals: {total:.1f} seconds", loc="left", pad=9)
+    ax.set_title(
+        f"(a) All {len(rows)} step intervals: {total:.1f} seconds", loc="left", pad=9
+    )
     scope_labels = [
-        "Sum of 78 step intervals",
-        "Run Test action",
+        f"Sum of {len(rows)} step intervals",
+        "Run Test job step",
         "Complete design CI job",
     ]
     scope_values = [total, test_seconds, job_seconds]
@@ -139,9 +145,10 @@ def main():
         xlim=(0, 335),
         xlabel="Elapsed seconds at each accounting boundary",
     )
+    scope_text = [f"{total:.1f}", f"{test_seconds:.0f}", f"{job_seconds:.0f}"]
     for i, value in enumerate(scope_values):
         scope.text(
-            value + 4, i, f"{value:.1f}", va="center", fontsize=FONT_SIZES["annotation"]
+            value + 4, i, scope_text[i], va="center", fontsize=FONT_SIZES["annotation"]
         )
     scope.set_title(
         "(b) The enclosing job also includes setup and other CI work", loc="left", pad=9
@@ -164,6 +171,7 @@ def main():
         for p in HERE.rglob("*")
         if p.is_file()
         and p.name not in {"sha256-manifest.txt", "build_receipt.json"}
+        and p != archive
         and "__pycache__" not in p.parts
     )
     (HERE / "sha256-manifest.txt").write_text(
@@ -175,13 +183,22 @@ def main():
     record_build(
         HERE,
         {
-            "source_files_hash_verified": len(manifest["files"]),
-            "all_78_numbered_steps_plotted_or_grouped": True,
-            "raw_job_and_run_identities_match": True,
+            "source_files_declared": len(manifest["files"]),
+            "source_files_hash_verified": manifest["verified_count"],
+            "source_files_absent": absent,
+            "upstream_zip_checked_against_subset": archive.exists(),
+            "numbered_steps": len(rows),
+            "all_numbered_steps_plotted_or_grouped": plotted_ids == step_ids,
+            "raw_job_and_run_identities_match": job["run_id"] == run["id"]
+            and job["head_sha"] == run["head_sha"],
             "nested_duration_order": boundaries,
         },
         "Source-byte verification and offline extraction of one selected public CI artifact. No tool rerun, industry cost estimate, causal intervention, or AI comparison.",
     )
+    if not archive.exists():
+        receipt = json.loads((HERE / "build_receipt.json").read_text())
+        receipt["files"].pop(archive_name, None)
+        (HERE / "build_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(boundaries, indent=2))
 
 

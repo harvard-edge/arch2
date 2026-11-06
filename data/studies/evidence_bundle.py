@@ -3,10 +3,15 @@ import datetime
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# What each verify_sources call in this process checked, by folder. record_build
+# reads this, so a receipt cannot report more verification than took place.
+_verifications = {}
 
 
 def sha256(path):
@@ -16,39 +21,48 @@ def sha256(path):
 def verify_sources(here, allow_missing_gitignored=False):
     manifest = json.loads((here / "source_manifest.json").read_text())
     verified = 0
+    missing = []
     for receipt in manifest["files"]:
         target = here / receipt["path"]
         if not target.exists() and allow_missing_gitignored:
+            missing.append(receipt["path"])
             continue
         assert target.exists(), f"missing source file: {receipt['path']}"
         assert sha256(target) == receipt["sha256"], receipt["path"]
         verified += 1
     manifest["verified_count"] = verified
+    manifest["missing_sources"] = missing
+    _verifications[Path(here).resolve()] = {
+        "declared": len(manifest["files"]),
+        "hash_verified": verified,
+        "missing": missing,
+    }
+    if missing:
+        print(f"{here.name}: {len(missing)} declared source(s) absent, not hash-checked:")
+        for path in missing:
+            print(f"  {path}")
     return manifest
 
 
 def record_build(here, checks, verification_scope=None):
-    prev_files = {}
     receipt_path = here / "build_receipt.json"
-    if receipt_path.exists():
-        try:
-            prev_files = json.loads(receipt_path.read_text()).get("files", {})
-        except Exception:
-            prev_files = {}
+    # Older callers pass len(manifest["files"]), the declared count. Reports what was
+    # hashed instead, because those callers' reproduce.py files are bound by audits.
+    own = _verifications.get(Path(here).resolve())
+    if own and isinstance(checks, dict) and "source_files_hash_verified" in checks:
+        checks = {**checks, "source_files_hash_verified": own["hash_verified"]}
     files = [
         p
         for p in here.rglob("*")
         if p.is_file()
         and p.name != "build_receipt.json"
+        and p.name != "runs.jsonl"
+        and "runs" not in p.relative_to(here).parts
         and "__pycache__" not in p.parts
         and "visual_qa" not in p.parts
         and "source_visual_qa" not in p.parts
     ]
-    file_hashes = dict(prev_files)
-    # Remove any stale visual_qa entries from previous receipts
-    for k in list(file_hashes):
-        if "visual_qa/" in k or "source_visual_qa/" in k:
-            del file_hashes[k]
+    file_hashes = {}
     for p in sorted(files):
         file_hashes[str(p.relative_to(here))] = sha256(p)
     record = {
@@ -67,6 +81,10 @@ def record_build(here, checks, verification_scope=None):
             )
         },
         "checks": checks,
+        "source_verification": {
+            os.path.relpath(folder, ROOT): result
+            for folder, result in sorted(_verifications.items())
+        },
         "files": dict(sorted(file_hashes.items())),
         "verification_scope": verification_scope
         or "Local extraction and calculations from retained public records; no GPU benchmark rerun or independent replication.",

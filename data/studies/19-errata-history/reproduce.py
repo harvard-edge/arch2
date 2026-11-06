@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Plot explicit erratum additions in four retained document histories."""
+from collections import Counter
 import csv
 import json
 import importlib.metadata
@@ -23,13 +24,19 @@ from evidence_bundle import verify_sources, record_build
 def main():
     manifest = verify_sources(HERE, allow_missing_gitignored=True)
     pdf_dir = HERE.parent / "13-errata-dispositions/raw/pdf"
-    if pdf_dir.exists() and any(pdf_dir.glob("*.pdf")):
+    extraction_ran = pdf_dir.exists() and any(pdf_dir.glob("*.pdf"))
+    if extraction_ran:
         verify_sources(
             HERE.parent / "13-errata-dispositions", allow_missing_gitignored=True
         )
         (HERE / "source_visual_qa").mkdir(parents=True, exist_ok=True)
         subprocess.run([sys.executable, str(HERE / "extract_history.py")], check=True)
         manifest = verify_sources(HERE, allow_missing_gitignored=True)
+    else:
+        print(
+            "Source PDFs absent: extraction skipped, committed CSVs plotted as is. "
+            "build_receipt.json records this run as unchecked against the sources."
+        )
     rows = list(csv.DictReader((HERE / "annual_counts.csv").open()))
     for r in rows:
         for k in (
@@ -41,16 +48,30 @@ def main():
             r[k] = int(r[k])
         assert r["explicit_added_id_count"] == r["distinct_explicit_added_id_count"]
     families = ["Broadwell-EP", "Ice Lake-SP", "Zen 1 (Naples)", "Zen 5 (Turin)"]
-    expected = {
-        "Broadwell-EP": 46,
-        "Ice Lake-SP": 104,
-        "Zen 1 (Naples)": 30,
-        "Zen 5 (Turin)": 21,
-    }
-    assert {
+    additions_by_family = {
         f: sum(r["explicit_added_id_count"] for r in rows if r["family"] == f)
         for f in families
-    } == expected
+    }
+    # Annual counts must equal the per-identifier records in every family and
+    # year, so an edit that preserves a family's total still halts the build.
+    events = list(csv.DictReader((HERE / "identifier_events.csv").open()))
+    event_counts = Counter(
+        (e["family"], int(e["year"])) for e in events if e["event_type"] == "added"
+    )
+    annual_counts = Counter(
+        {
+            (r["family"], r["year"]): r["explicit_added_id_count"]
+            for r in rows
+            if r["explicit_added_id_count"]
+        }
+    )
+    assert event_counts == annual_counts
+    revision_rows = list(csv.DictReader((HERE / "revision_rows.csv").open()))
+    initial_rows = [r for r in revision_rows if r["initial_release_row"] == "True"]
+    initial_counts_excluded = all(
+        not json.loads(r["explicit_added_ids"]) for r in initial_rows
+    )
+    shaded_years = {}
     titles = [
         "(a) Broadwell-EP | retained document: April 2022",
         "(b) Ice Lake-SP | retained document: March 2026",
@@ -63,9 +84,12 @@ def main():
         subset = [r for r in rows if r["family"] == family]
         first = min(r["year"] for r in subset)
         last = max(r["year"] for r in subset)
+        shaded_years[family] = set()
         if first > 2015:
+            shaded_years[family] |= set(range(2015, first))
             ax.axvspan(2014.5, first - 0.5, color=COLORS["row"], alpha=0.65, zorder=0)
         if last < 2026:
+            shaded_years[family] |= set(range(last + 1, 2027))
             ax.axvspan(last + 0.5, 2026.5, color=COLORS["row"], alpha=0.65, zorder=0)
         years = [r["year"] for r in subset]
         counts = [r["explicit_added_id_count"] for r in subset]
@@ -117,10 +141,8 @@ def main():
     (HERE / "summary.json").write_text(
         json.dumps(
             {
-                "explicit_additions_by_family": expected,
-                "revision_rows": len(
-                    list(csv.DictReader((HERE / "revision_rows.csv").open()))
-                ),
+                "explicit_additions_by_family": additions_by_family,
+                "revision_rows": len(revision_rows),
                 "meaning": "Explicit Added identifiers in the retained tables, not discovery dates, annual industry totals, or complete cumulative inventories.",
             },
             indent=2,
@@ -130,16 +152,30 @@ def main():
     record_build(
         HERE,
         {
-            "source_files_hash_verified": len(manifest["files"]),
-            "explicit_additions_checked_against_each_source_history": True,
-            "initial_counts_excluded": True,
-            "outside_history_years_shaded": True,
+            "source_files_declared": len(manifest["files"]),
+            "source_files_hash_verified": manifest["verified_count"],
+            "source_extraction_ran": extraction_ran,
+            "annual_counts_match_identifier_events": event_counts == annual_counts,
+            "initial_counts_excluded": initial_counts_excluded,
+            "outside_history_years_shaded": all(
+                shaded_years[f]
+                == set(range(2015, 2027))
+                - set(
+                    range(
+                        min(int(r["year"]) for r in revision_rows if r["family"] == f),
+                        max(int(r["year"]) for r in revision_rows if r["family"] == f)
+                        + 1,
+                    )
+                )
+                for f in families
+            ),
         },
         "Four selected revision histories and their explicit identifier additions. Initial inventories are unknown; source gaps and Broadwell BDF92 removal omission prevent full historical reconstruction.",
     )
-    receipt = json.loads((HERE / "build_receipt.json").read_text())
-    receipt["packages"]["pymupdf"] = importlib.metadata.version("pymupdf")
-    (HERE / "build_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    if extraction_ran:
+        receipt = json.loads((HERE / "build_receipt.json").read_text())
+        receipt["packages"]["pymupdf"] = importlib.metadata.version("pymupdf")
+        (HERE / "build_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
 
 
 if __name__ == "__main__":

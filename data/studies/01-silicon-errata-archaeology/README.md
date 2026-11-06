@@ -12,26 +12,35 @@
 > were published by the vendor fall, by subsystem?
 
 Every erratum was mined from the current specification update (Intel) or revision
-guide (AMD) for 19 CPU families, 1,774 errata in all. A committed rule set assigned
-each to a subsystem, and a seeded stratified sample of 231 was audited.
+guide (AMD) for 19 CPU families, 1,774 errata extracted. Six of them have no retained or retrievable primary text and are excluded from every count (section 5), which leaves 1,768. A committed rule set assigned
+each to a subsystem, and one model relabeled a seeded stratified sample of 231. The classifier
+is rule-based and model-assisted, with no human label audit. No person reviewed the labels;
+where this file and its scripts say "audit", they mean that model relabeling.
 
-- No audited class holds more than about a fifth of the errata. Memory controllers,
-  coherence fabrics, and I/O together hold 19.7% (audit-adjusted, 95% interval
-  16.7 to 22.8%). Core execution with caches and TLBs holds a comparable 20.4%
-  (16.1 to 25.2%). Debug, performance monitoring, and trace hold 16.5%.
+- No largest share and no ranking is reported as a finding about silicon errata. The ranking
+  depends on how a rule-based classifier orders its classes. Over 2,000 random class orders
+  of the title matches (description matches held as assigned), the largest class by rule runs 16.3 to 41.2% (median 28.0) in the applied grouping, and which
+  class it is changes, and 23.9 to 50.6% (median 36.9) under the written merge rule, where the
+  same class stays largest (section 3). Those spans describe the classifier. Only the recorded
+  order has a relabeled sample. Earlier versions of this README said no audited class holds
+  more than about a fifth, then about 30% under the written rule, then about 19 to 35% with at
+  least six classes and none near half of the corpus. All three failed audit and are withdrawn.
+- In every reading, memory controllers, coherence fabrics, and caches together hold a
+  minority: 12.6% by rule and 8.0% adjusted (6.0 to 10.5%). That sum does not depend on how
+  classes are merged. Any one-label change keeps the adjusted sum between 7.2 and 9.1%. The
+  rule sum does depend on class order: 6.8 to 24.6% over 2,000 random orders (section 3).
 - Errata in which an arithmetic, floating-point, or vector unit computes or
   schedules incorrectly are rare: 4 of 231 audited, about 2.2% of the population
   (0.6 to 4.4%).
-- 1,547 of 1,774 errata (87%) carry no planned fix. When dispositions differ
+- 1,541 of 1,768 errata (87%) carry no planned fix. When dispositions differ
   across steppings, the extraction retains the least resolved disposition. This
   counts documented entries, not affected shipped processors. Workaround subgroup
   counts have been withdrawn because their field extraction was not reliable
   (see the validation limits below).
-- The largest reported class is mostly I/O: 228 of its 347 rule-assigned errata (66%)
-  are I/O and peripheral, and memory controllers, coherence fabrics, and caches together
-  hold 12.6% of all errata by rule. The figure labels it "I/O, memory controller,
-  coherence" for that reason.
-- 1,536 of 1,774 errata (87%) come from Intel documents. In the 238 AMD errata alone,
+- In the applied grouping, the class that joins I/O, memory controllers, and coherence is
+  mostly I/O: 228 of its 347 rule-assigned errata (66%) are I/O and peripheral. The figure
+  labels it "I/O, memory controller, coherence" for that reason.
+- 1,530 of 1,768 errata (87%) come from Intel documents. In the 238 AMD errata alone,
   the same class holds 24.8% by rule.
 - The shares have no denominator: no document reports how much logic or specified
   behavior each subsystem contains, so they are not normalized by subsystem size.
@@ -95,6 +104,7 @@ replaced, or duplicated, in both the summary table and the detailed section.
 | Classify | [`classify_errata.py`](./classify_errata.py) with [`classification_rules.yml`](./classification_rules.yml) | `errata_classified.csv` |
 | Draw audit sample | [`audit_sample.py`](./audit_sample.py) | `audit_sample.csv` (labels added by the auditor) |
 | Audit metrics | [`audit_metrics.py`](./audit_metrics.py) with [`reporting_classes.yml`](./reporting_classes.yml) | `audit_metrics.json` |
+| Merge rule comparison | [`merge_rule_sensitivity.py`](./merge_rule_sensitivity.py), scoring through `audit_metrics.compute` | `merge_rule_sensitivity.json` |
 | Figure | [`plot_errata_subsystems.py`](./plot_errata_subsystems.py) | `book/contents/chapters/11-ownership/images/fig-errata-subsystem-shares.{svg,pdf,png}` |
 
 **Completeness checks, each fatal.** For every document the scraper compares the
@@ -111,23 +121,32 @@ client-part tables is not reliable in plain text.
 **Classification.** Whole-word or phrase matching only, patterns stored as data,
 classes tried in a fixed order, title first and the problem statement only when the
 title matches nothing, and an explicit Unclassified bucket with no default class.
-The semantics are written at the top of `classification_rules.yml`. The rules were
-frozen before the audit sample was drawn.
+The semantics are written at the top of `classification_rules.yml`. Class order changes the
+rule shares: 783 of the 1,659 errata matched on their titles match more than one class (see
+"Class order" below). The rules are
+recorded as frozen before the audit sample was drawn, but the rules and the labeled
+sample first appear together in commit 75cc61153, so the repository cannot show the order.
 
-**Audit.** 18 errata per rule class (all 15 Unclassified), seed 20260929. The
-worksheet the auditor read listed each sampled erratum's title, problem statement,
-and implication in shuffled order without its rule label. The auditor labeled each
+**Audit.** 18 errata per rule class (all 15 Unclassified), seed 20260929. As
+`audit_sample.py` is written, the worksheet lists each sampled erratum's title, problem
+statement, and implication in shuffled order without its rule label. The worksheet was
+written to the git-ignored `.cache/` and was not retained. No copy was found in any
+checkout, in git history, or in surviving local session history (searched 2026-11-02;
+Claude transcripts from that date have aged out and Codex holds no session for
+2026-09-29), so what the auditor actually saw cannot be shown. The auditor labeled each
 by reading that text, using the class descriptions in `classification_rules.yml`,
 and flagged errata whose defect is in an arithmetic, floating-point, or vector unit.
-Conventions applied consistently: an erratum about the logic that observes or
+Conventions the labels mostly follow: an erratum about the logic that observes or
 reports behavior (a counter, a machine-check bank) goes to that logic; a wrong or
 missing #GP on an MSR access goes to instruction execution; string and locked
-operations go to caches and load-store ordering. Each row carries a one-line note,
+operations go to caches and load-store ordering. The last was not applied consistently:
+ICL066 (REP MOVSB) went to instruction execution, SKX76 (lock prefix) to I/O, and ICX40
+(poisoned locked transaction) to interrupts. Each row carries a one-line note,
 and ambiguous rows say which other class they could be.
 
 **The labels are a model-assisted reading, not human review.** The auditor was the
-same model that wrote the rules. The worksheet hid the rule label, but that does not
-make the reading independent, and no second labeler measured inter-rater agreement.
+same model that wrote the rules. The code that builds the worksheet omits the rule label,
+but that would not make the reading independent, and no second labeler measured inter-rater agreement.
 This is a co-generation limitation: the rules and the labels share one reader's
 assumptions. A blind relabel of the 231 sampled errata by an independent human, with
 Cohen's kappa against the model labels, would measure agreement beyond chance and give
@@ -136,16 +155,138 @@ the adjusted shares an independent reference. It has not been done.
 **Metrics.** Per-class precision with Wilson 95% intervals; population agreement and
 audit-adjusted shares estimated from the stratified sample with a stratified
 bootstrap (10,000 replicates, seed 20260929). Estimated agreement: 76.3% over the
-twelve rule classes (70.3 to 82.1%), 81.2% over the reporting classes (75.3 to 86.7%).
+twelve rule classes (70.3 to 82.0%), 81.2% over the reporting classes (75.3 to 86.7%).
 
-**Merge or drop, decided after the audit.** A class is reported only if its
-precision is at least 0.70 and its Wilson lower bound at least 0.50. Classes that
-failed were merged with the class they were most often confused with when the merge
-passed, or dropped. Dropped classes are shown only inside the "not resolved" bar.
+**Merge or drop, decided after the audit: the written rule and what was done disagree.**
+The rule: a class is reported only if its precision is at least 0.70 and its Wilson lower
+bound at least 0.50. Classes that fail are merged with the class they are most often
+confused with when the merge passes, or dropped. Dropped classes are shown only inside the
+"not resolved" bar. The rule does not say what to do when two classes tie. Earlier versions
+of `reporting_classes.yml` stated that the rule was fixed before any merge, but rule and
+outcomes first appear together in commit 75cc61153, so the record cannot show that.
 
-| Rule class | Errata | Audited | Agree | Precision | Wilson 95% | Outcome |
+The applied grouping departs from the rule for three of the five failed classes. Nobody
+has amended the rule to fit or changed the grouping to follow it. The figure draws the
+applied grouping, and which to keep is an author decision. Everything below is computed by
+`merge_rule_sensitivity.py`, and every grouping goes through the same `audit_metrics.compute`
+path. All of it is modeled, since it rests on one model's labels.
+
+| Failed class | Alone | Most confused with (relabeled rows) | Merge test | Written rule | Applied |
+| :--- | ---: | :--- | :--- | :--- | :--- |
+| Caches, TLBs, and load-store ordering | 6/18 | Instruction execution and exceptions (11) | 32/36, low 0.75, passes | merge | merged with Instruction execution and exceptions |
+| Coherence and on-die or socket fabric | 10/18 | Power, clocking, and thermal management (4) | 31/36, low 0.71, passes | merge | merged with I/O and peripheral interfaces; Memory controller and DRAM |
+| Graphics, display, and on-die accelerators | 12/18 | I/O and peripheral interfaces (3) | 32/36, low 0.75, passes | merge | drop |
+| Machine check and error reporting | 10/18 | Instruction execution and exceptions (3) | 30/36, low 0.68, passes | merge | drop |
+| Security and isolation features | 13/18 | Virtualization and IOMMU (4) | 34/36, low 0.82, passes | merge | merged with Virtualization and IOMMU |
+
+Two more points. Memory controller (15/18) and I/O (16/18) each passed alone, so the rule
+gives no ground for reporting them together; that follows from the coherence choice. The
+applied classes do pass the test as merged, so the departure is in which merge was chosen,
+not in class quality.
+
+Every merge that passes the test, whichever class the audit confused it with:
+
+| Failed class | Merges that pass the test |
+| :--- | :--- |
+| Caches, TLBs, and load-store ordering | Instruction execution and exceptions (32/36, low 0.75) |
+| Coherence and on-die or socket fabric | Power, clocking, and thermal management (31/36, low 0.71); I/O and peripheral interfaces (27/36, low 0.59); Virtualization and IOMMU (27/36, low 0.59) |
+| Graphics, display, and on-die accelerators | I/O and peripheral interfaces (32/36, low 0.75); Power, clocking, and thermal management (31/36, low 0.71); Virtualization and IOMMU (29/36, low 0.65); Instruction execution and exceptions (28/36, low 0.62); Interrupts, timers, reset, and system management (28/36, low 0.62); Debug, performance monitoring, and trace (27/36, low 0.59); Memory controller and DRAM (27/36, low 0.59) |
+| Machine check and error reporting | Instruction execution and exceptions (30/36, low 0.68); Interrupts, timers, reset, and system management (28/36, low 0.62); I/O and peripheral interfaces (27/36, low 0.59); Memory controller and DRAM (27/36, low 0.59); Power, clocking, and thermal management (27/36, low 0.59); Virtualization and IOMMU (27/36, low 0.59) |
+| Security and isolation features | Virtualization and IOMMU (34/36, low 0.82); Power, clocking, and thermal management (30/36, low 0.68); I/O and peripheral interfaces (29/36, low 0.65); Debug, performance monitoring, and trace (28/36, low 0.62); Instruction execution and exceptions (28/36, low 0.62); Interrupts, timers, reset, and system management (28/36, low 0.62); Memory controller and DRAM (28/36, low 0.62) |
+
+"Most often confused" is not defined further in the rule. The primary reading counts a
+class's own audited rows relabeled to another class. Over all 120 orders of the failed classes,
+recomputing confusion against the groups formed so far gives one outcome, the same grouping.
+Counting both directions makes coherence tie between power and machine check; the tie toward
+machine check fails the test, so coherence would be dropped. Those readings leave the largest
+class where it was, but they do not cover every reading. The machine-check count below is one
+that moves it.
+
+Shares as applied:
+
+| Reporting class | Rule share | Audit-adjusted | 95% interval | Distinct titles only |
+| :--- | ---: | ---: | :--- | ---: |
+| Memory controller, coherence fabric, and I/O | 19.6% | 19.8% | 16.7 to 22.8% | 23.0% |
+| Debug, performance monitoring, and trace | 18.8% | 16.3% | 12.6 to 19.4% | 14.8% |
+| Core execution, caches, and TLBs | 15.9% | 20.4% | 16.1 to 25.2% | 14.7% |
+| Virtualization, isolation, and security features | 13.7% | 13.8% | 12.0 to 15.8% | 11.6% |
+| Power, clocking, and thermal management | 6.6% | 9.0% | 7.2 to 11.2% | 8.7% |
+| Interrupts, timers, reset, and system management | 5.4% | 6.1% | 4.1 to 8.4% | 5.1% |
+| Not resolved to a reported class | 19.9% | 14.7% | 10.6 to 18.8% | 22.1% |
+
+Shares under the written rule:
+
+| Reporting class | Rule share | Audit-adjusted | 95% interval | Distinct titles only |
+| :--- | ---: | ---: | :--- | ---: |
+| Machine check and error reporting + Instruction execution and exceptions + Caches, TLBs, and load-store ordering | 29.9% | 30.7% | 25.9 to 35.5% | 30.0% |
+| Debug, performance monitoring, and trace | 18.8% | 16.3% | 12.6 to 19.4% | 14.8% |
+| I/O and peripheral interfaces + Graphics, display, and on-die accelerators | 17.9% | 18.4% | 15.9 to 20.8% | 19.5% |
+| Virtualization and IOMMU + Security and isolation features | 13.7% | 13.8% | 12.0 to 15.8% | 11.6% |
+| Power, clocking, and thermal management + Coherence and on-die or socket fabric | 9.3% | 11.4% | 9.1 to 14.2% | 12.6% |
+| Interrupts, timers, reset, and system management | 5.4% | 6.1% | 4.1 to 8.4% | 5.1% |
+| Memory controller and DRAM | 4.1% | 3.4% | 2.7 to 4.1% | 5.1% |
+| Not resolved to a reported class | 0.8% | 0.0% | 0.0 to 0.0% | 1.3% |
+
+Machine check alone moves the largest share to 29.9%:
+
+| One departure repaired, others as applied | Largest rule share | Largest adjusted share |
+| :--- | ---: | ---: |
+| Coherence and on-die or socket fabric merged with Power, clocking, and thermal management | 18.8% | 20.4% |
+| Graphics, display, and on-die accelerators merged with I/O and peripheral interfaces | 24.7% | 24.1% |
+| Machine check and error reporting merged with Instruction execution and exceptions | 29.9% | 30.7% |
+
+**The machine-check target rests on a small count, so no largest share is reported.** Of
+the 8 machine-check rows relabeled, 3 went to instruction execution and 2 to interrupts, and
+one each to security, coherence, and I/O. Two of the 3 are one title in two families (RPL061
+and ARL006, "PCONFIG Error Reporting May be Incorrect"). Counting each title once, as the
+distinct-title shares do, gives a 2 to 2 tie, and the rule does not say which to take. This
+study adds no tiebreak. `merge_rule_sensitivity.py` computes every tied branch and now stops
+if a reading meets a tie with no branch named. The row notes cut both ways: RPL015 (labeled
+security) says it could be execution, which would widen the count to 4 to 2, and RPL061 says
+it could be read as a memory-encryption feature, which would leave 2 rows each for instruction
+execution, interrupts, and security. All of the
+following are modeled, and intervals exclude the choice of merge target.
+
+| Reading | Largest rule share | Largest adjusted share |
+| :--- | ---: | ---: |
+| Applied grouping | 19.6% | 20.4% |
+| Written rule | 29.9% | 30.7% |
+| Each title once, machine check to instruction execution | 29.9% | 30.7% |
+| Each title once, machine check to interrupts | 19.4% | 20.4% |
+| The 3 rows relabeled to interrupts, rule rederived | 19.4% | 18.7% |
+| One departure repaired, as in the table above | 18.8 to 29.9% | 20.4 to 30.7% |
+| Every one-label change, rule rederived, ties branched (2,376 changes) | 18.8 to 34.9% | 19.7 to 35.4% |
+
+Under the written rule, 49 of the 2,376 one-label changes can move the largest rule share.
+Three do so outright (RPL061, BDF16, or ARL006 relabeled to interrupts, which gives 19.4%).
+The other 46 create a tie with a branch that keeps 29.9%. One-label changes give point
+estimates only. Across all of these readings the largest class runs from 18.8 to 34.9% by
+rule and 18.7 to 35.4% adjusted. The class that comes out largest varies among debug,
+the applied I/O class, core execution, and machine check joined to each of several classes.
+The highest upper interval among the named readings is 35.5%.
+
+Those values all use the recorded class order, so they are not a range for the largest share
+(see Class order, below). The memory-system sum stays a minority across them.
+
+**Class order.** The rule bars depend on the fixed order in which classes are tried. 783 of
+the 1,659 errata matched on their titles match more than one class. Over 2,000 random orders
+of the twelve rule classes (seed 20260929), with body-matched and Unclassified rows held as
+assigned and no merging, the largest rule class holds 13.4 to 32.7% of the corpus and the
+memory-system sum 6.8 to 24.6%, against 12.6% in the committed order. The merged readings
+above all use the committed order. Adjusted shares use the labels, so order reaches them
+only through the strata, and no other order has a relabeled sample.
+
+Merges and class order vary together in the third audit's reading, kept in
+`class_order.largest_merged_class`. Over the same orders and seed, the largest merged class by
+rule runs 16.3 to 41.2% (median 28.0) in the applied grouping, where three classes take the
+top place, and 23.9 to 50.6% (median 36.9) under the written rule, where one class holds it in
+all 2,000 orders. These are extremes of a random sample of orders, not bounds.
+
+Per-class audit results, with the outcome as applied:
+
+| Rule class | Errata | Audited | Agree | Precision | Wilson 95% | Outcome as applied |
 | :--- | ---: | ---: | ---: | ---: | :--- | :--- |
-| Debug, performance monitoring, and trace | 339 | 18 | 15 | 0.83 | 0.61 to 0.94 | reported |
+| Debug, performance monitoring, and trace | 333 | 18 | 15 | 0.83 | 0.61 to 0.94 | reported |
 | Machine check and error reporting | 247 | 18 | 10 | 0.56 | 0.34 to 0.75 | dropped |
 | I/O and peripheral interfaces | 228 | 18 | 16 | 0.89 | 0.67 to 0.97 | reported |
 | Instruction execution and exceptions | 177 | 18 | 15 | 0.83 | 0.61 to 0.94 | reported |
@@ -159,41 +300,42 @@ passed, or dropped. Dropped classes are shown only inside the "not resolved" bar
 | Coherence and on-die or socket fabric | 47 | 18 | 10 | 0.56 | 0.34 to 0.75 | merged |
 | Unclassified | 15 | 15 | 0 | 0.00 | 0.00 to 0.20 | no rule matched |
 
-### Reported shares
-
-| Reporting class | Rule share | Audit-adjusted | 95% interval | Distinct titles only |
-| :--- | ---: | ---: | :--- | ---: |
-| Memory controller, coherence fabric, and I/O | 19.6% | 19.7% | 16.7 to 22.8% | 23.0% |
-| Debug, performance monitoring, and trace | 19.1% | 16.5% | 12.8 to 19.7% | 15.0% |
-| Virtualization, isolation, and security features | 13.7% | 13.7% | 11.9 to 15.8% | 11.6% |
-| Core execution, caches, and TLBs | 15.8% | 20.4% | 16.1 to 25.2% | 14.7% |
-| Power, clocking, and thermal management | 6.6% | 9.0% | 7.1 to 11.2% | 8.7% |
-| Interrupts, timers, reset, and system management | 5.4% | 6.1% | 4.1 to 8.4% | 5.1% |
-| Not resolved to a reported class | 19.8% | 14.6% | 10.6 to 18.7% | 22.0% |
-
 "Distinct titles only" counts each normalized title once, since a defect in shared
-logic recurs in every family that inherits it (1,036 distinct titles).
+logic recurs in every family that inherits it (1,034 distinct titles).
 
 ---
 
 ## 4. Reproduce
 
+The full path no longer runs. Five Intel documents were revised in October 2026, the pinned
+PDFs are not retained, and the vendor no longer serves them. `--verify-hashes` stops at Alder
+Lake, by design (run `20261102T144156Z`, exit 1, in `runs.jsonl`). The classify step needs the
+text cache that the scraper writes, so it cannot run either.
+That failed run is the only extraction in `runs.jsonl`, so `errata.csv` has no logged
+successful run. Its earlier extraction appears only in the dated records below.
+
+From the committed CSVs, without the PDFs:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r data/studies/01-silicon-errata-archaeology/requirements.txt
-.venv/bin/python data/scrapers/mine_cpu_errata.py --verify-hashes
 cd data/studies/01-silicon-errata-archaeology
-../../../.venv/bin/python classify_errata.py
 ../../../.venv/bin/python audit_sample.py      # verifies the committed sample; never overwrites labels
 ../../../.venv/bin/python audit_metrics.py
+../../../.venv/bin/python merge_rule_sensitivity.py
 ../../../.venv/bin/python plot_errata_subsystems.py
 ```
 
-Verified 2026-09-29: a second, cold download matched all 19 SHA-256 hashes and
-reproduced `errata.csv` byte for byte, and `audit_sample.py` re-drew the committed
-sample exactly. If a vendor revises a document, `--verify-hashes` stops; rerunning
-without it records the new revision, and the audit must then be re-drawn and
-re-labeled because class sizes change.
+Run these through `data/run_study.py` so that each attempt is logged. On 2026-11-02 they
+reproduced `audit_metrics.json` byte for byte. On 2026-11-06 they were rerun after the
+six exclusions in section 5, which changed every output. `merge_rule_sensitivity.py` takes about 90 s,
+since it scores every one-label change. Rerunning the scraper without `--verify-hashes`
+would record the new revisions; the audit must then be re-drawn and re-labeled because class
+sizes change.
+
+Earlier records, kept as dated: on 2026-09-29 a second, cold download matched all 19 SHA-256
+hashes and reproduced `errata.csv` byte for byte, and `audit_sample.py` re-drew the committed
+sample exactly.
 
 ## 5. Limits
 
@@ -236,6 +378,39 @@ reference classification.
 `workaround_status.py` now produces only an unvalidated diagnostic worksheet in
 `.cache/workaround_candidates.csv`. Its text-pattern labels do not establish that
 a workaround or guidance exists. It is excluded from the publication pipeline.
+
+### Six rows with no reachable source (2 November 2026)
+
+Six rows in `errata.csv` have no reachable source. They are listed in
+[`withdrawn_rows.csv`](./withdrawn_rows.csv): ADL090, ADL091, LNL068, LNL069, ARL072, and
+ARL073, two Intel PT titles repeated across three families, all in the debug class, none in
+the audit sample. The pinned revisions listed them. The October 2026 revisions (Alder Lake
+041, Lunar Lake 023, Arrow Lake 024) say the erratum has been removed and give no reason.
+The pinned PDFs are not retained, and the Wayback Machine index returned no capture of those
+three documents for August to November 2026 (other URL forms were not tried). Their titles and
+status cannot be rechecked. Since 2026-11-06 they are excluded from every count (next section). The other 388 rows of the five revised
+documents matched on the later revisions in the 2026-11-02 audit. Six other errata added in
+those revisions are not in this corpus.
+
+### Six rows excluded from every count (6 November 2026)
+
+The 2026-11-02 audit (finding F2) asked that rows without retained or retrievable primary text
+leave the counts. Before deciding, each family was checked in
+`~/Documents/Arch2-Private-Sources/errata-pdfs-pinned/` (no Alder, Lunar, or Arrow Lake copy),
+`errata-pdfs-revised-upstream-2026-11-02/`, and `.cache/pdf/`. Every held copy is the later
+revision, which prints only "removed" for these entries, and none matches the pinned hash. The
+decision and reason for each row are in [`excluded_rows.csv`](./excluded_rows.csv). The rows stay
+in `errata.csv` and `errata_classified.csv` as evidence. `audit_metrics.load_population()` drops
+them, and every script and the chapter count through it, so the population is 1,768 rather than
+1,774. None of the six is in the audit sample, so no label was added, removed, or changed. The
+sample was drawn from 1,774 rows; within each stratum it is still a simple random draw from the
+rows that remain, and the stratum weights now use the 1,768-row population. The 2026-11-06 runs
+are in `runs.jsonl`.
+
+### No independent human labels
+
+The study has no independent human labels. Every adjusted share, every precision, and every
+merge test rests on one model's reading. See "The labels are a model-assisted reading" above.
 
 ### Other limits
 

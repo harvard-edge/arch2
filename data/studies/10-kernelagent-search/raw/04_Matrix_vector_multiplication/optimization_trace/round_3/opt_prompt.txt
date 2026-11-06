@@ -1,0 +1,282 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs matrix-vector multiplication (C = A * B).
+    """
+    def __init__(self):
+        super(Model, self).__init__()
+    
+    def forward(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        """
+        Performs matrix-vector multiplication.
+
+        Args:
+            A: Input matrix of shape (M, K).
+            B: Input vector of shape (K, 1).
+
+        Returns:
+            Output vector of shape (M, 1).
+        """
+        return torch.matmul(A, B)
+
+M = 256 * 8 # 2048
+K = 131072 * 8 # 1048576
+
+def get_inputs():
+    A = torch.rand(M, K)
+    B = torch.rand(K, 1)
+    return [A, B]
+
+def get_init_inputs():
+    return []  # No special initialization inputs needed
+PyTorch Eager baseline: 2.0928 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def matvec_kernel(
+    A_ptr,      # Pointer to matrix A [M, K]
+    x_ptr,      # Pointer to vector x [K]
+    C_ptr,      # Pointer to output vector C [M]
+    M,          # Number of rows in A
+    K,          # Number of columns in A (and elements in x)
+    stride_am,  # Stride for rows of A
+    stride_ak,  # Stride for columns of A
+    BLOCK_SIZE_M: tl.constexpr,  # Block size for M dimension
+    BLOCK_SIZE_K: tl.constexpr,  # Block size for K dimension
+):
+    """
+    Fused matrix-vector multiplication kernel.
+    Computes C = A @ x where A is [M, K] and x is [K].
+    
+    Each program handles BLOCK_SIZE_M rows of the output.
+    For each row, we accumulate the dot product across all K elements.
+    """
+    # Get the program ID - each program handles BLOCK_SIZE_M rows
+    pid_m = tl.program_id(0)
+    
+    # Compute row indices this program is responsible for
+    row_start = pid_m * BLOCK_SIZE_M
+    row_offsets = row_start + tl.arange(0, BLOCK_SIZE_M)
+    row_mask = row_offsets < M
+    
+    # Initialize accumulator for the dot product (one per row)
+    acc = tl.zeros((BLOCK_SIZE_M,), dtype=tl.float32)
+    
+    # Iterate over the K dimension in blocks
+    for k_start in range(0, K, BLOCK_SIZE_K):
+        k_offsets = k_start + tl.arange(0, BLOCK_SIZE_K)
+        k_mask = k_offsets < K
+        
+        # Load x vector elements for this block [BLOCK_SIZE_K]
+        x_vals = tl.load(x_ptr + k_offsets, mask=k_mask, other=0.0)
+        
+        # Load A matrix elements for this block [BLOCK_SIZE_M, BLOCK_SIZE_K]
+        # A[row_offsets, k_offsets]
+        a_ptrs = A_ptr + row_offsets[:, None] * stride_am + k_offsets[None, :] * stride_ak
+        combined_mask = row_mask[:, None] & k_mask[None, :]
+        a_vals = tl.load(a_ptrs, mask=combined_mask, other=0.0)
+        
+        # Compute partial dot product and accumulate
+        # a_vals: [BLOCK_SIZE_M, BLOCK_SIZE_K], x_vals: [BLOCK_SIZE_K]
+        # Multiply and sum across K dimension
+        acc += tl.sum(a_vals.to(tl.float32) * x_vals.to(tl.float32)[None, :], axis=1)
+    
+    # Store the result
+    c_ptrs = C_ptr + row_offsets
+    tl.store(c_ptrs, acc.to(tl.bfloat16), mask=row_mask)
+
+
+def kernel_function(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """
+    Wrapper for matrix-vector multiplication: C = A @ x
+    
+    Args:
+        A: Matrix of shape [M, K]
+        x: Vector of shape [K] or [K, 1]
+    
+    Returns:
+        C: Vector of shape [M] or [M, 1] depending on input x shape
+    """
+    # Handle input shape
+    x_squeezed = x.squeeze() if x.dim() > 1 else x
+    
+    # Get dimensions
+    M, K = A.shape
+    assert x_squeezed.shape[0] == K, f"Dimension mismatch: A has {K} columns but x has {x_squeezed.shape[0]} elements"
+    
+    # Allocate output
+    C = torch.empty(M, device=A.device, dtype=A.dtype)
+    
+    # Block sizes
+    BLOCK_SIZE_M = 64
+    BLOCK_SIZE_K = 256
+    
+    # Calculate grid
+    grid = (triton.cdiv(M, BLOCK_SIZE_M),)
+    
+    # Launch kernel
+    matvec_kernel[grid](
+        A, x_squeezed, C,
+        M, K,
+        A.stride(0), A.stride(1),
+        BLOCK_SIZE_M=BLOCK_SIZE_M,
+        BLOCK_SIZE_K=BLOCK_SIZE_K,
+    )
+    
+    # Match output shape to input x shape
+    if x.dim() > 1 and x.shape[-1] == 1:
+        return C.unsqueeze(-1)
+    return C
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: underutilized
+- Root Cause: {'cause': 'Extreme register pressure using maximum 255 registers per thread severely limits occupancy', 'evidence': [{'metric': 'launch__registers_per_thread', 'value': 255, 'interpretation': 'Maximum register usage limits blocks per SM to 2, preventing latency hiding'}, {'metric': 'launch__occupancy_limit_registers', 'value': 2, 'interpretation': 'Registers are the primary occupancy limiter, allowing only 2 blocks per SM'}, {'metric': 'sm__warps_active.avg.pct_of_peak_sustained_active', 'value': 6.25, 'interpretation': 'Only 6.25% of possible warps are active, extremely low occupancy'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 252.0% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register pressure limiting occupancy to 2 blocks per SM
+**Fix Applied**: Reduce BLOCK_M from 128 to 32-64 and increase num_stages to 3-4 to lower register pressure while improving memory latency hiding through software pipelining
+**Performance**: 11.1232ms → 39.1588ms (252.0% slower)
+**NCU SOL (% of Peak)**: Combined: 6.0%, Compute: 2.4%, Memory: 6.0%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 292.6% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (254 per thread) severely limits occupancy, allowing only 2 blocks per SM instead of the theoretical maximum
+**Fix Applied**: Reduce BLOCK_M and BLOCK_K tile sizes (e.g., BLOCK_M=32, BLOCK_K=128) to lower register pressure, increase num_stages to 4 for better memory pipelining, and use num_warps=8 to improve occupancy and latency hiding
+**Performance**: 9.5189ms → 37.3688ms (292.6% slower)
+**NCU SOL (% of Peak)**: Combined: 7.7%, Compute: 2.4%, Memory: 7.7%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 8.8% faster]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: High memory latency stalls due to poor cache utilization and insufficient memory-level parallelism
+**Fix Applied**: Increase BLOCK_K and use shared memory to cache the B vector across K iterations, enabling data reuse and reducing global memory pressure. Also consider vectorized loads (e.g., tl.load with 4-element vectors) to improve memory coalescing and increase in-flight memory requests.
+**Performance**: 6.8029ms → 6.2023ms (8.8% faster)
+**NCU SOL (% of Peak)**: Combined: 39.5%, Compute: 9.4%, Memory: 39.5%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 46.4% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Memory latency bottleneck from poor cache reuse - warps spend 60% of time waiting for global memory loads
+**Fix Applied**: Increase data reuse by loading the B vector tile into shared memory once per block and having multiple warps share it, while processing more rows per program to amortize B loads and improve cache locality for A matrix accesses
+**Performance**: 6.8029ms → 9.9565ms (46.4% slower)
+**NCU SOL (% of Peak)**: Combined: 34.3%, Compute: 8.6%, Memory: 34.3%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 91.0% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Excessive register usage (254 registers per thread) severely limits occupancy
+**Fix Applied**: Reduce BLOCK_M from 128 to 32-64 and increase num_stages from 2 to 4-6 to reduce register pressure while improving memory latency hiding through software pipelining
+**Performance**: 9.5189ms → 18.1855ms (91.0% slower)
+**NCU SOL (% of Peak)**: Combined: 31.0%, Compute: 6.9%, Memory: 31.0%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register pressure limiting occupancy to 2 blocks per SM
+**Fix Applied**: Reduce BLOCK_M from 128 to 32-64 and increase num_stages to 3-4 to lower register pressure while improving memory latency hiding through software pipelining
+**Expected**: Reducing BLOCK_M and increasing num_stages should have lowered register pressure, increased occupancy, and improved performance through better latency hiding
+**Actual**: Performance degraded by 252%, going from 11.1ms to 39.2ms. Both Compute (2.4%) and Memory (6.0%) SOL metrics are extremely low, indicating severe underutilization (-252.0%)
+**Analysis**: The fix made things significantly worse. Reducing BLOCK_M from 128 to 32-64 likely reduced the amount of work per block, leading to inefficient computation patterns. The extremely low SOL metrics (2.4% compute, 6.0% memory) suggest the kernel is now doing very little useful work - possibly due to excessive overhead from smaller tiles, poor memory access patterns, or the config changes creating suboptimal parallelism. The original bottleneck diagnosis of register pressure may have been incorrect, or the applied fix was too aggressive.
+**Lessons**:
+  - Reducing tile sizes too aggressively can hurt performance more than register pressure does
+  - Very low SOL metrics (<10%) indicate fundamental issues with work distribution or parallelism, not just occupancy
+  - BLOCK_M reduction from 128 to 32-64 is too drastic - should try incremental changes
+  - Config changes noted as 'none' but fix description mentions parameter changes - there may be a mismatch in what was actually applied
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (254 per thread) severely limits occupancy, allowing only 2 blocks per SM instead of the theoretical maximum
+**Fix Applied**: Reduce BLOCK_M and BLOCK_K tile sizes (e.g., BLOCK_M=32, BLOCK_K=128) to lower register pressure, increase num_stages to 4 for better memory pipelining, and use num_warps=8 to improve occupancy and latency hiding
+**Expected**: Reducing tile sizes and adjusting num_warps/num_stages should have lowered register pressure, increased occupancy, and improved performance by better utilizing GPU resources
+**Actual**: Performance degraded by nearly 4x (9.5ms → 37.4ms), and both Compute (2.4%) and Memory (7.7%) SOL metrics are extremely low, indicating severe underutilization got worse (-292.6%)
+**Analysis**: While the diagnosis of excessive register usage limiting occupancy was likely correct, the fix was counterproductive. Reducing BLOCK_M to 32 while keeping BLOCK_K at 128 creates an extremely unbalanced tile shape that hurts data reuse and arithmetic intensity. The 8 warps combined with smaller tiles means each warp does less useful work. The dramatic performance regression suggests the kernel is now doing far more memory accesses relative to compute, and the very low SOL metrics (2.4% compute, 7.7% memory) indicate the kernel is neither compute-bound nor memory-bound but rather suffering from severe inefficiency, possibly due to poor tile shapes causing excessive loop overhead or poor memory access patterns.
+**Lessons**:
+  - Tile size reductions must maintain balanced aspect ratios - extremely narrow tiles (BLOCK_M=32) hurt data reuse
+  - Increasing num_warps without sufficient work per warp can hurt performance due to coordination overhead
+  - Register pressure fixes should be incremental - halving multiple dimensions simultaneously is too aggressive
+  - Very low SOL in both compute and memory often indicates fundamental algorithmic inefficiency, not just occupancy issues
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: High memory latency stalls due to poor cache utilization and insufficient memory-level parallelism
+**Fix Applied**: Increase BLOCK_K and use shared memory to cache the B vector across K iterations, enabling data reuse and reducing global memory pressure. Also consider vectorized loads (e.g., tl.load with 4-element vectors) to improve memory coalescing and increase in-flight memory requests.
+**Expected**: Expected memory throughput to increase and compute utilization to improve as better cache utilization and memory-level parallelism would reduce memory latency stalls, leading to higher overall GPU utilization.
+**Actual**: Achieved 8.8% performance improvement (6.8029ms → 6.2023ms). Memory SOL at 39.5% suggests improved memory bandwidth utilization, though compute remains low at 9.4%. (+8.8%)
+**Analysis**: The fix was effective because increasing BLOCK_K and using shared memory for caching the B vector reduced redundant global memory accesses. The 8.8% improvement confirms that memory latency was indeed a bottleneck. However, the compute SOL (9.4%) remaining low while memory SOL (39.5%) is moderate indicates the kernel is still memory-bound and there's room for further optimization. The gap between memory and compute utilization suggests we're now better at fetching data but still not fully utilizing compute resources.
+**Lessons**:
+  - Shared memory caching for reused data (like B vector across K iterations) provides meaningful performance gains
+  - 8.8% improvement from memory optimizations confirms memory latency was a real bottleneck
+  - Even after optimization, low compute SOL (9.4%) indicates the kernel remains underutilized - more work per thread or better parallelism needed
+  - Memory SOL at 39.5% suggests there's still headroom for memory bandwidth improvements
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Memory latency bottleneck from poor cache reuse - warps spend 60% of time waiting for global memory loads
+**Fix Applied**: Increase data reuse by loading the B vector tile into shared memory once per block and having multiple warps share it, while processing more rows per program to amortize B loads and improve cache locality for A matrix accesses
+**Expected**: Expected performance improvement by reducing memory latency through better cache reuse and shared memory utilization, potentially improving memory SOL and reducing warp stall time
+**Actual**: Performance degraded significantly by 46.4% (6.8ms → 9.97ms), with memory SOL at only 34.3% and compute at 8.6%, indicating severe underutilization got worse (-46.4%)
+**Analysis**: The fix backfired because adding shared memory for B vector tile and processing more rows per program likely introduced synchronization overhead, increased register pressure, and reduced occupancy. The memory SOL dropped to 34.3% suggesting the shared memory approach actually hurt memory bandwidth utilization rather than helping. For matrix-vector multiplication, the B vector is typically small and already benefits from L2 cache naturally - forcing it into shared memory added unnecessary complexity. The 'underutilized' diagnosis was partially correct but the root cause analysis was wrong - the issue wasn't poor cache reuse of B, but likely something else like insufficient parallelism or poor memory coalescing patterns.
+**Lessons**:
+  - Matrix-vector multiplication has different optimization patterns than matrix-matrix multiplication - B vector is often small enough to fit in cache naturally
+  - Adding shared memory doesn't always improve performance - it can hurt occupancy and add synchronization overhead
+  - Processing more rows per thread can reduce parallelism and hurt performance if not balanced correctly
+  - A 34.3% memory SOL with 8.6% compute SOL suggests the kernel is severely memory-bound but not efficiently using memory bandwidth
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Excessive register usage (254 registers per thread) severely limits occupancy
+**Fix Applied**: Reduce BLOCK_M from 128 to 32-64 and increase num_stages from 2 to 4-6 to reduce register pressure while improving memory latency hiding through software pipelining
+**Expected**: Reducing BLOCK_M and increasing num_stages should lower register pressure, improve occupancy, and hide memory latency better, leading to performance improvement
+**Actual**: Performance degraded by 91% (9.5ms → 18.2ms), with compute SOL dropping significantly while memory SOL remained low at 31% (-91.0%)
+**Analysis**: While the diagnosis of excessive register usage limiting occupancy was likely correct, the fix was counterproductive. Reducing BLOCK_M from 128 to 32-64 dramatically reduces the work per block and increases the total number of blocks needed, leading to more kernel launch overhead and reduced data reuse. The smaller tile size means less arithmetic intensity per memory access. The config changes field shows 'none', suggesting the intended changes may not have been applied correctly, or the pipeline stage increase didn't compensate for the reduced tile efficiency. The dramatic performance regression indicates the tile size reduction hurt more than the register savings helped.
+**Lessons**:
+  - Reducing tile sizes (BLOCK_M, BLOCK_N, BLOCK_K) can severely hurt performance by reducing data reuse and arithmetic intensity
+  - Register pressure should be addressed through other means first before reducing computational tile sizes
+  - A 91% regression suggests the fix fundamentally changed the algorithm's efficiency characteristics negatively
+  - Config changes showing 'none' may indicate the fix wasn't properly applied or was overridden
+
+
+Guidance for this round:
+- AVOID: Reducing BLOCK_M by more than 50% in a single optimization step; Making multiple parameter changes simultaneously (BLOCK_M and num_stages) without isolating effects; Assuming register pressure is the root cause when occupancy is low without profiling register usage; Reducing BLOCK_M below 64 for GEMM kernels as it creates poor tile aspect ratios; Making multiple aggressive config changes simultaneously without understanding individual effects; Assuming more warps always improves latency hiding - it can hurt if work per warp is insufficient; Don't assume a single optimization pass will fully resolve underutilization issues; Avoid stopping optimization when compute utilization remains below 20%; Adding shared memory for small vectors that already cache well; Increasing work per thread/program without measuring occupancy impact; Applying matrix-matrix multiplication optimizations directly to matrix-vector problems; Aggressively reducing BLOCK_M to very small values (32-64) as a first approach to register pressure; Making multiple changes simultaneously (BLOCK_M reduction AND num_stages increase) which makes it hard to isolate effects; Reducing tile dimensions without considering the impact on arithmetic intensity and data reuse- PRIORITIZE: Make incremental changes - try BLOCK_M=96 instead of jumping to 32-64; Profile actual register usage before assuming register pressure is the issue; Consider that underutilization might be due to insufficient parallelism or poor memory access patterns rather than occupancy; Revert to baseline and try increasing num_warps or adjusting BLOCK_N instead of BLOCK_M; Try reducing only BLOCK_K first (e.g., 64 or 128) while keeping BLOCK_M at 64 or higher; Consider reducing num_stages instead of increasing it to lower register pressure; Use num_warps=4 as a balanced starting point for medium-sized tiles; Make single config changes to isolate the impact of each modification; Continue increasing arithmetic intensity by processing more output elements per thread; Try larger tile sizes to increase data reuse and amortize memory access costs; Explore vectorized loads (float4) to further improve memory coalescing; Consider loop unrolling to increase instruction-level parallelism and hide remaining latency; Investigate if occupancy is limiting performance - may need to adjust block sizes; Focus on memory coalescing for A matrix accesses first; Increase parallelism rather than work per thread for underutilized kernels; Profile to understand whether L1/L2 cache is already being utilized effectively before adding shared memory; Consider vectorized loads (float4) to improve memory bandwidth utilization; Try reducing BLOCK_K instead of BLOCK_M to lower register pressure while maintaining output tile size; Consider reducing num_warps to decrease register pressure while keeping tile sizes; Try modest BLOCK_M reductions (128→96 or 128→80) rather than dramatic cuts; Adjust num_stages more conservatively (2→3) rather than jumping to 4-6
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-3 or rtol=1e-3)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

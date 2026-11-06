@@ -10,6 +10,7 @@ import json
 import platform
 import subprocess
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,14 +74,25 @@ def main() -> None:
     excluded_sync = [
         r for r in inventory if "distinct local-sync driver" in r["selection_reason"]
     ]
+    threads_by_workload = defaultdict(set)
+    for row in extracted:
+        threads_by_workload[row["model_and_input"]].add(row["thread_count"])
+    complete_workloads = [
+        name
+        for name, threads in threads_by_workload.items()
+        if threads == {"1", "4", "8"}
+    ]
     if (
         len(extracted) != 30
         or len(inventory) != 40
         or len(selected) != 30
         or len(excluded_sync) != 10
+        or len(complete_workloads) != 10
+        or len(threads_by_workload) != 10
     ):
         raise ValueError(
-            "Inventory reconciliation failed: expected 40 latency rows, 30 included thread rows, 10 excluded local-sync rows"
+            "Inventory reconciliation failed: expected 40 latency rows, 30 included thread rows, "
+            "10 excluded local-sync rows, and 10 workloads each with 1, 4, and 8 threads"
         )
     receipt = {
         "built_utc": datetime.now(timezone.utc).isoformat(),
@@ -89,10 +101,10 @@ def main() -> None:
         "verified_source_files": verified,
         "checks": {
             "pinned_source_hashes_verified": len(verified),
-            "all_latency_summary_rows_in_inventory": 40,
-            "thread_rows_included": 30,
-            "workloads_with_all_1_4_8_points": 10,
-            "local_sync_rows_excluded_with_reason": 10,
+            "all_latency_summary_rows_in_inventory": len(inventory),
+            "thread_rows_included": len(selected),
+            "workloads_with_all_1_4_8_points": len(complete_workloads),
+            "local_sync_rows_excluded_with_reason": len(excluded_sync),
         },
         "files": {str(p.relative_to(HERE)): sha256(p) for p in outputs},
         "verification_scope": "Report parsing and source-code configuration inspection only. No rerun, independent host, or raw per-repetition dataset is claimed.",

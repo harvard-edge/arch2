@@ -72,11 +72,17 @@ it does not imply that every month inside those endpoint years was observed.
 python3 data/studies/19-errata-history/reproduce.py
 ```
 
-The script reads the four frozen PDFs and metadata in study 13, verifies source
-hashes, re-extracts tables using PyMuPDF, and renders with the shared book style.
-Study 13 must be retained alongside this folder. If a PDF is missing, its
-collector can recover it only when the public response matches the pinned hash;
-preserve the private archive because vendor URLs can replace old revisions.
+The vendor PDFs are not in the repository: `13-errata-dispositions/raw/pdf/` is
+gitignored, and their redistribution rights are not established. With the PDFs
+in that directory, the script verifies their hashes, re-extracts the tables
+using PyMuPDF, and renders with the shared book style. Without them, it skips
+extraction, plots the committed CSVs, and prints that it did so. In both cases
+`build_receipt.json` records how many of the declared sources were
+hash-verified and whether extraction ran, so a run without the PDFs is not a
+source check. Study 13 must be retained alongside this folder. If a PDF is
+missing, its collector can recover it only when the public response matches the
+pinned hash; preserve the private archive because vendor URLs can replace old
+revisions.
 
 `revision_rows.csv` and `history_rows.json` retain the source rows.
 `range_expansions.csv` makes each range calculation visible.
@@ -84,8 +90,11 @@ preserve the private archive because vendor URLs can replace old revisions.
 `annual_counts.csv` contains the plotted data and missing-row indicators.
 `final_id_reconciliation.json` records the residual-baseline check and the
 Broadwell mismatch. `source_manifest.json` provides URLs and hashes; the raw
-PDFs remain in study 13. `source_visual_qa/` retains the four inspected history
-pages. Both figure formats were inspected through PNG rendering.
+PDFs stay outside the repository as described above. `source_pages/` retains
+the extracted text of the four revision-history pages. Extraction also writes
+page images to `source_visual_qa/`, which is gitignored, so those images are
+not retained and that inspection cannot be reviewed from this folder. Both
+figure formats were inspected through PNG rendering.
 
 Requirements are Python, PyMuPDF, Matplotlib, NumPy, and Requests. The current
 PyMuPDF table extraction is recorded in `build_receipt.json` alongside script,

@@ -30,8 +30,9 @@ use
     instances elaborate it.
 
 token distance
-    |i_use - i_decl|, the number of positions between the declaration's name
-    token and the use's name token in the token sequence.
+    |i_use - i_decl|, the difference between the positions of the declaration's
+    name token and the use's name token in the token sequence. Adjacent tokens
+    are 1 apart, one more than the number of tokens that intervene.
 
 tree distance
     The number of edges on the path between the declaration's syntax node and
@@ -393,8 +394,10 @@ class FileResult:
 
 
 def measure_file(
-    path: Path, corpus: Corpus, root: Path, support_trees, sm, bag
+    path: Path, corpus: Corpus, root: Path, support_trees, sm, bag, pair_sink=None
 ) -> FileResult:
+    """Measure one file. ``pair_sink``, if given, receives one dict per pair
+    with recoverable ancestor chains; it does not change the result."""
     res = FileResult()
     tree = syntax.SyntaxTree.fromFile(str(path), sm, bag)
     first = tree.root.getFirstToken()
@@ -515,6 +518,18 @@ def measure_file(
             td = tree_distance(chains[dk], chains[uk])
             if td is not None:
                 res.tree_distances.append(td)
+                if pair_sink is not None:
+                    pair_sink(
+                        {
+                            "decl_key": dk,
+                            "use_key": uk,
+                            "decl_chain": chains[dk],
+                            "use_chain": chains[uk],
+                            "decl_token": i,
+                            "use_token": j,
+                            "tree_distance": td,
+                        }
+                    )
     res.pairs = len(res.token_distances)
     res.declarations = len({d for d, _ in pairs if d >= 0})
     return res
@@ -531,9 +546,22 @@ def fmt(x: float) -> str:
     return f"{x:.4f}"
 
 
-def run(cache: Path, offline: bool, output: Path) -> None:
+def run(
+    cache: Path,
+    offline: bool,
+    output: Path,
+    source_root: Path | None = None,
+    summary: Path = SUMMARY,
+) -> None:
     manifest = read_manifest()
-    roots = {c.name: ensure_checkout(c, cache, offline) for c in CORPORA}
+    # Extracted commit archives have no git HEAD to check, so they rest on the
+    # per-file SHA-256 comparison below.
+    roots = {
+        c.name: source_root / c.checkout
+        if source_root
+        else ensure_checkout(c, cache, offline)
+        for c in CORPORA
+    }
     for row in manifest:
         p = roots[row["corpus"]] / row["source_path"]
         if sha256(p) != row["source_sha256"]:
@@ -623,7 +651,7 @@ def run(cache: Path, offline: bool, output: Path) -> None:
         w = csv.DictWriter(fh, fieldnames=list(out_rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(out_rows)
-    write_summary(out_rows, version)
+    write_summary(out_rows, version, summary)
     measured = sum(r["status"] == "measured" for r in out_rows)
     print(
         f"wrote {output} ({measured} measured, {len(out_rows) - measured} excluded)",
@@ -661,7 +689,7 @@ def loglog_fit(rows: list[dict], y_key: str = "mean_token_distance") -> dict:
     }
 
 
-def write_summary(rows: list[dict], version: str) -> None:
+def write_summary(rows: list[dict], version: str, path: Path = SUMMARY) -> None:
     measured = [r for r in rows if r["status"] == "measured"]
     groups = {
         "all": measured,
@@ -692,7 +720,7 @@ def write_summary(rows: list[dict], version: str) -> None:
             4,
         ),
     }
-    SUMMARY.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -711,6 +739,18 @@ def main() -> None:
         "--output", type=Path, default=DEFAULT_OUTPUT, help="dataset CSV to write"
     )
     ap.add_argument(
+        "--summary",
+        type=Path,
+        help="summary JSON to write; defaults to the retained file only when "
+        "--output is the default, and otherwise sits beside --output",
+    )
+    ap.add_argument(
+        "--source-root",
+        type=Path,
+        help="directory of commit archives extracted under each checkout name, "
+        "used in place of git clones; every file still passes its SHA-256 check",
+    )
+    ap.add_argument(
         "--derive-manifest",
         action="store_true",
         help="rebuild corpus_manifest.csv from the deleted dataset in git history",
@@ -723,7 +763,14 @@ def main() -> None:
         write_manifest(rows)
         print(f"wrote {MANIFEST} ({len(rows)} files)", file=sys.stderr)
         return
-    run(args.cache, args.offline, args.output)
+    summary = args.summary
+    if summary is None:
+        summary = (
+            SUMMARY
+            if args.output == DEFAULT_OUTPUT
+            else args.output.with_suffix(".summary.json")
+        )
+    run(args.cache, args.offline, args.output, args.source_root, summary)
 
 
 if __name__ == "__main__":

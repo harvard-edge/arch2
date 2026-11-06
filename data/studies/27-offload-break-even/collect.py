@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure where accelerator offload breaks even against an optimized host.
 
-One invocation is one independent run (fresh process). It times FP32 n x n
+One invocation is one run (fresh process). Runs in one session share its host state. It times FP32 n x n
 matrix products on the host CPU (vendor BLAS through torch.matmul / torch.bmm)
 and on the Apple GPU through the PyTorch MPS backend, and writes every timed
 repetition to raw/run-<id>.csv plus a host-state record raw/run-<id>.host.json.
@@ -14,7 +14,7 @@ Panel (a), one n x n product, three arms:
 Panel (b), sixteen independent n x n products, three arms:
   cpu_bmm         torch.bmm on the host over a (16, n, n) batch.
   mps_16_launch   sixteen separate torch.matmul launches on resident operands,
-                  one synchronize after the sixteenth.
+                  waiting for each with torch.mps.synchronize() before the next.
   mps_bmm         one torch.bmm launch on resident operands, synchronized.
 
 For each n the six arms run in a random order (recorded), each arm is warmed
@@ -61,8 +61,8 @@ def host_state(args):
         "timestamp_start": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
         "cpu_model": sh(["sysctl", "-n", "machdep.cpu.brand_string"]),
         "cpu_logical": sh(["sysctl", "-n", "hw.ncpu"]),
-        "cpu_performance_cores": sh(["sysctl", "-n", "hw.perflevel0.physicalcpu"]),
-        "cpu_efficiency_cores": sh(["sysctl", "-n", "hw.perflevel1.physicalcpu"]),
+        "cpu_perflevel0_cores": sh(["sysctl", "-n", "hw.perflevel0.physicalcpu"]),
+        "cpu_perflevel1_cores": sh(["sysctl", "-n", "hw.perflevel1.physicalcpu"]),
         "memory_bytes": sh(["sysctl", "-n", "hw.memsize"]),
         "os": f"{platform.system()} {platform.mac_ver()[0]} (Darwin {platform.release()})",
         "python": sys.version.split()[0],
@@ -120,8 +120,10 @@ def make_arms(n, dev):
         return torch.bmm(a16, b16)
 
     def mps_16_launch():
-        cs = [torch.matmul(a16d[i], b16d[i]) for i in range(BATCH)]
-        torch.mps.synchronize()
+        cs = []
+        for i in range(BATCH):
+            cs.append(torch.matmul(a16d[i], b16d[i]))
+            torch.mps.synchronize()
         return cs
 
     def mps_bmm():

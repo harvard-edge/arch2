@@ -1,0 +1,286 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs matrix-vector multiplication (C = A * B).
+    """
+    def __init__(self):
+        super(Model, self).__init__()
+    
+    def forward(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        """
+        Performs matrix-vector multiplication.
+
+        Args:
+            A: Input matrix of shape (M, K).
+            B: Input vector of shape (K, 1).
+
+        Returns:
+            Output vector of shape (M, 1).
+        """
+        return torch.matmul(A, B)
+
+M = 256 * 8 # 2048
+K = 131072 * 8 # 1048576
+
+def get_inputs():
+    A = torch.rand(M, K)
+    B = torch.rand(K, 1)
+    return [A, B]
+
+def get_init_inputs():
+    return []  # No special initialization inputs needed
+PyTorch Eager baseline: 2.0928 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def matvec_kernel(
+    A_ptr,
+    x_ptr,
+    C_ptr,
+    M,
+    K,
+    stride_am,
+    stride_ak,
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr,
+):
+    """
+    Matrix-vector multiplication: C = A @ x
+    A is [M, K], x is [K], C is [M]
+    """
+    pid_m = tl.program_id(0)
+    
+    # Each program handles BLOCK_SIZE_M rows
+    row_start = pid_m * BLOCK_SIZE_M
+    row_offsets = row_start + tl.arange(0, BLOCK_SIZE_M)
+    row_mask = row_offsets < M
+    
+    # Initialize accumulator in float32 for numerical stability
+    acc = tl.zeros((BLOCK_SIZE_M,), dtype=tl.float32)
+    
+    # Iterate over K dimension in blocks
+    for k_start in range(0, K, BLOCK_SIZE_K):
+        k_offsets = k_start + tl.arange(0, BLOCK_SIZE_K)
+        k_mask = k_offsets < K
+        
+        # Load x vector elements [BLOCK_SIZE_K]
+        x_vals = tl.load(x_ptr + k_offsets, mask=k_mask, other=0.0)
+        
+        # Load A matrix block [BLOCK_SIZE_M, BLOCK_SIZE_K]
+        a_ptrs = A_ptr + row_offsets[:, None] * stride_am + k_offsets[None, :] * stride_ak
+        combined_mask = row_mask[:, None] & k_mask[None, :]
+        a_vals = tl.load(a_ptrs, mask=combined_mask, other=0.0)
+        
+        # Convert to float32 for accumulation
+        a_vals_f32 = a_vals.to(tl.float32)
+        x_vals_f32 = x_vals.to(tl.float32)
+        
+        # Compute element-wise product and sum over K dimension
+        # a_vals_f32: [BLOCK_SIZE_M, BLOCK_SIZE_K]
+        # x_vals_f32: [BLOCK_SIZE_K]
+        # Broadcast x to [BLOCK_SIZE_M, BLOCK_SIZE_K] then reduce
+        product = a_vals_f32 * x_vals_f32[None, :]
+        acc += tl.sum(product, axis=1)
+    
+    # Store result - convert back to output dtype
+    c_ptrs = C_ptr + row_offsets
+    # Cast to bfloat16 before storing
+    acc_out = acc.to(tl.bfloat16)
+    tl.store(c_ptrs, acc_out, mask=row_mask)
+
+
+def kernel_function(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """
+    Matrix-vector multiplication: C = A @ x
+    
+    Args:
+        A: Matrix of shape [M, K]
+        x: Vector of shape [K] or [K, 1]
+    
+    Returns:
+        C: Vector of shape [M] or [M, 1]
+    """
+    # Handle x being [K, 1] shape
+    x_squeezed = x.squeeze() if x.dim() > 1 else x
+    
+    M, K = A.shape
+    assert x_squeezed.shape[0] == K, f"Shape mismatch: A is [{M}, {K}], x is [{x_squeezed.shape[0]}]"
+    
+    # Allocate output with same dtype as input
+    C = torch.empty(M, device=A.device, dtype=A.dtype)
+    
+    # Block sizes chosen for good performance
+    BLOCK_SIZE_M = 64
+    BLOCK_SIZE_K = 256
+    
+    grid = (triton.cdiv(M, BLOCK_SIZE_M),)
+    
+    matvec_kernel[grid](
+        A, x_squeezed, C,
+        M, K,
+        A.stride(0), A.stride(1),
+        BLOCK_SIZE_M=BLOCK_SIZE_M,
+        BLOCK_SIZE_K=BLOCK_SIZE_K,
+        num_warps=4,
+        num_stages=2,
+    )
+    
+    # Return with same shape as input x
+    if x.dim() > 1 and x.shape[-1] == 1:
+        return C.unsqueeze(-1)
+    return C
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: underutilized
+- Root Cause: {'cause': 'Extreme register pressure limiting occupancy to 2 blocks per SM', 'evidence': [{'metric': 'launch__registers_per_thread', 'value': 255, 'interpretation': 'Maximum possible registers used, severely limiting concurrent warps'}, {'metric': 'launch__occupancy_limit_registers', 'value': 2, 'interpretation': 'Register usage limits occupancy to only 2 blocks per SM'}, {'metric': 'sm__warps_active.avg.pct_of_peak_sustained_active', 'value': 6.25, 'interpretation': 'Only 6.25% of peak warp occupancy achieved, insufficient to hide latency'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 490.5% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Severe memory latency stalls due to insufficient parallelism to hide DRAM access latency
+**Fix Applied**: Increase NUM_ROWS from 4 to 16-32 and use shared memory to cache the B vector tile, allowing multiple rows to reuse the same B data within a thread block
+**Performance**: 6.8029ms → 40.1707ms (490.5% slower)
+**NCU SOL (% of Peak)**: Combined: 4.4%, Compute: 1.1%, Memory: 4.4%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 35.0% faster]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Extreme register pressure limiting occupancy to 2 warps per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M and BLOCK_SIZE_K to decrease register pressure (e.g., BLOCK_SIZE_M=32, BLOCK_SIZE_K=128), and use explicit num_warps and num_stages parameters to control register allocation while enabling software pipelining for latency hiding
+**Performance**: 6.2023ms → 4.0312ms (35.0% faster)
+**NCU SOL (% of Peak)**: Combined: 41.4%, Compute: 9.2%, Memory: 41.4%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 0.1% faster]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Maximum register usage (255 per thread) severely limits occupancy
+**Fix Applied**: Reduce register usage by using smaller BLOCK_SIZE_M (e.g., 16 or 32) and adding num_warps=4 or num_stages=1 to the kernel, or explicitly limit registers with max_nreg compiler hint to improve occupancy
+**Performance**: 6.2023ms → 6.1988ms (0.1% faster)
+**NCU SOL (% of Peak)**: Combined: 39.5%, Compute: 9.4%, Memory: 39.5%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 311.2% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Maximum register usage (255 per thread) severely limits occupancy
+**Fix Applied**: Reduce BLOCK_SIZE_M and BLOCK_SIZE_K to decrease register pressure (try BLOCK_SIZE_M=16, BLOCK_SIZE_K=64) and add num_warps=4 to the kernel launch to improve occupancy
+**Performance**: 6.2023ms → 25.5068ms (311.2% slower)
+**NCU SOL (% of Peak)**: Combined: 12.9%, Compute: 1.8%, Memory: 12.9%
+
+#### Attempt 1 (Worker 0) [✗ FAILED VERIFICATION 0.0% slower]
+**Prescription Applied**: `underutilized` tier
+**Root Cause**: Extreme register pressure with 255 registers per thread limits occupancy to only 2 warps per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M and BLOCK_SIZE_K to decrease register pressure (e.g., BLOCK_SIZE_M=16, BLOCK_SIZE_K=128), and add num_warps=4 and num_stages=2 to kernel launch to control register allocation and enable software pipelining
+**Error**: Verification failed after 10 refinement attempts:
+FAIL: max difference = 1024.0
+
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Severe memory latency stalls due to insufficient parallelism to hide DRAM access latency
+**Fix Applied**: Increase NUM_ROWS from 4 to 16-32 and use shared memory to cache the B vector tile, allowing multiple rows to reuse the same B data within a thread block
+**Expected**: Increasing NUM_ROWS and adding shared memory caching for B vector should have improved parallelism and reduced memory latency stalls, leading to better performance and higher memory/compute utilization
+**Actual**: Performance degraded catastrophically by 490.5% (6.8ms → 40.2ms), and both compute (1.1%) and memory (4.4%) utilization remained extremely low (-490.5%)
+**Analysis**: While the diagnosis of underutilization due to memory latency was likely correct, the fix implementation appears to have introduced severe issues. Increasing NUM_ROWS from 4 to 16-32 dramatically increases register pressure per thread, potentially causing register spilling to local memory. The shared memory addition may have also introduced synchronization overhead or bank conflicts. The extremely low SOL metrics (1.1% compute, 4.4% memory) suggest the kernel is now severely bottlenecked by something else - likely register spilling, excessive synchronization, or reduced occupancy due to resource constraints.
+**Lessons**:
+  - Aggressive increases in work per thread (4x-8x) can cause register spilling that far outweighs benefits
+  - Adding shared memory without careful analysis can reduce occupancy or introduce bank conflicts
+  - Multiple changes at once (NUM_ROWS increase + shared memory) makes it hard to isolate which change caused regression
+  - Low SOL in both compute and memory after a change often indicates a new bottleneck like register spilling or occupancy issues
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Extreme register pressure limiting occupancy to 2 warps per SM
+**Fix Applied**: Reduce BLOCK_SIZE_M and BLOCK_SIZE_K to decrease register pressure (e.g., BLOCK_SIZE_M=32, BLOCK_SIZE_K=128), and use explicit num_warps and num_stages parameters to control register allocation while enabling software pipelining for latency hiding
+**Expected**: Reducing register pressure by lowering BLOCK_SIZE_M and BLOCK_SIZE_K should increase occupancy beyond 2 warps per SM, allowing better latency hiding and improved GPU utilization
+**Actual**: Performance improved by 35% (6.2ms → 4.0ms), indicating that register pressure reduction successfully increased occupancy and allowed more warps to run concurrently (+35.0%)
+**Analysis**: The diagnosis was correct - the kernel was underutilized due to extreme register pressure limiting occupancy. By reducing tile sizes and controlling warps/stages, we freed up registers allowing more concurrent warps. The 35% improvement confirms the fix worked. However, the NCU SOL shows we're now at 41.4% memory bound with only 9.2% compute, suggesting we've shifted from being occupancy-limited to being memory-bandwidth limited. The kernel is now utilizing resources better but has revealed the next bottleneck.
+**Lessons**:
+  - Register pressure from large tile sizes can severely limit occupancy and overall performance
+  - Reducing BLOCK_SIZE_M and BLOCK_SIZE_K is an effective way to reduce register pressure
+  - Explicit num_warps and num_stages parameters give fine-grained control over register allocation
+  - Fixing one bottleneck (occupancy) often reveals the next bottleneck (memory bandwidth)
+  - A 35% improvement validates that underutilization was indeed the primary bottleneck
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Maximum register usage (255 per thread) severely limits occupancy
+**Fix Applied**: Reduce register usage by using smaller BLOCK_SIZE_M (e.g., 16 or 32) and adding num_warps=4 or num_stages=1 to the kernel, or explicitly limit registers with max_nreg compiler hint to improve occupancy
+**Expected**: Reducing register usage should increase occupancy, leading to better GPU utilization and noticeable performance improvement (5-20% or more). Memory SOL should increase as more threads can hide memory latency.
+**Actual**: Performance improved by only 0.1% (essentially unchanged). Memory SOL remains at 39.5% and Compute SOL at 9.4%, indicating the underutilization issue was not meaningfully addressed. (+0.1%)
+**Analysis**: The config changes field shows 'none', meaning the intended fix (reducing BLOCK_SIZE_M, adjusting num_warps/num_stages, or adding max_nreg) was not actually applied to the kernel configuration. The diagnosis of register pressure limiting occupancy was likely correct given the 255 registers per thread mentioned, but without actual config changes, no improvement could occur. The 0.1% change is within noise margin. The low Compute SOL (9.4%) and moderate Memory SOL (39.5%) confirm the kernel is still severely underutilized.
+**Lessons**:
+  - Config changes must actually be applied - 'none' in config changes means the fix was not implemented
+  - A 0.1% improvement is within measurement noise and indicates no real change occurred
+  - Register pressure of 255 per thread is indeed severe and needs aggressive reduction
+  - Both Compute and Memory SOL being low confirms underutilization but the fix requires actual parameter changes
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Maximum register usage (255 per thread) severely limits occupancy
+**Fix Applied**: Reduce BLOCK_SIZE_M and BLOCK_SIZE_K to decrease register pressure (try BLOCK_SIZE_M=16, BLOCK_SIZE_K=64) and add num_warps=4 to the kernel launch to improve occupancy
+**Expected**: Reducing BLOCK_SIZE_M and BLOCK_SIZE_K should decrease register pressure, allowing more threads per SM, improving occupancy and overall performance
+**Actual**: Performance degraded by 311% (6.2ms → 25.5ms). Both Compute SOL (1.8%) and Memory SOL (12.9%) are extremely low, indicating severe underutilization got worse, not better (-311.2%)
+**Analysis**: While the diagnosis of register pressure limiting occupancy was likely correct, the fix backfired badly. Reducing block sizes without config changes means the kernel now processes less work per block, requiring more blocks and more overhead. The extremely low Compute (1.8%) and Memory (12.9%) SOL indicate the kernel is doing very little useful work. The 'Config Changes: none' is suspicious - if BLOCK_SIZE parameters were changed, those ARE config changes. The num_warps=4 may have been applied but with smaller tiles, each warp has less work to do, leading to poor arithmetic intensity and inefficient memory access patterns.
+**Lessons**:
+  - Reducing tile sizes without careful analysis can dramatically hurt performance by reducing work per thread and arithmetic intensity
+  - Block size reductions must be balanced against maintaining sufficient work per thread to hide latency
+  - Register pressure fixes should be validated with actual register count measurements before and after
+  - When both Compute and Memory SOL are very low, the problem is likely launch configuration or fundamental algorithm structure, not just register pressure
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Severe memory latency stalls due to insufficient parallelism to hide DRAM access latency
+**Fix Applied**: Increase NUM_ROWS from 4 to 16-32 and use shared memory to cache the B vector tile, allowing multiple rows to reuse the same B data within a thread block
+**Expected**: Increasing NUM_ROWS and adding shared memory caching for B vector should have improved parallelism and reduced memory latency stalls, leading to better performance and higher memory/compute utilization
+**Actual**: Performance degraded catastrophically by 490.5% (6.8ms → 40.2ms), and both compute (1.1%) and memory (4.4%) utilization remained extremely low (-490.5%)
+**Analysis**: While the diagnosis of underutilization due to memory latency was likely correct, the fix implementation appears to have introduced severe issues. Increasing NUM_ROWS from 4 to 16-32 dramatically increases register pressure per thread, potentially causing register spilling to local memory. The shared memory addition may have also introduced synchronization overhead or bank conflicts. The extremely low SOL metrics (1.1% compute, 4.4% memory) suggest the kernel is now severely bottlenecked by something else - likely register spilling, excessive synchronization, or reduced occupancy due to resource constraints.
+**Lessons**:
+  - Aggressive increases in work per thread (4x-8x) can cause register spilling that far outweighs benefits
+  - Adding shared memory without careful analysis can reduce occupancy or introduce bank conflicts
+  - Multiple changes at once (NUM_ROWS increase + shared memory) makes it hard to isolate which change caused regression
+  - Low SOL in both compute and memory after a change often indicates a new bottleneck like register spilling or occupancy issues
+
+
+Guidance for this round:
+- AVOID: Making large jumps in work-per-thread parameters (e.g., 4→16-32) without incremental testing; Combining multiple optimization techniques in a single attempt; Adding shared memory without checking occupancy impact and bank conflict potential; Using excessively large tile sizes that cause register spilling or occupancy limits; Ignoring the relationship between block dimensions and register pressure; Assuming larger tiles always mean better performance; Claiming a fix was applied without verifying config changes actually occurred; Interpreting sub-1% changes as meaningful improvements; Aggressively reducing block sizes without compensating changes to maintain parallelism; Applying multiple changes simultaneously (block size reduction + num_warps change) making it hard to isolate effects; Reducing BLOCK_SIZE_K which directly impacts the amount of work done before writing back results; Making large jumps in work-per-thread parameters (e.g., 4→16-32) without incremental testing; Combining multiple optimization techniques in a single attempt; Adding shared memory without checking occupancy impact and bank conflict potential- PRIORITIZE: Make incremental changes - try NUM_ROWS=6 or 8 first before jumping to 16-32; Check register usage and occupancy before and after changes using NCU; If adding shared memory, do it as a separate step from increasing work per thread; Profile for register spilling (local memory traffic) when performance degrades unexpectedly; Now focus on memory optimization since we're 41.4% memory bound vs 9.2% compute bound; Consider memory coalescing improvements and data reuse strategies; Explore prefetching and better memory access patterns to improve memory efficiency; Try increasing compute intensity per memory access to balance the compute/memory ratio; Actually modify BLOCK_SIZE_M to 16 or 32 in the kernel config; Explicitly set num_warps=4 and num_stages=1 in the triton.Config; Use @triton.jit decorator with max_nreg parameter to limit registers; Consider reducing BLOCK_SIZE_K as well to further reduce register pressure; Verify changes are applied by checking kernel compilation output or profiler; Try reducing only BLOCK_SIZE_M while keeping BLOCK_SIZE_K large to maintain arithmetic intensity; Use explicit register limiting with maxrregcount pragma instead of hoping smaller tiles reduce registers; Increase BLOCK_SIZE_N if reducing M to maintain total work per block; Profile register usage explicitly before making changes to confirm the diagnosis; Make incremental changes - try NUM_ROWS=6 or 8 first before jumping to 16-32; Check register usage and occupancy before and after changes using NCU; If adding shared memory, do it as a separate step from increasing work per thread; Profile for register spilling (local memory traffic) when performance degrades unexpectedly
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-3 or rtol=1e-3)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

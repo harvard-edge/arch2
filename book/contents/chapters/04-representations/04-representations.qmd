@@ -48,8 +48,8 @@ Public repositories can reduce the cost of collecting data, but file count alone
 | --- | --- | --- | --- |
 | OpenRTLSet: an extracted Verilog module from public RTL or high-level synthesis (HLS) [@WangEtAl2025OpenRTLSet]. | Module-level Verilog generation. | Project context, per-module functional checks, workload behavior, and physical measurements. | Failed conversions and their rejection reasons are not released. |
 | RTL-Repo: a target-line completion with surrounding repository context [@AllamShalan2024RTLRepo]. | Multi-file Verilog completion. | Tool-checked behavior and physical results; reported split counts do not establish repository separation. | No design tool runs for the observation; filtered repositories are not retained. |
-| CircuitNet: a back-end design run and retained layout [@ChaiEtAl2022CircuitNet]. | Congestion, design rule violation, and IR-drop prediction. | Front-end software, workload behavior, and live project history. | 12,960 runs attempted; 10,242 layouts retained. Failure causes are not retained. |
-| QuArch: an expert-validated architecture question-answer pair [@PrakashEtAl2025QuArch; @PrakashEtAl2025QuArchReasoning]. | Architecture knowledge and reasoning. | Executable design state and measured implementation behavior. | The first release excludes questions without definitive answers or with narrow scope. |
+| CircuitNet: a back-end design run and retained layout [@ChaiEtAl2022CircuitNet]. | Congestion, design rule violation, and IR-drop prediction. | Front-end software, workload behavior, and live project history. | 12,960 runs attempted; 10,242 layouts retained after excluding failed runs, in the original release. The paper does not report failure causes. |
+| QuArch: an expert-validated architecture question-answer pair [@PrakashEtAl2025QuArch; @PrakashEtAl2025QuArchReasoning]. | Architecture knowledge and reasoning. | Executable design state and measured implementation behavior. | Review of the first release removed questions without definitive answers or with narrow scope. |
 : **A dataset supports only the task and context carried by its observations.** Module code, repository context, executed layouts, and architecture questions serve distinct purposes and leave different parts of design decisions unobserved. {#tbl-public-architecture-data tbl-colwidths="[28,20,26,26]"}
 
 CircuitNet's layouts can support a predictor of congestion or supply-grid IR drop (the voltage lost across the power-delivery wiring), whereas QuArch's questions can probe architectural knowledge. Neither supplies the schedule-latency pairs needed for our mapping study. Their sizes must also be read in their own units. Counts of modules, layouts, and validated questions do not measure a common quantity of useful information. A narrow collection can be well suited to one component even when the team must obtain the rest of the study's information elsewhere.
@@ -61,11 +61,11 @@ Collection filters help explain which designs survive into a public dataset. Pub
 ```{python}
 #| label: fig-public-code-to-rtl
 #| fig-cap: |
-#|   **Building a Verilog corpus from public C/C++ code involves several filters.** The horizontal log-scale bar chart traces repository attrition in the OpenRTLSet C/C++ collection pipeline: approximately 103,000 permissively licensed repositories narrow to approximately 12,000 after synthesizability screening, and only approximately 1,000 successfully generate Verilog through Vitis HLS [@WangEtAl2025OpenRTLSet]. The resulting 24,000 Verilog modules represent a distinct observation unit from the repositories shown. These counts reflect pipeline-specific tool filters rather than universal hardware synthesizability rates.
+#|   **Building a Verilog corpus from public C/C++ code involves several filters.** The horizontal log-scale bar chart traces repository attrition in the OpenRTLSet C/C++ collection pipeline: approximately 103,000 permissively licensed repositories narrow to approximately 12,000 after synthesizability screening, and only approximately 1,000 successfully generate Verilog through Vitis HLS [@WangEtAl2025OpenRTLSet]. The resulting approximately 24,000 Verilog modules represent a distinct observation unit from the repositories shown. These counts reflect pipeline-specific tool filters rather than universal hardware synthesizability rates.
 #| out-width: "100%"
 #| fig-alt: "Log-scale horizontal bar chart showing three stages from the OpenRTLSet C and C++ collection pipeline. Approximately 103,000 permissively licensed repositories enter the pipeline, 12,000 remain after the authors' synthesizability screen, and 1,000 successfully generate Verilog through Vitis HLS."
 
-# Source data: data/datasets/chapter4-openrtlset-funnel.csv
+# Source data: book/contents/chapters/04-representations/data/fig-public-code-to-rtl/chapter4-openrtlset-funnel.csv
 # (counts transcribed from OpenRTLSet, Section III-A, with per-row source columns)
 import csv
 from pathlib import Path
@@ -78,7 +78,7 @@ apply_style()
 
 _root = Path(_ap.__file__).resolve().parents[2]
 with open(
-    _root / "data" / "datasets" / "chapter4-openrtlset-funnel.csv",
+    _root / "book/contents/chapters/04-representations/data/fig-public-code-to-rtl/chapter4-openrtlset-funnel.csv",
     encoding="utf-8",
 ) as fh:
     _funnel_rows = list(csv.DictReader(l for l in fh if not l.startswith("#")))
@@ -137,13 +137,18 @@ for spine in ["top", "right", "left"]:
 ax.spines["bottom"].set_color(COLORS["ink"])
 ```
 
-The first large reduction occurs before Vitis HLS runs, when the authors screen for synthesizability; tool conversion narrows the pool further [@WangEtAl2025OpenRTLSet]. General-purpose C/C++ can rely on dynamic memory, unbounded pointers, or system calls that high-level synthesis cannot map to a static circuit. The survivors therefore reflect both the source population and the tool's accepted language subset. They supply generated Verilog modules, not matching physical implementations or workload measurements. An abundant source pool can still leave expensive observations missing.
+```{python}
+#| echo: false
+openrtl_modules = next(f"{int(row['approximate_count']):,}" for row in _funnel_rows if row["unit"] == "modules")
+```
+
+The first reduction occurs before Vitis HLS runs, when the authors screen for synthesizability; tool conversion then removes most of what remains [@WangEtAl2025OpenRTLSet]. Their screen prunes code that uses dynamic memory allocation, pointers, while loops, recursion, or branch control such as `goto`, and they attribute the later Vitis HLS failures to issues such as C++ standard library calls that are not synthesizable. The survivors therefore reflect both the source population and the tool's accepted language subset. They supply approximately `{python} openrtl_modules` generated Verilog modules, not matching physical implementations or workload measurements. An abundant source pool can still leave expensive observations missing.
 
 That shortage also limits what a model can learn from public corpora. A foundation model pretrained on them can learn syntax, circuit idioms, and documented design rules, yet still lack the evidence needed to apply those rules under project conditions. A team can assess metastability risk at clock-domain crossings,[^fn-metastability-c04] voltage drop across the power grid, or combinational loops only by running verification and timing checks on the proposed design itself. That gap between syntax and verified implementation connects corpus quality directly to the evaluation bottleneck in @sec-design-loop-no-longer-scales, because generating a plausible artifact and qualifying it consume very different resources.
 
 [^fn-metastability-c04]: **Metastability**: A transient state in which a storage element has not resolved to a valid logic level within the expected time. A setup or hold violation, including one caused by an asynchronous input, can produce it. Synchronizers reduce the probability that unresolved behavior reaches downstream logic; they do not eliminate the possibility of metastability.
 
-Internal project archives can supply project-specific context and design material for in-house teams, subject to the access restrictions discussed in @sec-architecture-data-access. ChipNeMo, for example, adapts a language model using proprietary chip-design material for engineering assistance, electronic design automation (EDA) script generation, and bug summarization [@LiuEtAl2023ChipNeMo]. Using internal material improves domain performance without making that material publicly reproducible, so an evaluation still has to state which evidence an independent reviewer can inspect.
+Internal project archives can supply project-specific context and design material for in-house teams, subject to the access restrictions discussed in @sec-architecture-data-access. ChipNeMo, for example, adapts a language model using proprietary chip-design material for engineering assistance, electronic design automation (EDA) script generation, and bug summarization [@LiuEtAl2023ChipNeMo]. The authors report improved performance over the base models on their internal engineering tasks, but an independent reviewer cannot reproduce that result from proprietary material, so an evaluation still has to state which evidence such a reviewer can inspect.
 
 For the mapping study, compatible prior runs would save work only if their kernels, schedules, hardware targets, and checks match the intended use. Remaining gaps require new observations, and the tools that produce them determine both their cost and the conditions they can cover.
 
@@ -178,7 +183,7 @@ The source and its operating conditions also set a run's acquisition cost, becau
 
 In the Lighthouse mapping study, the cost of a sample begins well before timed execution. Each candidate schedule must compile for the target, pass output correctness checks, and load into the evaluation environment before a simulator or hardware run can return latency and diagnostic counters. Preparing the compiler backend and calibrating the accelerator model are shared, one-time investments. Compilation, testing, execution, and diagnosis, by contrast, recur for every candidate and multiply across repeated runs and workload shapes. A dataset budget that counts only the final timing call therefore misses much of the work required to produce a usable label.
 
-Once a candidate clears compilation and correctness checks, timed simulation often dominates the per-sample cost. We can see how execution coverage drives that cost, independent of any particular Lighthouse candidate, with an illustrative setup: a 1\ GHz target, a 1\ s measured interval, 0.2\ s of warmup, a simulator rate of 100,000 target cycles per wall-clock second, three repetitions, and four workloads.
+Once a candidate clears compilation and correctness checks, timed simulation can dominate the per-sample cost. We can see how execution coverage drives that cost, independent of any particular Lighthouse candidate, with an illustrative setup: a 1\ GHz target, a 1\ s measured interval, 0.2\ s of warmup, a simulator rate of 100,000 target cycles per wall-clock second, three repetitions, and four workloads.
 
 ```{python}
 #| echo: false
@@ -216,9 +221,12 @@ total_serial_hours = total_target_cycles / simulator_rate / 3_600
 assert _one_second_row["wall_time_at_100kcycle_s"] == "2.8 h"
 assert round(total_target_cycles / 1e9, 1) == 14.4
 assert round(total_serial_hours) == 40
+sim_one_second_hours = f"{single_measurement_hours:.1f}"
+sim_total_gcycles = f"{total_target_cycles / 1e9:.1f}"
+sim_total_hours = f"{total_serial_hours:.0f}"
 ```
 
-During a single measured interval of 1\ s, a 1\ GHz target executes one billion cycles ($10^9$). At an assumed simulator rate of 100,000 target cycles per wall-clock second, simulating that single second takes roughly 2.8\ hours. Serial execution cost $T_{\text{serial}}$ combines target warmup cycles $C_{\text{warmup}}$, target measurement cycles $C_{\text{measure}}$, repetition count $R$, workload count $W$, and simulator throughput $v_{\text{sim}}$:
+During a single measured interval of 1\ s, a 1\ GHz target executes one billion cycles ($10^9$). At an assumed simulator rate of 100,000 target cycles per wall-clock second, simulating that single second takes roughly `{python} sim_one_second_hours`\ hours. Serial execution cost $T_{\text{serial}}$ combines target warmup cycles $C_{\text{warmup}}$, target measurement cycles $C_{\text{measure}}$, repetition count $R$, workload count $W$, and simulator throughput $v_{\text{sim}}$:
 
 $$
 T_{\text{serial}} =
@@ -226,11 +234,11 @@ T_{\text{serial}} =
 {v_{\text{sim}}}.
 $${#eq-serial-execution-cost}
 
-If we evaluate four workloads across three repetitions under the assumptions in @eq-serial-execution-cost, the study executes 14.4 billion target cycles and consumes forty serial simulator hours.[^fn-simulation-warmup-c04]
+If we evaluate four workloads across three repetitions under the assumptions in @eq-serial-execution-cost, the study executes `{python} sim_total_gcycles` billion target cycles and consumes `{python} sim_total_hours` serial simulator hours.[^fn-simulation-warmup-c04]
 
 [^fn-simulation-warmup-c04]: **Simulation warmup**: Architectural simulators begin execution with uninitialized (cold) state in caches, branch target buffers, translation lookaside buffers (TLBs), and prefetchers. Simulating an initial interval ($C_{\text{warmup}}$) without gathering statistics warms up internal microarchitectural structures to realistic steady-state hit rates before the actual measurement window begins.
 
-Those forty hours represent accumulated simulator runtime for one candidate configuration. Running jobs in parallel across a cluster can shorten wall-clock collection time when compute nodes and licenses permit, but it does not reduce total machine time. Shared setup, compilation, correctness checks, queueing, and failure diagnosis add further cost beyond the execution estimate.
+Those `{python} sim_total_hours` hours represent accumulated simulator runtime for one candidate configuration. Running jobs in parallel across a cluster can shorten wall-clock collection time when compute nodes and licenses permit, but it does not reduce total machine time. Shared setup, compilation, correctness checks, queueing, and failure diagnosis add further cost beyond the execution estimate.
 
 Replacing direct simulation with a fast surrogate does not eliminate that upfront acquisition budget either. Even if a surrogate evaluates a candidate in an illustrative two milliseconds, it still requires reference tool runs for training and calibration, whose collection can consume days or weeks of cluster compute. In BOOM-Explorer, for example, the authors built an offline dataset of 994 sampled microarchitectural configurations, and running the very-large-scale integration flow for each design took from about six to more than fourteen hours [@BaiEtAl2021BOOMExplorer]. At those per-sample costs, sweeping millions of variations requires a staged acquisition strategy rather than exhaustive evaluation.
 
@@ -257,7 +265,7 @@ Even at the right boundary, workload coverage has to match the metric being eval
 
 System performance, power dissipation, and thermal behavior are joint outcomes $y = f(x, w)$ of the hardware configuration $x \in \mathcal{X}$ and the dynamic workload feature vector $w \in \mathcal{W}$. Changing the application software or moving to a different execution phase can shift a hardware candidate from compute-bound to memory-bound. To capture these runtime shifts without paying for full-trace simulation, architects compress execution traces into compact feature representations.
 
-SimPoint, for example, builds a basic block vector ($w_{\text{BBV}} \in \mathbb{R}^d$) for each fixed instruction interval (such as $10^7$ or $10^8$ instructions) by counting how often each static basic block executes, weighting those counts by static block length, and normalizing across the interval [@SherwoodEtAl2002SimPoint]. SimPoint next projects those vectors into a lower-dimensional space (for example, by random projection) and clusters them with $k$-means to find recurring program phases. A small, weighted set of these intervals (the SimPoints) can then estimate full-trace behavior.
+SimPoint, for example, builds a basic block vector ($w_{\text{BBV}} \in \mathbb{R}^d$) for each fixed instruction interval (such as $10^8$ instructions) by counting how often each static basic block executes, weighting those counts by static block length, and normalizing across the interval [@SherwoodEtAl2002SimPoint]. SimPoint next projects those vectors into a lower-dimensional space (for example, by random projection) and clusters them with $k$-means to find recurring program phases. A small, weighted set of these intervals (the SimPoints) can then estimate full-trace behavior.
 
 Clustering program phases reduces simulation cost, but it does not automatically supply an error bound for a new design; the architect still has to verify how accurately the selected intervals estimate the target metrics. When a study requires explicit statistical confidence intervals over sampled execution slices, systematic sampling methods such as SMARTS compute those bounds directly under their sampling assumptions [@WunderlichEtAl2003SMARTS].
 
@@ -281,19 +289,19 @@ When the dataset supports a learned predictor, its examples serve different role
 
 ### Mixing Cheap and Costly Results
 
-Because cycle-accurate simulation and physical layout are too slow to run on every candidate while analytical formulas are too coarse to certify a winner, teams often combine cheap and expensive evaluations in the same dataset. Done carelessly, the combination pools rough roofline bounds and cycle-accurate measurements into a single unlabeled latency column and teaches a predictor to treat approximation error as hardware behavior. Such multi-fidelity data is safe to pool only when the sources estimate the same output, or have an explicit relationship between their outputs [@PeherstorferWillcoxGunzburger2018Multifidelity], and when each row records which tool produced it. How to spend a budget across fidelities, for example through active learning [@Settles2009ActiveLearning], is a method choice (@sec-methods-generation-prediction-optimization).
+Because cycle-accurate simulation and physical layout are too slow to run on every candidate while analytical formulas are too coarse to certify a winner, teams often combine cheap and expensive evaluations in the same dataset. Done carelessly, the combination pools rough roofline bounds and cycle-accurate measurements into a single unlabeled latency column and teaches a predictor to treat approximation error as hardware behavior. Multifidelity methods rely on models that approximate the same output quantity [@PeherstorferWillcoxGunzburger2018Multifidelity], so such data is safe to pool only when the sources share that output, or have an explicit relationship between their outputs, and when each row records which tool produced it. How to spend a budget across fidelities, for example through active learning [@Settles2009ActiveLearning], is a method choice (@sec-methods-generation-prediction-optimization).
 
 In the mapping study, inexpensive analytical estimates can screen many candidate schedules while cycle-level evaluations examine selected candidates near constraint boundaries or decision crossovers, leaving unvisited regions unsupported. When an adaptive selection policy picks those follow-up samples from earlier results, the dataset must also record its selection rules, candidate pools, and available observations. Without that record, a later evaluation cannot tell whether its held-out cases helped choose which samples were collected, which would make them part of the fitting they are meant to assess [@DworkEtAl2015ReusableHoldout].
 
 ### Cleaning Logs and Preventing Train-Test Leakage
 
-Even carefully collected tool runs can be ruined during dataset assembly. A regular-expression log parser may silently turn a negative timing slack or a missing report into `0.0`. A split intended to test new design families may scatter variants of the same Chisel or SystemVerilog generator template across training and evaluation partitions. Curation is what prevents those pipeline bugs from masquerading as clean training data. In the mapping dataset, each row identifies a kernel, input shape, schedule, and hardware target, and links to its compiled artifact, correctness result, repeated timings, and diagnostic counters. Units are consistent, repetitions are grouped, and missing results stay distinct from measured zeros. The source kernel and transformation history also supply the grouping keys needed for evaluation splits, because holding out new schedules for a familiar kernel tests a different capability from holding out an operator family that never appeared in training.
+Even carefully collected tool runs can be ruined during dataset assembly. A regular-expression log parser may silently turn a negative timing slack or a missing report into `0.0`. A split intended to test new design families may scatter variants of the same Chisel or SystemVerilog generator template across training and evaluation partitions. Curation is what prevents those pipeline bugs from masquerading as clean training data. In the prospective mapping dataset, each row should identify a kernel, input shape, schedule, and hardware target, and link to its compiled artifact, correctness result, repeated timings, and diagnostic counters. Units should be consistent, repetitions grouped, and missing results kept distinct from measured zeros. The source kernel and transformation history would also supply the grouping keys needed for evaluation splits, because holding out new schedules for a familiar kernel tests a different capability from holding out an operator family that never appeared in training.
 
 Those grouping keys matter because training examples in a hardware table are rarely independent and identically distributed. Multiple rows often share a design ancestor, generated artifact, workload trace, or software image, and repeated evaluations of a single schedule measure run-to-run variation rather than independent programs. Once the relevant lineage links are established and recorded, an evaluation split can test the intended form of transfer and prevent a high row count from disguising a narrow set of underlying designs.
 
 Protected evaluation splits must therefore match the intended unseen cases, whether new configurations within a known family, new design families, workloads, software revisions, or time periods [@KapoorNarayanan2023Leakage]. Configurations from a parameterized hardware description language (HDL) generator often share circuit structure. Holding out configurations from that generator can legitimately test prediction within its design family, but does not establish transfer to a new family. A claim about new families requires separating the generating templates as well as the table rows.
 
-Training on public hardware benchmarks can likewise inflate evaluation scores through memorization rather than generalization to new designs, a form of data contamination [@WangEtAl2025VeriContaminated; @Balloccu2024Leakage]. Private testbenches, repository-disjoint splits, and behavior-preserving transformations of test artifacts each close a different exposure path, so a dataset record should state which paths were examined (@sec-benchmark-health-standardization).
+Training on public hardware benchmarks can likewise inflate evaluation scores through memorization rather than generalization to new designs [@WangEtAl2025VeriContaminated], a form of the data contamination also reported for closed-source language models [@Balloccu2024Leakage]. Private testbenches, repository-disjoint splits, and behavior-preserving transformations of test artifacts each close a different exposure path, so a dataset record should state which paths were examined (@sec-benchmark-health-standardization).
 
 Synthetic training examples need similar checks, matched to their intended use, because treating unverified generator outputs as measured observations can mislead downstream learning [@VanBreugelEtAl2023SyntheticData]. Methods such as CraftRTL use synthetic Verilog examples to repair model errors [@LiuEtAl2024CraftRTL], yet passing syntax checks does not establish functional behavior, and passing functional tests says nothing about timing or power. A dataset can retain examples at any of these stages if it records the generator identity, intended task, and completed checks, while reserving physical evaluation for labels that make a physical claim.
 
@@ -311,7 +319,7 @@ A pipeline that discards failed tool runs, or collapses every non-passing return
 
 In a compiler-schedule search, a fast schedule that computes the wrong answer is not a valid speedup, whereas an unexplained compiler crash does not prove that the schedule is infeasible on the target hardware.
 
-For physical design runs, a failed place-and-route log can look like noise, yet those failures are the observations that locate the feasibility boundary. A surrogate trained only on clean signoff runs never sees a timing or routing violation. Because the missing outcomes depend directly on the quantities being predicted, this selection introduces survivorship bias [@Rubin1976InferenceMissingData].
+For physical design runs, a failed place-and-route log can look like noise, yet those failures are the observations that locate the feasibility boundary. A surrogate trained only on clean signoff runs never sees a timing or routing violation. Because the missing outcomes depend directly on the quantities being predicted, they are not missing at random, the condition under which an analysis can ignore why data are absent [@Rubin1976InferenceMissingData], and training on the survivors introduces survivorship bias.
 
 A censored observation establishes a bound on a named quantity rather than its exact value.[^fn-censored-c04] A timed-out simulation might establish the right-censored bound $y \ge y_{\text{limit}}$ on dynamic execution latency, for example, whereas an EDA tool timeout supplies no such bound on circuit path delay because an incomplete place-and-route run lacks extracted layout parasitics. Because those physical interconnect delays stay unbounded, downstream predictive and search methods must distinguish bounded simulation timeouts from unresolved physical runs (@sec-methods-generation-prediction-optimization).
 
@@ -363,9 +371,9 @@ These sources age at different rates and become outdated for different reasons. 
 
 ![**Outdated specifications can produce internally consistent designs that conflict with the current system.** When a generator or retriever reads frozen reference files after the active project has updated its interfaces, the resulting proposal can satisfy local syntax while violating current system constraints. Freshness and version checks catch that divergence before tool dispatch. The diagram is schematic and carries no measured values.](images/fig-split-brain-causality){#fig-split-brain-causality width="100%" fig-alt="Diagram in which a stale reference state and a current project state lead to an incompatible proposal. Version and freshness checks expose the mismatch before the proposal reaches a costly tool flow."}
 
-A stale interface assumption easily survives syntax parsing and isolated module synthesis because neither check inspects the system-level boundary, so the mismatch usually surfaces during integration or later, when repair is most expensive. Checking input identities and version hashes before launching simulator or synthesis runs catches that drift early, although confirming full interface compatibility still requires functional checks against the active design.
+A stale interface assumption easily survives syntax parsing and isolated module synthesis because neither check inspects the system-level boundary, so the mismatch can stay hidden until integration or later, when repair costs more. Checking input identities and version hashes before launching simulator or synthesis runs catches that drift early, although confirming full interface compatibility still requires functional checks against the active design.
 
-Updates to live project state carry their own compute, storage, license, and review costs. Whenever a compiler release, a new workload capture, or a revised bus specification makes part of the recorded knowledge inapplicable, the team needs a way to detect what went stale and decide which records to refresh. A smaller set of verified, up-to-date sources is therefore more useful to an active design loop than a broad archive whose applicability is unclear. The next step is to encode those verified sources in forms that predictors, generators, and optimizers can consume.
+Updates to live project state carry their own compute, storage, license, and review costs. Whenever a compiler release, a new workload capture, or a revised bus specification makes part of the recorded knowledge inapplicable, the team needs a way to detect what went stale and decide which records to refresh. For an active design loop, we therefore favor a smaller set of verified, up-to-date sources over a broad archive whose applicability is unclear. The next step is to encode those verified sources in forms that predictors, generators, and optimizers can consume.
 
 ## Machine-Usable Design Representations {#sec-hardware-representation-formats}
 
@@ -391,13 +399,14 @@ Compiler frameworks supply that multi-level structure by pairing parameter schem
 
 [^fn-hardware-ssa-c04]: **Static single assignment (SSA) in hardware IRs**: Software IRs such as LLVM use SSA form, in which each variable is assigned exactly once. In CIRCT's `hw`, `comb`, and `seq` dialects, SSA values represent wires or buses rather than sequential software variables, so single assignment gives every wire one driver. Because registered feedback is legal hardware, module bodies may contain cyclic connections, and dedicated checking passes, not the SSA form, catch illegal combinational loops.
 
-Linear text also separates a signal's declaration from the statements that read or drive it, so a method trying to modify a handshake must recover the relevant connections even when their source locations are far apart. A parse of public benchmark RTL, hardware libraries, and RISC-V cores compares that separation in token order with the path between the same declaration and use in a syntax tree (@fig-ch04-spatial-semantic-dilation) [@Slang; @VerilogEval; @RTLLM; @Taylor2018BaseJumpSTL; @Kindgren2018SERV; @LowRISCIbex; @Wolf2015PicoRV32].
+Linear text also separates a signal's declaration from the statements that read or drive it, so a method trying to modify a handshake must recover the relevant connections even when their source locations are far apart. A parse of public benchmark RTL, hardware libraries, and RISC-V cores measures that separation in token order and the path between the same declaration and use in a syntax tree (@fig-ch04-spatial-semantic-dilation), then compares each distance with a baseline that pairs the same declaration with a use of a different signal [@Slang; @VerilogEval; @RTLLM; @Taylor2018BaseJumpSTL; @Kindgren2018SERV; @LowRISCIbex; @Wolf2015PicoRV32].
 
 ```{python}
 #| echo: false
 # Inline values come from the same per-file CSV used by the figure.
 # Source: data/studies/09-representation-dilation/measure_representation_dilation.py
 import csv as _csv4d
+import json as _json4d
 import re as _re4d
 from pathlib import Path as _Path4d
 
@@ -447,32 +456,241 @@ dil_pyslang = _Raw4d(_ver4d)
 dil_slope, dil_slope_lo, dil_slope_hi = (
     _Raw4d(f"{v:.2f}") for v in _fit4d(_meas4d)
 )
+
+# Concentration and weighting sensitivity for the same pairs.
+_pairs4d = [int(r["tree_pairs"]) for r in _meas4d]
+_top4d = max(_meas4d, key=lambda r: int(r["tree_pairs"]))
+assert _top4d["source_path"].endswith("bsg_scatter_gather.sv")
+dil_median_tokens = _Raw4d(f"{_np4d.median([float(r['tokens']) for r in _meas4d]):.0f}")
+dil_top_share = _Raw4d(f"{100 * max(_pairs4d) / sum(_pairs4d):.0f}")
+dil_bound_pct = _Raw4d(
+    f"{100 * sum(int(r['name_refs_bound']) for r in _meas4d) / sum(int(r['name_refs']) for r in _meas4d):.0f}"
+)
+_sem4d = [int(r["semantic_errors_in_file"]) for r in _meas4d]
+dil_sem_files = sum(n > 0 for n in _sem4d)
+dil_sem_errors = sum(_sem4d)
+
+# Source: data/studies/23-representation-access/summarize.py
+with open(
+    _root4d / "data" / "studies" / "23-representation-access"
+    / "derived" / "summary.json",
+    encoding="utf-8",
+) as _fh:
+    _access4d = _json4d.load(_fh)
+assert _access4d["exact_token_tree_matched_pairs"] == sum(_pairs4d)
+_budget4d = next(
+    r for r in _access4d["selected_budget_sensitivity"]
+    if r["budget_tokens"] == 256
+)
+dil_cov_pair = _Raw4d(f"{100 * _budget4d['pair_weighted_coverage']:.0f}")
+dil_cov_file = _Raw4d(f"{100 * _budget4d['equal_file_weighted_coverage']:.0f}")
+_tree_rows4d = [r for r in _meas4d if r["mean_tree_distance"]]
+dil_short_files = _Raw4d(
+    f"{100 * sum(int(r['tokens']) <= 256 for r in _tree_rows4d) / len(_tree_rows4d):.0f}"
+)
+# The prose calls 256 the widest of the five budgets and the paths "near ten".
+_budgets4d = _access4d["selected_budget_sensitivity"]
+assert len(_budgets4d) == 5
+assert max(_budgets4d, key=lambda r: abs(r["difference_percentage_points"])) is _budget4d
+assert round(_np4d.median([float(r["mean_tree_distance"]) for r in _tree_rows4d])) == 10
+
+# Different-signal baseline for both distances. Its thresholds are post hoc.
+# Source: data/studies/09-representation-dilation/measure_tree_baseline.py
+with open(
+    _root4d / "data" / "studies" / "09-representation-dilation"
+    / "tree_baseline_summary.json",
+    encoding="utf-8",
+) as _fh:
+    _treebase4d = _json4d.load(_fh)
+assert _treebase4d["separates"] is False  # the prose below reports this post-hoc null
+_base4d = _treebase4d["all"]
+dil_base_files = _base4d["files"]
+dil_base_related = _Raw4d(f"{_base4d['median_file_mean_related']:.1f}")
+dil_base_unrelated = _Raw4d(f"{_base4d['median_file_mean_unrelated']:.1f}")
+dil_base_ratio = _Raw4d(f"{_base4d['median_ratio']:.3f}")
+dil_base_ratio_lo, dil_base_ratio_hi = (
+    _Raw4d(f"{v:.3f}") for v in _base4d["median_ratio_ci95"]
+)
+dil_base_longer = _Raw4d(f"{100 * _base4d['median_file_share_longer']:.0f}")
+dil_base_tied = _Raw4d(f"{100 * _base4d['median_file_share_tied']:.0f}")
+dil_base_shorter = _Raw4d(f"{100 * _base4d['median_file_share_shorter']:.0f}")
+dil_base_pooled_tied = _Raw4d(f"{100 * _base4d['pooled_share_tied']:.0f}")
+dil_base_shared = _Raw4d(
+    f"{100 * _base4d['median_file_share_candidates_sharing_statement']:.0f}"
+)
+dil_thr_ratio = _Raw4d(f"{_treebase4d['thresholds']['median_ratio_ci95_low_above']:.2f}")
+dil_thr_prob = _Raw4d(
+    f"{_treebase4d['thresholds']['median_prob_unrelated_longer_ties_half_at_least']:.2f}"
+)
+dil_base_token_ratio = _Raw4d(f"{_base4d['median_token_ratio']:.2f}")
+_outside4d = _treebase4d["pairs_outside_any_module"]
+assert len(_outside4d["files"]) == 1  # the footnote names one package file
+dil_base_outside = _outside4d["pairs"]
+dil_base_module_lca = _Raw4d(
+    f"{100 * _treebase4d['lowest_common_ancestor_kinds_share']['ModuleDeclaration']:.0f}"
+)
+_nest4d = _treebase4d["scope"]["nested_below_module"]
+_nestfiles4d = _treebase4d["scope"]["files_with_at_least_10_nested_pairs"]
+dil_nest_share = _Raw4d(
+    f"{100 * _nest4d['pairs'] / (_nest4d['pairs'] + _treebase4d['scope']['module_level']['pairs']):.0f}"
+)
+dil_nest_pairs = f"{_nest4d['pairs']:,}"
+dil_nest_related = _Raw4d(f"{_nest4d['mean_related']:.1f}")
+dil_nest_unrelated = _Raw4d(f"{_nest4d['mean_unrelated']:.1f}")
+dil_nest_ratio = _Raw4d(f"{_nest4d['ratio']:.2f}")
+dil_nest_longer = _Raw4d(f"{100 * _nest4d['share_longer']:.0f}")
+dil_nest_files = _nestfiles4d["files"]
+dil_nest_file_ratio = _Raw4d(f"{_nestfiles4d['median_ratio']:.2f}")
+dil_nest_file_lo, dil_nest_file_hi = (
+    _Raw4d(f"{v:.2f}") for v in _nestfiles4d["median_ratio_ci95"]
+)
 ```
 
-Token distance counts the intervening lexical tokens; tree distance counts edges along the syntax-tree path between the same declaration and use. This convenience corpus covers `{python} dil_measured` measured files at pinned commits, and the tree measurement covers only pairs whose endpoints both resolve.[^fn-dilation-sampling-c04]
+Token distance is the difference between the positions of a declaration and a use in the file's sequence of lexical tokens; tree distance counts edges along the syntax-tree path between the same declaration and use. Both measures cover only signal pairs whose declaration and use sit in the same file, so the connections a handshake edit follows across module boundaries lie outside them; parameters, types, and genvars are also excluded. This convenience corpus covers `{python} dil_measured` measured files at pinned commits, and the tree measurement covers only pairs whose endpoints both resolve.[^fn-dilation-sampling-c04]
 
-[^fn-dilation-sampling-c04]: **Measurement scope**: The original file-selection rule for the BaseJump and Ibex subsets was not recorded. Required BaseJump parameters were set to 4 for elaboration. Bootstrap intervals resample files within this corpus; related files and shared templates limit their interpretation as evidence about hardware beyond it.
+[^fn-dilation-sampling-c04]: **Measurement scope**: The original file-selection rule for the BaseJump and Ibex subsets was not recorded. Required BaseJump parameters were set to 4 for elaboration. Name binding resolved `{python} dil_bound_pct`% of same-file signal references, and the unbound remainder is not measured; `{python} dil_sem_files` measured files carry `{python} dil_sem_errors` semantic errors from that elaboration. Bootstrap intervals resample files within this corpus; related files and shared templates limit their interpretation as evidence about hardware beyond it. The baseline comparison is post hoc. Its cutoffs for calling the two kinds of pair separated, a median ratio above `{python} dil_thr_ratio` and a `{python} dil_thr_prob` probability that counts ties as half, were set after an earlier estimate of the same ratio was known, so it describes this corpus and tests no prediction. The comparison also omits the `{python} dil_base_outside` pairs in the functions of one package file, which no module encloses, although panel (b) plots them.
 
-![**Token separation grows with file length; syntax-tree paths remain short.** (a) Mean declaration-to-use distance in tokens has a log-log slope of `{python} dil_slope` (95% bootstrap interval `{python} dil_slope_lo` to `{python} dil_slope_hi`). (b) Tree paths cover `{python} dil_tree_pairs` pairs in `{python} dil_tree_files` files; a def-use graph links each pair directly. Parsed with pyslang `{python} dil_pyslang` [@Slang; @VerilogEval; @RTLLM].](images/fig-hardware-representation-dilation){#fig-ch04-spatial-semantic-dilation width="100%" fig-alt="Two-panel log-log scatter chart of declaration-to-use distance against file length in tokens for several hundred hardware source files from six corpora, each drawn with its own marker shape, hollow for benchmark files and filled for production files. (a) Mean distance in tokens rises along a fitted line that tracks file length, from the smallest benchmark files to the largest generated library file. (b) Mean path length in syntax-tree edges for the subset with recoverable tree paths stays in a narrow, nearly flat band across the whole range, above a dashed line at one edge marking the def-use graph."}
+![**Token distance grows with file length; syntax-tree paths stay near ten edges.** (a) Mean declaration-to-use distance in tokens has a log-log slope of `{python} dil_slope` (95% bootstrap interval `{python} dil_slope_lo` to `{python} dil_slope_hi`), close to the 1 expected when pairs sit a stable fraction of the file apart. (b) Mean tree path for `{python} dil_tree_pairs` same-file declaration-use pairs in `{python} dil_tree_files` files, `{python} dil_top_share`% from one file; the dashed line is one def-use edge, by construction. No baseline is drawn; at the file median, uses of a different signal lie about as far. Parsed with pyslang `{python} dil_pyslang` [@Slang; @VerilogEval; @RTLLM]](images/fig-hardware-representation-dilation){#fig-ch04-spatial-semantic-dilation width="100%" fig-alt="Two-panel log-log scatter chart of declaration-to-use distance against file length in tokens for several hundred hardware source files from six corpora, each drawn with its own marker shape, hollow for benchmark files and filled for production-oriented files. (a) Mean distance in tokens rises along a fitted line that tracks file length, from the smallest benchmark files to the largest generated library file. (b) Mean path length in syntax-tree edges for the subset with recoverable tree paths stays in a narrow, nearly flat band across the whole range, above a dashed line at one edge marking the def-use graph."}
 
-The difference follows from what each representation connects. A token sequence separates a declaration from its uses by all the intervening source text, so that separation grows as a module grows. A syntax-tree path instead follows the nesting of declarations, statements, and blocks. A definition-use graph connects each declaration directly to its uses, making that dependency explicit regardless of source-file length. CIRCT's SSA operands provide this direct connectivity for transformations that must preserve which values feed which operations.
+A token sequence separates a declaration from its uses by all the intervening source text, so that separation grows as a module grows. A slope near 1 is therefore close to arithmetic, because any pair separated by a stable fraction of the file produces it, and the narrow interval adds precision rather than independent support.
 
-A separate parse shows how much more structure a method must recover once designs grow beyond benchmark modules. Widely used generation benchmarks such as VerilogEval and RTLLM evaluate models mostly on compact leaf modules, whereas production hardware relies on deep module hierarchies, multiple clock domains, and complex bus interfaces. Comparing 1,513 SystemVerilog module declarations across six public repositories at pinned commits separates the two populations by syntax size and by the depth of source-level module references (@fig-ch04-ast-complexity-cliff) [@VerilogEval; @RTLLM].
+The flat tree paths cannot be read on their own, because a path in a tree is limited by the tree's depth and the figure plots declaration-use pairs alone. A separate baseline, available for `{python} dil_base_files` of the `{python} dil_tree_files` files, keeps each declaration and replaces its use with a use of a different declared signal in the same module. By either distance the two kinds of pair lie about equally far apart. The median file mean is `{python} dil_base_related` edges for declaration-use pairs and `{python} dil_base_unrelated` for different-signal pairs, a median ratio of `{python} dil_base_ratio` (95% bootstrap interval `{python} dil_base_ratio_lo` to `{python} dil_base_ratio_hi`). Token distance gives a median ratio of `{python} dil_base_token_ratio`. Taken file by file, the different-signal path is strictly longer in a median of `{python} dil_base_longer`% of draws, tied in `{python} dil_base_tied`%, and strictly shorter in `{python} dil_base_shorter`%, and `{python} dil_base_pooled_tied`% of all draws tie when pooled. A different signal may still be a connected one. In the median file, `{python} dil_base_shared`% of the candidate uses belong to signals named in the same assignment, always block, or instance as the declared signal, by a coarse test that counts a whole block as one statement.
+
+A tree path climbs from each endpoint to their lowest common ancestor. For `{python} dil_base_module_lca`% of the pairs inside a module that ancestor is the module itself, and for those pairs the path length follows how deeply the two endpoints are nested. The other `{python} dil_nest_share`% meet inside a generate block, function, loop, or procedural block, and there the paths differ. Across `{python} dil_nest_pairs` such pairs the mean path is `{python} dil_nest_related` edges against `{python} dil_nest_unrelated` for different-signal uses, a ratio of `{python} dil_nest_ratio`, and the different-signal path is strictly longer in `{python} dil_nest_longer`% of draws. The `{python} dil_nest_files` files with at least ten such pairs have a median ratio of `{python} dil_nest_file_ratio` (95% bootstrap interval `{python} dil_nest_file_lo` to `{python} dil_nest_file_hi`). These pairs were selected because their endpoints share a local scope, whereas a different-signal use can sit anywhere in the module and climb further. The selection therefore favors this gap, which does not show that a shorter path marks a dependency.
+
+The figure therefore shows that declaration-use paths in these files stay near ten edges, not that a syntax tree brings a signal closer to the signals that depend on it. Neither distance measures the connection between a declaration and its use. A definition-use graph records that connection directly, with an edge where a use binds to a declaration and no edge from that declaration to a use of another signal, so the binding is explicit by construction at any source-file length. This parse does not measure such a graph. CIRCT's SSA operands provide this direct connectivity for transformations that must preserve which values feed which operations.
+
+These distances also depend on what the corpus counts. The median file holds only `{python} dil_median_tokens` tokens, whereas one BaseJump file, `bsg_scatter_gather.sv`, contributes `{python} dil_top_share`% of the `{python} dil_tree_pairs` pairs. A source interval of 256 tokens, the widest weighting gap among the five budgets studied, therefore contains `{python} dil_cov_pair`% of those pairs when every pair counts equally but `{python} dil_cov_file`% when every file counts equally, and `{python} dil_short_files`% of those files are themselves no longer than 256 tokens, so every pair in them fits. This corpus alone cannot say how far apart a declaration and its use typically sit in RTL.
+
+```{python}
+#| echo: false
+# Inline values come from the same per-module CSV used by the figure.
+# Source: data/studies/02-ast-complexity-cliff/plot_ast_complexity_measured.py
+import statistics as _st4e
+
+with open(
+    _root4d / "data" / "studies" / "02-ast-complexity-cliff"
+    / "hardware_ast_complexity_measured.csv",
+    encoding="utf-8",
+) as _fh:
+    _ast4e = list(_csv4d.DictReader(_fh))
+
+
+def _med4e(rows):
+    return _st4e.median(int(r["concrete_syntax_nodes"]) for r in rows)
+
+
+def _repo4e(name):
+    return [r for r in _ast4e if r["dataset_name"] == name]
+
+
+def _ref_pct4e(name):
+    rows = _repo4e(name)
+    return 100 * sum(int(r["internal_hierarchy_depth"]) > 1 for r in rows) / len(rows)
+
+
+def _substantive4e(row):
+    """True if the file has a parser diagnostic beyond a missing final newline."""
+    codes = [c for c in row["syntax_diagnostic_codes"].split(";") if c]
+    return any(c != "DiagCode(NewlineEOF)" for c in codes)
+
+
+_bench4e = [r for r in _ast4e if r["corpus_category"] == "AI benchmark reference RTL"]
+_prod4e = [r for r in _ast4e if r["corpus_category"] == "Production-oriented open RTL"]
+_benchrepos4e = ["VerilogEval", "RTLLM"]
+_prodrepos4e = ["VeeR EH1", "CV32E40P", "OpenTitan", "BlackParrot"]
+assert len(_bench4e) + len(_prod4e) == len(_ast4e)
+
+ast_modules = _Raw4d(f"{len(_ast4e):,}")
+ast_bench_median = _Raw4d(f"{_med4e(_bench4e):,.0f}")
+ast_prod_median = _Raw4d(f"{_med4e(_prod4e):,.0f}")
+_ratio4e = _med4e(_prod4e) / _med4e(_bench4e)
+ast_ratio = _Raw4d(f"{_ratio4e:.1f}")
+ast_ot_share = _Raw4d(f"{100 * len(_repo4e('OpenTitan')) / len(_prod4e):.0f}")
+ast_med_ve, ast_med_rtllm, ast_med_veer, ast_med_cv32, ast_med_ot, ast_med_bp = (
+    _Raw4d(f"{_med4e(_repo4e(n)):,.0f}") for n in _benchrepos4e + _prodrepos4e
+)
+_repo_ratio4e = _st4e.median(_med4e(_repo4e(n)) for n in _prodrepos4e) / _st4e.median(
+    _med4e(_repo4e(n)) for n in _benchrepos4e
+)
+ast_repo_ratio = _Raw4d(f"{_repo_ratio4e:.1f}")
+_veer_lib4e = sum(
+    r["source_path"].endswith(("mem_lib.sv", "beh_lib.sv")) for r in _repo4e("VeeR EH1")
+)
+ast_veer_lib_pct = _Raw4d(f"{100 * _veer_lib4e / len(_repo4e('VeeR EH1')):.0f}")
+ast_med_veer_core = _Raw4d(
+    "{:,.0f}".format(
+        _med4e(
+            [
+                r
+                for r in _repo4e("VeeR EH1")
+                if not r["source_path"].endswith(("mem_lib.sv", "beh_lib.sv"))
+            ]
+        )
+    )
+)
+_diag4e = sum(int(r["syntax_diagnostic_count"]) > 0 for r in _prod4e)
+ast_diag_pct = _Raw4d(f"{100 * _diag4e / len(_prod4e):.0f}")
+_ratio_clean4e = _med4e([r for r in _prod4e if not _substantive4e(r)]) / _med4e(
+    [r for r in _bench4e if not _substantive4e(r)]
+)
+ast_clean_ratio = _Raw4d(f"{_ratio_clean4e:.1f}")
+ast_med_flagged = _Raw4d(f"{_med4e([r for r in _prod4e if _substantive4e(r)]):,.0f}")
+ast_med_unflagged = _Raw4d(f"{_med4e([r for r in _prod4e if not _substantive4e(r)]):,.0f}")
+# Source: data/studies/02-ast-complexity-cliff/sensitivity_include_dirs.py
+with open(
+    _root4d / "data" / "studies" / "02-ast-complexity-cliff"
+    / "hardware_ast_complexity_include_sensitivity.json",
+    encoding="utf-8",
+) as _fh:
+    _incl4e = _json4d.load(_fh)["pooled"]
+assert _incl4e["modules"] == len(_ast4e)
+ast_incl_ratio = _Raw4d(f"{_incl4e['pooled_ratio']:.1f}")
+ast_incl_clean_ratio = _Raw4d(f"{_incl4e['clean_ratio']:.1f}")
+_written4e = _incl4e["written_tokens"]
+assert round(_written4e["ratio_plain"], 1) == round(_written4e["ratio_include_path"], 1)
+ast_written_ratio = _Raw4d(f"{_written4e['ratio_plain']:.1f}")
+_bp_rows4e = _repo4e("BlackParrot")
+assert all(_substantive4e(r) for r in _bp_rows4e)
+ast_bp_modules = len(_bp_rows4e)
+_refs4e = [_ref_pct4e(n) for n in _prodrepos4e]
+ast_ref_ve = _Raw4d(f"{_ref_pct4e('VerilogEval'):.0f}")
+ast_ref_rtllm = _Raw4d(f"{_ref_pct4e('RTLLM'):.0f}")
+ast_ref_lo = _Raw4d(f"{min(_refs4e):.0f}")
+ast_ref_hi = _Raw4d(f"{max(_refs4e):.0f}")
+_depths4e = [int(r["internal_hierarchy_depth"]) for r in _prod4e]
+ast_depth_max = max(_depths4e)
+ast_depth_median = _Raw4d(f"{_st4e.median(_depths4e):.0f}")
+
+
+def _clock_pct4e(rows):
+    return 100 * sum(int(r["clock_like_event_signal_count"]) >= 2 for r in rows) / len(rows)
+
+
+ast_clock_prod = _Raw4d(f"{_clock_pct4e(_prod4e):.1f}")
+ast_clock_bench = _Raw4d(f"{_clock_pct4e(_bench4e):.1f}")
+
+# fig-alt cannot run inline code, so these guard its literal values.
+assert (_med4e(_bench4e), _med4e(_prod4e), round(_ratio4e, 1)) == (168, 1125, 6.7)
+assert (round(min(_refs4e)), round(max(_refs4e)), ast_depth_max) == (45, 63, 13)
+```
+
+A separate parse shows how much more structure a method must recover once designs grow beyond benchmark modules. Generation benchmarks such as VerilogEval and RTLLM evaluate models mostly on compact leaf modules [@VerilogEval; @RTLLM], whereas production hardware also relies on deep module hierarchies and, by common design practice rather than any measurement here, on multiple clock domains and complex bus interfaces. A comparison of `{python} ast_modules` SystemVerilog module declarations across six public repositories at pinned commits [@VerilogEval; @RTLLM; @LowRISC2026OpenTitanRepo; @OpenHW2026CV32E40PRepo; @CHIPSAlliance2026VeeREH1Repo; @BlackParrot2026Repo] measures syntax size, as concrete syntax nodes with tokens counted as leaves, and the depth of source-level module references (@fig-ch04-ast-complexity-cliff). It therefore speaks to hierarchy but not to clock domains or bus interfaces, and its production-oriented open RTL is not a sample of commercial designs. The parse also recorded event signals with clock-like names, and two or more appear in `{python} ast_clock_prod`% of production-oriented modules against `{python} ast_clock_bench`% of benchmark modules. A name-based count cannot identify a clock domain, so this weak signal leaves that limit in place.
 
 <!-- arch2-allow: figure-placement-override Top-only placement deferred the readable stacked figure sixteen pages past its discussion and blocked later figures. -->
-![**Production-oriented open RTL has larger modules and deeper chains of module references.** (a) Cumulative distributions of concrete syntax nodes per module separate academic benchmark reference RTL (median 168 nodes) from production-oriented open RTL (median 1,125 nodes), opening a $6.7\times$ module-weighted median gap. (b) The proportion of modules referencing uniquely defined local children rises from 0% in VerilogEval and 16% in RTLLM to 45%–63% across the production repositories, with source-reference depths up to 13. These paths follow unique module definitions in the parsed source, not elaborated instance hierarchies. Parsed with pyslang 11.0.0 from pinned commits [@VerilogEval; @RTLLM].](images/fig-ch04-ast-complexity-cliff){#fig-ch04-ast-complexity-cliff width="100%" fig-pos="!htbp" fig-alt="Two vertically stacked charts comparing AI benchmark reference RTL with production-oriented open RTL. (a) Empirical cumulative distribution of concrete syntax nodes per module on a log scale, with the benchmark curve centered near 168 nodes and the production curve near 1,125 nodes, a 6.7 times median gap. (b) Horizontal bar chart of the share of source modules that reference a uniquely defined local child, rising from 0 percent for VerilogEval and 16 percent for RTLLM to 45 to 63 percent for VeeR EH1, CV32E40P, BlackParrot, and OpenTitan. Maximum source-reference depth ranges from 1 to 13; elaborated instance depth is not measured."}
+![**Production-oriented open RTL has larger modules and deeper reference chains.** (a) Syntax nodes and tokens per module separate benchmark reference RTL (median `{python} ast_bench_median`) from production-oriented open RTL (median `{python} ast_prod_median`), a `{python} ast_ratio`$\times$ module-weighted gap that falls to `{python} ast_clean_ratio`$\times$ without files with substantive parser diagnostics. (b) Modules referencing local children rise from `{python} ast_ref_ve`% in VerilogEval and `{python} ast_ref_rtllm`% in RTLLM to `{python} ast_ref_lo`%–`{python} ast_ref_hi`% across production-oriented repositories, with source-reference depths up to `{python} ast_depth_max`, not elaborated instance depths [@VerilogEval; @RTLLM].](images/fig-ch04-ast-complexity-cliff){#fig-ch04-ast-complexity-cliff width="100%" fig-pos="!htbp" fig-alt="Two vertically stacked charts comparing AI benchmark reference RTL with production-oriented open RTL. (a) Empirical cumulative distribution of concrete syntax nodes and tokens per module on a log scale, with the benchmark curve centered near 168 nodes and the production curve near 1,125 nodes, a 6.7 times median gap. (b) Horizontal bar chart of the share of source modules that reference a uniquely defined local child, rising from 0 percent for VerilogEval and 16 percent for RTLLM to 45 to 63 percent for VeeR EH1, CV32E40P, BlackParrot, and OpenTitan. Maximum source-reference depth ranges from 1 to 13; elaborated instance depth is not measured."}
 
-The gap appears along both dimensions. Benchmark reference modules carry a median of 168 syntax nodes, whereas modules from OpenTitan, CV32E40P, VeeR EH1, and BlackParrot reach 1,125, a $6.7\times$ difference that narrows to $4.8\times$ for files parsed without diagnostics and to $4.3\times$ across repository medians but does not close. No VerilogEval module references another module, and RTLLM does so in 16% of its modules, whereas 45% to 63% of production modules reference local submodules, in chains up to 13 deep. These paths come from source syntax rather than an elaborated design, so they do not bound instance depth. A high pass rate on flat leaf modules therefore says little about whether a generator can keep port bindings, parameter overrides, and timing constraints consistent across a deep hierarchy.
+The gap appears along both dimensions, but its size depends on how the modules are pooled. Benchmark reference modules carry a median of `{python} ast_bench_median` syntax nodes, whereas the pooled production-oriented modules reach `{python} ast_prod_median`, a `{python} ast_ratio`$\times$ difference weighted toward OpenTitan, which supplies `{python} ast_ot_share`% of those modules. Repository medians are `{python} ast_med_ve` for VerilogEval and `{python} ast_med_rtllm` for RTLLM, against `{python} ast_med_veer` for VeeR EH1, `{python} ast_med_cv32` for CV32E40P, `{python} ast_med_ot` for OpenTitan, and `{python} ast_med_bp` for BlackParrot. VeeR EH1 thus falls below RTLLM because two library files supply `{python} ast_veer_lib_pct`% of its modules; without them its median rises to `{python} ast_med_veer_core`. The `{python} ast_repo_ratio`$\times$ ratio between the group medians of those repository medians shows an aggregate difference rather than a gap that holds for every repository. Parse quality moves the result in both directions. These standalone parses lacked some include files and macro definitions, and `{python} ast_diag_pct`% of the production-oriented modules come from files with parser diagnostics. Removing every file with a diagnostic other than a missing final newline lowers the pooled ratio to `{python} ast_clean_ratio`$\times$ and drops all `{python} ast_bp_modules` BlackParrot modules, but that filter removes the larger production-oriented modules (median `{python} ast_med_flagged` against `{python} ast_med_unflagged`) rather than repairing their parses. Adding each repository's HDL source directories to the include path repairs many of those parses and raises the pooled ratio to `{python} ast_incl_ratio`$\times$, or `{python} ast_incl_clean_ratio`$\times$ among modules left without a substantive diagnostic, so the filtered figure is a lower reading and not a corrected one. That larger count is a preprocessed one, however, because it includes macro text the repaired parse expands into each module. Counting only the tokens written in each module gives `{python} ast_written_ratio`$\times$ under both parses, so the rise does not show that the source itself is larger. No VerilogEval module references another module, and RTLLM does so in `{python} ast_ref_rtllm`% of its modules, whereas `{python} ast_ref_lo`% to `{python} ast_ref_hi`% of the modules in each of the four production-oriented repositories reference a uniquely defined local submodule, in chains that reach `{python} ast_depth_max` levels even though the median production-oriented module sits at depth `{python} ast_depth_median`. These paths come from source syntax rather than an elaborated design, so they do not bound instance depth. A high pass rate on flat leaf modules therefore says little about whether a generator can keep port bindings, parameter overrides, and timing constraints consistent across a deep hierarchy.
 
 ::: {.callout-law title="The Streetlight Effect in Hardware AI Benchmarks"}
 **The Classical Principle:** Inquiry tends to search where measurement is convenient rather than where the answer lies [@Kaplan1964ConductOfInquiry].
 
-**The Hardware Trap:** A benchmark suite whose modules are easy to generate and check measures the easy case, however many modules it contains. Flat leaf modules leave untested the deep hierarchies, multiple clock domains, and bus interfaces that production designs depend on.
+**The Hardware Trap:** A benchmark suite whose modules are easy to generate and check measures the easy case, however many modules it contains. Flat leaf modules leave untested the module hierarchies that production-oriented RTL shows, along with the multiple clock domains and bus interfaces that integrated designs depend on but this parse cannot identify.
 
 **The Architectural Antidote:** Claims about generative tools for multi-clock system-on-chip designs, hierarchical interconnects, or physical floorplans need evaluations that exercise those structures. An isolated-module benchmark remains useful for a task confined to that scope (@sec-law-streetlight-effect in @sec-appendix-b-laws-paradoxes).
 :::
 
-These measurements illustrate access to a relationship, not a demonstrated advantage for a particular learned model. Context length and training affect whether a sequence model can recover distant dependencies, and a graph's short paths do not establish correct handshakes or physical timing. The useful design choice is which relationships to expose directly and which to recover through additional sources and checks. That choice changes again as the design moves between abstraction levels.
+These measurements describe source layout and syntax size, not a demonstrated advantage for a particular learned model, and they do not show that one representation gives readier access to a connection. Context length and training affect whether a sequence model can recover distant dependencies, and a graph's direct edges do not establish correct handshakes or physical timing. The useful design choice is which relationships to expose directly and which to recover through additional sources and checks. That choice changes again as the design moves between abstraction levels.
 
 ### Abstraction Levels and Tool Inputs
 
@@ -507,7 +725,7 @@ Discrete syntax trees, compiler graphs, and gate-level netlists preserve exact t
 2. **Circuit and graph embeddings ($\mathbf{z}_{\text{graph}} \in \mathbb{R}^m$):** Graph neural network representations over AIGs, cell connectivity graphs, MLIR spatial dialects, and physical floorplan adjacency matrices (such as DeepGate2 and learned macro-placement canvas graphs) that encode topology, logic depth, and physical proximity.
 3. **Workload and trace vectors ($\mathbf{z}_{\text{trace}} \in \mathbb{R}^k$):** Encodings of runtime behavior from instruction streams, memory access histograms, or DRAM command logs. SimPoint basic block vectors ($w_{\text{BBV}}$) are an example of computed features; a learned encoder can produce a different compact view.
 
-Graph-based encodings illustrate which structural relationships a learned vector can draw from directly. Graph representations preserve fan-in, fan-out, connectivity, and logic locality at the node level, as demonstrated in DeepGate2's learned representations over AIGs [@ShiEtAl2023DeepGate2]. Similarly, learned macro placement represents chips through connectivity graphs paired with spatial grid canvases [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement], though both graph and canvas structures remain derived views of the native placement state rather than independent sources of truth.
+Graph-based encodings illustrate which structural relationships a learned vector can draw from directly. A graph input carries fan-in, fan-out, and connectivity in its edges, so a learned model starts from them rather than recovering them from text. DeepGate2, for example, learns node embeddings over AIGs, supervised by pairwise truth-table differences, so that embedding distance reflects logic function as well as structure [@ShiEtAl2023DeepGate2]. Similarly, learned macro placement represents chips through connectivity graphs paired with spatial grid canvases [@MirhoseiniEtAl2021GraphPlacement; @ChengEtAl2023MacroPlacement], though both graph and canvas structures remain derived views of the native placement state rather than independent sources of truth.
 
 Nearby vectors may retrieve similar schedules or circuits without guaranteeing compatible interfaces or satisfied timing constraints. Retrieval therefore returns the underlying source along with its similarity score. A workflow that proposes changes in the learned space also needs a way to map the proposal back to explicit compiler inputs or hardware artifacts that tools can construct and check.
 
@@ -542,11 +760,11 @@ An agent can use this state to retrieve an applicable design note, request a new
 
 ## Data Licensing, Privacy, and Provenance {#sec-architecture-data-access}
 
-A representation can capture every required electrical and physical domain and still remain legally or operationally restricted. Production architecture relies on foundry process design kits (PDKs, such as TSMC N7 or N3 kits) and proprietary IP blocks governed by nondisclosure agreements (NDAs). Substituting an open cell library for that restricted collateral changes the technical question as well as the access terms. A surrogate calibrated on an educational library such as Nangate45 cannot predict a 3\ nm implementation, where transistor behavior, wire parasitics,[^fn-wire-parasitics-c04] and cell footprints diverge sharply. A dataset therefore has to record both its technical conditions and its legal boundaries, including PDK revisions, NDA scopes, tool license terms, and permitted recipients, so that an architect never mistakes an accessible academic proxy for evidence about a production process.
+A representation can capture every required electrical and physical domain and still remain legally or operationally restricted. Production architecture relies on foundry process design kits (PDKs, such as TSMC N7 or N3 kits) and proprietary IP blocks governed by nondisclosure agreements (NDAs). Substituting an open cell library for that restricted collateral changes the technical question as well as the access terms. A surrogate calibrated on an educational library such as Nangate45 has, by our reasoning rather than a measured transfer result, no established accuracy for a 3\ nm implementation, where transistor behavior, wire parasitics,[^fn-wire-parasitics-c04] and cell footprints differ. A dataset therefore has to record both its technical conditions and its legal boundaries, including PDK revisions, NDA scopes, tool license terms, and permitted recipients, so that an architect never mistakes an accessible academic proxy for evidence about a production process.
 
-[^fn-wire-parasitics-c04]: **Wire parasitics**: The distributed resistance ($R$) and capacitance ($C$) associated with physical on-chip interconnects. As process nodes shrink from 45\ nm to 3\ nm, wire resistance per unit length rises steeply because cross-sections narrow and electron scattering at surfaces and grain boundaries increases, so interconnect delay increasingly dominates on long wires.
+[^fn-wire-parasitics-c04]: **Wire parasitics**: The distributed resistance ($R$) and capacitance ($C$) associated with physical on-chip interconnects.
 
-Even when a team holds legitimate access to production collateral, the governing agreements rarely grant a blanket right to use those files in machine learning workflows. Training, retrieval, transformation, and redistribution carry distinct legal boundaries across foundry PDKs, commercial interconnect IP (such as PCIe or DDR controllers), Liberty (`.lib`) timing files, and Library Exchange Format (LEF) physical layouts.[^fn-physical-formats-c04] Permission to integrate an IP block into an internal chip does not establish permission to send it to an external large language model endpoint or incorporate it into a public training corpus [@LongpreEtAl2024DataProvenance]. Proprietary netlist fragments, SPICE decks, and place-and-route reports usually require running models inside environments that the governing agreements permit, often on premises. Auditing whether generated RTL reproduces proprietary collateral therefore requires logging the provenance of retrieved context and running similarity checks inside that secure boundary without exposing the protected IP.
+Even when a team holds legitimate access to production collateral, it cannot assume that the governing agreements grant a blanket right to use those files in machine learning workflows. Training, retrieval, transformation, and redistribution carry distinct legal boundaries across foundry PDKs, commercial interconnect IP (such as PCIe or DDR controllers), Liberty (`.lib`) timing files, and Library Exchange Format (LEF) physical layouts.[^fn-physical-formats-c04] Permission to integrate an IP block into an internal chip does not establish permission to send it to an external large language model endpoint or incorporate it into a public training corpus, which is our reading of how such agreements divide use rather than a published finding. Even for public text datasets, an audit found license terms frequently missing or wrong on widely used hosting sites [@LongpreEtAl2024DataProvenance]. Proprietary netlist fragments, SPICE decks, and place-and-route reports can require running models inside environments that the governing agreements permit, often on premises. Auditing whether generated RTL reproduces proprietary collateral therefore requires logging the provenance of retrieved context and running similarity checks inside that secure boundary without exposing the protected IP.
 
 [^fn-physical-formats-c04]: **Physical design collateral (`.lib` and LEF)**: Liberty (`.lib`) timing libraries supply characterized cell propagation delays, setup-and-hold tables, and leakage values across operating corners. LEF files provide abstract cell boundaries, pin geometries, and metal routing obstructions required for macro placement and routing.
 
@@ -570,7 +788,7 @@ A tile-size vector permits changes within a schedule template. A dependency grap
 
 Even a parameter change has dependencies beyond its scalar value. Changing cache capacity can require a new SRAM bank organization, wrapper instantiation, and matching hierarchical paths in timing and power constraints. An encoding that exposes only capacity hides the work needed to construct the candidate. Likewise, a schedule edit changes generated code and can invalidate the trace used to estimate memory traffic or switching activity. These dependency links tell the system which observations to refresh after an action.
 
-Numerical encoding determines how a method compares candidate values computationally. A linear capacity feature emphasizes absolute differences, while a logarithmic feature emphasizes relative changes [@LeeBrooks2006RegressionModeling]. Neither establishes whether a proposed capacity can be built. A schema indexed by supported SRAM organizations can restrict proposals to available implementations, while a method that proposes a new organization needs a path to the tools that will construct and check it. Representation therefore determines both how candidates are compared computationally and which candidates can reach evaluation.
+Numerical encoding determines how a method compares candidate values computationally. A linear capacity feature emphasizes absolute differences, while a logarithmic feature, such as the $\log_2$ cache sizes in one regression study of microarchitectural performance [@LeeBrooks2006RegressionModeling], emphasizes relative changes. Neither establishes whether a proposed capacity can be built. A schema indexed by supported SRAM organizations can restrict proposals to available implementations, while a method that proposes a new organization needs a path to the tools that will construct and check it. Representation therefore determines both how candidates are compared computationally and which candidates can reach evaluation.
 
 ### Available Information and Missing Observations
 
@@ -594,9 +812,9 @@ The handoff can point into existing specifications, experiment databases, and ve
 
 Building source-linked datasets and machine-usable representations for an architectural study exposes five open research problems across dataset curation, benchmark splitting, representation design, cross-layer provenance, and workload modeling:
 
-- **How should we train models and collect data when many tool runs crash, time out, or fail physical checks?** Public physical-design datasets such as CircuitNet discard runs that fail placement or routing [@ChaiEtAl2022CircuitNet], yet training surrogates only on the layouts that survive omits observations near the physical feasibility boundary. Different failures carry different lessons. A missed target-frequency check gives a left-censored bound on sustainable clock rate, whereas an EDA router timeout leaves circuit delay unresolved, and dense fanout or pin crowding can make those missing results depend on the candidate. Survival-aware training can use qualified censored bounds, while unresolved physical outcomes require separate treatment. Under tight tool-license budgets, we still need training objectives and active data-collection policies that preserve these distinctions when deciding whether to diagnose an aborted run, sample nearby legal configurations, or record a supported feasibility boundary.
+- **How should we train models and collect data when many tool runs crash, time out, or fail physical checks?** CircuitNet, a public physical-design dataset, excluded failed runs from its original release [@ChaiEtAl2022CircuitNet], yet training surrogates only on the layouts that survive omits observations near the physical feasibility boundary. Different failures carry different lessons. A missed target-frequency check gives a left-censored bound on sustainable clock rate, whereas an EDA router timeout leaves circuit delay unresolved, and dense fanout or pin crowding can make those missing results depend on the candidate. Survival-aware training can use qualified censored bounds, while unresolved physical outcomes require separate treatment. Under tight tool-license budgets, we still need training objectives and active data-collection policies that preserve these distinctions when deciding whether to diagnose an aborted run, sample nearby legal configurations, or record a supported feasibility boundary.
 
-- **How do we split hardware datasets into training and test sets when parameterized generators share circuit structure across configurations?** A row split can test unseen configurations within a familiar Chisel, FIRRTL, or SystemVerilog `generate` template. If the claim concerns new design families, however, shared templates across training and test sets can make familiar circuit structure look like evidence of cross-family transfer. Protein and molecular machine learning faced this same leakage problem and moved from random row splits to splits that hold out whole protein families or groups of molecules sharing a core structure [@RaoEtAl2019TAPE; @WuEtAl2018MoleculeNet]. Hardware still lacks an agreed distance metric, and putting every design from a parameterized generator into one split can starve the training set of structural variety. Dataset builders need quantitative structural-similarity metrics over elaborated netlists and syntax trees so that benchmark splits match the actual generalization claim, from interpolating queue depths inside a known template to extrapolating across new interconnect topologies.
+- **How do we split hardware datasets into training and test sets when parameterized generators share circuit structure across configurations?** A row split can test unseen configurations within a familiar Chisel, FIRRTL, or SystemVerilog `generate` template. If the claim concerns new design families, however, shared templates across training and test sets can make familiar circuit structure look like evidence of cross-family transfer. Protein and molecular benchmarks treat a similar risk directly. TAPE reports a test set of fully held-out protein families beside a random split [@RaoEtAl2019TAPE], and MoleculeNet recommends splits that separate molecules by core structure for several of its datasets because a random split is not always the best test [@WuEtAl2018MoleculeNet]. Hardware still lacks an agreed distance metric, and putting every design from a parameterized generator into one split can starve the training set of structural variety. Dataset builders need quantitative structural-similarity metrics over elaborated netlists and syntax trees so that benchmark splits match the actual generalization claim, from interpolating queue depths inside a known template to extrapolating across new interconnect topologies.
 
 - **How can a hardware representation prevent electrically or protocol-illegal designs by construction without ruling out unconventional topologies?** A flat stream of text tokens permits edits that drop flow-control backpressure signals or omit voltage level shifters across power domains, leaving downstream simulation and implementation tools to find the defects. Restricting a method to checked configurations within a fixed template can prevent some malformed proposals, but excludes structural changes the template cannot express. The challenge is to expose more legal changes while preserving the invariants that static checks can establish and identifying which protocol and electrical properties still need deeper verification.
 
@@ -618,4 +836,4 @@ Reusable knowledge explains when an observation should guide another decision. I
 - **Plan for permitted use and reuse.** Access to source material does not establish permission for every training, retrieval, or sharing use. Preserve applicable restrictions through derived datasets and representations, and distinguish what others can reproduce from what requires restricted sources.
 :::
 
-With their representations and handoff records in place, our two Lighthouse studies now expose very different candidate spaces, data needs, and evaluation costs. Choosing how to act on those handoffs is the next decision (@sec-methods-generation-prediction-optimization). The first question is whether direct tool evaluation is already sufficient, or whether prediction, generation, optimization, or their combination can find a better design or reduce the total cost of reaching it.
+With their representations and handoff fields specified, our two Lighthouse studies now expose very different candidate spaces, data needs, and evaluation costs. Choosing how to act on those handoffs is the next decision (@sec-methods-generation-prediction-optimization). The first question is whether direct tool evaluation is already sufficient, or whether prediction, generation, optimization, or their combination can find a better design or reduce the total cost of reaching it.

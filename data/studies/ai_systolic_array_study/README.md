@@ -12,17 +12,26 @@ implementation. It does not establish that a model is generally better at
 architecture search, that the slice represents a complete XR application, or
 that any candidate is ready for RTL, physical design, or product use.
 
-## Frozen protocol
+## Protocol file and its timing
 
-The preregistration in
-[`context/pre_registration.yaml`](context/pre_registration.yaml) was frozen
-before the model call or any study simulation. It declares:
+The protocol file
+[`context/pre_registration.yaml`](context/pre_registration.yaml) names itself a
+preregistration. Its own `frozen_at_utc` field reads `2026-07-14T18:19:48Z`,
+and its `status` field reads `frozen_before_model_call_and_simulation`. Those
+fields are self-reported, as are the model-call and simulation times in
+`recorded/`, which fall after that timestamp. The file first entered git in
+commit `f5516e52e` (author date 2026-07-15 01:04:43 UTC, commit date 01:05:58
+UTC), about 6.6 hours after the recorded end of the simulations and in the same
+commit as the results and the model response. Git adds no independent ordering,
+and the prompt hash in the file does not match the retained prompt (see below).
+The record therefore does not show that the protocol preceded the run. It
+declares:
 
 - the three-layer XR-like GEMM slice and its transposed mechanism probe;
 - the legal array dimensions, 1,024-PE budget, and 32x32 baseline;
 - three model candidates and three fixed-heuristic candidates, with four
   SCALE-Sim evaluations per arm after inserting the baseline;
-- a deterministic aggregate-aspect-ratio heuristic fixed before the call;
+- a deterministic aggregate-aspect-ratio heuristic;
 - the local decision score, `cycles / (average utilization / 100)`;
 - a 1 percent support margin; and
 - a shared four-run mirrored/transposed mechanism test outside both arm
@@ -37,15 +46,15 @@ recorded as unavailable rather than inferred.
 One provenance gap was discovered after the study. The retained
 `context/model_prompt.md` hashes to
 `36e0167aa338c6b13087314b768e4f313a8b72ebce5d2c7b7bff5af968376971`,
-while the preregistration and model provenance record
+while the protocol file and model provenance record
 `ec12df200a134532942ce0120bbb5694bc657c0e13cf88654631db42aa76fbca`.
 No matching prompt copy survives in the package. The complete response and
 simulator inputs remain retained, but the exact generation context cannot be
-verified. The frozen records are not rewritten to hide the mismatch.
+verified. The retained records are not rewritten to hide the mismatch.
 
 ## Recorded outcome
 
-Cycles and utilization below are computed by SCALE-Sim for the frozen inputs.
+Cycles and utilization below are computed by SCALE-Sim for the recorded inputs.
 The historical runner computed the local score and dispositions; the
 standalone [`replay.py`](replay.py) now checks those records and recomputes
 their metrics. None of the values are measurements from silicon.
@@ -55,10 +64,10 @@ prefetch, divided by the **unweighted arithmetic mean** of the three layers'
 `Overall Util %` values, expressed as a fraction. These are compute-window
 cycles, not complete application latency. The separately retained
 `Total Cycles (incl. prefetch)` column sums to 17,371 for the 32x32 baseline
-and 17,500 for 16x64. Their exact score tie applies to the preregistered
-excluding-prefetch metric. Including prefetch would make 16x64 about 0.743
+and 17,500 for 16x64. Their exact score tie applies to the
+excluding-prefetch metric named in the protocol file. Including prefetch would make 16x64 about 0.743
 percent worse with the same utilization denominator, still inside the
-preregistered 1 percent tolerance. This sensitivity check does not change
+protocol file's 1 percent tolerance. This sensitivity check does not change
 the historical metric or establish end-to-end latency across layers.
 
 | Arm | Shape | Cycles excluding prefetch | Unweighted mean layer utilization | Local score | Disposition |
@@ -72,7 +81,7 @@ the historical metric or establish end-to-end latency across layers.
 | Heuristic | 8x128 | 19,405 | 29.704% | 65,327.45 | Ranked worse |
 | Heuristic | 64x16 | 17,757 | 32.294% | 54,985.25 | Ranked worse |
 
-The architecture-outcome claim is null at the preregistered margin because no
+The architecture-outcome claim is null at the protocol file's margin because no
 nonbaseline candidate improves on 32x32 by at least 1 percent. The
 two arms return the same best score at the same four-run budget. With a weak
 comparator, substantial proposal overlap, and unknown total human effort, this
@@ -97,7 +106,7 @@ accountable decision status remains `awaiting_author_confirmation`.
 ## Verification and replay
 
 The former `arch2_labs.study` package is retired. The standalone runner in
-this directory supports this frozen experiment only. It neither calls a
+this directory supports this recorded experiment only. It neither calls a
 model nor uses the network. It does not rewrite the original records,
 repair the missing prompt, or claim to reproduce the model interaction.
 
@@ -113,15 +122,20 @@ input identities, raw report schemas and layer counts. It recomputes the
 metrics, local scores, gates and reported outcomes. The known prompt mismatch
 is printed as a limitation. A different prompt modification, missing report,
 changed metric, or broken hash fails verification. These internal consistency
-checks do not authenticate the historical model call or its preregistration.
+checks do not authenticate the historical model call or the date of the protocol file.
 
-Replay requires SCALE-Sim 3.0.0. Python 3.11 matches the historical execution
-environment; the runner was also checked with Python 3.14. Install the
-simulator in a separate environment if needed (installation requires package
-access; verification and replay themselves do not):
+Replay requires SCALE-Sim 3.0.0, Python 3.11, and numpy 1.26.4. Python 3.11
+matches the historical execution environment, which recorded no numpy or pandas
+version. Under numpy 2 the replay stops with "only 0-dimensional arrays can be
+converted to Python scalars", and numpy 1.26.4 has no Python 3.14 wheel.
+`requirements.txt` pins numpy; with that pin pip resolved pandas 3.0.6 on
+2026-11-02, and pandas is not pinned. The twelve runs matched in that
+environment (`runs.jsonl`). Install the simulator in a separate environment if
+needed (installation requires package access; verification and replay
+themselves do not):
 
 ```bash
-python3 -m venv /tmp/arch2-systolic-env
+python3.11 -m venv /tmp/arch2-systolic-env
 /tmp/arch2-systolic-env/bin/python -m pip install -r data/studies/ai_systolic_array_study/requirements.txt
 /tmp/arch2-systolic-env/bin/python data/studies/ai_systolic_array_study/replay.py replay \
   --output /tmp/arch2-systolic-replay

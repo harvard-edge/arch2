@@ -88,5 +88,31 @@ def test_retained_data_path_establishes_inventory_only(figure: dict) -> None:
     assert detail == "1 retained input(s)"
 
 
+def test_modeled_figure_requires_retained_data(figure: dict) -> None:
+    assert (
+        provenance.classify("fig-result", figure, {"evidence_class": "modeled"})[0]
+        == "VIOLATION"
+    )
+    (provenance.ROOT / "observations.csv").write_text("value\n1\n")
+    declaration = {"evidence_class": "modeled", "data": ["observations.csv"]}
+    assert (
+        provenance.classify("fig-result", figure, declaration)[0] == "declared-modeled"
+    )
+
+
+def test_modeled_figure_keeps_the_data_figure_contract(figure: dict) -> None:
+    (provenance.ROOT / "observations.csv").write_text("value\n1\n")
+    declaration = {"evidence_class": "modeled", "data": ["observations.csv"]}
+    problem = provenance.check_data_figure_contract("fig-result", figure, declaration)
+    assert problem == "modeled figure requires an explicit generator declaration"
+    declaration["generator"] = "inline"
+    problem = provenance.check_data_figure_contract("fig-result", figure, declaration)
+    assert "missing provenance.yml" in problem
+    (provenance.ROOT / "provenance.yml").write_text("{}\n")
+    assert (
+        provenance.check_data_figure_contract("fig-result", figure, declaration) is None
+    )
+
+
 def test_every_active_manuscript_figure_has_complete_provenance_and_yml() -> None:
     assert provenance.main() == 0

@@ -1,0 +1,337 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs Max Pooling 3D.
+    """
+    def __init__(self, kernel_size: int, stride: int = None, padding: int = 0, dilation: int = 1, return_indices: bool = False, ceil_mode: bool = False):
+        """
+        Initializes the Max Pooling 3D layer.
+
+        Args:
+            kernel_size (int): Size of the kernel for the max pooling operation.
+            stride (int, optional): Stride of the pooling operation. Defaults to None, which means stride is equal to kernel_size.
+            padding (int, optional): Padding applied to the input tensor. Defaults to 0.
+            dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+            return_indices (bool, optional): Whether to return indices of the maximum values. Defaults to False.
+            ceil_mode (bool, optional): When True, the output size is ceil(input_size / stride) instead of floor. Defaults to False.
+        """
+        super(Model, self).__init__()
+        self.maxpool = nn.MaxPool3d(kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, return_indices=return_indices, ceil_mode=ceil_mode)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Max Pooling 3D to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, channels, dim1, dim2, dim3).
+
+        Returns:
+            torch.Tensor: Output tensor with Max Pooling 3D applied.
+        """
+        return self.maxpool(x)
+
+batch_size = 16
+channels = 32
+dim1 = 128
+dim2 = 128
+dim3 = 128
+kernel_size = 3
+stride = 2
+padding = 1
+dilation = 3
+
+def get_inputs():
+    x = torch.rand(batch_size, channels, dim1, dim2, dim3)
+    return [x]
+
+def get_init_inputs():
+    return [kernel_size, stride, padding, dilation]
+PyTorch Eager baseline: 6.2473 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def max_pool3d_kernel(
+    input_ptr,
+    output_ptr,
+    N, C, D, H, W,  # Input dimensions
+    OD, OH, OW,  # Output dimensions
+    kernel_size: tl.constexpr,
+    stride: tl.constexpr,
+    padding: tl.constexpr,
+    dilation: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """
+    Fused 3D Max Pooling kernel.
+    Each program handles one output element.
+    """
+    # Get program ID - we flatten all output elements
+    pid = tl.program_id(0)
+    
+    # Total number of output elements
+    total_outputs = N * C * OD * OH * OW
+    
+    # Process BLOCK_SIZE elements per program
+    offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offs < total_outputs
+    
+    # Decompose linear index to (n, c, od, oh, ow)
+    ow = offs % OW
+    tmp = offs // OW
+    oh = tmp % OH
+    tmp = tmp // OH
+    od = tmp % OD
+    tmp = tmp // OD
+    c = tmp % C
+    n = tmp // C
+    
+    # Compute input starting positions (with padding offset)
+    d_start = od * stride - padding
+    h_start = oh * stride - padding
+    w_start = ow * stride - padding
+    
+    # Initialize max value to negative infinity
+    max_val = tl.full([BLOCK_SIZE], float('-inf'), dtype=tl.float32)
+    
+    # Iterate over the pooling window
+    for kd in range(kernel_size):
+        d_in = d_start + kd * dilation
+        d_valid = (d_in >= 0) & (d_in < D)
+        
+        for kh in range(kernel_size):
+            h_in = h_start + kh * dilation
+            h_valid = (h_in >= 0) & (h_in < H)
+            
+            for kw in range(kernel_size):
+                w_in = w_start + kw * dilation
+                w_valid = (w_in >= 0) & (w_in < W)
+                
+                # Combined validity check
+                valid = mask & d_valid & h_valid & w_valid
+                
+                # Compute input index: n * (C*D*H*W) + c * (D*H*W) + d_in * (H*W) + h_in * W + w_in
+                input_idx = n * (C * D * H * W) + c * (D * H * W) + d_in * (H * W) + h_in * W + w_in
+                
+                # Load input value
+                val = tl.load(input_ptr + input_idx, mask=valid, other=float('-inf'))
+                val = val.to(tl.float32)
+                
+                # Update max
+                max_val = tl.maximum(max_val, val)
+    
+    # Store result
+    tl.store(output_ptr + offs, max_val, mask=mask)
+
+
+def kernel_function(x, kernel_size=2, stride=2, padding=0, dilation=1):
+    """
+    3D Max Pooling wrapper function.
+    
+    Args:
+        x: Input tensor of shape (N, C, D, H, W)
+        kernel_size: Size of the pooling window
+        stride: Stride of the pooling window
+        padding: Padding added to input
+        dilation: Spacing between kernel elements
+    
+    Returns:
+        Output tensor after max pooling
+    """
+    # Handle tuple/list parameters
+    if isinstance(kernel_size, (tuple, list)):
+        kernel_size = kernel_size[0]
+    if isinstance(stride, (tuple, list)):
+        stride = stride[0]
+    if isinstance(padding, (tuple, list)):
+        padding = padding[0]
+    if isinstance(dilation, (tuple, list)):
+        dilation = dilation[0]
+    
+    # Get input dimensions
+    N, C, D, H, W = x.shape
+    
+    # Calculate output dimensions
+    OD = (D + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    OH = (H + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    OW = (W + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    
+    # Allocate output tensor
+    output = torch.empty((N, C, OD, OH, OW), device=x.device, dtype=x.dtype)
+    
+    # Total number of output elements
+    total_outputs = N * C * OD * OH * OW
+    
+    # Launch configuration
+    BLOCK_SIZE = 256
+    grid = (triton.cdiv(total_outputs, BLOCK_SIZE),)
+    
+    # Ensure input is contiguous
+    x = x.contiguous()
+    
+    # Launch kernel
+    max_pool3d_kernel[grid](
+        x,
+        output,
+        N, C, D, H, W,
+        OD, OH, OW,
+        kernel_size=kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    
+    return output
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'Poor memory coalescing due to non-contiguous 3D pooling window access patterns', 'evidence': [{'metric': 'smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct', 'value': 23.64, 'interpretation': 'Only 23.64% of fetched bytes are actually used, indicating severe memory access inefficiency from scattered 3D window traversal'}, {'metric': 'l1tex__throughput.avg.pct_of_peak_sustained_active', 'value': 99.21, 'interpretation': 'L1 cache is saturated trying to service inefficient memory requests'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✓ IMPROVED 8.8% faster]
+**Prescription Applied**: `compute` tier
+**Root Cause**: No Tensor Core utilization despite being on H100 with available Tensor Core units
+**Fix Applied**: Restructure the kernel to process multiple output elements per thread using shared memory for input data reuse, reducing redundant global memory accesses and improving memory coalescing to reduce long scoreboard stalls
+**Performance**: 6.4988ms → 5.9261ms (8.8% faster)
+**NCU SOL (% of Peak)**: Combined: 85.2%, Compute: 85.2%, Memory: 46.1%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 44.0% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor global memory access coalescing resulting in wasted memory bandwidth
+**Fix Applied**: Reorganize the kernel to process contiguous memory regions by iterating over the width dimension in the innermost loop with vectorized loads (e.g., tl.load with vectorized access of 4 or 8 elements), and ensure BLOCK_OW aligns with memory transaction sizes to improve coalescing from 25% to closer to 100%
+**Performance**: 5.2163ms → 2.9224ms (44.0% faster)
+**NCU SOL (% of Peak)**: Combined: 83.2%, Compute: 83.2%, Memory: 66.5%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 379.3% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor global memory coalescing causing inefficient memory transactions
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the W dimension by ensuring consecutive threads access consecutive memory addresses. Change the blocking strategy to have threads within a warp process adjacent W elements while keeping C constant, and consider using shared memory to stage irregular pooling window accesses
+**Performance**: 5.4836ms → 26.2822ms (379.3% slower)
+**NCU SOL (% of Peak)**: Combined: 88.7%, Compute: 71.8%, Memory: 88.7%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 48.8% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor memory coalescing with only 24.87% of loaded bytes being useful, causing 4x memory traffic amplification
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the innermost dimension (W) by making BLOCK_OW the primary blocking dimension and ensuring strideW=1 accesses. Consider transposing the channel and spatial dimensions in the blocking strategy to achieve coalesced 128-byte transactions.
+**Performance**: 5.2163ms → 2.6718ms (48.8% faster)
+**NCU SOL (% of Peak)**: Combined: 99.0%, Compute: 76.5%, Memory: 99.0%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 47.4% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor global memory coalescing with only ~25% of sector bytes being useful data
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the W dimension (strideW=1) rather than across channels, and increase BLOCK_OW while reducing BLOCK_C to improve coalescing. Consider using shared memory to stage data for the 3D pooling window.
+**Performance**: 5.4836ms → 2.8827ms (47.4% faster)
+**NCU SOL (% of Peak)**: Combined: 82.8%, Compute: 82.8%, Memory: 66.4%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Effective]
+**Diagnosis**: No Tensor Core utilization despite being on H100 with available Tensor Core units
+**Fix Applied**: Restructure the kernel to process multiple output elements per thread using shared memory for input data reuse, reducing redundant global memory accesses and improving memory coalescing to reduce long scoreboard stalls
+**Expected**: If the root cause was truly 'No Tensor Core utilization', we would expect the fix to enable Tensor Cores and see a dramatic improvement (potentially 2-10x) in compute throughput. The fix description mentions shared memory and memory coalescing, not Tensor Core enablement.
+**Actual**: Achieved 8.8% improvement through shared memory optimization and reduced global memory accesses. Compute SOL at 85.2% indicates good compute utilization, but this improvement came from memory access patterns, not Tensor Core activation. (+8.8%)
+**Analysis**: The diagnosis claimed 'No Tensor Core utilization' as the root cause, but the applied fix focused on shared memory tiling and memory coalescing - which are memory optimizations, not Tensor Core enablement. The 8.8% improvement is modest and consistent with memory access pattern improvements, not the dramatic gains expected from Tensor Core activation. The Memory SOL at 46.1% shows memory is not saturated, suggesting the shared memory optimization helped reduce memory pressure. The mismatch between diagnosis (Tensor Cores) and fix (shared memory) indicates the diagnosis was incorrect, even though the fix was beneficial.
+**Lessons**:
+  - Tensor Core utilization requires specific code patterns (WMMA/MMA instructions, specific data types like FP16/TF32, and matrix-shaped operations) - not just shared memory optimization
+  - An 8.8% improvement from shared memory tiling suggests there was significant redundant global memory access that can be further optimized
+  - 85.2% compute SOL with 46.1% memory SOL suggests the kernel is compute-bound but not fully utilizing available compute resources
+  - The diagnosis and fix should be aligned - if diagnosing Tensor Core issues, the fix should specifically enable Tensor Cores
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Poor global memory access coalescing resulting in wasted memory bandwidth
+**Fix Applied**: Reorganize the kernel to process contiguous memory regions by iterating over the width dimension in the innermost loop with vectorized loads (e.g., tl.load with vectorized access of 4 or 8 elements), and ensure BLOCK_OW aligns with memory transaction sizes to improve coalescing from 25% to closer to 100%
+**Expected**: Improving memory coalescing should reduce wasted memory bandwidth and improve overall performance, with memory SOL increasing significantly
+**Actual**: Performance improved by 44% (5.2ms to 2.9ms), but memory SOL only reached 66.5% while compute SOL jumped to 83.2%, suggesting the kernel became compute-bound (+44.0%)
+**Analysis**: The diagnosis was correct - poor memory coalescing was indeed a bottleneck. The fix of reorganizing to process contiguous memory with vectorized loads was effective, as shown by the 44% speedup. However, the memory SOL at 66.5% suggests there's still room for memory optimization, but the kernel has shifted to being compute-bound (83.2% compute SOL). This indicates the memory fix was successful enough to expose compute as the new limiting factor.
+**Lessons**:
+  - Memory coalescing improvements can yield substantial gains (44% in this case)
+  - Vectorized loads with aligned block sizes effectively improve memory access patterns
+  - Fixing one bottleneck often reveals another - memory fix exposed compute bottleneck
+  - A successful memory optimization doesn't always max out memory SOL if compute becomes the new limiter
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor global memory coalescing causing inefficient memory transactions
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the W dimension by ensuring consecutive threads access consecutive memory addresses. Change the blocking strategy to have threads within a warp process adjacent W elements while keeping C constant, and consider using shared memory to stage irregular pooling window accesses
+**Expected**: If memory coalescing was the bottleneck, fixing it should have improved performance by reducing memory transactions and improving memory throughput efficiency
+**Actual**: Performance degraded catastrophically by 379.3%, going from 5.48ms to 26.28ms despite memory SOL being at 88.7% (-379.3%)
+**Analysis**: The original kernel was already reasonably efficient at memory access (as evidenced by the 88.7% memory SOL after the change). The attempted fix likely introduced significant overhead by changing the thread organization and blocking strategy, which disrupted the existing efficient access patterns. The reorganization may have caused issues like increased thread divergence, poor occupancy, or inefficient shared memory usage. The high memory SOL (88.7%) after the change suggests memory is being used well, but the compute SOL dropped or the overall execution became much slower due to algorithmic inefficiencies introduced by the restructuring.
+**Lessons**:
+  - A high memory SOL doesn't mean good performance if the overall execution time increases dramatically
+  - Changing thread blocking strategies can have severe unintended consequences on kernel performance
+  - The original memory access pattern may have been more efficient than diagnosed
+  - Pooling operations have inherent irregular access patterns that may not benefit from simple coalescing fixes
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Poor memory coalescing with only 24.87% of loaded bytes being useful, causing 4x memory traffic amplification
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the innermost dimension (W) by making BLOCK_OW the primary blocking dimension and ensuring strideW=1 accesses. Consider transposing the channel and spatial dimensions in the blocking strategy to achieve coalesced 128-byte transactions.
+**Expected**: Improving memory coalescing should reduce memory traffic amplification and improve memory throughput, leading to significant speedup since memory was the bottleneck
+**Actual**: Performance improved by 48.8% (5.2163ms → 2.6718ms), and Memory SOL jumped to 99.0% indicating near-optimal memory utilization. The kernel is now memory-bound at peak efficiency. (+48.8%)
+**Analysis**: The diagnosis was correct - poor memory coalescing (only 24.87% useful bytes) was causing 4x memory traffic amplification. By reorganizing to process contiguous memory along the W dimension with stride-1 accesses, we achieved coalesced 128-byte transactions. The Memory SOL at 99.0% confirms we're now utilizing memory bandwidth optimally. The 48.8% improvement is consistent with reducing the 4x memory amplification. Compute SOL at 76.5% shows compute is being utilized well but memory is the limiting factor at maximum efficiency.
+**Lessons**:
+  - Memory coalescing issues with low useful byte ratios (sub-30%) are strong indicators of significant optimization opportunity
+  - Reorganizing blocking dimensions to align with contiguous memory access patterns can yield ~50% improvements
+  - Achieving 99% Memory SOL indicates the kernel is now operating at hardware memory bandwidth limits
+  - Stride-1 access patterns along the innermost dimension are critical for coalesced transactions
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Poor global memory coalescing with only ~25% of sector bytes being useful data
+**Fix Applied**: Reorganize the kernel to process contiguous memory along the W dimension (strideW=1) rather than across channels, and increase BLOCK_OW while reducing BLOCK_C to improve coalescing. Consider using shared memory to stage data for the 3D pooling window.
+**Expected**: Improving memory coalescing should reduce memory bottleneck and improve overall performance, with memory SOL potentially increasing or compute becoming the new bottleneck
+**Actual**: Performance improved by 47.4% (5.48ms → 2.88ms), and the bottleneck shifted from memory to compute (82.8% compute SOL vs 66.4% memory SOL) (+47.4%)
+**Analysis**: The diagnosis was correct - poor global memory coalescing at ~25% useful data was indeed the bottleneck. By reorganizing the kernel to process contiguous memory along the W dimension (stride=1), memory accesses became coalesced. The 47.4% improvement is substantial and consistent with fixing a memory coalescing issue. The shift from memory-bound to compute-bound (82.8% compute SOL) confirms the memory bottleneck was successfully addressed. Memory SOL at 66.4% indicates memory is now reasonably efficient but no longer the limiting factor.
+**Lessons**:
+  - Memory coalescing issues with low useful data percentages (~25%) can cause severe performance degradation
+  - Reorganizing access patterns to process contiguous dimensions (stride=1) is highly effective for coalescing
+  - Fixing memory bottlenecks can shift the kernel to being compute-bound, revealing the next optimization target
+  - A 47% improvement from coalescing fixes indicates how costly uncoalesced accesses are
+
+
+Guidance for this round:
+- AVOID: Diagnosing Tensor Core issues when the actual problem is memory access patterns; Mismatching root cause diagnosis with the applied optimization technique; Assuming memory optimization will continue to yield gains once compute SOL exceeds memory SOL; Focusing solely on memory optimizations when compute has become the bottleneck; Major restructuring of thread organization without incremental testing; Assuming memory coalescing is the primary issue without verifying actual memory transaction efficiency; Changing blocking strategies that fundamentally alter the kernel's execution model; Blocking strategies that prioritize non-contiguous dimensions over the innermost (fastest-varying) dimension; Ignoring memory coalescing efficiency metrics when diagnosing memory bottlenecks; Processing data across non-contiguous dimensions (e.g., across channels) when contiguous alternatives exist; Ignoring memory access patterns when sector utilization is below 50%- PRIORITIZE: If Tensor Cores are truly desired, implement WMMA intrinsics or use libraries like cuBLAS that leverage Tensor Cores; Continue optimizing shared memory usage since the current fix showed promise; Investigate why compute is at 85.2% - there may be instruction-level parallelism or occupancy improvements possible; Profile for warp stalls and divergence to understand remaining compute inefficiencies; Now focus on compute optimizations since compute SOL (83.2%) exceeds memory SOL (66.5%); Consider instruction-level parallelism improvements or reducing arithmetic operations; Look for opportunities to fuse operations or reduce redundant computations; Explore different tile sizes that might better balance compute and memory utilization; Revert to the original kernel structure and make smaller, targeted optimizations; Focus on compute optimizations since original memory access was likely adequate; Profile the original kernel more carefully to identify the actual bottleneck; Consider loop unrolling or vectorized loads within the existing structure; When Memory SOL hits 99%, shift focus to compute optimizations or algorithmic improvements to reduce total memory operations; Consider data layout transformations if natural access patterns don't align with memory coalescing requirements; Look for opportunities to increase arithmetic intensity now that memory is at peak efficiency; Now that kernel is compute-bound at 82.8%, focus on reducing arithmetic operations or improving instruction-level parallelism; Consider shared memory tiling to reduce redundant global memory loads in the pooling window; Explore vectorized loads (float4) to further improve memory throughput if applicable; Look for opportunities to reduce thread divergence in compute-heavy sections
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recompute every reported number from raw/run-*.csv and write summary.json.
+"""Recompute every reported number from the declared raw runs and write summary.json.
 
 Stdlib only. For each run and for the pooled sample it computes per-(arm, n)
 median and interquartile range, then:
@@ -29,12 +29,21 @@ CPU_OF = {
 }
 ARMS = ["cpu_single", "mps_resident", "mps_copy", "cpu_bmm", "mps_16_launch", "mps_bmm"]
 FLOOR_MAX_N = 256
+# The runs provenance.yml declares. Any other raw/run-*.csv, such as an audit rerun
+# left in the folder, stays out of the sample and is reported.
+DECLARED_RUNS = (1, 2, 3, 4, 5)
 
 
 def load():
     samples = defaultdict(list)  # (run, arm, n) -> [s]
     hosts = {}
-    for path in sorted(RAW.glob("run-*.csv")):
+    declared = [RAW / f"run-{k}.csv" for k in DECLARED_RUNS]
+    absent = [p.name for p in declared if not p.exists()]
+    if absent:
+        raise SystemExit(f"declared run file(s) missing: {absent}")
+    for path in sorted(set(RAW.glob("run-*.csv")) - set(declared)):
+        print(f"ignored undeclared run file: {path.name}")
+    for path in declared:
         for row in csv.DictReader(path.open()):
             samples[(int(row["run_id"]), row["arm"], int(row["n"]))].append(
                 float(row["seconds"])
@@ -246,17 +255,26 @@ def main():
         for n in sizes
     )
 
-    h0 = hosts[min(hosts)] if hosts else {}
+    # The boundary states what the receipts recorded, so it cannot outlive a rerun.
+    missing = [r for r in runs if r not in hosts]
+    if missing:
+        raise SystemExit(f"no host receipt for run(s) {missing}")
+    h0 = hosts[min(hosts)]
+    for key in ("cpu_model", "torch_version", "torch_blas_info"):
+        seen = {h.get(key) for h in hosts.values()}
+        if len(seen) != 1:
+            raise SystemExit(f"receipts disagree on {key}: {sorted(map(str, seen))}")
     summary = {
         "study": "offload-break-even",
-        "claim_boundary": "One Apple M5 Max laptop, FP32 n x n products, PyTorch 2.11.0 CPU (Accelerate BLAS) versus MPS; "
+        "claim_boundary": f"One {h0['cpu_model']} laptop, FP32 n x n products, "
+        f"PyTorch {h0['torch_version']} CPU ({h0['torch_blas_info'].capitalize()} BLAS) versus MPS; "
         "unified memory, so the copy arm measures an in-DRAM copy, not a discrete-link transfer.",
         "host": {
             k: h0.get(k)
             for k in [
                 "cpu_model",
-                "cpu_performance_cores",
-                "cpu_efficiency_cores",
+                "cpu_perflevel0_cores",
+                "cpu_perflevel1_cores",
                 "memory_bytes",
                 "os",
                 "python",

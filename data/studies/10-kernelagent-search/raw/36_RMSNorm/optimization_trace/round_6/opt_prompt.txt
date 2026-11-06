@@ -1,0 +1,424 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs RMS Normalization.
+    """
+    def __init__(self, num_features: int, eps: float = 1e-5):
+        """
+        Initializes the RMSNorm layer.
+
+        Args:
+            num_features (int): Number of features in the input tensor.
+            eps (float, optional): A small value added to the denominator to avoid division by zero. Defaults to 1e-5.
+        """
+        super(Model, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies RMS Normalization to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, num_features, *).
+
+        Returns:
+            torch.Tensor: Output tensor with RMS Normalization applied, same shape as input.
+        """
+        # Calculate the RMS along the feature dimension
+        rms = torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + self.eps)
+
+        # Normalize the input by dividing by the RMS
+        return x / rms
+
+batch_size = 112
+features = 64
+dim1 = 512
+dim2 = 512
+
+def get_inputs():
+    x = torch.rand(batch_size, features, dim1, dim2)
+    return [x]
+
+def get_init_inputs():
+    return [features]
+PyTorch Eager baseline: 10.9546 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    C_CONST: tl.constexpr,
+):
+    """
+    RMSNorm kernel for NCHW tensors.
+    Normalizes across the channel dimension for each spatial position.
+    
+    RMSNorm formula: y = x / sqrt(mean(x^2) + eps)
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh % H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    # Base offsets for this (n, h) position
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # Create channel offsets
+    offs_c = tl.arange(0, C_CONST)
+    mask_c = offs_c < C
+    
+    # Compute 2D offsets for loading [C_CONST, BLOCK_W]
+    # x_offset[c, w] = base_nh_x + c * stride_cx + offs_w[w] * stride_wx
+    x_offsets_2d = base_nh_x + offs_c[:, None] * stride_cx + offs_w[None, :] * stride_wx
+    mask_2d = mask_c[:, None] & mask_w[None, :]
+    
+    # Load all values at once [C_CONST, BLOCK_W]
+    x_vals_2d = tl.load(x_ptr + x_offsets_2d, mask=mask_2d, other=0.0)
+    x_f32_2d = x_vals_2d.to(tl.float32)
+    
+    # Compute sum of squares across channels (axis=0)
+    sq_2d = x_f32_2d * x_f32_2d
+    sum_sq = tl.sum(sq_2d, axis=0)  # [BLOCK_W]
+    
+    # Compute inverse RMS: 1 / sqrt(mean(x^2) + eps)
+    c_f32 = C.to(tl.float32)
+    mean_sq = sum_sq / c_f32
+    inv_rms = tl.math.rsqrt(mean_sq + eps)  # [BLOCK_W]
+    
+    # Normalize: y = x * inv_rms
+    y_f32_2d = x_f32_2d * inv_rms[None, :]
+    y_vals_2d = y_f32_2d.to(x_vals_2d.dtype)
+    
+    # Store results
+    y_offsets_2d = base_nh_y + offs_c[:, None] * stride_cy + offs_w[None, :] * stride_wy
+    tl.store(y_ptr + y_offsets_2d, y_vals_2d, mask=mask_2d)
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel_large_c(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """
+    RMSNorm kernel for larger channel counts.
+    Uses a loop over channel blocks to handle C > BLOCK_C.
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh % H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # First pass: compute sum of squares
+    sum_sq = tl.zeros([BLOCK_W], dtype=tl.float32)
+    
+    for c_start in range(0, C, BLOCK_C):
+        offs_c = c_start + tl.arange(0, BLOCK_C)
+        mask_c = offs_c < C
+        
+        x_offsets_2d = base_nh_x + offs_c[:, None] * stride_cx + offs_w[None, :] * stride_wx
+        mask_2d = mask_c[:, None] & mask_w[None, :]
+        
+        x_vals_2d = tl.load(x_ptr + x_offsets_2d, mask=mask_2d, other=0.0)
+        x_f32_2d = x_vals_2d.to(tl.float32)
+        
+        sq_2d = x_f32_2d * x_f32_2d
+        sum_sq += tl.sum(sq_2d, axis=0)
+    
+    # Compute inverse RMS
+    c_f32 = C.to(tl.float32)
+    mean_sq = sum_sq / c_f32
+    inv_rms = tl.math.rsqrt(mean_sq + eps)
+    
+    # Second pass: normalize and store
+    for c_start in range(0, C, BLOCK_C):
+        offs_c = c_start + tl.arange(0, BLOCK_C)
+        mask_c = offs_c < C
+        
+        x_offsets_2d = base_nh_x + offs_c[:, None] * stride_cx + offs_w[None, :] * stride_wx
+        mask_2d = mask_c[:, None] & mask_w[None, :]
+        
+        x_vals_2d = tl.load(x_ptr + x_offsets_2d, mask=mask_2d, other=0.0)
+        x_f32_2d = x_vals_2d.to(tl.float32)
+        
+        y_f32_2d = x_f32_2d * inv_rms[None, :]
+        y_vals_2d = y_f32_2d.to(x_vals_2d.dtype)
+        
+        y_offsets_2d = base_nh_y + offs_c[:, None] * stride_cy + offs_w[None, :] * stride_wy
+        tl.store(y_ptr + y_offsets_2d, y_vals_2d, mask=mask_2d)
+
+
+def kernel_function(x, *args, **kwargs):
+    """
+    RMSNorm for NCHW tensors.
+    Normalizes across the channel dimension: y = x / sqrt(mean(x^2) + eps)
+    """
+    if not isinstance(x, torch.Tensor):
+        raise TypeError("x must be a torch.Tensor")
+    if x.device.type != "cuda":
+        raise ValueError("x must be on CUDA device")
+    if x.ndim != 4:
+        raise ValueError(f"Expected 4D NCHW tensor, got shape {tuple(x.shape)}")
+
+    # Parse eps from args/kwargs
+    eps = kwargs.get("eps", 1e-5)
+    if len(args) >= 1 and isinstance(args[0], float):
+        eps = args[0]
+
+    N, C, H, W = x.shape
+    
+    # Allocate output
+    y = torch.empty_like(x)
+
+    sx0, sx1, sx2, sx3 = x.stride()
+    sy0, sy1, sy2, sy3 = y.stride()
+
+    # Choose kernel based on channel count
+    if C <= 64:
+        C_CONST = 64
+        BLOCK_W = 128
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            C_CONST=C_CONST,
+            num_warps=4,
+            num_stages=2,
+        )
+    elif C <= 128:
+        C_CONST = 128
+        BLOCK_W = 64
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            C_CONST=C_CONST,
+            num_warps=4,
+            num_stages=2,
+        )
+    elif C <= 256:
+        C_CONST = 256
+        BLOCK_W = 32
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            C_CONST=C_CONST,
+            num_warps=8,
+            num_stages=2,
+        )
+    else:
+        # For larger C, use blocked approach with two passes
+        BLOCK_C = 64
+        BLOCK_W = 64
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel_large_c[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            BLOCK_C=BLOCK_C,
+            num_warps=4,
+            num_stages=2,
+        )
+
+    return y
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'Poor data locality and cache utilization - L1 hit rate is 0% and L2 hit rate is only 50.68%, causing most memory accesses to hit DRAM', 'evidence': [{'metric': 'l1tex__t_sector_hit_rate.pct', 'value': 0, 'interpretation': 'No L1 cache reuse - all accesses miss L1 cache'}, {'metric': 'lts__t_sector_hit_rate.pct', 'value': 50.68, 'interpretation': 'Only half of L2 accesses hit, rest go to DRAM'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 117.0% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: High memory latency stalls due to insufficient warp occupancy to hide DRAM access latency
+**Fix Applied**: Reduce register pressure by splitting the 2D load pattern into smaller tiles or using shared memory to cache channel data, targeting <64 registers per thread to improve occupancy from 5 to 8+ blocks per SM
+**Performance**: 3.5475ms → 7.6982ms (117.0% slower)
+**NCU SOL (% of Peak)**: Combined: 80.9%, Compute: 15.4%, Memory: 80.9%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 1.0% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor data locality causing excessive DRAM traffic with no L1 cache reuse
+**Fix Applied**: Increase occupancy by reducing register usage (currently 94 registers per thread limits to 5 blocks per SM) through register spilling or smaller tile sizes, and consider fusing the two-pass algorithm into a single pass to halve memory traffic
+**Performance**: 3.5191ms → 3.5532ms (1.0% slower)
+**NCU SOL (% of Peak)**: Combined: 88.5%, Compute: 8.6%, Memory: 88.5%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 4.5% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: High memory latency stalls due to global memory access patterns with no L1 cache reuse
+**Fix Applied**: Reduce register pressure by splitting the 2D tile computation or using smaller BLOCK_W/C_CONST values, and consider data prefetching with increased num_stages to overlap memory access with computation
+**Performance**: 3.5191ms → 3.6782ms (4.5% slower)
+**NCU SOL (% of Peak)**: Combined: 86.9%, Compute: 14.8%, Memory: 86.9%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 16.4% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor L1 cache utilization with 0% hit rate causing all memory requests to go to L2/DRAM
+**Fix Applied**: Reduce register usage by splitting the 2D load into smaller tiles and using explicit register spilling or reducing BLOCK_W/C_CONST sizes to improve occupancy and enable better latency hiding
+**Performance**: 3.5191ms → 4.0960ms (16.4% slower)
+**NCU SOL (% of Peak)**: Combined: 88.5%, Compute: 6.9%, Memory: 88.5%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 4.6% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: High memory latency causing long scoreboard stalls - warps stall waiting for global memory loads to complete
+**Fix Applied**: Reduce register pressure by using smaller data types where possible (e.g., float16 for intermediate calculations) or split the kernel into smaller pieces to allow more concurrent warps, and consider using shared memory to stage data loads for better L1 utilization
+**Performance**: 3.5191ms → 3.6800ms (4.6% slower)
+**NCU SOL (% of Peak)**: Combined: 86.9%, Compute: 10.8%, Memory: 86.9%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: High memory latency stalls due to insufficient warp occupancy to hide DRAM access latency
+**Fix Applied**: Reduce register pressure by splitting the 2D load pattern into smaller tiles or using shared memory to cache channel data, targeting <64 registers per thread to improve occupancy from 5 to 8+ blocks per SM
+**Expected**: Reducing register pressure should have increased occupancy, allowing more warps to hide memory latency, resulting in improved performance (lower execution time)
+**Actual**: Performance degraded significantly by 117%, execution time more than doubled from 3.5ms to 7.7ms. Memory SOL remains high at 80.9% while compute dropped to 15.4% (-117.0%)
+**Analysis**: The diagnosis of memory bottleneck appears correct (80.9% memory SOL confirms memory-bound). However, the fix implementation was counterproductive. Splitting 2D load patterns or adding shared memory likely introduced: 1) Additional synchronization overhead, 2) Extra memory transactions for shared memory loads/stores, 3) Possibly worse memory access patterns. The compute SOL dropping to 15.4% suggests the kernel is now doing less useful compute work relative to memory operations, indicating the 'optimization' added overhead without benefit.
+**Lessons**:
+  - Reducing register pressure doesn't always improve performance - the cost of the alternative (shared memory, more instructions) can outweigh occupancy benefits
+  - Memory-bound kernels need careful analysis of whether occupancy is actually the limiting factor vs. memory access patterns
+  - Shared memory is not free - it adds synchronization and extra load/store operations
+  - The original 3.5ms baseline was already reasonably optimized for this memory-bound workload
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor data locality causing excessive DRAM traffic with no L1 cache reuse
+**Fix Applied**: Increase occupancy by reducing register usage (currently 94 registers per thread limits to 5 blocks per SM) through register spilling or smaller tile sizes, and consider fusing the two-pass algorithm into a single pass to halve memory traffic
+**Expected**: Expected reduced DRAM traffic and improved memory efficiency by increasing occupancy through register reduction, leading to better latency hiding and faster execution
+**Actual**: Performance degraded by 1.0% (3.5191ms → 3.5532ms), with memory still at 88.5% SOL and compute at only 8.6%, indicating the memory bottleneck was not addressed (-1.0%)
+**Analysis**: The diagnosis of memory bottleneck was correct (88.5% Memory SOL confirms this). However, the fix of reducing register usage to increase occupancy was ineffective because: 1) No config changes were actually applied, meaning the fix wasn't properly implemented, 2) Register spilling can actually hurt performance by adding memory traffic, 3) Simply increasing occupancy doesn't guarantee better memory performance if the access patterns remain inefficient. The slight performance regression suggests any changes made may have introduced overhead without improving data locality.
+**Lessons**:
+  - Config changes must actually be applied for optimization attempts to have effect
+  - Register spilling trades register pressure for memory traffic - counterproductive for memory-bound kernels
+  - Increasing occupancy alone doesn't fix poor memory access patterns or data locality issues
+  - For memory-bound kernels at 88.5% SOL, focus should be on reducing total memory traffic rather than hiding latency
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: High memory latency stalls due to global memory access patterns with no L1 cache reuse
+**Fix Applied**: Reduce register pressure by splitting the 2D tile computation or using smaller BLOCK_W/C_CONST values, and consider data prefetching with increased num_stages to overlap memory access with computation
+**Expected**: Reducing register pressure and adding prefetching should improve memory latency hiding, leading to better performance and potentially shifting the bottleneck ratio
+**Actual**: Performance degraded by 4.5% (3.5191ms → 3.6782ms), and memory SOL remains very high at 86.9% while compute stays low at 14.8% (-4.5%)
+**Analysis**: The diagnosis of memory bottleneck was correct (86.9% memory SOL confirms this). However, the fix was ineffective because: 1) No config changes were actually applied despite mentioning BLOCK_W/C_CONST changes, 2) Reducing register pressure alone doesn't address the core issue of poor global memory access patterns and lack of L1 cache reuse, 3) Simply increasing num_stages without restructuring memory access patterns adds overhead without benefit. The slight performance regression suggests the changes may have introduced additional instruction overhead or disrupted existing optimizations.
+**Lessons**:
+  - Register pressure reduction is not a direct solution for memory latency issues - it helps with occupancy but doesn't fix access patterns
+  - Config changes must actually be applied to see their effect - the attempt noted 'none' for config changes
+  - Memory bottlenecks at 86.9% SOL require fundamental changes to data access patterns, not just prefetching hints
+  - L1 cache reuse requires restructuring how threads access shared data, not just register optimizations
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor L1 cache utilization with 0% hit rate causing all memory requests to go to L2/DRAM
+**Fix Applied**: Reduce register usage by splitting the 2D load into smaller tiles and using explicit register spilling or reducing BLOCK_W/C_CONST sizes to improve occupancy and enable better latency hiding
+**Expected**: Reducing register usage and tile sizes should improve occupancy and enable better latency hiding, leading to improved memory throughput and reduced execution time
+**Actual**: Performance degraded by 16.4% (3.52ms → 4.10ms), memory SOL remained high at 88.5% while compute dropped to 6.9%, indicating the fix made things worse (-16.4%)
+**Analysis**: The diagnosis of memory bottleneck was correct (88.5% memory SOL confirms this). However, the fix of reducing tile sizes and register usage was counterproductive. Smaller tiles likely increased the number of memory transactions and reduced data reuse, making the L1 cache problem worse rather than better. The 0% L1 hit rate issue requires improving spatial/temporal locality of memory accesses, not reducing working set sizes which can actually hurt reuse patterns. The compute SOL dropping to 6.9% suggests less useful work is being done per memory access.
+**Lessons**:
+  - Reducing tile sizes can hurt performance by decreasing data reuse opportunities
+  - L1 cache hit rate issues require improving access patterns, not just reducing working set
+  - Register pressure and occupancy are not always the root cause of memory bottlenecks
+  - Smaller tiles mean more memory transactions overall, which worsens memory-bound kernels
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: High memory latency causing long scoreboard stalls - warps stall waiting for global memory loads to complete
+**Fix Applied**: Reduce register pressure by using smaller data types where possible (e.g., float16 for intermediate calculations) or split the kernel into smaller pieces to allow more concurrent warps, and consider using shared memory to stage data loads for better L1 utilization
+**Expected**: Reducing register pressure and improving memory staging should decrease scoreboard stalls and improve memory throughput, leading to better performance
+**Actual**: Performance degraded by 4.6% (3.5191ms → 3.6800ms), and memory SOL remained very high at 86.9% indicating the memory bottleneck was not alleviated (-4.6%)
+**Analysis**: The diagnosis of a memory bottleneck appears correct given the 86.9% Memory SOL vs 10.8% Compute SOL. However, the fix was ineffective because: 1) Using float16 for intermediate calculations likely introduced conversion overhead and potential precision issues that slowed computation, 2) Splitting kernels or changing register usage without proper analysis may have actually reduced occupancy or introduced additional memory transactions, 3) The fix didn't address the root cause of memory latency - it focused on symptoms rather than reducing actual memory traffic or improving access patterns
+**Lessons**:
+  - Float16 conversions can introduce overhead that outweighs memory savings, especially if the GPU doesn't have strong FP16 support
+  - Register pressure reduction doesn't automatically improve memory performance - the relationship is indirect through occupancy
+  - With 86.9% Memory SOL, the focus should be on reducing total memory traffic (coalescing, caching, algorithmic changes) rather than register optimizations
+  - Shared memory staging only helps if access patterns are non-coalesced or data is reused
+
+
+Guidance for this round:
+- AVOID: Blindly trading registers for shared memory without measuring actual occupancy impact; Adding shared memory tiling when the original memory access pattern was already efficient; Assuming more occupancy always equals better performance for memory-bound kernels; Attempting register spilling on memory-bound kernels as it increases DRAM traffic; Proposing fixes without implementing corresponding config changes; Focusing on occupancy optimization when the real issue is memory access efficiency; Applying fixes that don't directly address the memory access pattern when memory is the bottleneck; Proposing config changes but not actually implementing them; Using register pressure reduction as a fix for memory latency problems; Reducing BLOCK_W or tile sizes when L1 cache utilization is the problem; Assuming occupancy improvements will automatically fix memory bottlenecks; Making changes that reduce data reuse in memory-bound kernels; Using float16 without verifying the GPU has efficient FP16 units and that conversion overhead is acceptable; Applying multiple optimization strategies simultaneously without measuring individual impact; Focusing on register pressure when the primary issue is memory bandwidth saturation- PRIORITIZE: Focus on improving memory coalescing and access patterns rather than occupancy; Use vectorized loads (float4, int4) to improve memory bandwidth utilization; Analyze whether the 80.9% memory SOL can be improved through better L2 cache utilization; Consider loop unrolling to reduce instruction overhead while maintaining register usage; Implement actual kernel fusion to reduce memory traffic by half (single-pass algorithm); Improve memory coalescing and access patterns to maximize L1/L2 cache hit rates; Use shared memory tiling to increase data reuse and reduce DRAM accesses; Analyze memory access patterns with NCU to identify specific inefficiencies; Implement coalesced memory access patterns to maximize memory bandwidth utilization; Use shared memory to cache frequently accessed global memory data; Restructure tile dimensions to improve spatial locality in L1/L2 cache; Apply memory access pattern analysis to identify and fix strided or random access patterns; Consider tiling strategies that maximize data reuse before eviction; Use shared memory to stage data and improve L1/L2 cache hit rates; Ensure coalesced memory access patterns for global memory loads; Increase data reuse per thread by keeping larger tiles but using shared memory; Analyze memory access patterns to identify strided or scattered accesses causing L1 misses; Analyze memory access patterns first - ensure coalesced global memory access; Use shared memory only when there's clear data reuse opportunity; Consider algorithmic changes to reduce total memory traffic (tiling, fusion); Profile with NCU to identify specific memory inefficiencies (L1/L2 hit rates, sector efficiency)
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

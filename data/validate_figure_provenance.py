@@ -2,7 +2,7 @@
 """Check explicit evidence declarations for active manuscript figures.
 
 The figure_evidence map in data/datasets/provenance.yml distinguishes measured,
-transcribed, analytical, and conceptual figures. This check verifies inventory,
+modeled, transcribed, analytical, and conceptual figures. This check verifies inventory,
 source-file existence, and bibliography keys. It does not execute generators,
 prove that a plot consumes its declared inputs, or certify numerical correctness
 or the support a cited source provides. Those require separate source audits.
@@ -22,7 +22,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CHAPTERS = ROOT / "book" / "contents"
 MANIFEST = ROOT / "data" / "datasets" / "provenance.yml"
-EVIDENCE_CLASSES = {"measured", "transcribed", "analytical", "conceptual"}
+EVIDENCE_CLASSES = {"measured", "modeled", "transcribed", "analytical", "conceptual"}
 
 
 @lru_cache(maxsize=1)
@@ -172,8 +172,8 @@ def classify(
             where,
         )
     source_keys = set(keys) | cited_sources(info.get("caption", ""))
-    if kind == "measured" and not data:
-        return "VIOLATION", "measured figure requires retained data paths", where
+    if kind in {"measured", "modeled"} and not data:
+        return "VIOLATION", f"{kind} figure requires retained data paths", where
     if kind == "transcribed" and not (data or source_keys):
         return (
             "VIOLATION",
@@ -214,7 +214,7 @@ def data_provenance_yml(rel: str) -> Path | None:
 def check_data_figure_contract(label: str, info: dict, evidence: dict) -> str | None:
     """Ensure every active manuscript data figure has retained data, a generator, and a local provenance.yml."""
     kind = evidence.get("evidence_class")
-    if kind not in {"measured", "transcribed", "analytical"}:
+    if kind not in {"measured", "modeled", "transcribed", "analytical"}:
         return None
     data = evidence.get("data", [])
     if not data:
@@ -227,15 +227,61 @@ def check_data_figure_contract(label: str, info: dict, evidence: dict) -> str | 
     return None
 
 
+def figure_record_path(label: str, info: dict) -> Path:
+    """Every data figure keeps its record at <chapter>/data/<figure>/provenance.yml."""
+    return info["qmd"].parent / "data" / label / "provenance.yml"
+
+
+def check_figure_record(label: str, info: dict, evidence: dict, gaps: list[str]) -> str | None:
+    """Check the per-figure record; append source completeness gaps (reported, not failed) to gaps."""
+    if evidence.get("evidence_class") not in {"measured", "modeled", "transcribed", "analytical"}:
+        return None
+    path = figure_record_path(label, info)
+    if not path.is_file():
+        return f"missing figure record {path.relative_to(ROOT)}"
+    try:
+        record = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as error:
+        return f"figure record does not parse: {error}"
+    if record.get("schema") != "arch2-provenance/v1" or record.get("figure") != label:
+        return "figure record needs schema arch2-provenance/v1 and figure: <its label>"
+    if record.get("evidence_class") != evidence.get("evidence_class"):
+        return f"figure record says {record.get('evidence_class')}, manifest says {evidence.get('evidence_class')}"
+    for entry in record.get("datasets") or []:
+        rel = entry.get("file", "")
+        if not ((path.parent / rel).is_file() or (ROOT / rel).is_file()):
+            return f"figure record lists a dataset that does not exist: {rel}"
+    sources = record.get("sources")
+    if isinstance(sources, str):
+        upstream = record.get("upstream") or []
+        if not upstream or any(not u.get("provenance") or not (ROOT / u["provenance"]).is_file() for u in upstream):
+            gaps.append(f"{label}: points upstream, but an upstream folder has no provenance.yml")
+        return None
+    if not sources:
+        return "figure record has no sources"
+    for i, src in enumerate(sources):
+        if not (src.get("url") or src.get("id") or src.get("receipt")):
+            gaps.append(f"{label} / {src.get('name', f'source {i + 1}')[:60]}: names no url, citation id, or receipt")
+        for rel in [r for r in [src.get("receipt")] if r]:
+            if not (ROOT / rel).exists() and not (path.parent / rel).exists():
+                return f"source {i + 1} receipt does not exist: {rel}"
+        missing = [k for k, ok in (("locator", src.get("locator")),
+                                   ("sha256", src.get("sha256") or (src.get("pulled") or {}).get("sha256")),
+                                   ("retained copy", src.get("receipt") or src.get("private_copy"))) if not ok]
+        if missing:
+            gaps.append(f"{label} / {src.get('name', f'source {i + 1}')[:60]}: no {', '.join(missing)}")
+    return None
+
+
 def main() -> int:
     manifest = yaml.safe_load(MANIFEST.read_text()).get("figure_evidence", {})
     figs = collect_figures()
-    results = []
+    results, gaps = [], []
     for label, info in sorted(figs.items()):
         ev = manifest.get(label, {})
         verdict, detail, where = classify(label, info, ev)
         if verdict != "VIOLATION":
-            contract_err = check_data_figure_contract(label, info, ev)
+            contract_err = check_data_figure_contract(label, info, ev) or check_figure_record(label, info, ev, gaps)
             if contract_err:
                 verdict, detail = "VIOLATION", contract_err
         results.append((label, verdict, detail, where))
@@ -251,7 +297,12 @@ def main() -> int:
         print(f"  FAIL {label}: {detail} [{where}]")
     for label in stale:
         print(f"  FAIL inactive figure remains in evidence inventory: {label}")
-    if failures or stale:
+    if gaps:
+        print(f"\n{len(gaps)} source gaps (a source without a locator, a full sha256, or a retained copy):")
+        if "--verbose" in sys.argv or "--strict" in sys.argv:
+            for gap in gaps:
+                print(f"  GAP {gap}")
+    if failures or stale or ("--strict" in sys.argv and gaps):
         return 1
     print("\nEvidence declarations and source paths are structurally consistent.")
     print(

@@ -1,0 +1,85 @@
+figure: fig-ai-study-result
+producer: session fe4868b7
+auditor: red-team-round5-ch05-baseline-second 2026-11-02
+audited_on: '2026-11-02'
+inputs:
+  caption: 16bf9d86ca910cedd11ed199204324efc97f5d7147bf18f8a855c7f2f76b832a
+  data/studies/ai_systolic_array_study/recorded/reference/study_results.json: dbd9a1a1fb73c7d1a54ea5bcd923e3b752f2c5294e98650da98c2a9e68cbb3cd
+source_check: 'Primary source for every plotted value is the twelve retained SCALE-Sim report sets under data/studies/ai_systolic_array_study/recorded/reference/runs.
+  A new script, written from the protocol text without reusing replay.py metric code, recomputed cycles, utilization,
+  score, reads, and writes from the raw COMPUTE_REPORT and DETAILED_ACCESS_REPORT files; all twelve evaluations
+  match study_results.json. The simulator itself was refetched: scalesim-3.0.0 wheel from PyPI, sha256 009f202d8469eb8a0ea4475dc378e5c94c162caed02953a29c28747cddfd6d07,
+  uploaded 2025-08-13. scalesim/topology_utils.py and compute/systolic_compute_ws.py were read: GEMM maps K to row
+  folds and N to column folds, and M to the temporal term. Citation metadata for RajEtAl2025ScaleSimV3 was compared
+  with Crossref for DOI 10.1109/ISPASS64960.2025.00026 (title, pages 186-200, venue, year agree). The paper body
+  was not read; the citation only identifies the simulator. Protocol file, model response, and schema hashes were
+  recomputed; the retained prompt hashes to 36e0167a, not the recorded ec12df20, as the caption states. git show
+  of f5516e52e confirms the protocol file, model response, and results entered git in one commit dated 2026-07-15T01:05:58Z,
+  6.57 hours after the logged simulation end.'
+rerun:
+  command: python3.11 -m venv V; V/bin/pip install scalesim==3.0.0 numpy==1.26.4; copy data/studies/ai_systolic_array_study
+    to scratch; V/bin/python replay.py replay --output <new scratch dir>; python3 replay.py verify
+  result: verify passed 75 file hashes. Replay on Python 3.11.15, numpy 1.26.4, pandas 3.0.6 matched all twelve
+    runs, and all three report files of every run are byte-identical to the retained copies. Elapsed about 21 s
+    including verification. The figure cell was extracted from the qmd and run in scratch against a copy of book/_python,
+    book/_styles, and study_results.json; plotted values equal the recomputed values.
+attempts:
+- attack: 'Budget hid a better shape: ran all fifteen legal shapes through SCALE-Sim 3.0.0 with the recorded configuration,
+    outside the four-run budget.'
+  outcome: survived
+  detail: No legal shape beats 33,782.40. 16x64 and 32x32 tie; next best is 16x32 at 44,769.59. The null at the
+    1% margin holds over the full space.
+- attack: 'Tie is a rounding or aggregation artifact: compared per-layer fields and reimplemented the fold mechanism.'
+  outcome: survived
+  detail: Cycles and Overall Util % are identical on all three layers. Cycles = ceil(K/R) x ceil(N/C) x (2R + C
+    + M - 2) - 1 matches 36 of 36 layers. Both shapes have 2R + C = 96 and the same fold products (32, 24, 24).
+    Score includes the cycle sum and unweighted mean only, and per-layer equality means any layer weighting also
+    ties.
+- attack: 'Metric flatters the tie: rescored with prefetch cycles and read Compute Util %.'
+  outcome: survived
+  detail: Prefetch sums are 17,371 and 17,500, 0.743% against 16x64, inside the 1% margin. Compute Util differs
+    as the prose states. The prose names both fields as differing and unread by the score.
+- attack: 'Heuristic tuned after the fact: reimplemented aggregate-aspect-ratio-v1 from the protocol text.'
+  outcome: survived
+  detail: Aggregate N/M = 448/224 = 2; ranking yields 16x64, 8x128, 64x16 as frozen, with the tiebreak on ascending
+    rows. Overlap of two of three is correct.
+- attack: 'Mechanism panel oversold: recomputed probe scores and checked the falsifier wording in the model response.'
+  outcome: survived
+  detail: Scores 33,782.40, 54,985.25, 23,530.65, 25,458.11; margins 38.56% and 7.57%. 16x64 wins both, so the recorded
+    falsifier is met. Lead shrinks about fivefold, which panel b shows and the caption does not hide.
+- attack: 'Selective or plausibility failure in logged runs: checked runs.jsonl hashes, attempts, and elapsed times.'
+  outcome: survived
+  detail: Three attempts, two dependency failures with logs and a disclosed log overwrite; log and code hashes match;
+    13.7 s for twelve runs agrees with the 19 s in July and with my per-run 1 to 2 s for these shapes.
+negative_control: 'Perturbed a scratch study_results.json (16x64 score x 1.5, transposed 64x16 score set to 20,000):
+  plotted values changed to 50.7 and 20.0. Changing one cycle count in a scratch COMPUTE_REPORT made replay.py verify
+  exit 1 on a hash mismatch.'
+limits:
+- All values are SCALE-Sim 3.0.0 model outputs on a synthetic three-layer GEMM slice, not silicon or RTL measurements.
+- The July 2026 execution has no per-attempt run log. execution_provenance.json self-reports twelve evaluations
+  and zero failures, and runs.jsonl covers only the 2026-11-02 replays. The simulator is deterministic for these
+  inputs, so repeated simulation could not change a value, but the record cannot show how many model calls were
+  made.
+- The model proposal cannot be authenticated because the prompt hash fails. The caption discloses this. The figure
+  plots simulator returns for retained inputs, and those returns do not depend on the prompt.
+- The retained prompt names 16x64 and 64x16 as the probe shapes and mentions an aggregate-aspect-ratio rule, so
+  the overlap with the heuristic may be anchored by the prompt. The book claims no independence between the proposers.
+- A schema rejection before inference at 18:21:00Z and an amendment stamped 18:21:41Z are retained in provenance.json
+  and the protocol file. The retained protocol file therefore postdates its frozen_at_utc field. No model output
+  was produced by the rejected attempt.
+- 'My scratch replay and sweep are not in runs.jsonl because this audit may write only its record. Scratch directory:
+  /tmp/rt-ch05-yFIdR8.'
+verdict: PASS
+findings:
+- 'DOWNGRADED, book/contents/chapters/05-methods/05-methods.qmd:543: the sweep estimate of about 24 s is correct
+  arithmetic at the stated rate (19.05/12 x 15 = 23.8 s) but the rate is not constant. A direct sweep of all fifteen
+  shapes took 41.4 s here, because small arrays need more folds (8x8 took 6.3 s, 32x32 took 1.1 s). The argument,
+  that enumeration is cheap, stands. Hardware differs from July, and my sweep includes per-run logging. Low.'
+- 'DOWNGRADED, 05-methods.qmd:539: ''the workload''s dimensions divide evenly by these array sizes'' is loose. K/R
+  and N/C are integers, but M = 32 does not divide by 64. M is not folded, so the conclusion holds. The ledger entry
+  states the exact form. Low.'
+- data/datasets/provenance.yml:48,282 class simulator output as measured while the study provenance.yml and the
+  claim ledger label it modeled. The validator offers no modeled class and the rule file permits separate vocabularies,
+  so this is noted, not a break. Low.
+- Caption values (33.8k) are typed literals, not computed; they match the results file and the caption is hash-bound.
+  Plotted values are read from the file. Low.

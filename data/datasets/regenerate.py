@@ -34,7 +34,7 @@ def _num(x):
 
 
 def _write(name, header, rows):
-    target = HERE / name
+    target = HERE.parents[1] / name if "/" in name else HERE / name
     comment_lines = []
     if target.is_file():
         for line in target.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -70,7 +70,7 @@ def training_compute():  # ch2
                 ]
             )
     _write(
-        "chapter2-training-compute.csv",
+        "book/contents/chapters/02-pressures/data/fig-training-compute-growth/chapter2-training-compute.csv",
         ["model", "publication_date", "training_compute_flop", "frontier"],
         out,
     )
@@ -97,7 +97,7 @@ def accelerator_landscape():  # ch1
                     ]
                 )
     _write(
-        "chapter1-accelerator-landscape.csv",
+        "book/contents/chapters/02-pressures/data/fig-accelerator-landscape/chapter1-accelerator-landscape.csv",
         [
             "label",
             "peak_performance_ops_per_s",

@@ -1,0 +1,461 @@
+
+TASK: Optimize the following Triton kernel based on hardware profiling analysis to achieve better performance.
+
+TARGET GPU:
+- GPU: NVIDIA H100 NVL 94GB
+- Architecture: Hopper
+- Peak Memory Bandwidth: 3900 GB/s
+- Peak FP32: 60.0 TFLOPS
+- Peak FP16: 1671.0 TFLOPS
+- Peak BF16: 1671.0 TFLOPS
+- SM Count: 132
+- Max Threads per SM: 2048
+- L1 Cache per SM: 256 KB
+- L2 Cache (Total): 50 MB
+- Memory: 94 GB HBM3
+
+PROBLEM DESCRIPTION:
+import torch
+import torch.nn as nn
+
+class Model(nn.Module):
+    """
+    Simple model that performs RMS Normalization.
+    """
+    def __init__(self, num_features: int, eps: float = 1e-5):
+        """
+        Initializes the RMSNorm layer.
+
+        Args:
+            num_features (int): Number of features in the input tensor.
+            eps (float, optional): A small value added to the denominator to avoid division by zero. Defaults to 1e-5.
+        """
+        super(Model, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies RMS Normalization to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, num_features, *).
+
+        Returns:
+            torch.Tensor: Output tensor with RMS Normalization applied, same shape as input.
+        """
+        # Calculate the RMS along the feature dimension
+        rms = torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + self.eps)
+
+        # Normalize the input by dividing by the RMS
+        return x / rms
+
+batch_size = 112
+features = 64
+dim1 = 512
+dim2 = 512
+
+def get_inputs():
+    x = torch.rand(batch_size, features, dim1, dim2)
+    return [x]
+
+def get_init_inputs():
+    return [features]
+PyTorch Eager baseline: 10.9546 ms
+
+CURRENT KERNEL IMPLEMENTATION:
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel_fused(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """
+    Single-pass RMSNorm kernel that reads input only once.
+    Each thread block processes a tile of [BLOCK_C, BLOCK_W] elements.
+    We accumulate partial sums across all C channels in registers,
+    then normalize and write output in the same pass.
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh - n * H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    # Cast to int64 for address arithmetic
+    stride_nx = tl.full([], stride_nx, tl.int64)
+    stride_cx = tl.full([], stride_cx, tl.int64)
+    stride_hx = tl.full([], stride_hx, tl.int64)
+    stride_wx = tl.full([], stride_wx, tl.int64)
+    stride_ny = tl.full([], stride_ny, tl.int64)
+    stride_cy = tl.full([], stride_cy, tl.int64)
+    stride_hy = tl.full([], stride_hy, tl.int64)
+    stride_wy = tl.full([], stride_wy, tl.int64)
+
+    n = n.to(tl.int64)
+    h = h.to(tl.int64)
+    offs_w_i64 = offs_w.to(tl.int64)
+
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # Accumulator for sum of squares
+    acc = tl.zeros([BLOCK_W], dtype=tl.float32)
+    
+    # First pass: load all channels, compute sum of squares, store in shared memory
+    # We'll use a blocked approach to reduce register pressure
+    num_c_blocks = tl.cdiv(C, BLOCK_C)
+    
+    # Allocate storage for channel values - we'll process in blocks
+    for c_block in range(num_c_blocks):
+        c_start = c_block * BLOCK_C
+        offs_c = c_start + tl.arange(0, BLOCK_C)
+        mask_c = offs_c < C
+        
+        # Load block of channels
+        for c_idx in range(BLOCK_C):
+            c = c_start + c_idx
+            if c < C:
+                c_i64 = tl.full([], c, tl.int64)
+                x_offsets = base_nh_x + c_i64 * stride_cx + offs_w_i64 * stride_wx
+                x_vals = tl.load(x_ptr + x_offsets, mask=mask_w, other=0.0)
+                x_f32 = x_vals.to(tl.float32)
+                acc += x_f32 * x_f32
+
+    # Compute inverse RMS
+    c_f32 = tl.full([1], C, dtype=tl.float32)
+    mean = acc / c_f32
+    inv_rms = tl.math.rsqrt(mean + eps)
+
+    # Second pass: normalize and store
+    for c in range(C):
+        c_i64 = tl.full([], c, tl.int64)
+        x_offsets = base_nh_x + c_i64 * stride_cx + offs_w_i64 * stride_wx
+        y_offsets = base_nh_y + c_i64 * stride_cy + offs_w_i64 * stride_wy
+        x_vals = tl.load(x_ptr + x_offsets, mask=mask_w, other=0.0)
+        x_f32 = x_vals.to(tl.float32)
+        y_f32 = x_f32 * inv_rms
+        y_vals = y_f32.to(x_vals.dtype)
+        tl.store(y_ptr + y_offsets, y_vals, mask=mask_w)
+
+
+@triton.jit
+def _rmsnorm_nchw_kernel_single_pass(
+    x_ptr, y_ptr,
+    N, C, H, W,
+    stride_nx, stride_cx, stride_hx, stride_wx,
+    stride_ny, stride_cy, stride_hy, stride_wy,
+    eps,
+    BLOCK_W: tl.constexpr,
+    C_CONST: tl.constexpr,
+):
+    """
+    Single-pass RMSNorm kernel optimized for small C (fits in registers).
+    Loads all C channels once, computes sum of squares, normalizes, and stores.
+    """
+    pid_w = tl.program_id(axis=0)
+    pid_nh = tl.program_id(axis=1)
+
+    n = pid_nh // H
+    h = pid_nh - n * H
+
+    start_w = pid_w * BLOCK_W
+    offs_w = start_w + tl.arange(0, BLOCK_W)
+    mask_w = offs_w < W
+
+    # Cast to int64 for address arithmetic
+    stride_nx = tl.full([], stride_nx, tl.int64)
+    stride_cx = tl.full([], stride_cx, tl.int64)
+    stride_hx = tl.full([], stride_hx, tl.int64)
+    stride_wx = tl.full([], stride_wx, tl.int64)
+    stride_ny = tl.full([], stride_ny, tl.int64)
+    stride_cy = tl.full([], stride_cy, tl.int64)
+    stride_hy = tl.full([], stride_hy, tl.int64)
+    stride_wy = tl.full([], stride_wy, tl.int64)
+
+    n = n.to(tl.int64)
+    h = h.to(tl.int64)
+    offs_w_i64 = offs_w.to(tl.int64)
+
+    base_nh_x = n * stride_nx + h * stride_hx
+    base_nh_y = n * stride_ny + h * stride_hy
+
+    # Load all channels into registers and compute sum of squares
+    offs_c = tl.arange(0, C_CONST)
+    mask_c = offs_c < C
+    
+    # Create 2D offset grid [C_CONST, BLOCK_W]
+    offs_c_i64 = offs_c.to(tl.int64)
+    
+    # Compute all offsets at once: [C_CONST, BLOCK_W]
+    x_offsets_2d = base_nh_x + offs_c_i64[:, None] * stride_cx + offs_w_i64[None, :] * stride_wx
+    mask_2d = mask_c[:, None] & mask_w[None, :]
+    
+    # Load all values at once
+    x_vals_2d = tl.load(x_ptr + x_offsets_2d, mask=mask_2d, other=0.0)
+    x_f32_2d = x_vals_2d.to(tl.float32)
+    
+    # Sum of squares across channels (axis=0)
+    sq_2d = x_f32_2d * x_f32_2d
+    acc = tl.sum(sq_2d, axis=0)
+    
+    # Compute inverse RMS
+    c_f32 = tl.full([1], C, dtype=tl.float32)
+    mean = acc / c_f32
+    inv_rms = tl.math.rsqrt(mean + eps)
+    
+    # Normalize and store
+    y_f32_2d = x_f32_2d * inv_rms[None, :]
+    y_vals_2d = y_f32_2d.to(x_vals_2d.dtype)
+    
+    y_offsets_2d = base_nh_y + offs_c_i64[:, None] * stride_cy + offs_w_i64[None, :] * stride_wy
+    tl.store(y_ptr + y_offsets_2d, y_vals_2d, mask=mask_2d)
+
+
+def _parse_kernel_args(x, args, kwargs):
+    eps = kwargs.pop("eps", None)
+    num_features = kwargs.pop("num_features", None)
+    if "features" in kwargs and num_features is None:
+        num_features = kwargs.pop("features")
+    out = kwargs.pop("out", None)
+    if out is None:
+        out = kwargs.pop("output", None)
+    if out is None:
+        out = kwargs.pop("y", None)
+    if out is None:
+        out = kwargs.pop("dst", None)
+
+    if len(args) == 1:
+        a0 = args[0]
+        if isinstance(a0, (int,)) and num_features is None:
+            num_features = int(a0)
+        else:
+            if eps is None:
+                eps = float(a0)
+    elif len(args) == 2:
+        a0, a1 = args
+        if isinstance(a0, (float,)) or not isinstance(a0, (int,)):
+            if eps is None:
+                eps = float(a0)
+            if num_features is None and isinstance(a1, (int,)):
+                num_features = int(a1)
+        else:
+            if num_features is None:
+                num_features = int(a0)
+            if eps is None:
+                eps = float(a1)
+
+    if eps is None:
+        eps = 1e-5
+    return eps, num_features, out
+
+
+def kernel_function(x, *args, **kwargs):
+    if not isinstance(x, torch.Tensor):
+        raise TypeError("x must be a torch.Tensor")
+    if x.device.type != "cuda":
+        raise ValueError("x must be on CUDA device")
+    if x.ndim != 4:
+        raise ValueError(f"Expected 4D NCHW tensor, got shape {tuple(x.shape)}")
+    if x.dtype not in (torch.float16, torch.bfloat16, torch.float32):
+        raise ValueError(f"Unsupported dtype: {x.dtype}. Use float16, bfloat16, or float32.")
+
+    eps, num_features, out = _parse_kernel_args(x, args, kwargs)
+
+    N, C, H, W = x.shape
+    if num_features is not None and int(num_features) != C:
+        raise ValueError(f"num_features ({num_features}) does not match input channels ({C}).")
+
+    if out is None:
+        y = x
+    else:
+        if not isinstance(out, torch.Tensor):
+            raise TypeError("Provided output must be a torch.Tensor")
+        if out.shape != x.shape or out.device != x.device or out.dtype != x.dtype:
+            raise ValueError("Output tensor must match input in shape, device, and dtype.")
+        y = out
+
+    sx0, sx1, sx2, sx3 = x.stride()
+    sy0, sy1, sy2, sy3 = y.stride()
+
+    # For C=64, we can use the single-pass kernel that loads all channels at once
+    # This reduces memory traffic by 2x
+    if C <= 128:
+        # Use power of 2 for C_CONST
+        C_CONST = 64 if C <= 64 else 128
+        BLOCK_W = 128
+        
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+        
+        _rmsnorm_nchw_kernel_single_pass[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            C_CONST=C_CONST,
+            num_warps=4,
+            num_stages=2,
+        )
+    else:
+        # Fall back to two-pass for large C
+        BLOCK_W = 256
+        BLOCK_C = 64
+        grid = (triton.cdiv(W, BLOCK_W), N * H)
+
+        _rmsnorm_nchw_kernel_fused[grid](
+            x, y,
+            N, C, H, W,
+            sx0, sx1, sx2, sx3,
+            sy0, sy1, sy2, sy3,
+            float(eps),
+            BLOCK_W=BLOCK_W,
+            BLOCK_C=BLOCK_C,
+            num_warps=4,
+            num_stages=2,
+        )
+
+    return y
+```
+
+OPTIMIZATION STRATEGY ():
+The hardware profiling (NCU) analysis identified the following bottleneck:
+- Category: memory
+- Root Cause: {'cause': 'High memory latency causing long scoreboard stalls - warps waiting for global memory loads to complete', 'evidence': [{'metric': 'smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct', 'value': 56.3, 'interpretation': 'Over half of stall cycles are due to waiting for memory operations, indicating memory latency is the dominant bottleneck'}, {'metric': 'l1tex__t_sector_hit_rate.pct', 'value': 14.17, 'interpretation': 'Very low L1 cache hit rate means most accesses go to slower L2 or DRAM'}]}
+- Suggested Optimization: N/A
+- Expected Improvement: N/A
+
+RECENT OPTIMIZATION ATTEMPTS:
+#### Attempt 1 (Worker 0) [✓ IMPROVED 15.2% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm requires reading input data twice, doubling memory bandwidth consumption
+**Fix Applied**: Fuse the two passes into a single pass by loading data into shared memory or registers, computing sum-of-squares, then immediately normalizing before storing, eliminating the second read from global memory
+**Performance**: 5.3296ms → 4.5174ms (15.2% faster)
+**NCU SOL (% of Peak)**: Combined: 96.4%, Compute: 20.4%, Memory: 96.4%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 3.8% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: High memory latency causing long scoreboard stalls - warps are blocked waiting for global memory loads to complete
+**Fix Applied**: Reduce register pressure by processing fewer channels per thread or using shared memory to cache channel data, targeting <64 registers per thread to improve occupancy from 30% to 50%+
+**Performance**: 3.5475ms → 3.6808ms (3.8% slower)
+**NCU SOL (% of Peak)**: Combined: 77.8%, Compute: 18.7%, Memory: 77.8%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 0.1% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Poor L1 cache utilization with low hit rate causing excessive DRAM traffic
+**Fix Applied**: Reduce register usage from 96 to under 64 registers per thread by using shared memory for intermediate channel values, enabling higher occupancy (currently limited to 5 blocks by registers)
+**Performance**: 3.5475ms → 3.5528ms (0.1% slower)
+**NCU SOL (% of Peak)**: Combined: 88.6%, Compute: 8.6%, Memory: 88.6%
+
+#### Attempt 1 (Worker 0) [✓ IMPROVED 5.4% faster]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Two-pass algorithm requires loading input data twice from global memory
+**Fix Applied**: Implement a true single-pass algorithm by buffering tiles in shared memory. Load each BLOCK_C x BLOCK_W tile once into shared memory, compute partial sum-of-squares, synchronize across all tiles to get final inv_rms, then normalize from shared memory and write output.
+**Performance**: 4.5174ms → 4.2735ms (5.4% faster)
+**NCU SOL (% of Peak)**: Combined: 80.7%, Compute: 14.1%, Memory: 80.7%
+
+#### Attempt 1 (Worker 0) [✗ NO IMPROVEMENT 8.7% slower]
+**Prescription Applied**: `memory` tier
+**Root Cause**: Double memory traversal pattern - data is loaded twice (once for computing sum of squares, once for normalization) instead of being cached in registers or shared memory
+**Fix Applied**: Implement true single-pass algorithm by buffering tile data in shared memory during the first pass (sum of squares computation) and reusing it for normalization, eliminating the second global memory read
+**Performance**: 4.5174ms → 4.9092ms (8.7% slower)
+**NCU SOL (% of Peak)**: Combined: 84.9%, Compute: 8.4%, Memory: 84.9%
+
+
+SELF-REFLECTION ANALYSIS:
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Two-pass algorithm requires reading input data twice, doubling memory bandwidth consumption
+**Fix Applied**: Fuse the two passes into a single pass by loading data into shared memory or registers, computing sum-of-squares, then immediately normalizing before storing, eliminating the second read from global memory
+**Expected**: Fusing two passes into one should reduce global memory reads by approximately 50%, leading to significant speedup since memory was the bottleneck
+**Actual**: Achieved 15.2% improvement (5.33ms → 4.52ms) with memory remaining the dominant bottleneck at 96.4% SOL (+15.2%)
+**Analysis**: The diagnosis was correct - the two-pass algorithm was indeed causing excessive memory bandwidth consumption. The fix successfully reduced memory traffic by eliminating redundant global memory reads. The 15.2% improvement confirms memory was the bottleneck. However, memory SOL remains at 96.4%, indicating we're now more efficiently using memory bandwidth but still memory-bound. The improvement was less than the theoretical 50% because: (1) writes still occur, (2) shared memory/register overhead, (3) we're now closer to peak memory bandwidth utilization rather than wasting it on redundant reads.
+**Lessons**:
+  - Fusing passes is an effective strategy for memory-bound kernels with multiple data traversals
+  - Even after optimization, a kernel can remain memory-bound but with better bandwidth utilization
+  - 96.4% memory SOL indicates we're near peak memory efficiency - further gains require algorithmic changes or compute optimizations
+  - 15% improvement from pass fusion validates that redundant memory accesses were a real problem
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: High memory latency causing long scoreboard stalls - warps are blocked waiting for global memory loads to complete
+**Fix Applied**: Reduce register pressure by processing fewer channels per thread or using shared memory to cache channel data, targeting <64 registers per thread to improve occupancy from 30% to 50%+
+**Expected**: Reducing register pressure should improve occupancy, allowing more warps to hide memory latency, resulting in faster execution and reduced memory bottleneck percentage
+**Actual**: Performance degraded by 3.8% (3.5475ms → 3.6808ms), and memory SOL remains dominant at 77.8% indicating the memory bottleneck was not addressed (-3.8%)
+**Analysis**: The diagnosis of memory bottleneck was correct (77.8% Memory SOL confirms memory-bound kernel). However, the fix of reducing register pressure likely introduced overhead without achieving the intended occupancy improvement. Processing fewer channels per thread may have increased total thread count or loop iterations, adding instruction overhead. The compute SOL at 18.7% suggests we're not compute-limited, so any added compute work directly hurts performance. The fix didn't effectively address the root cause of memory latency - we needed to reduce memory accesses or improve memory access patterns, not just change register usage.
+**Lessons**:
+  - Register pressure reduction alone doesn't solve memory latency issues if memory access patterns remain unchanged
+  - Processing fewer elements per thread can increase overhead and hurt performance when memory-bound
+  - For memory-bound kernels, focus on reducing memory transactions or improving coalescing rather than occupancy
+  - High memory SOL (77.8%) indicates the kernel is already efficiently using memory bandwidth - need to reduce total memory traffic
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Poor L1 cache utilization with low hit rate causing excessive DRAM traffic
+**Fix Applied**: Reduce register usage from 96 to under 64 registers per thread by using shared memory for intermediate channel values, enabling higher occupancy (currently limited to 5 blocks by registers)
+**Expected**: Reducing register usage to under 64 registers per thread should have increased occupancy, allowing more warps to hide memory latency and improve L1 cache utilization, resulting in measurable performance improvement
+**Actual**: Performance remained essentially unchanged (-0.1%), and the memory bottleneck persists at 88.6% SOL while compute remains at 8.6% SOL (-0.1%)
+**Analysis**: The diagnosis of a memory bottleneck was correct (88.6% Memory SOL confirms this). However, the fix of reducing register pressure by moving to shared memory was ineffective because: 1) Moving intermediate values to shared memory likely just traded one type of memory access for another, not reducing overall memory traffic; 2) The L1 cache hit rate issue may stem from access patterns rather than occupancy; 3) Even if occupancy increased, the fundamental memory access pattern causing poor cache utilization wasn't addressed; 4) Shared memory has its own bank conflicts and latency that may have offset any occupancy gains
+**Lessons**:
+  - Increasing occupancy alone doesn't solve memory bottlenecks if the underlying access pattern is inefficient
+  - Moving data from registers to shared memory trades one resource for another and may not reduce DRAM traffic
+  - L1 cache hit rate is more influenced by access patterns (coalescing, locality) than by occupancy
+  - A 88.6% memory SOL indicates the memory system is nearly saturated - need to reduce total memory traffic, not just hide latency
+
+#### Round 1 Reflection [Effective]
+**Diagnosis**: Two-pass algorithm requires loading input data twice from global memory
+**Fix Applied**: Implement a true single-pass algorithm by buffering tiles in shared memory. Load each BLOCK_C x BLOCK_W tile once into shared memory, compute partial sum-of-squares, synchronize across all tiles to get final inv_rms, then normalize from shared memory and write output.
+**Expected**: Significant reduction in memory traffic by eliminating the second pass over global memory, expecting 20-40% improvement since we're halving the number of global memory loads
+**Actual**: Modest 5.4% improvement in performance, memory SOL remains high at 80.7% indicating memory is still the dominant bottleneck (+5.4%)
+**Analysis**: The diagnosis was correct - memory was indeed the bottleneck as evidenced by the 80.7% memory SOL. The fix was partially effective, achieving a measurable speedup. However, the improvement was smaller than expected because: 1) The single-pass algorithm still requires significant shared memory synchronization overhead, 2) The buffering approach may have limited the amount of parallelism or occupancy, 3) At 80.7% memory SOL, we're still heavily memory-bound suggesting the fix reduced but didn't eliminate memory pressure. The compute SOL at 14.1% confirms arithmetic intensity remains low.
+**Lessons**:
+  - Single-pass algorithms with shared memory buffering can reduce global memory traffic but synchronization overhead limits gains
+  - When memory SOL remains above 80%, further memory optimizations are still warranted
+  - A 2x reduction in theoretical memory loads doesn't translate to 2x speedup due to other overheads
+  - Low compute SOL (14.1%) indicates the kernel is far from compute-bound, confirming memory optimization focus is correct
+
+#### Round 1 Reflection [Ineffective]
+**Diagnosis**: Double memory traversal pattern - data is loaded twice (once for computing sum of squares, once for normalization) instead of being cached in registers or shared memory
+**Fix Applied**: Implement true single-pass algorithm by buffering tile data in shared memory during the first pass (sum of squares computation) and reusing it for normalization, eliminating the second global memory read
+**Expected**: Expected memory bottleneck to decrease (from ~85% SOL) by eliminating double global memory traversal, with corresponding performance improvement
+**Actual**: Performance degraded by 8.7% (4.5174ms → 4.9092ms), memory SOL remained at 84.9% indicating the memory bottleneck was not alleviated (-8.7%)
+**Analysis**: The diagnosis of double memory traversal was likely correct given the high memory SOL (84.9%). However, the shared memory buffering approach introduced overhead that outweighed the benefits. Possible issues: 1) Shared memory bank conflicts causing serialization, 2) Synchronization overhead from __syncthreads() calls, 3) The original kernel may have benefited from L1/L2 cache hits on the second pass that were faster than explicit shared memory management, 4) Added register pressure from managing shared memory pointers and indices. The memory SOL staying at 84.9% suggests the shared memory approach didn't reduce global memory traffic as intended.
+**Lessons**:
+  - L1/L2 cache can be effective for temporal locality - explicit shared memory buffering isn't always faster than relying on hardware caching
+  - Shared memory introduces synchronization and bank conflict overhead that must be carefully managed
+  - For RMSNorm-like patterns, the second pass may already hit L2 cache if the data fits, making explicit buffering redundant
+  - Performance regression despite correct diagnosis indicates the fix implementation was suboptimal, not that the diagnosis was wrong
+
+
+Guidance for this round:
+- AVOID: Multi-pass algorithms that re-read the same data from global memory; Expecting linear improvement proportional to reduced memory operations (other factors limit gains); Attempting to improve occupancy as a solution for memory latency when already memory-bound; Reducing work per thread without considering the overhead of additional threads/iterations; Focusing on register pressure when the bottleneck is memory bandwidth utilization; Assuming register reduction automatically improves performance when memory-bound; Trading register usage for shared memory without analyzing whether it reduces global memory traffic; Focusing on occupancy when the real issue is memory access patterns; Assuming theoretical memory reduction directly translates to proportional speedup; Introducing heavy synchronization barriers when trying to reduce memory traffic; Blindly replacing cache-friendly access patterns with explicit shared memory without measuring cache hit rates first; Adding synchronization barriers without considering their overhead relative to the memory savings; Assuming shared memory is always faster than L2 cache for repeated access patterns- PRIORITIZE: Look for opportunities to increase arithmetic intensity since memory is saturated; Consider vectorized loads (float4) to maximize memory transaction efficiency; Explore whether computation can be restructured to hide remaining memory latency; Since compute SOL is only 20.4%, find ways to overlap more computation with memory operations; Use shared memory to cache frequently accessed data and reduce global memory transactions; Improve memory coalescing to maximize effective bandwidth per transaction; Explore data layout changes (SoA vs AoS) to improve memory access patterns; Consider loop tiling or blocking strategies to improve cache hit rates; Profile memory transaction efficiency and address any uncoalesced accesses; Analyze and improve memory coalescing patterns to increase L1 cache effectiveness; Use data reuse strategies like tiling to reduce total DRAM traffic; Profile specific memory access patterns to identify non-coalesced accesses; Consider algorithmic changes that increase arithmetic intensity rather than just hiding latency; Explore vectorized memory access (float4) to improve memory bandwidth utilization; Consider memory coalescing optimizations to improve effective bandwidth; Try increasing arithmetic intensity by processing more elements per thread; Investigate whether shared memory bank conflicts are limiting performance; Profile L1/L2 cache hit rates before implementing shared memory solutions; Consider vectorized loads (float4) to improve memory bandwidth utilization; Try reducing the number of threads per block to increase L1 cache per thread; Explore warp-level primitives (shuffle) for reduction instead of shared memory; Consider fusing the reduction and normalization into a single pass using online algorithms
+PERFORMANCE TARGET:
+- Achieve 20-100% performance improvement over baseline
+- Maintain numerical correctness (atol=1e-2 or rtol=1e-2)
+- Preserve public API (same inputs/outputs, shapes, dtypes)
+
+CRITICAL REQUIREMENTS:
+1. Apply the optimization strategy described above to address the identified bottleneck
+2. The implementation must be a complete, valid Python file
+3. The main function must be named 'kernel_function' that wraps the actual Triton kernel
+4. Focus on the specific optimization while maintaining correctness
+5. Keep the wrapper free of PyTorch compute primitives
+
+OUTPUT FORMAT:
+1. Output complete optimized kernel code in ```python blocks
+2. Include only: imports, Triton kernel (@triton.jit), wrapper function (kernel_function)
+3. No testing code, benchmarks, or explanatory comments
+
+Generate the complete optimized kernel implementation:

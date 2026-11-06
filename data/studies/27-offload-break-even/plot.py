@@ -32,7 +32,7 @@ PANELS = [
         "Sixteen products",
         [
             ("cpu_bmm", "Host CPU, batched", "o", COLORS["ink"]),
-            ("mps_16_launch", "GPU, sixteen launches", "^", COLORS["methods"]),
+            ("mps_16_launch", "GPU, sixteen awaited launches", "^", COLORS["methods"]),
             ("mps_bmm", "GPU, one launch", "s", COLORS["workload"]),
         ],
     ),
@@ -41,13 +41,13 @@ PANELS = [
 
 def main():
     with open(HERE / "medians.csv", encoding="utf-8") as fh:
-        rows = [r for r in csv.DictReader(fh) if r["run"] in {"1", "2", "3"}]
+        rows = [r for r in csv.DictReader(fh) if r["run"].isdigit()]
     apply_style()
     fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.75), sharey=True)
     fig.subplots_adjust(left=0.085, right=0.985, top=0.9, bottom=0.16, wspace=0.08)
     for ax, (title, arms), tag in zip(axes, PANELS, ("(a)", "(b)")):
         for arm, label, marker, color in arms:
-            for run in ("1", "2", "3"):
+            for run in sorted({r["run"] for r in rows}):
                 pts = sorted(
                     (int(r["n"]), float(r["median"]))
                     for r in rows
