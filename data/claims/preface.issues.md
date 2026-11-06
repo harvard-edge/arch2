@@ -7,3 +7,8 @@
 - CLM-P-001: the dataset records that 2024 recruitment changed. "Remain common" relies on the series without that caveat.
 - CLM-P-014: "I wrote it" sits beside the disclosure's "coordinated agents draft text". Author decision on wording.
 - CLM-P-002, CLM-P-015: general assertions with no citation.
+
+## Ledger decisions, 2026-11-06 (claim-ledger agent, front and back matter)
+
+- CLM-P-014: moved to not_claims. The quoted clause states the author's purpose. The authorship tension with the disclosure stays open above and is tested under disclosure CLM-D-006 and CLM-D-013.
+- Left for the author: P-002 and P-015 (general assertions about the field, need a citation or a softer sentence); P-005 and P-006 (recollection of how third parties reacted, need a source or first-person framing).
