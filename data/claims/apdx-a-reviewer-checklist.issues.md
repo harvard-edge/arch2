@@ -6,3 +6,7 @@
 - CLM-A-020: Sculley supports the ML-code clause, not the hardware clause that follows it.
 - CLM-A-017: neither source concerns simulators, so the transfer is analogy.
 - CLM-A-024: no opened page confirmed a public ChiPBench repository.
+
+## Ledger decisions, 2026-11-06 (claim-ledger agent, front and back matter)
+
+- CLM-A-002, CLM-A-021: no bib entry in the appendix supports the comparative or the cost-share statement (SculleyEtAl2015Hidden is cited for the ML-code clause only). Left for the author: cite a source, reword as advice, or cut.
