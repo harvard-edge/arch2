@@ -33,6 +33,8 @@ Each entry in a record's `sources` list uses these fields:
 | `pulled` | A later fetch into the store: date, URL, hash, and whether it matches `sha256` |
 | `basis`, `gap` | Which records these fields were copied from, and what is still missing |
 
+A record may also carry `attributions`: documents the sources name, such as an original study or a paywalled version of record, that were not themselves read. Plotted values never rest on an attribution; they rest on the listed sources.
+
 `python3 data/validate_figure_provenance.py` fails a commit when a data figure has
 no record, and `--verbose` lists the source gaps (a source with no locator, full
 hash, or retained copy). `data/audits/MOVES.yml` maps the paths used before the
