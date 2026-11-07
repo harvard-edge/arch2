@@ -10,3 +10,8 @@
 ## Ledger decisions, 2026-11-06 (claim-ledger agent, front and back matter)
 
 - CLM-A-002, CLM-A-021: no bib entry in the appendix supports the comparative or the cost-share statement (SculleyEtAl2015Hidden is cited for the ML-code clause only). Left for the author: cite a source, reword as advice, or cut.
+
+## Resolutions, 2026-11-07 (front and back matter claims pass)
+
+- CLM-A-002, outcome 4 (narrowed): "within the top 1% to 5% of candidates is much more informative" became "within the top candidates, for example the top 1% to 5%, measures fidelity where the optimizer selects and should be reported beside the aggregate figures". The uncited comparative is gone; what remains is a definition (a subset rank correlation measures agreement within that subset) and a reviewer instruction, with the band as an example cutoff. Moved to not_claims.
+- CLM-A-021, outcome 4 (narrowed and cited): "often a fraction of a hardware workflow whose real cost lies in" became "account for only part of a hardware workflow's cost, which also includes", which states composition, not shares, and no longer clashes with "Rather than assuming which factor dominates". Cited Synopsys2026Cloud for metered license cost (unopened in this pass; bib note records pay-per-use billing by the minute).
