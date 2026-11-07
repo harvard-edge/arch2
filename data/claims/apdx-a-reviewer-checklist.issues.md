@@ -15,3 +15,7 @@
 
 - CLM-A-002, outcome 4 (narrowed): "within the top 1% to 5% of candidates is much more informative" became "within the top candidates, for example the top 1% to 5%, measures fidelity where the optimizer selects and should be reported beside the aggregate figures". The uncited comparative is gone; what remains is a definition (a subset rank correlation measures agreement within that subset) and a reviewer instruction, with the band as an example cutoff. Moved to not_claims.
 - CLM-A-021, outcome 4 (narrowed and cited): "often a fraction of a hardware workflow whose real cost lies in" became "account for only part of a hardware workflow's cost, which also includes", which states composition, not shares, and no longer clashes with "Rather than assuming which factor dominates". Cited Synopsys2026Cloud for metered license cost (unopened in this pass; bib note records pay-per-use billing by the minute).
+
+## Author sign-off, 2026-11-07
+
+The author reviewed the agent-made text corrections in commit ca61a1cc (published in v0.2.29) and accepted all of them. Licensing and open-access status are out of scope for the manuscript text; they are the author's and legal's decision with the publisher, and the disclosure takes no position.

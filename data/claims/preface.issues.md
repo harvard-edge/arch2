@@ -19,3 +19,7 @@
 - CLM-P-005, outcome 3 after softening: dropped "to many", which asserted other people's reaction. What remains is the author's recollection of how the idea sounded. Moved to not_claims.
 - CLM-P-006, outcome 3 after softening: "the proposal met with candid skepticism across the computer architecture community" became "I heard candid skepticism about the proposal from colleagues across the computer architecture community", a first-person recollection. Moved to not_claims.
 - CLM-P-015, outcome 4 (reworded as the author's view): "go stale within months" became "In my own work, ... have gone stale within months." Moved to not_claims as a first-person account. No source supports a field-wide rate.
+
+## Author sign-off, 2026-11-07
+
+The author reviewed the agent-made text corrections in commit ca61a1cc (published in v0.2.29) and accepted all of them. Licensing and open-access status are out of scope for the manuscript text; they are the author's and legal's decision with the publisher, and the disclosure takes no position.

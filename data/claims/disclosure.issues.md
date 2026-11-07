@@ -29,3 +29,7 @@
 - CLM-D-011, CLM-D-012, outcome 3: the author's recollection of a discarded early draft and their own rebuild. Moved to not_claims.
 - CLM-D-015, outcome 2: "remain open" became "are freely readable online". No license or open-access status is asserted (Bucket A). Evidence publish-site.yml (GitHub Pages deploy to arch2.mlsysbook.ai) and README.md (public site links); LICENSE.md stays as contrary evidence on reuse.
 - CLM-D-018, outcome 3 after softening: "flags" became "is tasked with flagging", the author's stated design intent for the role. Moved to not_claims. No per-finding record is tracked.
+
+## Author sign-off, 2026-11-07
+
+The author reviewed the agent-made text corrections in commit ca61a1cc (published in v0.2.29) and accepted all of them. Licensing and open-access status are out of scope for the manuscript text; they are the author's and legal's decision with the publisher, and the disclosure takes no position.
